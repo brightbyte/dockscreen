@@ -131,7 +131,7 @@ def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(monkey
     commands.audit([], [], runtime())
 
     lines = [line for line in capsys.readouterr().out.splitlines() if "cap_drop" in line]
-    assert len(lines) == 1 and lines[0].endswith("where they are missing, in services web, db")
+    assert len(lines) == 1 and lines[0].endswith("where missing, in services web, db")
 
 
 def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():

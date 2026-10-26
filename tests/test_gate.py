@@ -672,6 +672,7 @@ def test_run_refuses_what_audit_calls_failed(capsys):
     docker.inspect_container = lambda ref: (_ for _ in ()).throw(DockerError("boom"))
     assert gate.run(ctx(docker), ["img"]) == 1  # not started: a failure to look is not a pass
     assert capsys.readouterr().err.splitlines() == [
+        f"[dockscreen] \u25cf added {' '.join(DEFAULTS)}",  # the routine notice comes before the failure
         f"[dockscreen] {BAD} boom", "[dockscreen] \u2718 audit failed"]
 
 

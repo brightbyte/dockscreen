@@ -1,3 +1,5 @@
+import types
+
 import pytest
 
 from dockscreen import compose_cli, docker_cli, flags
@@ -80,7 +82,7 @@ def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful,
     from dockscreen import messages
     monkeypatch.setattr(docker_cli, "passthrough", lambda argv, runtime: 0)
     monkeypatch.setattr(docker_cli.gate, "audit", lambda *a, **k: 0)
-    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: object())
+    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: types.SimpleNamespace(context=lambda: "default"))
 
     docker_cli.main(argv)
 

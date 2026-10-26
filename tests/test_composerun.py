@@ -40,7 +40,7 @@ def test_compose_runs_from_the_hardened_config_with_the_project_pinned(monkeypat
     web = config["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
     assert ('added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where '
-            "they were missing, in services web") in capsys.readouterr().err
+            "missing, in services web") in capsys.readouterr().err
 
 
 def test_every_generated_file_is_private_and_removed_afterwards(monkeypatch, tmp_path):

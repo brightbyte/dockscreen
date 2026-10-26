@@ -21,14 +21,14 @@ def test_report(capsys):
     assert messages.report([]) is True
     assert messages.report(["a", "b"]) is False
 
-    assert capsys.readouterr().err == "[dockscreen] refusing: a\n[dockscreen] refusing: b\n"
+    assert capsys.readouterr().err == "[dockscreen] \u25cf refusing: a\n[dockscreen] \u25cf refusing: b\n"
 
 
 def test_refuse(capsys):
     assert messages.refuse(["a"]) == 1
     assert messages.refuse([]) == 1  # refused, even without a reason: fails closed
 
-    assert capsys.readouterr().err == "[dockscreen] refusing: a\n"
+    assert capsys.readouterr().err == "[dockscreen] \u25cf refusing: a\n"
 
 
 def test_fatal():
