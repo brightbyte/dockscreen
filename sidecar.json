@@ -1,0 +1,7 @@
+{
+  "sidecars": {
+    "run-python": {
+      "target": "run-python:3.13-trixie"
+    }
+  }
+}
