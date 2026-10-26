@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 
-from dockscreen import argscan, config, images, policy, verdict
+from dockscreen import argscan, config, images, messages, policy, verdict
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
@@ -77,7 +77,10 @@ def sensitive_inside(directory, runtime):
 def mount_dir_warnings(runtime):
     """One warning per configured mount dir that equals or contains a sensitive path."""
     return [
-        f"warning: the configured mount dir {directory} contains {found[0]}, so containers can mount it"
+        messages.marked(
+            messages.WARN,
+            f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
+            "narrow mount_dirs in the config file")
         for directory in config.all_mount_dirs(runtime.settings)
         if (found := sensitive_inside(directory, runtime))
     ]

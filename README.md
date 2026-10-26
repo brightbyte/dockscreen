@@ -22,6 +22,8 @@ For `dockscreen compose`: `up`, `create`, `run`, `watch`, `scale` and `alpha` re
 
 Every command dockscreen screens ends its output with the verdict, right before docker or compose takes over: ✔ audit passed, ⊖ denied by audit, or ✘ audit failed when it could not look (the image did not pull, the config did not parse). If `up` or `run` does not show that line, dockscreen was not in the path. Commands it passes on unchecked (`ps`, `logs`, `exec` …) print nothing.
 
+Messages state the facts; with `--helpful` (or `--verbose`, or in `audit`) they continue with what you can do about it. Whatever dockscreen changes is said, with a cyan mark if it rarely matters (defaults added, names resolved to ids, images pinned) or a yellow one if it can alter how things run (an image's root user replaced by the default user, or a `cap_drop` or `security_opt` of your own extended).
+
 When refusing, dockscreen says why. `dockscreen compose harden` prints a compose override file that fixes what can be fixed.
 
 ## Users
@@ -94,6 +96,7 @@ Before the subcommand, such as `dockscreen --allow-me compose up` or `dockscreen
 | Option | |
 |---|---|
 | `--allow-me` | containers may run as you: in `user:`, and as an image's own user |
+| `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. `--verbose` is taken by dockscreen, not passed on, so docker and compose stay quiet |
 | `--strict-screen` | `audit` only so far: also fail for what the command line asks for that a project or image may not have; refused before any other subcommand |
 | `--skip-screening` | turns off all checks and defaults, and prints a warning each time |
 
@@ -146,3 +149,21 @@ Images that start as root and drop privileges themselves, such as postgres or re
 To screen every `docker` command you type, put `bin/docker`, or a symlink named `docker` to `dockscreen`, ahead of the real docker on your `PATH`. dockscreen skips itself when it looks for the real docker.
 
 Only commands that go through the wrapper are checked. Scripts, IDEs and anything else that talks to the docker socket directly bypass it.
+
+### Tools that need the real docker
+
+Some tools run containers that are meant to be privileged or to run as root, and dockscreen refuses to start them. minikube's docker driver is one: its node container runs systemd as root with `--privileged`, so `docker start minikube` ends in `cannot change the user of an existing container`, and recreating it as a non-root user would break it. Docker cannot change the user of an existing container, so there is nothing for dockscreen to adjust.
+
+Give such a tool the real docker, for that command only, by putting the directory of the real docker ahead of dockscreen's on its `PATH`:
+
+```sh
+PATH=/usr/bin:$PATH minikube start      # if /usr/bin/docker is the real docker
+```
+
+or wrap it once, in a function or a script that is not on your `PATH` as `docker`:
+
+```sh
+minikube() { PATH=/usr/bin:$PATH command minikube "$@"; }
+```
+
+A config entry that skips screening for an image or a container name is deliberately not offered: it would stay in effect unnoticed, and a compose project can choose its image and container names. Use `--skip-screening` before the subcommand for a single command you type yourself.

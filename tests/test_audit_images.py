@@ -4,10 +4,14 @@ import os
 
 from fakes import FakeImages, install_tools, make_tools, runtime
 
-from dockscreen import commands, screen
+from dockscreen import commands, messages, screen
+from dockscreen.composeimages import USER_HELP
 from dockscreen.verdict import BAD, GOOD, WARN
 
 UID, GID = os.getuid(), os.getgid()
+
+ROOT_FALLBACK = "running as 65534:65534 instead of root"
+PIN = "user, image id and pull_policy: never fixed to what was checked, in the generated file only"
 
 
 def project(**services):
@@ -52,8 +56,8 @@ def test_audit_pulls_and_says_what_happens_to_each_service_without_a_user(monkey
     assert report(captured.out) == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), "
          "gid 100001 (no local group); accepted"),
-        (f"{WARN} service web: no user set; image web:1 would run as root; dockscreen runs it as the "
-         "default user (65534:65534)"),
+        messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
+        messages.routine_change(f"services db, web: {PIN}"),
     ]
     assert [cmd[-3:] for cmd in recorder.children] == [["pull", "cache", "web"]]  # db is already local
 
@@ -111,8 +115,7 @@ def test_brief_prints_only_the_verdict(monkeypatch, capsys, tmp_path):
     captured = capsys.readouterr()
     assert captured.out == ("\u2296 denied by audit: service db: image db:1: the image's uid 1000 exists "
                             "on this host (local user daniel); the image's gid 1000 exists on this host "
-                            "(local group daniel); set user: to choose one, or set user under "
-                            f'[images."db"] in {runtime().config_file}\n')
+                            "(local group daniel)\n")
     assert captured.err == ""
 
 

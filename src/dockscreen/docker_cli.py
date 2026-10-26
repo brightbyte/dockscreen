@@ -52,8 +52,10 @@ def dispatch(argv):
 
     allow_me, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE, flags.ALLOW_ME)
     strict, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE, flags.STRICT_SCREEN)
+    helpful, argv = flags.strip_helpful(argv, DOCKER_OPTS_WITH_VALUE)
 
     idx = argscan.find_subcommand(argv, DOCKER_OPTS_WITH_VALUE)
+    messages.set_helpful(helpful or (idx is not None and argv[idx] == "audit"))
     if strict and (idx is None or argv[idx] != "audit"):
         # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
         return messages.refuse([f"{flags.STRICT_SCREEN} is only supported for audit so far"])
@@ -68,7 +70,8 @@ def dispatch(argv):
         if idx != 0:
             messages.notice("docker options before `compose` are not supported")
             return 1
-        return compose_cli.main([*([flags.ALLOW_ME] if allow_me else []), *argv[1:]], runtime)
+        lead = [*([flags.ALLOW_ME] if allow_me else []), *([flags.HELPFUL] if helpful else [])]
+        return compose_cli.main([*lead, *argv[1:]], runtime)
 
     sub, end = argv[idx], idx
     if sub == "container" and idx + 1 < len(argv) and argv[idx + 1] in GATED - {"audit"}:
@@ -93,6 +96,7 @@ def gated(argv, sub, idx, end, runtime, allow_me=False, strict=False):
             resolved = gate.create_args(args, runtime)
         except hostusers.UserError as e:
             return messages.refuse([str(e)])
+        messages.notice(gate.defaults_notice())
         return passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
     if sub == "exec":
         resolved = compose_cli.rewrite_exec("docker exec", args, runtime)

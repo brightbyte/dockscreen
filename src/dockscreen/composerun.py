@@ -115,9 +115,7 @@ def run(argv, idx, runtime, tools=None, allow_me=False):
 
     hardened, tools = project.hardened, project.tools
     lines = [*parsed.notices, *screen.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(tools.gate_ctx)]
-    if project.additions:
-        lines.append(hardening.summary(project.additions))
+             imagedecision.root_default_notice(tools.gate_ctx), *hardening.describe(project.additions)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
         prepared = composeimages.prepare(command(hardened), hardened, parsed.args, tools, chosen(parsed))

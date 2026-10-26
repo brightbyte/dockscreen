@@ -62,3 +62,36 @@ def test_docker_without_a_global_flag_gets_no_exemption(monkeypatch):
     monkeypatch.setattr(docker_cli, "passthrough", lambda a, _: calls.append(a) or 0)
     docker_cli.main(["create", "img", FLAG])  # belongs to the command
     assert calls == [["create", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "img", FLAG]]
+
+
+@pytest.mark.parametrize("argv", [["--helpful", "up"], ["--verbose", "up"], ["--verbose", "--helpful", "up"]])
+def test_helpful_and_verbose_are_ours_and_not_passed_on(argv):
+    assert flags.strip_helpful(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE) == (True, ["up"])
+
+
+def test_verbose_after_the_subcommand_is_dockers_own():
+    assert flags.strip_helpful(["up", "--verbose"], compose_cli.GLOBAL_OPTS_WITH_VALUE) == (
+        False, ["up", "--verbose"])
+
+
+@pytest.mark.parametrize("argv, helpful", [
+    (["--helpful", "ps"], True), (["--verbose", "ps"], True), (["ps"], False), (["audit", "img"], True)])
+def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful, monkeypatch):
+    from dockscreen import messages
+    monkeypatch.setattr(docker_cli, "passthrough", lambda argv, runtime: 0)
+    monkeypatch.setattr(docker_cli.gate, "audit", lambda *a, **k: 0)
+    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: object())
+
+    docker_cli.main(argv)
+
+    assert messages._helpful is helpful
+
+
+def test_compose_audit_is_helpful_and_compose_gets_the_flag(forwarded, monkeypatch):
+    from dockscreen import messages
+    monkeypatch.setitem(compose_cli.COMMANDS, "audit", lambda **kwargs: 0)
+
+    compose_cli.main(["audit"])
+    assert messages._helpful is True
+    compose_cli.main(["--verbose", "ps"])
+    assert messages._helpful is True and forwarded == [["ps"]]  # --verbose is not passed to compose

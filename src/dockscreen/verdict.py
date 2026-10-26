@@ -56,7 +56,8 @@ def report(verdict, reasons, brief_mode=False):
         messages.out(brief(verdict, reasons), indent=False)
         return int(verdict)
     for reason in reasons:
-        messages.notice(messages.marked(BAD, f"refusing: {reason}" if verdict is Verdict.REFUSED else reason))
+        text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
+        messages.notice(messages.marked(BAD, text, messages.help_of(reason)))
     messages.notice(line(verdict))
     return int(verdict)
 

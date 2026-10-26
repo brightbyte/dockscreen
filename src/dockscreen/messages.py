@@ -31,19 +31,56 @@ class Mark(str):
 
 
 class Marked(str):
-    """`MARK text`, keeping the mark for colouring."""
+    """`MARK text`, keeping the mark for colouring.
 
-    def __new__(cls, mark, text):
+    help: an optional second part that says what to do about it, shown only in helpful mode
+    (set_helpful). The line itself only states the facts, and its string value is just that.
+    """
+
+    def __new__(cls, mark, text, help=None):
         line = super().__new__(cls, f"{mark} {text}")
-        line.mark, line.text = mark, text
+        line.mark, line.text, line.help = mark, text, help
         return line
 
+    @property
+    def shown(self):
+        """The text, with the help after it in helpful mode."""
+        return f"{self.text} - {self.help}" if self.help and _helpful else self.text
 
-GREEN, YELLOW, RED, BLUE = "32", "33", "31", "34"
+
+class Reason(str):
+    """Why something is refused or failed, with an optional `help`: what to do about it."""
+
+    def __new__(cls, text, help=None):
+        reason = super().__new__(cls, text)
+        reason.help = help
+        return reason
+
+
+def reason(text, help=None):
+    return Reason(text, help)
+
+
+def help_of(reason):
+    """The help of a Reason, or None for a plain string."""
+    return getattr(reason, "help", None)
+
+
+_helpful = False
+
+
+def set_helpful(on):
+    """Show the second part of messages that have one: for --helpful, --verbose and the audit commands."""
+    global _helpful
+    _helpful = on
+
+
+GREEN, YELLOW, RED, BLUE, CYAN = "32", "33", "31", "34", "36"
 GOOD = Mark("\u25cf", GREEN)    # ● accepted as it is
-WARN = Mark("\u25cf", YELLOW)   # ● allowed, but changed by dockscreen or worth a look
+WARN = Mark("\u25cf", YELLOW)   # ● allowed, but worth a look; also a change that can alter behaviour
 BAD = Mark("\u25cf", RED)       # ● refused, or could not be checked
 HINT = Mark("\u24d8", BLUE)     # ⓘ how to get past something
+ROUTINE = Mark("\u25cf", CYAN)  # \u25cf changed by dockscreen, rarely matters
 PASSED = Mark("\u2714", GREEN)  # ✔
 REFUSED = Mark("\u2296", RED)   # ⊖
 FAILED = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
@@ -56,8 +93,18 @@ MAX_WIDTH, MIN_WIDTH, TAB_WIDTH = 120, 20, 8
 CONTINUATION = "  "
 
 
-def marked(mark, text):
-    return Marked(mark, text)
+def marked(mark, text, help=None):
+    return Marked(mark, text, help)
+
+
+def routine_change(text, help=None):
+    """A line about something dockscreen changes that rarely affects how the thing runs."""
+    return Marked(ROUTINE, text, help)
+
+
+def notable_change(text, help=None):
+    """A line about something dockscreen changes that can alter how the thing runs: worth a look."""
+    return Marked(WARN, text, help)
 
 
 def notice(text):
@@ -90,7 +137,7 @@ def wrapped(text, width, colour):
     """text as lines of at most width columns after a tab (TAB_WIDTH), continued under the text after
     the mark (CONTINUATION). Words are never broken: a long path stays whole."""
     lead = f"{text.mark} " if isinstance(text, Marked) else ""
-    body = printable(text.text if lead else text)
+    body = printable(text.shown if lead else text)
     if width is None:
         lines = [lead + body]
     else:
@@ -103,9 +150,10 @@ def wrapped(text, width, colour):
 
 def paint(line, stream):
     """line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
-    if not isinstance(line, Marked) or not wants_colour(stream):
+    if not isinstance(line, Marked):
         return printable(line)
-    return f"{coloured(line.mark)} {printable(line.text)}"
+    mark = coloured(line.mark) if wants_colour(stream) else line.mark
+    return f"{mark} {printable(line.shown)}"
 
 
 def coloured(mark):
@@ -128,7 +176,7 @@ def warning(text):
 def report(problems):
     """One refusal per problem; True if there were none."""
     for problem in problems:
-        notice(f"refusing: {problem}")
+        notice(Marked(BAD, f"refusing: {problem}", help_of(problem)))
     return not problems
 
 

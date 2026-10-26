@@ -23,6 +23,7 @@ from dockscreen import (
     argscan,
     flags,
     hostusers,
+    ids,
     images,
     imageuser,
     messages,
@@ -67,12 +68,13 @@ def run(ctx, args):
     try:
         parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.resolve_account)
     except runargs.ParseError as e:
-        verdict.screened([f"cannot read the command line: {e}; use the real docker for this one"])
+        verdict.screened([messages.reason(f"cannot read the command line: {e}",
+                                          "use the real docker for this one")])
         return 1
     except hostusers.UserError as e:
         verdict.screened([str(e)])
         return 1
-    for message in [*parsed.notices, root_default_notice(ctx)]:
+    for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
         if message:
             messages.notice(message)
     ctx = ctx.allowing_me(parsed.allow_me)
@@ -87,7 +89,10 @@ def run(ctx, args):
         # image's to resolve, whatever its passwd and group files say.
         ctx.docker.remove(container)
         if assessment.kind is Kind.FALLBACK:
-            messages.notice(fallback_notice(parsed.image, assessment))
+            messages.notice(fallback_notice(assessment))
+        else:
+            messages.notice(messages.routine_change(
+                f"image {parsed.image} runs as {pinned_user(assessment)}, passed to docker as numbers"))
         created = create_checked(ctx, parsed, [f"--user={pinned_user(assessment)}"])
         if isinstance(created, int):
             return created
@@ -102,9 +107,19 @@ def run(ctx, args):
     )
 
 
-def fallback_notice(image, assessment):
-    return (f"image {image} would run as root; running it as the default user ({pinned_user(assessment)}) "
-            f"instead; {CHOOSE_HINT} yourself")
+def defaults_notice():
+    """The change `run` and `create` make to every container, as a marked line."""
+    return messages.routine_change(
+        f"added {' '.join(DEFAULTS)}",
+        "a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
+        "which override these")
+
+
+def fallback_notice(assessment):
+    return messages.notable_change(
+        f"running as {pinned_user(assessment)} instead of root",
+        f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
+        "accessible to it")
 
 
 def create_checked(ctx, parsed, extra):
@@ -267,23 +282,31 @@ def check_existing(ctx, args):
     """Problems for the containers named in `docker start`/`restart` arguments.
 
     An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
-    default user or a configured one) is refused like one whose user is not accepted.
+    default user or a configured one) is refused like one whose user is not accepted, unless it
+    already runs as that user.
     """
     problems = []
     for ref in argscan.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
             assessment = assess(ctx, info["Id"], info)
-            if assessment.replaces_image_user:
+            if assessment.replaces_image_user and not runs_as_pinned_user(info, assessment):
                 user = pinned_user(assessment)
-                problems.append(f"{ref}: its image's user would be replaced by {user}, which an existing "
-                                f"container cannot be; recreate it with --user {user}")
+                problems.append(messages.reason(
+                    f"{ref}: cannot change the user of an existing container; it would run as the "
+                    f"image's user, not as {user}", f"recreate it with --user {user}"))
             else:
                 image = info["Config"].get("Image") or ""
-                problems += [f"{ref}: {p}" for p in explain(ctx, assessment, image)]
+                problems += [messages.reason(f"{ref}: {p}", messages.help_of(p))
+                             for p in explain(ctx, assessment, image)]
         except (DockerError, ValueError, KeyError) as e:
             problems.append(f"{ref}: {e}")
     return problems
+
+
+def runs_as_pinned_user(info, assessment):
+    """Whether the container was created with the numeric user dockscreen would have chosen."""
+    return ids.parse_user(info["Config"].get("User") or "") == assessment.user
 
 
 def verify_split(info, parsed):
@@ -292,7 +315,8 @@ def verify_split(info, parsed):
     misread_image = config.get("Image") != parsed.image
     misread_command = parsed.command and (config.get("Cmd") or []) != parsed.command
     if misread_image or misread_command:
-        return ["could not reliably tell the image from the command line; use the real docker for this one"]
+        return [messages.reason("could not reliably tell the image from the command line",
+                                "use the real docker for this one")]
     return []
 
 
@@ -300,7 +324,7 @@ def explain(ctx, assessment, image):
     """The problems, with how to get past them when they come from the image's own identity."""
     if assessment.identity is None:
         return assessment.problems
-    return [f"{p}; {CHOOSE_HINT}, {config_hint(ctx, image)}" for p in assessment.problems]
+    return [messages.reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
 
 
 def config_hint(ctx, image):

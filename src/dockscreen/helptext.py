@@ -55,12 +55,14 @@ VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖
 
 DOCKER_OPTIONS = (
     Option(flags.ALLOW_ME, "Allow containers to run as you"),
+    Option(flags.HELPFUL, "Say what to do about a message too (also --verbose, which is not passed on)"),
     Option(flags.SKIP_SCREENING, "Turn all checks off; warns every time"),
     Option(flags.STRICT_SCREEN, "For audit: also deny what the command line asks for that a project or "
                                 "image may not have"),
 )
 COMPOSE_OPTIONS = (
     Option(flags.ALLOW_ME, "Allow services to run as you"),
+    Option(flags.HELPFUL, "Say what to do about a message too (also --verbose, which is not passed on)"),
     Option(flags.SKIP_SCREENING, "Turn all checks off; warns every time"),
 )
 

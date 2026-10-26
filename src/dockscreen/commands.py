@@ -69,9 +69,8 @@ def audit(global_args, args, runtime, allow_me=False):
 
     outcome, problems, lines = audit_images(project, brief)
     if not brief:
-        warnings = [*screen.mount_dir_warnings(runtime), *hardening.describe(project.additions),
-                    *shellenv.describe(project.hardened, runtime.env)]
-        for line in [*(messages.marked(verdict.WARN, w) for w in warnings), *lines]:
+        warnings = [*screen.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
+        for line in [*hardening.describe(project.additions), *warnings, *lines]:
             messages.out(line)
         if problems or project.additions:
             messages.out(messages.marked(verdict.HINT, HARDEN_HINT))

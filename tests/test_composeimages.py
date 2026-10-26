@@ -4,13 +4,17 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_tools, rules, runtime
 
-from dockscreen import autofix, composeimages, imagedecision, policy
+from dockscreen import autofix, composeimages, imagedecision, messages, policy
 from dockscreen import config as configuration
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import Kind
 from dockscreen.verdict import GOOD, WARN
 
 NOBODY = "65534:65534"
+
+ROOT_FALLBACK = "running as 65534:65534 instead of root"
+PIN = "user, image id and pull_policy: never fixed to what was checked, in the generated file only"
+USER_HELP = composeimages.USER_HELP
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # what prepare is given; only the tail matters
 
 
@@ -177,13 +181,13 @@ def test_refusals_say_what_to_do():
     assert len(prepared.problems) == 1  # one line per service, however many ids are the problem
     assert "service web: image web:1: the image's uid 1000 exists on this host" in prepared.problems[0]
     assert "gid 1000" in prepared.problems[0]
-    assert prepared.problems[0].endswith(
+    assert prepared.problems[0].help == (
         f'set user: to choose one, or set user under [images."web"] in {runtime().config_file}')
 
 
 def test_a_built_image_is_not_pointed_at_an_image_section():
     prepared, _, _ = prepare(project(web={"build": {"context": "."}}), FakeImages(users={"web:1": "web"}))
-    assert prepared.problems[0].endswith("; set user: to choose one")  # the config file never applies
+    assert prepared.problems[0].help == "set user: to choose one"  # the config file never applies
 
 
 def test_services_with_a_user_are_not_looked_at():
@@ -283,21 +287,21 @@ def test_descriptions_and_notices():
     assert composeimages.describe(config, prepared, ctx) == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), gid 100001 "
          "(no local group); accepted"),
-        (f"{WARN} service debug: no user set and not started by default; "
-         "dockscreen runs it as the default user (65534:65534) if it is started"),
-        (f"{WARN} service web: no user set; image web:1 would run as root; dockscreen runs it as the "
-         "default user (65534:65534)"),
+        messages.notable_change("service debug: no user set and not started by default; dockscreen runs it "
+                                "as the default user (65534:65534) if it is started", USER_HELP),
+        messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
+        messages.routine_change(f"services db, web: {PIN}"),
     ]
     assert composeimages.notices(prepared) == [
-        "service web: image web:1 would run as root; dockscreen runs it as the default user (65534:65534)"]
+        messages.notable_change(f"service web: {ROOT_FALLBACK}", USER_HELP),
+        messages.routine_change(f"services db, web: {PIN}")]
 
 
 def test_a_refusal_names_the_local_account_that_the_images_id_would_be():
     refused, _, _ = prepare(project(web={}), FakeImages(users={"web:1": "web"}))
     assert refused.problems == [
         ("service web: image web:1: the image's uid 1000 exists on this host (local user daniel); "
-         "the image's gid 1000 exists on this host (local group daniel); set user: to choose one, "
-         f'or set user under [images."web"] in {runtime().config_file}')]
+         "the image's gid 1000 exists on this host (local group daniel)")]
 
 
 # --- services with mounts ----------------------------------------------------------
@@ -355,10 +359,12 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
 
     assert prepared.decisions["db"].assessment.kind is Kind.CONFIGURED
     assert final["services"]["db"]["user"] == "999:999" and vetted == {"db"}
-    assert composeimages.notices(prepared) == []  # configured: no notice
+    assert composeimages.notices(prepared) == [  # configured: routine only, no surprise
+        messages.routine_change(f"services db: {PIN}")]
     assert composeimages.describe(mariadb_project(), prepared, gate_context(images, MARIADB)) == [
         f"{GOOD} service db: no user set; image mariadb:11 runs as 999:999, "
-        "the user the config file sets for it"]
+        "the user the config file sets for it",
+        messages.routine_change(f"services db: {PIN}")]
 
 
 @pytest.mark.parametrize("fields, digests, why", [
@@ -374,8 +380,8 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
     assessment = prepared.decisions["db"].assessment
     assert assessment.kind is Kind.FALLBACK  # the normal rules: root runs as the default user
     lines = composeimages.describe(config, prepared, gate_context(images, MARIADB))
-    assert lines[-1] == (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
-                         f"but {why}")
+    assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
+            f"but {why}") in lines
 
 
 def test_services_whose_user_the_command_line_chooses_are_not_decided():

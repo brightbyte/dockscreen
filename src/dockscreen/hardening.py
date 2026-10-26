@@ -12,13 +12,15 @@ import copy
 import json
 from typing import NamedTuple
 
-from dockscreen import ids, policy
+from dockscreen import ids, messages, policy
 from dockscreen.policy import CAP_DROP, SECURITY_OPT
 
 class Addition(NamedTuple):
     service: str
     key: str
     message: str  # what was missing or a name, and what dockscreen does about it
+    notable: bool = False  # the project set the key itself, so dockscreen changes what it chose
+    help: str | None = None  # what the project can do about it
 
 
 def apply(config, accounts):
@@ -31,16 +33,20 @@ def apply(config, accounts):
     for name, service in (hardened.get("services") or {}).items():
         additions += resolve_user_names(name, service, accounts)
         if policy.check_cap_drop(service.get("cap_drop"), None):
-            reason = "is not set" if not service.get("cap_drop") else f"does not include {CAP_DROP}"
-            service["cap_drop"] = [*(service.get("cap_drop") or []), CAP_DROP]
+            declared = service.get("cap_drop")
+            reason = f"lacks {CAP_DROP}" if declared else "is not set"
+            service["cap_drop"] = [*(declared or []), CAP_DROP]
             additions.append(Addition(
-                name, "cap_drop", f"cap_drop {reason}; dockscreen adds cap_drop: {json.dumps([CAP_DROP])}"))
+                name, "cap_drop", f"cap_drop {reason}; added {json.dumps([CAP_DROP])}",
+                notable=bool(declared), help=NOT_REMOVABLE))
         if not policy.has_no_new_privileges(service.get("security_opt")):
-            reason = "is not set" if not service.get("security_opt") else "does not include no-new-privileges"
-            service["security_opt"] = [*(service.get("security_opt") or []), SECURITY_OPT]
+            declared = service.get("security_opt")
+            reason = "lacks no-new-privileges" if declared else "is not set"
+            service["security_opt"] = [*(declared or []), SECURITY_OPT]
             additions.append(Addition(
                 name, "security_opt",
-                f"security_opt {reason}; dockscreen adds security_opt: {json.dumps([SECURITY_OPT])}"))
+                f"security_opt {reason}; added {json.dumps([SECURITY_OPT])}",
+                notable=bool(declared), help=NOT_REMOVABLE))
     return hardened, additions
 
 
@@ -50,7 +56,8 @@ def resolve_user_names(name, service, accounts):
     if service.get("user"):
         resolved = resolve_spec(service["user"], accounts)
         if resolved != service["user"]:
-            additions.append(Addition(name, "user", resolved_message("user", service["user"], resolved)))
+            additions.append(Addition(name, "user", resolved_message("user", service["user"], resolved),
+                                      help=RESOLVE_HELP))
             service["user"] = resolved
     for key in ("post_start", "pre_stop"):
         for hook in service.get(key) or []:
@@ -58,13 +65,13 @@ def resolve_user_names(name, service, accounts):
                 resolved = resolve_spec(hook["user"], accounts)
                 if resolved != hook["user"]:
                     message = resolved_message(f"{key} user", hook["user"], resolved)
-                    additions.append(Addition(name, key, message))
+                    additions.append(Addition(name, key, message, help=RESOLVE_HELP))
                     hook["user"] = resolved
     if service.get("group_add"):
         resolved = [resolve_group(g, accounts) for g in service["group_add"]]
         if resolved != service["group_add"]:
             additions.append(Addition(name, "group_add", resolved_message(
-                "group_add", service["group_add"], resolved)))
+                "group_add", service["group_add"], resolved), help=RESOLVE_HELP))
             service["group_add"] = resolved
     return additions
 
@@ -94,21 +101,33 @@ def resolve_group(group, accounts):
 
 
 def resolved_message(what, before, after):
-    return (f"{what} {json.dumps(before)} names an account on this host; "
-            f"dockscreen resolves it to {json.dumps(after)}")
+    return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 
 
 DEFAULT_KEYS = ("cap_drop", "security_opt")
+NOT_REMOVABLE = "dockscreen always adds it, and cap_add is refused: a service that needs more cannot run"
+DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, and cap_add is refused: "
+                 "it cannot run under dockscreen")
+RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
 def describe(additions):
-    """Lines for an audit: one per name resolved on this host, and one for the defaults, naming the
-    services that lack them. The defaults are the same for every service, so a line each is noise."""
-    lines = [f"service {a.service}: {a.message}" for a in additions if a.key not in DEFAULT_KEYS]
-    services = list(dict.fromkeys(a.service for a in additions if a.key in DEFAULT_KEYS))
+    """Marked lines for an audit or a run: what dockscreen changed, and how much it deserves a look.
+
+    A default added where the project set nothing is routine, and one line names the services, since it
+    is the same for all. A key the project set itself, and a name resolved on this host, get a line each.
+    """
+    lines = []
+    for a in additions:
+        if a.key in DEFAULT_KEYS and not a.notable:
+            continue
+        make = messages.notable_change if a.notable else messages.routine_change
+        lines.append(make(f"service {a.service}: {a.message}", a.help))
+    services = list(dict.fromkeys(a.service for a in additions if a.key in DEFAULT_KEYS and not a.notable))
     if services:
-        lines.append(f'dockscreen adds cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where '
-                     f"they are missing, in services {', '.join(services)}")
+        lines.append(messages.routine_change(
+            f'added cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where missing, '
+            f"in services {', '.join(services)}", DEFAULTS_HELP))
     return lines
 
 
@@ -118,11 +137,3 @@ def defaults_note():
             "service that lacks them, resolves user and group names to ids on this host, and runs a "
             "service that sets no user as the configured default user when its image would run as root, "
             "so these are not repeated here")
-
-
-def summary(additions):
-    """One line for a run: which services got which defaults."""
-    services = {}
-    for a in additions:
-        services.setdefault(a.service, []).append(a.key)
-    return "hardening defaults added: " + ", ".join(f"{s} ({', '.join(k)})" for s, k in services.items())

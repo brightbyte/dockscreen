@@ -126,3 +126,31 @@ def test_brief_lines_are_not_wrapped(monkeypatch, capsys):
     monkeypatch.setenv("COLUMNS", "40")
     messages.out(LONG, indent=False)
     assert capsys.readouterr().out == str(LONG) + "\n"
+
+
+def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
+    line = messages.notable_change("a changed", "do this about it")
+    assert str(line) == "● a changed"  # the facts, whatever the mode
+
+    messages.notice(line)
+    assert capsys.readouterr().err == "[dockscreen] ● a changed\n"
+
+    messages.set_helpful(True)
+    messages.notice(line)
+    assert capsys.readouterr().err == (
+        "[dockscreen] ● a changed - do this about it\n")
+    messages.out(line)
+    assert capsys.readouterr().out == "\t● a changed - do this about it\n"
+
+
+def test_a_reasons_help_follows_it_on_the_refusal_line(capsys):
+    from dockscreen import verdict
+    reason = messages.reason("it is wrong", "make it right")
+
+    verdict.report(verdict.Verdict.REFUSED, [reason])
+    assert capsys.readouterr().err.splitlines()[0] == "[dockscreen] ● refusing: it is wrong"
+
+    messages.set_helpful(True)
+    verdict.report(verdict.Verdict.REFUSED, [reason])
+    assert capsys.readouterr().err.splitlines()[0] == (
+        "[dockscreen] ● refusing: it is wrong - make it right")

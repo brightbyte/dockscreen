@@ -6,6 +6,9 @@ Before the subcommand (strip() takes them out):
   printed every time and cannot be silenced, because the flag may have been copied into a script or
   an alias.
 - --allow-me lets services and images run as the caller's own ids (see idrules).
+- --helpful (or --verbose) adds the second part of messages that have one: why, and what it costs.
+  The audit commands do that anyway. --verbose is taken here, not passed on, so that it does not
+  make docker or compose noisy as well.
 - --strict-screen treats the command line as untrusted too: what it asks for that a project or an
   image may not have (see runpolicy) is refused. Only `audit` supports it so far; everything else
   refuses to run with it, rather than ignore it.
@@ -24,9 +27,13 @@ ALLOW_ME = "--allow-me"
 AS = "--as"
 AS_ME = "--as-me"
 STRICT_SCREEN = "--strict-screen"
+HELPFUL = "--helpful"
+VERBOSE = "--verbose"
 BRIEF = "--brief"
-AS_ME_MESSAGE = ("--as-me goes after run or exec, before the service; for up, give --allow-me before the "
-                 "subcommand, and user: \"${UID}:${GID}\" to the services that should run as you")
+AS_ME_MESSAGE = messages.marked(
+    messages.BAD, "--as-me goes after run or exec, before the service",
+    "for up, give --allow-me before the subcommand, and user: \"${UID}:${GID}\" to the services that should "
+    "run as you")
 
 
 def strip(argv, value_opts, flag=SKIP_SCREENING):
@@ -50,6 +57,13 @@ def strip(argv, value_opts, flag=SKIP_SCREENING):
         else:
             break
     return found, [*kept, *argv[i:]]
+
+
+def strip_helpful(argv, value_opts):
+    """(whether --helpful or --verbose was given, argv without them)."""
+    helpful, argv = strip(argv, value_opts, HELPFUL)
+    verbose, argv = strip(argv, value_opts, VERBOSE)
+    return helpful or verbose, argv
 
 
 def banner():

@@ -6,7 +6,7 @@ pass-through is recognised by the value being the shell's own under the same nam
 another name. The variables dockscreen exports for compose files are left out. Values are never shown.
 """
 
-from dockscreen import ids
+from dockscreen import ids, messages
 
 
 def copied(config, env):
@@ -28,6 +28,8 @@ def copied(config, env):
 def describe(config, env):
     """One line per service that gets variables from the shell."""
     return [
-        f"service {name}: environment variables taken from your shell: {', '.join(names)}"
+        messages.marked(
+            messages.WARN, f"service {name}: environment variables taken from your shell: {', '.join(names)}",
+            "unset them in your shell, or give the project literal values, to keep them out")
         for name, names in copied(config, env).items()
     ]

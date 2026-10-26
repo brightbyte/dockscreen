@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import shellenv
+from dockscreen import messages, shellenv
 
 
 def config(**services):
@@ -13,8 +13,9 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_
 
     assert shellenv.copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
     lines = shellenv.describe(cfg, shell)
-    assert lines == ["service db: environment variables taken from your shell: HOME",
-                     "service web: environment variables taken from your shell: TOKEN"]
+    assert lines == [
+        messages.marked(messages.WARN, "service db: environment variables taken from your shell: HOME"),
+        messages.marked(messages.WARN, "service web: environment variables taken from your shell: TOKEN")]
     assert all("s3cret" not in line for line in lines)
 
 

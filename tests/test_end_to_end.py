@@ -122,7 +122,7 @@ def test_up_pulls_then_runs_compose_from_the_hardened_file_and_returns_its_exit_
     hardened = json.loads((fake_dir / "file-read").read_text())
     assert hardened["services"]["web"]["cap_drop"] == ["ALL"]
     assert not os.path.exists(path)  # removed once compose has exited
-    assert "hardening defaults added: web (cap_drop, security_opt)" in capsys.readouterr().err
+    assert "added cap_drop" in capsys.readouterr().err
 
 
 def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(project, capsys):
@@ -138,7 +138,7 @@ def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(pr
     web = json.loads((fake_dir / "file-read").read_text())["services"]["web"]
     assert web["user"] == "65534:65534" and web["pull_policy"] == "never"
     err = capsys.readouterr().err
-    assert "image x:1 would run as root; dockscreen runs it as the default user (65534:65534)" in err
+    assert "service web: running as 65534:65534 instead of root" in err
 
 
 def test_an_image_that_chose_a_low_user_is_refused_and_nothing_starts(project, capsys):

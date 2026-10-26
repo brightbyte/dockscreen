@@ -1,7 +1,7 @@
 import pytest
 from fakes import Accounts, rules, runtime
 
-from dockscreen import commands, hardening, patch, policy, screen
+from dockscreen import commands, hardening, messages, patch, policy, screen
 
 NOBODY = "65534:65534"
 
@@ -16,10 +16,21 @@ def test_missing_defaults_are_added_and_described():
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
     assert hardening.describe(additions) == [
-        'dockscreen adds cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where they are '
-        "missing, in services web",
+        messages.routine_change(
+            'added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where missing, '
+            "in services web", hardening.DEFAULTS_HELP),
     ]
-    assert hardening.summary(additions) == "hardening defaults added: web (cap_drop, security_opt)"
+
+
+def test_a_default_that_overrides_what_the_project_set_is_marked_check_this():
+    original = config(cap_drop=["NET_RAW"])
+    _, additions = hardening.apply(original, Accounts())
+
+    lines = hardening.describe(additions)
+
+    assert lines[0] == messages.notable_change(
+        'service web: cap_drop lacks ALL; added ["ALL"]')
+    assert lines[1].startswith(f"{messages.ROUTINE} added cap_drop")  # security_opt: unset
 
 
 def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
@@ -30,9 +41,8 @@ def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
     assert web["cap_drop"] == ["NET_RAW", "ALL"]
     assert web["security_opt"] == ["seccomp=unconfined", "no-new-privileges:true"]
     assert [(a.key, a.message) for a in additions] == [
-        ("cap_drop", 'cap_drop does not include ALL; dockscreen adds cap_drop: ["ALL"]'),
-        ("security_opt", 'security_opt does not include no-new-privileges; '
-                         'dockscreen adds security_opt: ["no-new-privileges:true"]'),
+        ("cap_drop", 'cap_drop lacks ALL; added ["ALL"]'),
+        ("security_opt", 'security_opt lacks no-new-privileges; added ["no-new-privileges:true"]'),
     ]
 
 
@@ -68,7 +78,7 @@ def test_audit_reports_the_additions_and_hints_at_harden(monkeypatch, capsys, tm
 
     captured = capsys.readouterr()
     assert "audit passed" in captured.err
-    assert 'dockscreen adds cap_drop: ["ALL"] and security_opt' in captured.out
+    assert 'added cap_drop: ["ALL"] and security_opt' in captured.out
     assert "the harden subcommand prints a compose override" in captured.out
 
 
@@ -154,8 +164,8 @@ def test_names_are_resolved_on_this_host(spec, resolved):
     assert hardened["services"]["web"]["user"] == resolved
     assert original["services"]["web"]["user"] == spec  # the input is left alone
     # the first line: the same service also lacks the other defaults
-    assert hardening.describe(additions)[0] == (
-        f'service web: user "{spec}" names an account on this host; dockscreen resolves it to "{resolved}"')
+    assert hardening.describe(additions)[0] == messages.routine_change(
+        f'service web: user "{spec}" resolved to "{resolved}" on this host')
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "65534:65534", "app", "app:app", "1000", "1000:staff"])
@@ -203,7 +213,6 @@ def test_the_audit_reports_the_resolution_and_harden_does_not_repeat_it(monkeypa
     commands.harden([], [], runtime())
     harden_out = capsys.readouterr().out
 
-    assert ('service web: user "nobody" names an account on this host; '
-            'dockscreen resolves it to "65534:65534"') in audit_out
+    assert 'service web: user "nobody" resolved to "65534:65534" on this host' in audit_out
     assert harden_out.splitlines()[-1] == "services: {}"  # automatic, like the other defaults
     assert "resolves user and group names to ids on this host" in harden_out

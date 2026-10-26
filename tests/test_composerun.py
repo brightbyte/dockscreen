@@ -39,7 +39,8 @@ def test_compose_runs_from_the_hardened_config_with_the_project_pinned(monkeypat
                        "--project-name", "proj", "up", "-d", "web"]
     web = config["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
-    assert "hardening defaults added: web (cap_drop, security_opt)" in capsys.readouterr().err
+    assert ('added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where '
+            "they were missing, in services web") in capsys.readouterr().err
 
 
 def test_every_generated_file_is_private_and_removed_afterwards(monkeypatch, tmp_path):
@@ -188,8 +189,7 @@ def test_a_root_image_runs_as_the_default_user_with_the_image_pinned_in_the_gene
     assert web["pull_policy"] == "never"
     pulled = [cmd[-2:] for cmd in recorder.children if "pull" in cmd]
     assert pulled == [["pull", "web"]]    # the project's policy (always) was applied first
-    assert ("service web: image x:1 would run as root; dockscreen runs it as the default user "
-            "(65534:65534)") in capsys.readouterr().err
+    assert "service web: running as 65534:65534 instead of root" in capsys.readouterr().err
 
 
 def test_images_are_acquired_from_a_config_that_still_has_the_projects_pull_policy(monkeypatch, tmp_path):

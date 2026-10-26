@@ -74,6 +74,7 @@ def dispatch(argv, runtime=None):
         return forward(argv, runtime or load_runtime())  # the config file names the real docker
 
     allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
+    helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
     as_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.AS_ME)
     if as_me:
         messages.notice(flags.AS_ME_MESSAGE)
@@ -83,6 +84,7 @@ def dispatch(argv, runtime=None):
     ids.export(runtime.env, runtime.me)
 
     idx = argscan.find_subcommand(argv, GLOBAL_OPTS_WITH_VALUE)
+    messages.set_helpful(helpful or (idx is not None and argv[idx] == "audit"))
     target = help_request(argv, idx)
     if target is not None:
         return show_help(target, argv, idx, runtime)

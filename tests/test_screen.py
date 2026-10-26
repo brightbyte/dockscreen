@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from fakes import runtime
 
-from dockscreen import config, screen
+from dockscreen import config, messages, screen
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
@@ -57,7 +57,8 @@ def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeyp
     settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
     assert screen.mount_dir_warnings(runtime(env={}, settings=settings)) == [
-        f"warning: the configured mount dir {tmp_path} contains {home}, so containers can mount it"]
+        messages.marked(messages.WARN, f"the configured mount dir {tmp_path} contains {home}, so containers "
+                                       "can mount it")]
 
 
 def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, monkeypatch):

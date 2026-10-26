@@ -132,9 +132,16 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 ### Notices
 
+Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done.
+
+A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`messages.Reason`), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
+
+- **routine** (cyan): a default added where nothing was set (`cap_drop`, `security_opt`, `--cap-drop`, `--security-opt`), a name resolved to ids, a checked image user passed on as numbers, an image pinned by id with `pull_policy: never`. These rarely change how the thing runs. The defaults can still break a program that needs a capability or a setuid binary, and the line says so.
+- **check this** (yellow): a change that can alter behaviour: an image's root user replaced by the default user, a service that is not started getting the default user whatever its image would choose, a `cap_drop` or `security_opt` the project set itself that dockscreen extends.
+
 - The default user replaced an image's root user: one line per service, on every run.
 - The configured default user is root: one line on every run.
-- A configured image user, root included, gets no per-run notice; `audit` lists it.
+- A configured image user, root included: a routine line per run, `audit` lists it too.
 - A name resolved on this host (`--as`, `user:`): one line naming the ids.
 
 ## Mechanisms

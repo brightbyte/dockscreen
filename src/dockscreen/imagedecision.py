@@ -19,7 +19,7 @@ Used by `docker run` (gate) and by compose (composeimages) alike.
 import enum
 from typing import NamedTuple, Protocol, runtime_checkable
 
-from dockscreen import config, idrules, ids, images, imageuser
+from dockscreen import config, idrules, ids, images, imageuser, messages
 from dockscreen.runtime import Runtime
 
 
@@ -178,6 +178,7 @@ def pinned_user(assessment):
 def root_default_notice(ctx):
     """A notice for every run when the configured default user is root, or None."""
     if 0 in ctx.settings.default_user:
-        return (f"the configured default user is {default_user_spec(ctx)}: "
-                "images that would run as root run as root")
+        return messages.marked(
+            messages.WARN, f"the configured default user is {default_user_spec(ctx)}: images that would "
+                           "run as root run as root", "set default_user in the config file to change it")
     return None

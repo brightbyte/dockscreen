@@ -118,7 +118,7 @@ def decision_problem(name, decision, config_file=None):
     if decision.assessment.failed:
         return text
     hint = images.section_hint(decision.image, config_file, decision.built) if config_file else None
-    return f"{text}; set user: to choose one" + (f", or {hint}" if hint else "")
+    return messages.reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
 def verify_round_trip(command, config, tools):
@@ -266,7 +266,7 @@ def describe(config, prepared, ctx):
             default = imagedecision.default_user_spec(ctx)
             text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
                     f"default user ({default}) if it is started")
-            lines.append(messages.marked(verdict.WARN, text))
+            lines.append(messages.notable_change(text, USER_HELP))
             continue
         assessment, dot = decision.assessment, verdict.dot(decision.assessment)
         if assessment.kind is imagedecision.Kind.OK:
@@ -278,20 +278,34 @@ def describe(config, prepared, ctx):
             lines.append(messages.marked(dot, f"service {name}: no user set; image {decision.image} runs as "
                                               f"{user}, the user the config file sets for it"))
         elif assessment.kind is imagedecision.Kind.FALLBACK:
-            lines.append(messages.marked(dot, f"service {name}: no user set; {fallback_text(decision)}"))
+            lines.append(messages.notable_change(f"service {name}: no user set; {fallback_text(decision)}",
+                                                 USER_HELP))
         if assessment.note:
             lines.append(messages.marked(verdict.WARN, f"service {name}: note: {assessment.note}"))
-    return lines
+    return [*lines, *pin_notices(prepared)]
+
+
+USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
+             "volumes set up for root")
 
 
 def fallback_text(decision):
-    return (f"image {decision.image} would run as root; dockscreen runs it as the default user "
-            f"({imagedecision.pinned_user(decision.assessment)})")
+    return f"running as {imagedecision.pinned_user(decision.assessment)} instead of root"
+
+
+def pin_notices(prepared):
+    """One line for the services whose checked user and image are fixed in the generated file, if any."""
+    names = [name for name, d in prepared.decisions.items() if d.assessment.pins_user]
+    if not names:
+        return []
+    return [messages.routine_change(
+        f"services {', '.join(names)}: user, image id and pull_policy: never fixed to what was checked, "
+        "in the generated file only")]
 
 
 def notices(prepared):
-    """What a run is about to do that the project did not ask for."""
+    """What a run is about to do that the project did not ask for, as marked lines."""
     return [
-        f"service {name}: {fallback_text(d)}"
+        messages.notable_change(f"service {name}: {fallback_text(d)}", USER_HELP)
         for name, d in prepared.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
-    ]
+    ] + pin_notices(prepared)
