@@ -53,6 +53,17 @@ Compose interpolates the files it reads, so the generated file is written as `do
 
 `environment: [FOO]` takes FOO from your shell. dockscreen does not refuse it, but `audit` and every run that starts containers say which services get which variables (names only, never values). The resolved config does not record where a value came from, so a pass-through is recognised by the value being your shell's own under the same name: `X: ${FOO}` is not noticed, and `FOO: bar` is reported if your shell has `FOO=bar`. `UID` and `GID` are left out.
 
+## Network
+
+dockscreen does not filter the network: a container can reach the internet, and with Docker's defaults also the host
+and the local network. Code running in the container should not be trusted, and neither should a local network
+(a hotel, a train, a conference), so on a host with rootful Docker and UFW, install
+[docker-fw](https://github.com/brightbyte/docker-fw). Its rules keep containers from reaching the host and the
+private address ranges of the LAN, stop Docker from bypassing UFW for published ports, and still let containers
+use DNS, talk to each other and reach the public internet. 
+
+The restrictions imposed by docker-fw can be bypassed using `--network host`, or by adding an appropriate `ufw` rule.
+
 ## Commands
 
 | Command | |
