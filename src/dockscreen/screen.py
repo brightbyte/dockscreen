@@ -6,6 +6,7 @@ import re
 import subprocess
 
 from dockscreen import argscan, config, images, messages, policy, verdict
+from dockscreen.dockerclient import DockerError
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
@@ -114,6 +115,33 @@ def load_config(global_args, docker_binary):
         return json.loads(result.stdout)
     except ValueError as e:
         raise InspectError(f"cannot parse docker compose config output: {e}")
+
+
+def name_conflicts(name, directory, docker):
+    """Problems with running the project `name` in `directory`: containers of a project of that name
+    already exist that were made from another directory.
+
+    The name is the project's own choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`), and it
+    decides which volumes, networks and containers compose uses, replaces and, for `down -v`, removes.
+    Volumes and networks alone say nothing about where they came from, so only containers count.
+    """
+    try:
+        found = docker.project_directories(name)
+    except DockerError as e:
+        return [f"cannot tell whether another project is called {name!r}: {e}"]
+    here = os.path.realpath(directory)
+    others = sorted({path for path in found if not path or os.path.realpath(path) != here})
+    if not others:
+        return []
+    shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
+    return [messages.reason(
+        f"project name {name!r} is used by containers made from {shown}, not from {here}",
+        "pass -p NAME to choose the name yourself")]
+
+
+def names_project(global_args, env):
+    """Whether the person chose the project name, with -p or COMPOSE_PROJECT_NAME in the environment."""
+    return bool(argscan.option_values(global_args, "--project-name", "-p") or env.get("COMPOSE_PROJECT_NAME"))
 
 
 REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot be checked"

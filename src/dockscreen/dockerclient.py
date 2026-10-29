@@ -70,6 +70,18 @@ class Docker:
     def remove(self, container):
         self.run([self.binary, "rm", "--force", "--", container], capture_output=True)
 
+    def project_directories(self, name):
+        """The working directory label of each container, running or not, of the compose project `name`.
+
+        Empty for one that has no such label. Raises DockerError if docker cannot say.
+        """
+        label = "com.docker.compose.project"
+        result = self.run([self.binary, "ps", "--all", "--filter", f"label={label}={name}", "--format",
+                           f'{{{{.Label "{label}.working_dir"}}}}'], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise DockerError(result.stderr.strip() or "docker ps failed")
+        return result.stdout.splitlines()
+
     def context(self):
         result = self.run([self.binary, "context", "show"], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None

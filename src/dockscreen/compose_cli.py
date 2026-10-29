@@ -20,6 +20,7 @@ from dockscreen import (
     messages,
     policy,
     screen,
+    verdict,
 )
 from dockscreen.commands import ALIASES, COMMANDS
 from dockscreen.dockerclient import DockerNotFound
@@ -31,6 +32,8 @@ RUNTIME_SUBCOMMANDS = frozenset({"up", "create", "run", "watch", "scale", "alpha
 # Subcommands that only build: they get the build-related checks, not the runtime policy.
 BUILD_SUBCOMMANDS = frozenset({"build", "bake"})
 SCREENED_SUBCOMMANDS = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
+# Subcommands that stop, change or remove what the project's name stands for. Only the name is checked.
+NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", "start", "pause", "unpause"})
 
 # Global `docker compose` options that consume the following token as their value.
 # Needed to tell `-f foo.yml up` (subcommand "up") from `-f up` (a value).
@@ -97,6 +100,9 @@ def dispatch(argv, runtime=None):
             return composerun.run(argv, idx, runtime, allow_me=allow_me)
         if not screen.passes(argv[:idx], runtime, policy.check_build_config):
             return 1
+    elif idx is not None and argv[idx] in NAMED_PROJECT_SUBCOMMANDS:
+        if not name_is_free(argv[:idx], runtime):
+            return 1
     elif idx is not None and argv[idx] == "exec":
         args = rewrite_exec("exec", argv[idx + 1:], runtime)
         if args is None:
@@ -104,6 +110,23 @@ def dispatch(argv, runtime=None):
         argv = [*argv[:idx + 1], *args]
 
     forward(argv, runtime)
+
+
+def name_is_free(global_args, runtime):
+    """Whether the project's name is not that of a project made from another directory.
+
+    Said nothing when it is. A project that cannot be inspected is left to compose to report.
+    """
+    if screen.names_project(global_args, runtime.env):
+        return True
+    try:
+        config, directory = screen.inspect(global_args, runtime)
+    except screen.ScreenError:
+        return True
+    if not config.get("name"):
+        return True
+    reasons = screen.name_conflicts(config["name"], directory, runtime.docker)
+    return not reasons or verdict.screened(reasons)
 
 
 def rewrite_exec(kind, args, runtime):

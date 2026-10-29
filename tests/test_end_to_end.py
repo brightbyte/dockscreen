@@ -35,6 +35,7 @@ case "$1 $2" in
 esac
 case "$1" in
   create) echo cid; exit 0 ;;
+  ps) exit 0 ;;
   rm) exit 0 ;;
   cp) case "$3" in cid:/etc/passwd) cat "$DIR/passwd.tar" ;; *) exit 1 ;; esac; exit 0 ;;
 esac

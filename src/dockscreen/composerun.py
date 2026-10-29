@@ -64,6 +64,9 @@ class Project(NamedTuple):
             problems.append("config has no project name")
         if self.remote:
             problems.append(screen.REMOTE_MESSAGE)
+        elif not problems and not screen.names_project(self.global_args, self.runtime.env):
+            problems += screen.name_conflicts(self.hardened["name"], self.directory,
+                                              self.tools.gate_ctx.docker)
         return problems
 
     def final_ctx(self, prepared, vetted):

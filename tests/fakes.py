@@ -75,9 +75,13 @@ class FakeImages:
         self.calls = []
         self.created = []
         self._containers = {}
+        self.project_dirs = []  # working_dir labels of the containers of the project, whatever its name
 
     def context(self):
         return "default"
+
+    def project_directories(self, name):
+        return self.project_dirs
 
     @staticmethod
     def image_id(name):
@@ -173,6 +177,9 @@ class FakeDocker:
 
     def context(self):
         return self.current_context
+
+    def project_directories(self, name):
+        return []
 
     def names(self):
         return [call[0] for call in self.calls]
