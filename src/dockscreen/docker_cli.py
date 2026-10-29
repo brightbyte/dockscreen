@@ -9,6 +9,7 @@ import sys
 
 from dockscreen import (
     argscan,
+    bake,
     compose_cli,
     config,
     flags,
@@ -30,6 +31,7 @@ DOCKER_OPTS_WITH_VALUE = frozenset({
     "--tlscacert", "--tlscert", "--tlskey",
 })
 GATED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
+BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 
 
 def main(argv=None):
@@ -78,9 +80,28 @@ def dispatch(argv):
         sub, end = argv[idx + 1], idx + 1
     if wants_command_help(sub, argv[end + 1:]):
         return show_command_help(sub, argv, runtime)
+    if (bake_args := bake_arguments(argv, idx)) is not None and bake.wants_screening(bake_args):
+        return screened_bake(argv, bake_args, runtime)
     if sub not in GATED:
         return passthrough(argv, runtime)
     return gated(argv, sub, idx, end, runtime, allow_me, strict)
+
+
+def bake_arguments(argv, idx):
+    """The arguments of `buildx bake`, or None if the command is not that."""
+    if argv[idx] != "buildx":
+        return None
+    rest = argv[idx + 1:]
+    at = argscan.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
+    return rest[at + 1:] if at is not None and rest[at] == "bake" else None
+
+
+def screened_bake(argv, args, runtime):
+    """Run `buildx bake` if the definition it would build passes the policy for builds."""
+    reasons, failed = bake.screen(runtime.docker, args)
+    if not verdict.screened(reasons, failed):
+        return 1
+    return passthrough(argv, runtime)
 
 
 def gated(argv, sub, idx, end, runtime, allow_me=False, strict=False):

@@ -18,7 +18,7 @@ For `dockscreen compose`: `up`, `create`, `run`, `watch`, `scale` and `alpha` re
 - uses volumes or networks that are external or belong to another project;
 - uses a compose key that dockscreen doesn't know yet. The policy is an allowlist.
 
-`build` and `bake` only check what building can reach: no SSH agent, no host network or privileged builds, and contexts and secrets inside the project.
+`build` and `bake` only check what building can reach: no SSH agent, no host network or privileged builds, and contexts and secrets inside the project. `docker buildx bake` gets the same check, run on the definition that `docker buildx bake --print` gives, and also refuses outputs and cache exports that write files. `docker buildx build` and `docker build` are not screened.
 
 Every command dockscreen screens ends its output with the verdict, right before docker or compose takes over: ✔ audit passed, ⊖ denied by audit, or ✘ audit failed when it could not look (the image did not pull, the config did not parse). If `up` or `run` does not show that line, dockscreen was not in the path. Commands it passes on unchecked (`ps`, `logs`, `exec` …) print nothing.
 

@@ -204,6 +204,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `create` gets the defaults and user resolution. Its container is checked when it is started.
 - `start` and `restart` check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` checks only the form of the user (see [Forms](#forms)).
+- `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `bake.check_definition` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
 - `audit` takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
@@ -258,6 +259,8 @@ Text from the project or the image is escaped (`text.printable`) before it is pr
 
 ## Known gaps
 
+- `start` and `restart` trust a container whose user differs from its image's, as `run --user` is trusted: dockscreen cannot tell one made on a command line from one a project's script made. They do not examine `HostConfig` (privileged, binds, devices). A user that is the image's own is resolved by the daemon at start, from the container's files, so the safety rests on `imageuser` reading ids as the daemon does. `restart` has a window in which a running container with a writable `/etc/passwd` can change the result after the check.
+- `bake` resolves relative paths in its definition against the current directory, not against the directory of a bake file given with `-f`; a bake file elsewhere is checked against the wrong base. Other plugin commands that start containers (`docker sandbox run`, `docker model run`) and swarm `service create` and `stack deploy` are passed through.
 - Compose `start` and `restart` are passed through unchecked. A container that plain `docker compose create` made, without dockscreen, can be started through them.
 - Image sections cannot apply to a locally built image; pinning by digest is a [future idea](../FUTURE.md).
 - `harden` writes `user: "${UID}:${GID}"` where an image's user is refused, which needs `--allow-me` to run.
