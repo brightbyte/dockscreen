@@ -1,6 +1,6 @@
 """Which uids and gids a project or an image may choose for a container.
 
-Applies to every id that comes from an untrusted source: `user:`, hook users and `group_add` in a compose
+Applies to every id that comes from an untrusted source: `user:` and hook users in a compose
 file, and the user an image runs as. Ids from the command line and the config file are trusted and are
 not checked here.
 
@@ -10,7 +10,8 @@ Never accepted, unless they are allowed ids (below):
   (processes, inotify watches), and own its files in anything it mounts;
 - an id in a subordinate range (/etc/subuid, /etc/subgid, any owner): files with these ids belong to
   rootless containers on this host;
-- 65535 and 4294967295, which tools read as "no id".
+- 65535 and 4294967295, which tools read as "no id";
+- an id above 2147483647, which docker refuses and older daemons wrap or clamp.
 
 With host mounts (bind mounts, devices, volumes_from, secrets, configs) the id must be an allowed id,
 because what the container can write on the host depends on it.
@@ -26,6 +27,9 @@ from dockscreen import hostusers
 
 SUBUID_FILE = "/etc/subuid"
 SUBGID_FILE = "/etc/subgid"
+# Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
+# caller's own uid, so they are refused here with or without host mounts.
+MAX_ID = 2**31 - 1
 
 
 @runtime_checkable
@@ -58,6 +62,8 @@ class Rules(NamedTuple):
             return f"{kind} 0 is root"
         if value in configuration.NO_ID:
             return f"{kind} {value} means \"no id\" to many tools"
+        if value > MAX_ID:
+            return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
         if value == self.me[0 if base == "uid" else 1]:
             return f"{kind} {value} is yours; pass --allow-me to allow it"
         name = self.local.user_name(value) if base == "uid" else self.local.group_name(value)

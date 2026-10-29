@@ -25,6 +25,20 @@ def test_ids_that_are_not_root_and_unknown_to_the_host_are_accepted_without_moun
     assert rules(local=Accounts()).problems(uid, gid, supplementary) == []
 
 
+@pytest.mark.parametrize("mounts", [False, True])
+@pytest.mark.parametrize("value", [2**31, 2**32, 2**32 + 1000, 10**20])
+def test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts(value, mounts):
+    reason = f"{value} is above 2147483647, the largest id docker accepts"
+    problems = rules(local=Accounts()).problems(value, 65534, (value,), mounts=mounts)
+    assert [p for p in problems if "supplementary" not in p] == [f"uid {reason}"]
+    assert problems[1] == f"supplementary gid {reason}"
+    assert rules(local=Accounts()).problems(65534, value, mounts=mounts) == [f"gid {reason}"]
+
+
+def test_the_largest_id_docker_accepts_is_not_refused_for_its_size():
+    assert rules(local=Accounts()).problems(2**31 - 1, 2**31 - 1) == []
+
+
 @pytest.mark.parametrize("uid, gid, supplementary, reason", [
     (0, 100001, (), "uid 0 is root"),
     (100000, 0, (), "gid 0 is root"),
