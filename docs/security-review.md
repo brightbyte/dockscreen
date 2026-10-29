@@ -8,13 +8,7 @@ Method: reading the source. "Code confirmed" means the dockscreen side was re-re
 
 ## Medium
 
-### 1. Service names are passed to compose without `--`
-
-`composeimages.py:189`: `[*command, subcommand, *names]`. The compose spec allows a leading `-` in a service name, so `--ssh` becomes `docker compose build --ssh default`, which forwards the SSH agent (refused for `build.ssh` by policy). Code confirmed; unverified whether compose-go accepts such names.
-
-Fix: `--` before `*names`, or refuse names starting with `-` in `check_config`.
-
-### 2. An `include:` entry's `env_file` and `extends.file` are invisible in the `config` output
+### 1. An `include:` entry's `env_file` and `extends.file` are invisible in the `config` output
 
 Host file contents can flow into values such as `image:` and be sent at pull time. The `env_file` of services is covered; these two are not.
 
@@ -24,75 +18,75 @@ Fix: refuse them in the raw config, or document as out of scope.
 
 Ordered by how likely the problem is to matter, then by how cheap the fix is.
 
-### 3. Without a real docker, the wrapper execs itself forever
+### 2. Without a real docker, the wrapper execs itself forever
 
 `realdocker.choose` falls back to the plain name `"docker"`, which `execvp` finds on `PATH`, i.e. the wrapper. `DOCKER_NOT_FOUND` is never reached. Code confirmed. Fix: return None or raise `DockerNotFound`.
 
-### 4. Ctrl-C and SIGTERM on `docker run` leave the container running
+### 3. Ctrl-C and SIGTERM on `docker run` leave the container running
 
 `Docker.start` uses `subprocess.call`: Ctrl-C kills the `docker start --attach` client after 0.25 s and shows a traceback; SIGTERM orphans the child. `composerun.run_child` already forwards signals; reuse it.
 
-### 5. `docker run` and `docker start` do not see a bind-backed named volume
+### 4. `docker run` and `docker start` do not see a bind-backed named volume
 
 In a project, a named volume whose `driver_opts` bind a host path counts as a host mount. For a container, the volume is only a name, so a volume that was created that way earlier is not counted, and the id rules for containers without host mounts apply.
 
-### 6. `docker run` recreates the container by image name, not id
+### 5. `docker run` recreates the container by image name, not id
 
 `gate.py:96, 148`: `create` for the fallback uses the name, not the id, so a tag that moves between the two creates applies the pinned user of image A to image B. `composeimages.finalize` already pins the id. Needs a concurrent actor.
 
-### 7. `annotations` is allowed unchecked
+### 6. `annotations` is allowed unchecked
 
 `policy.HARMLESS_SERVICE_KEYS`. `run.oci.keep_original_groups` under crun keeps the runtime's supplementary groups. Depends on the daemon's runtime. Drop it from the harmless list or refuse `run.oci.*`.
 
-### 8. Symlink swap between check and mount
+### 7. Symlink swap between check and mount
 
 `is_inside` resolves symlinks for the check only; docker resolves them at start. With a read-write project mount, service A can re-point `./x` before service B (`depends_on: A`) mounts it. Needs `--allow-me` or a world-writable project directory. Fix: refuse bind sources whose `realpath` differs from their normalized path.
 
-### 9. `additional_contexts: oci-layout://…` counts as a remote URL
+### 8. `additional_contexts: oci-layout://…` counts as a remote URL
 
 `is_host_path` treats it as one; buildx reads a local layout. Allowlist the URL schemes. The same applies to the contexts of a bake definition.
 
-### 10. An `ipam` subnet can overlap the LAN
+### 9. An `ipam` subnet can overlap the LAN
 
 The policy checks the `ipam` keys and driver, not the subnets, so a project can declare a network that takes over routes to hosts on the LAN.
 
-### 11. `docker buildx bake` resolves relative paths against the current directory
+### 10. `docker buildx bake` resolves relative paths against the current directory
 
 A bake file given with `-f` from another directory is checked against the wrong base.
 
-### 12. Commands that start containers or build without going through dockscreen
+### 11. Commands that start containers or build without going through dockscreen
 
 `docker sandbox run`, `docker model run`, swarm `service create` and `stack deploy` are passed through unchecked. `buildx build` and `docker build` are not screened either: their Dockerfile cannot reach the host without options, and the command line is trusted.
 
-### 13. `harden` maps a mount source `/` to `./`
+### 12. `harden` maps a mount source `/` to `./`
 
 `autofix.placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
 
-### 14. `docker.context()` ignores `--config`
+### 13. `docker.context()` ignores `--config`
 
 `docker --config ~/other run img` with a remote `currentContext` there passes the remote check. Mistake class only.
 
-### 15. Relative `PATH` entries are searched for the real docker
+### 14. Relative `PATH` entries are searched for the real docker
 
 `realdocker.find` skips only empty entries; `tests/test_realdocker.py:36` accepts `./docker`. Marginal: the shell would pick the same binary unless the wrapper is first.
 
-### 16. Unknown value-taking global options fail open
+### 15. Unknown value-taking global options fail open
 
 `docker compose --newopt val up` makes `val` the subcommand and forwards `up` unscreened. No current trigger; the docker option set looks complete.
 
-### 17. Config trust
+### 16. Config trust
 
 `config.strict_modes` walks the realpath chain only, not the directory that holds a symlinked path. Project sections match by cwd prefix (documented). `/etc/subuid` is read directly, so NSS subid sources are not covered.
 
-### 18. Uncaught exceptions end in a traceback
+### 17. Uncaught exceptions end in a traceback
 
 `getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `gate.py:152-159` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
 
-### 19. `text.printable` does not escape `\`
+### 18. `text.printable` does not escape `\`
 
 A literal `\x0a` in a project name looks like an escape; invisible printable characters (U+2800, U+3164) pass. The verdict line cannot be forged inside project strings, because every sink escapes. Raw docker, pull and build output can print `[dockscreen] ✔ audit passed` before the real verdict, and container output follows it; inherent to passing output through.
 
-### 20. `imageuser.resolve` reports supplementary groups even when the group is given explicitly
+### 19. `imageuser.resolve` reports supplementary groups even when the group is given explicitly
 
 Moby does not. Harmless on `run` and compose; a spurious refusal on `start`.
 
