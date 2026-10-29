@@ -92,6 +92,7 @@ class Assessment(NamedTuple):
     note: str | None = None        # a section for the repository that does not apply, and why
     user: tuple | None = None      # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
     section: str | None = None     # the repository whose image section applied, if one did
+    home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
 
     @property
     def refused(self):
@@ -156,7 +157,8 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
     except ValueError as e:
         return Assessment(Kind.REFUSED, [str(e)], **found)
     if imageuser.involves_root(identity):
-        return Assessment(Kind.FALLBACK, [], identity, user=settings.default_user, **found)
+        return Assessment(Kind.FALLBACK, [], identity, user=settings.default_user, home=settings.default_home,
+                          **found)
     if mounts is None:
         mounts = has_host_mounts(info)
     problems = rules.problems(identity.uid, identity.gid, identity.supplementary, mounts=mounts)
@@ -166,12 +168,12 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
 
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
-DEFAULT_USER_HOME = "/tmp"
+def default_home(user, home):
+    """The HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
 
-
-def gets_default_home(user):
-    """Whether HOME is set for a default user (uid, gid) that replaces an image's root user."""
-    return 0 not in user
+    home: the configured default_home. Root keeps its own.
+    """
+    return "" if 0 in user else home
 
 
 def env_value(env, name):

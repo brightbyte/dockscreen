@@ -434,6 +434,14 @@ def test_a_service_that_is_not_started_gets_the_default_users_home_too():
     assert final["services"]["idle"]["environment"] == {"HOME": "/tmp"}
 
 
+def test_the_default_home_follows_the_config_file_and_may_be_left_out():
+    images = FakeImages(users={"web:1": ""})
+    _, final, _ = decided(project(web={}), images, settings=configuration.Config(default_home="/var/empty"))
+    assert final["services"]["web"]["environment"] == {"HOME": "/var/empty"}
+    _, final, _ = decided(project(web={}), images, settings=configuration.Config(default_home=""))
+    assert "environment" not in final["services"]["web"]
+
+
 def test_root_as_the_default_user_gets_no_home():
     settings = configuration.Config(default_user=(0, 0))
     _, final, _ = decided(project(web={}), FakeImages(users={"web:1": ""}), settings=settings)

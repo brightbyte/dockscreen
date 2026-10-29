@@ -30,7 +30,7 @@ When refusing, dockscreen says why. `dockscreen compose harden` prints a compose
 
 Containers don't run as root or as you unless you say so.
 
-- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice. Its `HOME` is set to `/tmp`, which nobody can write to unlike root's home, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
+- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice. Its `HOME` is set to `/tmp` (the configured `default_home`), which nobody can write to unlike root's home, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
 - A project or an image may not pick root, an id of a local account, an id from `/etc/subuid` or `/etc/subgid`, or 65535 and 4294967295. That applies to the uid, the gid and supplementary groups.
 - With host mounts (bind mounts, devices, `volumes_from`, secrets, configs), the id must be in the nobody range (65530–65534 unless configured), the default user, a user configured for the image, or you with `--allow-me`.
 - To run services as yourself: `dockscreen --allow-me compose up`, with `user: "${UID}:${GID}"` on those services. dockscreen sets `UID` and `GID` to your real ids.
@@ -79,6 +79,7 @@ dockscreen reads `/etc/dockscreen/config.toml` and then `~/.config/dockscreen/co
 
 ```toml
 default_user = "65534:65534"       # replaces an image's root user
+default_home = "/tmp"             # its HOME; "" leaves HOME alone
 nobody_range = [65530, 65534]      # ids any project or image may use, mounts or not
 mount_dirs = ["/srv/shared-data"]  # where bind mounts may come from, besides the project
 security_opts = []                 # security options allowed besides no-new-privileges
@@ -92,7 +93,7 @@ user = "999:999"
 mount_dirs = ["/srv/shop-uploads"]
 ```
 
-Every setting except `docker` can also go in an image section and a project section. They apply in that order, after the top level: a single value (`user`, `default_user`, `nobody_range`) replaces the one before, a list (`mount_dirs`, `security_opts`) is added to. Nothing stops a section from allowing too much: that is your call.
+Every setting except `docker` can also go in an image section and a project section. They apply in that order, after the top level: a single value (`user`, `default_user`, `default_home`, `nobody_range`) replaces the one before, a list (`mount_dirs`, `security_opts`) is added to. Nothing stops a section from allowing too much: that is your call.
 
 When dockscreen refuses something the config file could allow (a bind mount outside the project, an image's own user), the message names the setting and your config file.
 

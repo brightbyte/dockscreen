@@ -32,6 +32,7 @@ def test_every_key(tmp_path):
     path = write(tmp_path / "c.toml", '''
 user = "4100:4101"
 default_user = "4000:4001"
+default_home = "/var/empty"
 nobody_range = [70000, 70010]
 mount_dirs = ["/data"]
 security_opts = ["seccomp=/etc/docker/strict.json"]
@@ -40,6 +41,9 @@ docker = "/usr/local/bin/docker"
 [images.mariadb]
 user = "999:999"
 mount_dirs = ["/srv/db"]
+
+[images."ghcr.io/acme/tool"]
+default_home = ""
 
 [images."ghcr.io/acme/app"]
 security_opts = ["apparmor=acme"]
@@ -51,13 +55,15 @@ nobody_range = [80000, 80010]
     settings = load(path)
     assert settings.user == (4100, 4101)
     assert settings.default_user == (4000, 4001)
+    assert settings.default_home == "/var/empty"
     assert settings.nobody_range == (70000, 70010)
     assert settings.mount_dirs == ("/data",)
     assert settings.security_opts == ("seccomp=/etc/docker/strict.json",)
     assert settings.docker == "/usr/local/bin/docker"
     assert dict(settings.images) == {
         "docker.io/library/mariadb": config.Section(user=(999, 999), mount_dirs=("/srv/db",)),
-        "ghcr.io/acme/app": config.Section(security_opts=("apparmor=acme",))}
+        "ghcr.io/acme/app": config.Section(security_opts=("apparmor=acme",)),
+        "ghcr.io/acme/tool": config.Section(default_home="")}  # "" is a choice: no HOME
     assert dict(settings.projects) == {
         "/home/me/src/shop": config.Section(default_user=(5000, 5000), nobody_range=(80000, 80010))}
 
@@ -109,6 +115,8 @@ def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tm
     ('typo = 1', "unknown key 'typo'"),
     ('default_user = "nobody"', 'default_user must be "uid:gid" with numeric ids'),
     ('default_user = "65534"', 'default_user must be "uid:gid"'),
+    ('default_home = "tmp"', "default_home must be an absolute path"),
+    ("default_home = 1", "default_home must be an absolute path"),
     ("nobody_range = [65534, 65530]", "nobody_range must be [low, high]"),
     ("nobody_range = [0, 10]", "nobody_range must be [low, high]"),
     ("nobody_range = [65530, 65535]", "nobody_range must be [low, high]"),

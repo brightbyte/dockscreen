@@ -25,7 +25,7 @@ from dockscreen import ids, images, messages
 
 SYSTEM_FILE = "/etc/dockscreen/config.toml"
 # What the top level, an image section and a project section may set.
-SETTINGS = frozenset({"user", "default_user", "nobody_range", "mount_dirs", "security_opts"})
+SETTINGS = frozenset({"user", "default_user", "default_home", "nobody_range", "mount_dirs", "security_opts"})
 KEYS = SETTINGS | {"docker", "images", "projects"}
 # 65535 and 4294967295 are (uid_t)-1 in 16 and 32 bits, which tools read as "no id".
 NO_ID = frozenset({65535, 4294967295})
@@ -39,6 +39,7 @@ class Section(NamedTuple):
     """The settings an image or project section gives; None and () for those it leaves alone."""
     user: tuple | None = None
     default_user: tuple | None = None
+    default_home: str | None = None
     nobody_range: tuple | None = None
     mount_dirs: tuple = ()
     security_opts: tuple = ()
@@ -47,6 +48,7 @@ class Section(NamedTuple):
 class Config(NamedTuple):
     user: tuple | None = None                # (uid, gid) an image runs as when nothing chose a user
     default_user: tuple = (65534, 65534)     # (uid, gid) that replaces an image's root user
+    default_home: str = "/tmp"               # HOME of the default user; "" leaves HOME alone
     nobody_range: tuple = (65530, 65534)     # inclusive: ids any image or project may use
     mount_dirs: tuple = ()                   # absolute directories bind mounts may come from
     security_opts: tuple = ()                # security options allowed besides no-new-privileges
@@ -73,7 +75,7 @@ def effective(config, repository=None, directory=None):
 
 def amend(config, section):
     """config with section applied: single values replaced, lists added to."""
-    changes = {key: getattr(section, key) for key in ("user", "default_user", "nobody_range")
+    changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
     for key in ("mount_dirs", "security_opts"):
         before = getattr(config, key)
@@ -175,6 +177,11 @@ def section(path, where, data):
     for key in ("user", "default_user"):
         if key in data:
             fields[key] = user_value(path, f"{where} {key}".strip(), data[key])
+    if "default_home" in data:
+        value = data["default_home"]
+        if not isinstance(value, str) or (value and not os.path.isabs(value)):
+            raise ConfigError(f"{prefix}default_home must be an absolute path, or \"\" to leave HOME alone")
+        fields["default_home"] = value
     if "nobody_range" in data:
         fields["nobody_range"] = id_range(path, data["nobody_range"])
     if "mount_dirs" in data:

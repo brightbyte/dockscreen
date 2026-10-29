@@ -11,6 +11,11 @@
 # The user that replaces an image's root user, as numeric "uid:gid".
 #default_user = "65534:65534"
 
+# The HOME of the default user when it replaces an image's root user: the image's own HOME is root's,
+# which that user cannot write to. A HOME the command line, an env file or the service sets stays.
+# "" leaves HOME as the image has it. The default user gets no HOME when it is root.
+#default_home = "/tmp"
+
 # Ids any project or image may use, with or without host mounts (inclusive).
 #nobody_range = [65530, 65534]
 

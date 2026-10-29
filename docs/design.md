@@ -44,7 +44,7 @@ Who a container runs as is the decision dockscreen spends most of its effort on.
 | Source | Trusted | Checked |
 |---|---|---|
 | Command line: `--user`/`-u`, `--as`, `--as-me`, `--allow-me` | yes | form only (see [Forms](#forms)) |
-| Config file: `user`, `default_user`, `nobody_range`, at the top level and in image and project sections | yes | the file's ownership and permissions (see [Configuration](#configuration-and-options-config)) |
+| Config file: `user`, `default_user`, `default_home`, `nobody_range`, at the top level and in image and project sections | yes | the file's ownership and permissions (see [Configuration](#configuration-and-options-config)) |
 | Compose file: `user:`, hook `user:`, `group_add`, including values from `.env` | no | all rules |
 | Image: its `USER`, `/etc/passwd` and `/etc/group` | no | all rules |
 
@@ -52,7 +52,7 @@ Who a container runs as is the decision dockscreen spends most of its effort on.
 
 - **me**: the caller's real uid and gid.
 - **nobody range**: ids any project or image may use, mounts or not. `nobody_range`, 65530–65534 by default.
-- **default user**: what replaces an image's root user. `default_user`, 65534:65534 by default. It also gets `HOME=/tmp` (not when it is root), because the image's own `HOME` is root's. A `HOME` that the command line, an env file or the service sets stays: for `docker run`, a `HOME` in the created container that differs from the image's `ENV` counts as set by the caller. The image's own user and a configured user keep the home docker finds in passwd.
+- **default user**: what replaces an image's root user. `default_user`, 65534:65534 by default. It also gets `HOME` set to `default_home`, `/tmp` by default (not when it is root, nor when `default_home` is `""`), because the image's own `HOME` is root's. A `HOME` that the command line, an env file or the service sets stays: for `docker run`, a `HOME` in the created container that differs from the image's `ENV` counts as set by the caller. The image's own user and a configured user keep the home docker finds in passwd.
 - **configured user**: a `uid:gid` that `user` sets in the config file, at the top level or in the image's or project's section.
 - **allowed ids**: the nobody range, the default user, the uid and the gid of the configured user that applies to the service, and me when `--allow-me` was given (`--as-me` implies it for `docker run`). Each id is allowed on its own: with a configured `900:900`, `900:65534` passes too. A top-level `user` makes its ids allowed for every service of every project.
 - **host mounts**: bind mounts, devices, `volumes_from`, secrets and configs. Named volumes and tmpfs are not.
@@ -217,6 +217,7 @@ The config files are TOML, read with `tomllib`. The user's file overrides `/etc`
 | Key | Default | Effect |
 |---|---|---|
 | `default_user` | `65534:65534` | replaces an image's root user; a notice on every run if it is root |
+| `default_home` | `/tmp` | `HOME` of the default user, which has none of its own; `""` leaves `HOME` alone |
 | `nobody_range` | `[65530, 65534]` | ids any project or image may use, mounts or not; may not include 65535 |
 | `mount_dirs` | none | absolute directories, besides the project, that bind mounts may come from |
 | `user` | none | the user every image runs as when the service or command line chooses none |

@@ -34,13 +34,12 @@ from dockscreen import (
 )
 from dockscreen.dockerclient import DockerError, DockerNotFound
 from dockscreen.imagedecision import (
-    DEFAULT_USER_HOME,
     Assessment,
     DockerAccess,
     Kind,
     assess,
+    default_home,
     env_value,
-    gets_default_home,
     pinned_user,
     root_default_notice,
 )
@@ -119,12 +118,13 @@ def home_args(ctx, info, assessment):
     The container as created has the merged environment: a HOME that differs from the image's own
     was set by the person running it, and stays.
     """
-    if not gets_default_home(assessment.user):
+    home = default_home(assessment.user, assessment.home)
+    if not home:
         return []
     image_env = ctx.docker.inspect_image(info["Image"])["Config"].get("Env")
     if env_value(info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
         return []
-    return ["-e", f"HOME={DEFAULT_USER_HOME}"]
+    return ["-e", f"HOME={home}"]
 
 
 def defaults_notice():
@@ -136,10 +136,11 @@ def defaults_notice():
 
 
 def fallback_notice(assessment):
+    home = default_home(assessment.user, assessment.home)
     return messages.notable_change(
         f"running as {pinned_user(assessment)} instead of root",
         f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
-        f"accessible to it, and HOME is {DEFAULT_USER_HOME} unless you set it")
+        "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
 def create_checked(ctx, parsed, extra):

@@ -162,6 +162,22 @@ def test_a_home_chosen_on_the_command_line_or_in_an_env_file_stays(docker, args)
     assert "HOME=/tmp" not in created_env(docker)
 
 
+def test_the_default_home_comes_from_the_config_file_and_may_be_left_out():
+    docker = FakeDocker(image_user="")
+    assert gate.run(ctx(docker, config.Config(default_home="/var/empty")), ["img"]) == 42
+    assert created_env(docker) == ["HOME=/var/empty"]
+    left_alone = FakeDocker(image_user="", image_env=["HOME=/root"])
+    assert gate.run(ctx(left_alone, config.Config(default_home="")), ["img"]) == 42
+    assert created_env(left_alone) == []
+
+
+def test_an_image_section_can_choose_the_home_of_the_default_user():
+    settings = config.Config(images={"docker.io/library/img": config.Section(default_home="/work")})
+    docker = FakeDocker(image_user="", repo_digests=["img@sha256:abc"])
+    assert gate.run(ctx(docker, settings), ["img"]) == 42
+    assert created_env(docker) == ["HOME=/work"]
+
+
 def test_only_a_default_user_replacing_root_gets_a_home():
     accepted = FakeDocker(image_user="app")  # the image's own user: docker finds its home in passwd
     assert gate.run(ctx(accepted), ["img"]) == 42
