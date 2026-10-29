@@ -36,7 +36,7 @@ def report(out):
 
 
 def pulls(recorder):
-    return [cmd[-2:] for cmd in recorder.children if "pull" in cmd]
+    return [cmd[-3:] for cmd in recorder.children if "pull" in cmd]
 
 
 # --- audit ----------------------------------------------------------------------
@@ -59,7 +59,7 @@ def test_audit_pulls_and_says_what_happens_to_each_service_without_a_user(monkey
         messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
         messages.routine_change(f"services db, web: {PIN}"),
     ]
-    assert [cmd[-3:] for cmd in recorder.children] == [["pull", "cache", "web"]]  # db is already local
+    assert [cmd[-4:] for cmd in recorder.children] == [["pull", "--", "cache", "web"]]  # db is already local
 
 
 def test_audit_refuses_an_image_that_chose_a_low_user(monkeypatch, capsys, tmp_path):
@@ -143,7 +143,7 @@ def test_harden_writes_nothing_for_a_root_image_and_never_the_pull_pin(monkeypat
     assert out.splitlines()[-1] == "services: {}"       # nothing is needed: dockscreen does it all
     assert "pull_policy" not in out and "never" not in out  # the pin lives in the generated file only
     assert "user:" not in out.replace("sets no user", "")
-    assert pulls(recorder) == [["pull", "web"]]  # the project's always policy: the images were looked at
+    assert pulls(recorder) == [["pull", "--", "web"]]  # the project's always policy: the images were looked at
     assert ("runs a service that sets no user as the configured default user when its image would run "
             "as root") in out
 

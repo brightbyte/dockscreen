@@ -187,7 +187,7 @@ def acquire(command, config, to_run, args, tools):
         else:
             pull.append(name)  # always, and the periodic ones: pulling each run never serves stale images
     for subcommand, names in (("pull", pull), ("build", build)):
-        if names and tools.run_child([*command, subcommand, *names]) != 0:
+        if names and tools.run_child([*command, subcommand, "--", *names]) != 0:
             return [f"docker compose {subcommand} {' '.join(names)} failed"]
     return []
 

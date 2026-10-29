@@ -116,7 +116,7 @@ def test_up_pulls_then_runs_compose_from_the_hardened_file_and_returns_its_exit_
     assert config_call[:3] == ["compose", "--profile", "dev"] and "--no-env-resolution" in config_call
     assert config_call[config_call.index("--profile", 3) + 1] == "*"  # every profile is inspected
     assert verify_call[-4:] == ["config", "--format", "json", "--no-env-resolution"]
-    assert services_call[-2:] == ["config", "--services"] and pull_call[-2:] == ["pull", "web"]
+    assert services_call[-2:] == ["config", "--services"] and pull_call[-3:] == ["pull", "--", "web"]
     path = (fake_dir / "file-path").read_text().strip()
     assert up_call == ["compose", "--profile", "dev", "-f", path, "--project-directory", str(work.resolve()),
                        "--project-name", "proj", "up", "-d"]
@@ -132,7 +132,8 @@ def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(pr
 
     assert compose_cli.main(["up"]) == 5
 
-    assert [c[-2:] for c in compose_calls(fake_dir)][2:4] == [["config", "--services"], ["pull", "web"]]
+    calls_of_compose = compose_calls(fake_dir)[2:4]
+    assert [calls_of_compose[0][-2:], calls_of_compose[1][-3:]] == [["config", "--services"], ["pull", "--", "web"]]
     create = next(c for c in calls(fake_dir) if c[0] == "create")
     assert create == ["create", "--pull=never", "--", "x:1"]  # looked at, never started
     assert any(c[0] == "rm" for c in calls(fake_dir))

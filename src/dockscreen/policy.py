@@ -123,7 +123,7 @@ class Context(NamedTuple):
 
 def check_config(config, ctx):
     project = config.get("name")
-    problems = unknown_keys(config, TOP_LEVEL_KEYS, "top-level key")
+    problems = unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + check_service_names(config)
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
         problems += [f"service {name}: {p}"
@@ -135,12 +135,18 @@ def check_config(config, ctx):
     return problems + check_file_sources(config, ctx)
 
 
+def check_service_names(config):
+    """Service names go to compose as arguments, where a leading `-` would be an option."""
+    return [f"service name {name!r} starts with '-', which compose would read as an option"
+            for name in config.get("services") or {} if str(name).startswith("-")]
+
+
 def check_build_config(config, ctx):
     """The subset of the policy that applies to `build`: what building can reach on the host.
 
     Runtime hardening (user, capabilities, mounts) is irrelevant until containers run.
     """
-    problems = []
+    problems = check_service_names(config)
     for name, service in (config.get("services") or {}).items():
         if service and "build" in service:
             problems += [f"service {name}: {p}" for p in check_build(service["build"], ctx)]

@@ -67,14 +67,14 @@ def test_images_are_pulled_by_the_projects_pull_policy(policy_, present, pulled)
 
     prepared, recorder, _ = prepare(project(web=fields), images)
 
-    assert subcommands(recorder) == ([["pull", "web"]] if pulled else [])
+    assert subcommands(recorder) == ([["pull", "--", "web"]] if pulled else [])
     assert prepared.to_run == {"web"}
 
 
 def test_the_command_line_pull_policy_overrides_the_projects():
     images = FakeImages(users={"web:1": "app"})
     _, recorder, _ = prepare(project(web={"pull_policy": "never"}), images, ["--pull", "always"])
-    assert subcommands(recorder) == [["pull", "web"]]
+    assert subcommands(recorder) == [["pull", "--", "web"]]
     _, recorder, _ = prepare(project(web={"pull_policy": "always"}), images, ["--pull=never"])
     assert subcommands(recorder) == []
 
@@ -93,7 +93,7 @@ def test_built_images_are_built_when_up_would_build_them(fields, args, present, 
 
     _, recorder, _ = prepare(config, images, args)
 
-    assert subcommands(recorder) == ([["build", "web"]] if built else [])
+    assert subcommands(recorder) == ([["build", "--", "web"]] if built else [])
 
 
 def test_pulling_before_building_and_failure_stops_everything():
@@ -101,12 +101,12 @@ def test_pulling_before_building_and_failure_stops_everything():
     config["services"]["app"].pop("image")
     images = FakeImages(users={"web:1": "app", "proj-app": "app"}, local=set())
     _, recorder, _ = prepare(config, images, active=("web", "app"))
-    assert subcommands(recorder) == [["pull", "web"], ["build", "app"]]
+    assert subcommands(recorder) == [["pull", "--", "web"], ["build", "--", "app"]]
 
     prepared, recorder, images = prepare(config, FakeImages(users={}, local=set()), active=("web", "app"),
                                          codes={"pull": 1})
     assert prepared.problems == ["docker compose pull web failed"]
-    assert prepared.decisions == {} and subcommands(recorder) == [["pull", "web"]]  # build never started
+    assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]  # build never started
     assert images.calls == []  # and nothing was created
 
 

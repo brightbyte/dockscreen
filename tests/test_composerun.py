@@ -187,8 +187,8 @@ def test_a_root_image_runs_as_the_default_user_with_the_image_pinned_in_the_gene
     assert web["user"] == "65534:65534"
     # in the generated file only: the image that was checked is the one that runs
     assert web["pull_policy"] == "never"
-    pulled = [cmd[-2:] for cmd in recorder.children if "pull" in cmd]
-    assert pulled == [["pull", "web"]]    # the project's policy (always) was applied first
+    pulled = [cmd[-3:] for cmd in recorder.children if "pull" in cmd]
+    assert pulled == [["pull", "--", "web"]]    # the project's policy (always) was applied first
     assert "service web: running as 65534:65534 instead of root" in capsys.readouterr().err
 
 
@@ -229,7 +229,7 @@ def test_failing_to_pull_stops_the_run(monkeypatch, tmp_path, capsys):
     tools, recorder = make_tools(FakeImages(users={"x:1": "app"}, local=set()), codes={"pull": 1})
     assert up(["up"], 0, tools) == 1
     assert "docker compose pull web failed" in capsys.readouterr().err
-    assert [cmd[-2:] for cmd in recorder.children] == [["pull", "web"]]
+    assert [cmd[-3:] for cmd in recorder.children] == [["pull", "--", "web"]]
 
 
 def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(monkeypatch, tmp_path):

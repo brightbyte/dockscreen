@@ -189,6 +189,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 | volumes and networks | named `<project>_<key>`, not `external`; volumes use the local driver, and `driver_opts` may not turn one into a bind or network mount; networks use `bridge` or `none` |
 | `develop.watch` | no `sync+exec`, which runs a command in the container |
 | `x-` keys | ignored, as compose does, except in `build` |
+| service names | no leading `-`, because names go to compose as arguments; `pull` and `build` of the images get `--` before them |
 
 ### Users (`idrules`, `hostusers`, `images`, `imageuser`, `imagedecision`)
 

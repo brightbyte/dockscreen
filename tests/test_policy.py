@@ -547,3 +547,11 @@ def test_fix_config_keeps_mounts_from_extra_dirs(project):
     fixed = autofix.fix_config(config, context(project, [outside]))
 
     assert [m["source"] for m in fixed["services"]["web"]["volumes"]] == [str(outside), "./ETC"]
+
+
+def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project):
+    config = {"services": {"--ssh": service(), "web": service()}}
+    reason = "service name '--ssh' starts with '-', which compose would read as an option"
+
+    assert check(project, config) == [reason]
+    assert policy.check_build_config({"name": "proj", **config}, context(project)) == [reason]
