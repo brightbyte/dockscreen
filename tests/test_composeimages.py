@@ -417,6 +417,29 @@ def test_an_image_name_that_looks_like_an_option_is_not_read_as_one():
     assert images.created[0][1][-2:] == ["--", "-x"]
 
 
+def test_the_default_user_that_replaces_root_gets_a_home_unless_the_service_sets_one():
+    config = project(web={}, db={"environment": {"HOME": "/srv", "X": "1"}}, app={})
+    images = FakeImages(users={"web:1": "", "db:1": "", "app:1": "app"})
+
+    _, final, _ = decided(config, images, active=("web", "db", "app"))
+
+    services = final["services"]
+    assert services["web"]["environment"] == {"HOME": "/tmp"}
+    assert services["db"]["environment"] == {"HOME": "/srv", "X": "1"}
+    assert "environment" not in services["app"]  # its own user: docker finds its home in passwd
+
+
+def test_a_service_that_is_not_started_gets_the_default_users_home_too():
+    _, final, _ = decided(project(web={}, idle={}), FakeImages(users={"web:1": "app"}), active=("web",))
+    assert final["services"]["idle"]["environment"] == {"HOME": "/tmp"}
+
+
+def test_root_as_the_default_user_gets_no_home():
+    settings = configuration.Config(default_user=(0, 0))
+    _, final, _ = decided(project(web={}), FakeImages(users={"web:1": ""}), settings=settings)
+    assert "environment" not in final["services"]["web"]
+
+
 def test_a_looked_at_image_is_pinned_by_id_so_a_moved_tag_cannot_change_what_runs():
     config = project(web={}, db={}, other={"user": "7:7"}, built={"build": {"context": "."}})
     images = FakeImages(users={"web:1": "app", "db:1": "", "other:1": "app", "proj-built": "app"})

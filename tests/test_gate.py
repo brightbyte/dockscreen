@@ -140,6 +140,37 @@ def test_root_with_mounts_runs_as_the_default_user(capsys):
         capsys.readouterr().err)
 
 
+def created_env(docker):
+    """The environment arguments of the last create."""
+    args = [call for call in docker.calls if call[0] == "create"][-1][1]
+    return [args[i + 1] for i, arg in enumerate(args) if arg == "-e"]
+
+
+@pytest.mark.parametrize("image_env", [[], ["HOME=/root"]])
+def test_the_default_user_that_replaces_root_gets_a_home_it_can_write_to(image_env):
+    docker = FakeDocker(image_user="", image_env=image_env)
+    assert gate.run(ctx(docker), ["img"]) == 42
+    assert created_env(docker) == ["HOME=/tmp"]  # also over the image's own HOME, which is root's
+
+
+@pytest.mark.parametrize("docker, args", [
+    (FakeDocker(image_user="", image_env=["HOME=/root"]), ["-e", "HOME=/srv", "img"]),
+    (FakeDocker(image_user="", image_env=["HOME=/root"], env_file=["HOME=/srv"]), ["--env-file", "f", "img"]),
+])
+def test_a_home_chosen_on_the_command_line_or_in_an_env_file_stays(docker, args):
+    assert gate.run(ctx(docker), args) == 42
+    assert "HOME=/tmp" not in created_env(docker)
+
+
+def test_only_a_default_user_replacing_root_gets_a_home():
+    accepted = FakeDocker(image_user="app")  # the image's own user: docker finds its home in passwd
+    assert gate.run(ctx(accepted), ["img"]) == 42
+    assert created_env(accepted) == []
+    root_default = FakeDocker(image_user="")
+    assert gate.run(ctx(root_default, config.Config(default_user=(0, 0))), ["img"]) == 42
+    assert created_env(root_default) == []  # root has a home of its own
+
+
 def test_run_says_it_adds_the_defaults_as_a_routine_change(capsys):
     docker = FakeDocker(image_user="app")
     assert gate.run(ctx(docker), ["img"]) == 42
@@ -225,7 +256,8 @@ def test_an_image_that_would_run_as_root_is_run_as_nobody_instead(image_user, ca
     assert gate.run(ctx(docker), ["-i", "img"]) == 42
 
     creates = [call[1] for call in docker.calls if call[0] == "create"]
-    assert creates == [[*DEFAULTS, "-i", "img"], [*DEFAULTS, "--user=65534:65534", "-i", "img"]]
+    assert creates == [[*DEFAULTS, "-i", "img"],
+                       [*DEFAULTS, "--user=65534:65534", "-e", "HOME=/tmp", "-i", "img"]]
     assert docker.names().count("remove") == 1
     assert docker.calls[docker.names().index("remove")] == ("remove", "cid1")
     assert docker.calls[-1] == ("start", "cid1", True, True, None)

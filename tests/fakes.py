@@ -118,7 +118,7 @@ class FakeDocker:
 
     def __init__(self, image_user="", container_user=None, image="img", command=None, passwd=PASSWD,
                  group=GROUP, open_stdin=False, create_code=0, context="default", image_missing=False,
-                 info_extra=None, repo_digests=None):
+                 info_extra=None, repo_digests=None, image_env=None, env_file=None):
         self.image_user = image_user
         self.container_user = image_user if container_user is None else container_user
         self.image, self.command = image, command or []
@@ -127,6 +127,9 @@ class FakeDocker:
         self.image_missing = image_missing
         self.info_extra = info_extra or {}  # for example {"Mounts": [{"Type": "bind"}]}
         self.repo_digests = repo_digests or []  # where the image was pulled from
+        self.image_env = image_env or []        # the image's ENV, as NAME=value
+        self.env_file = env_file or []          # what an --env-file of the command line would add
+        self.env = [*self.image_env, *self.env_file]
         self.calls = []
 
     def create(self, args):
@@ -134,7 +137,10 @@ class FakeDocker:
         if "--pull=never" in args and self.image_missing:
             return 1, None
         self.host_config = {"CapDrop": [], "SecurityOpt": []}  # what the daemon records of the options
-        for arg in args:
+        self.env = [*self.image_env, *self.env_file]
+        for position, arg in enumerate(args):
+            if arg == "-e":
+                self.env.append(args[position + 1])
             if arg.startswith("--user="):
                 self.container_user = arg[len("--user="):]
             elif arg.startswith("--cap-drop="):
@@ -150,10 +156,10 @@ class FakeDocker:
         host = {**getattr(self, "host_config", {}), **(self.info_extra.get("HostConfig") or {})}
         return {"Id": "id-" + ref, "Image": "sha256:abc", "Config": {
             "Image": self.image, "Cmd": self.command, "User": self.container_user,
-            "OpenStdin": self.open_stdin}, **self.info_extra, "HostConfig": host}
+            "OpenStdin": self.open_stdin, "Env": self.env}, **self.info_extra, "HostConfig": host}
 
     def inspect_image(self, ref):
-        return {"Config": {"User": self.image_user}, "RepoDigests": self.repo_digests}
+        return {"Config": {"User": self.image_user, "Env": self.image_env}, "RepoDigests": self.repo_digests}
 
     def read_file(self, container, path):
         return {"/etc/passwd": self.passwd, "/etc/group": self.group}[path]

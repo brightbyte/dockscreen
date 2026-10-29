@@ -240,18 +240,27 @@ def finalize(config, prepared, ctx):
         decision = prepared.decisions.get(name)
         if decision is None:  # not started by this command
             service["user"] = imagedecision.default_user_spec(ctx)  # an allowed id: the policy accepts it
+            give_default_home(service, ctx.settings.default_user)
             continue
         if not decision.assessment.pins_user:
             continue
         # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
         # resolve the image's user to anything but what was checked
         service["user"] = imagedecision.pinned_user(decision.assessment)
-        if decision.assessment.kind is not imagedecision.Kind.FALLBACK:
-            vetted.add(name)  # the default user is an allowed id, and needs no vetting
+        if decision.assessment.kind is imagedecision.Kind.FALLBACK:
+            give_default_home(service, decision.assessment.user)  # the default user is an allowed id
+        else:
+            vetted.add(name)  # ... which needs no vetting
         service["pull_policy"] = "never"  # the image that was checked is the one that runs
         if decision.image_id and "build" not in service:
             service["image"] = decision.image_id  # ... even if the name is moved to another image
     return final, frozenset(vetted)
+
+
+def give_default_home(service, user):
+    """HOME for the default user that replaces root, unless the service sets one."""
+    if imagedecision.gets_default_home(user):
+        service["environment"] = {"HOME": imagedecision.DEFAULT_USER_HOME, **(service.get("environment") or {})}
 
 
 def describe(config, prepared, ctx):

@@ -34,10 +34,13 @@ from dockscreen import (
 )
 from dockscreen.dockerclient import DockerError, DockerNotFound
 from dockscreen.imagedecision import (
+    DEFAULT_USER_HOME,
     Assessment,
     DockerAccess,
     Kind,
     assess,
+    env_value,
+    gets_default_home,
     pinned_user,
     root_default_notice,
 )
@@ -93,7 +96,10 @@ def run(ctx, args):
         else:
             messages.notice(messages.routine_change(
                 f"image {parsed.image} runs as {pinned_user(assessment)}, passed to docker as numbers"))
-        created = create_checked(ctx, parsed, [f"--user={pinned_user(assessment)}"])
+        extra = [f"--user={pinned_user(assessment)}"]
+        if assessment.kind is Kind.FALLBACK:
+            extra += home_args(ctx, info, assessment)
+        created = create_checked(ctx, parsed, extra)
         if isinstance(created, int):
             return created
         container, info, assessment = created
@@ -105,6 +111,20 @@ def run(ctx, args):
         interactive=bool(info["Config"].get("OpenStdin")),
         detach_keys=parsed.detach_keys,
     )
+
+
+def home_args(ctx, info, assessment):
+    """`-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
+
+    The container as created has the merged environment: a HOME that differs from the image's own
+    was set by the person running it, and stays.
+    """
+    if not gets_default_home(assessment.user):
+        return []
+    image_env = ctx.docker.inspect_image(info["Image"])["Config"].get("Env")
+    if env_value(info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
+        return []
+    return ["-e", f"HOME={DEFAULT_USER_HOME}"]
 
 
 def defaults_notice():
@@ -119,7 +139,7 @@ def fallback_notice(assessment):
     return messages.notable_change(
         f"running as {pinned_user(assessment)} instead of root",
         f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
-        "accessible to it")
+        f"accessible to it, and HOME is {DEFAULT_USER_HOME} unless you set it")
 
 
 def create_checked(ctx, parsed, extra):

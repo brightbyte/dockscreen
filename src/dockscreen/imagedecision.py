@@ -165,6 +165,24 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
     return Assessment(Kind.OK, [], identity, user=(identity.uid, identity.gid), **found)
 
 
+# The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
+DEFAULT_USER_HOME = "/tmp"
+
+
+def gets_default_home(user):
+    """Whether HOME is set for a default user (uid, gid) that replaces an image's root user."""
+    return 0 not in user
+
+
+def env_value(env, name):
+    """The value of `name` in an `Env` list of `NAME=value` strings, or None."""
+    for entry in reversed(env or []):
+        key, equals, value = entry.partition("=")
+        if equals and key == name:
+            return value
+    return None
+
+
 def default_user_spec(ctx):
     """The `uid:gid` that replaces an image's root user in this project, without an image section."""
     return ids.format_user(ctx.settings.default_user)

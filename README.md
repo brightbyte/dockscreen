@@ -30,7 +30,7 @@ When refusing, dockscreen says why. `dockscreen compose harden` prints a compose
 
 Containers don't run as root or as you unless you say so.
 
-- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice.
+- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice. Its `HOME` is set to `/tmp`, which nobody can write to unlike root's home, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
 - A project or an image may not pick root, an id of a local account, an id from `/etc/subuid` or `/etc/subgid`, or 65535 and 4294967295. That applies to the uid, the gid and supplementary groups.
 - With host mounts (bind mounts, devices, `volumes_from`, secrets, configs), the id must be in the nobody range (65530–65534 unless configured), the default user, a user configured for the image, or you with `--allow-me`.
 - To run services as yourself: `dockscreen --allow-me compose up`, with `user: "${UID}:${GID}"` on those services. dockscreen sets `UID` and `GID` to your real ids.
