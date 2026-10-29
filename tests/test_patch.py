@@ -25,7 +25,7 @@ def test_patch_resets_removed_keys_and_overrides_changed_ones():
     assert '    user: "${UID}:${GID}"' in lines
     assert any("--allow-me" in line and line.startswith("# note") for line in lines)
     assert "    privileged: !reset null" in lines
-    assert f'    group_add: !override ["{GID}"]' in lines
+    assert "    group_add: !reset null" in lines
     # untouched keys are not repeated
     assert not any("image" in line for line in lines)
 

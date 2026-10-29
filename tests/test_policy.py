@@ -156,11 +156,11 @@ def test_subordinate_ids_are_refused(project):
     assert_refused(problems, "uid 100000 is in a subordinate id range")
 
 
-def test_group_add_takes_numeric_allowed_ids_only(project):
-    assert problems_for(project, group_add=["4343", 65534]) == []
-    assert_refused(problems_for(project, group_add=["0"]), "group_add '0': gid 0 is root")
-    assert_refused(problems_for(project, group_add=["nogroup"]),
-                   "group_add 'nogroup' does not exist on this host")
+@pytest.mark.parametrize("value", [["4343"], [65534], ["0"], ["nogroup"]])
+def test_group_add_is_refused_whatever_it_names(project, value):
+    # Older daemons look a number up as a group name in the image first, so the id cannot be trusted.
+    assert_refused(problems_for(project, group_add=value), "group_add is not allowed")
+    assert problems_for(project, group_add=[]) == []
 
 
 # --- privileges -----------------------------------------------------------
@@ -251,7 +251,6 @@ def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
     configured = ctx._replace(configured_user=(900, 900))
     assert policy.check_user("900:900", configured) == []
     assert policy.check_user("900:65534", configured) == []  # each id on its own, as for the nobody range
-    assert policy.check_group_add(["900"], configured) == []
     assert policy.check_user("901:900", configured) == ["user '901:900': uid 901 is not in the nobody range "
                                                         "65530-65534, and there are host mounts"]
 
@@ -372,6 +371,51 @@ def test_volume_drivers_and_options(project):
                    "device 'relative/dir' must be an absolute path")
     assert_refused(volume(driver_opts={"type": "none", "o": "bind", "device": "/etc"}),
                    "device '/etc' is outside")
+
+
+@pytest.mark.parametrize("opts", [
+    {"type": "tmpfs", "device": "/etc", "o": "bind"},
+    {"type": "tmpfs", "device": "/etc", "o": "rbind"},
+    {"type": "tmpfs", "device": "tmpfs", "o": "size=1m, Bind"},
+    {"type": "tmpfs", "device": "/etc"},
+])
+def test_a_tmpfs_volume_cannot_be_made_a_bind_mount_of_a_host_path(project, opts):
+    # The kernel ignores the filesystem type when the bind flag is set.
+    problems = check(project, {"volumes": {"v": {"name": "proj_v", "driver_opts": opts}}})
+    assert_refused(problems, "a tmpfs volume must not name a device or bind")
+
+
+def test_volume_driver_opts_are_an_allowlist_and_bind_needs_a_device(project):
+    def volume(opts):
+        return check(project, {"volumes": {"v": {"name": "proj_v", "driver_opts": opts}}})
+
+    assert volume({"type": "tmpfs", "device": "tmpfs", "o": "size=1m,uid=1000"}) == []
+    assert_refused(volume({"type": "tmpfs", "size": "1m"}), "driver_opts key 'size' is not on the allow list")
+    assert_refused(volume({"type": "none", "o": "bind"}), "bind needs a device")
+
+
+@pytest.mark.parametrize("volumes, mounts", [
+    ({}, False),
+    ({"d": {"name": "proj_d"}}, False),
+    ({"d": {"name": "proj_d", "driver_opts": {"type": "tmpfs", "device": "tmpfs", "o": "size=1m"}}}, False),
+    ({"d": {"name": "proj_d", "driver_opts": {"type": "none", "o": "bind", "device": "/p/data"}}}, True),
+    ({"d": {"name": "proj_d", "driver_opts": {"type": "tmpfs", "o": "bind", "device": "/etc"}}}, True),
+])
+def test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files(volumes, mounts):
+    web = {"volumes": [{"type": "volume", "source": "d", "target": "/h"}]}
+    assert policy.has_host_mounts(web, volumes) is mounts
+
+
+def test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume(project):
+    def check_user(volumes):
+        web = service(user="5000:5001", volumes=[{"type": "volume", "source": "d", "target": "/h"}])
+        return check(project, {"services": {"web": web}, "volumes": volumes})
+
+    named = {"d": {"name": "proj_d"}}
+    bound = {"d": {"name": "proj_d", "driver_opts": {"type": "none", "o": "bind",
+                                                      "device": str(project / "data")}}}
+    assert check_user(named) == []  # nothing on the host is owned by 5000
+    assert check_user(bound)  # with the project's files in reach, it is refused like any bind mount
 
 
 def test_extra_dirs_apply_to_volume_devices_but_not_to_build_contexts(project):

@@ -25,15 +25,20 @@ NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "n
 # What every service must have; hardening adds them where they are missing.
 CAP_DROP = "ALL"
 SECURITY_OPT = "no-new-privileges:true"
-# Service keys that are refused whenever they carry a value; autofix removes them.
+# Service keys that are refused whenever they carry a value; autofix removes them. group_add is one
+# because older docker daemons look a number up as a group name in the image's /etc/group first, and
+# dockscreen can neither pin the value nor read the group file for every service.
 FORBIDDEN_KEYS = (
     "privileged", "cap_add", "devices", "device_cgroup_rules", "gpus", "cgroup_parent", "external_links",
+    "group_add",
 )
 # A tuple: the order of the checks is the order of the problems reported.
 NAMESPACE_KEYS = ("pid", "ipc", "uts", "userns_mode", "cgroup", "network_mode")
 
 # Volume driver_opts types that stay on this host's filesystem or memory.
 LOCAL_VOLUME_TYPES = frozenset({"", "none", "tmpfs"})
+VOLUME_DRIVER_OPTS = frozenset({"type", "device", "o"})
+BIND_FLAGS = frozenset({"bind", "rbind"})
 NETWORK_DRIVERS = frozenset({None, "", "bridge", "none"})
 NETWORK_DRIVER_OPTS = frozenset({"com.docker.network.driver.mtu"})
 
@@ -122,7 +127,7 @@ def check_config(config, ctx):
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
         problems += [f"service {name}: {p}"
-                     for p in check_service(service or {}, service_ctx, name in ctx.vetted)]
+                     for p in check_service(service or {}, service_ctx, name in ctx.vetted, config.get("volumes"))]
     for key, volume in (config.get("volumes") or {}).items():
         problems += [f"volume {key}: {p}" for p in check_volume(key, volume, project, ctx)]
     for key, network in (config.get("networks") or {}).items():
@@ -151,9 +156,9 @@ def unknown_keys(mapping, allowed, what, extensions=True):
     ]
 
 
-def check_service(service, ctx, vetted=False):
+def check_service(service, ctx, vetted=False, volumes=None):
     problems = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-    ctx = ctx._replace(mounts=has_host_mounts(service))
+    ctx = ctx._replace(mounts=has_host_mounts(service, volumes))
     for key, check in SERVICE_CHECKS.items():
         if key == "user" and vetted:
             continue
@@ -164,12 +169,27 @@ def check_service(service, ctx, vetted=False):
 
 # --- users and privileges -------------------------------------------------
 
-def has_host_mounts(service):
+def has_host_mounts(service, volumes=None):
     """Whether the service reaches host files: bind mounts, secrets and configs (bind-mounted files),
-    devices, or the volumes of another container."""
-    binds = any(isinstance(m, dict) and m.get("type") == "bind" for m in service.get("volumes") or [])
+    devices, or the volumes of another container.
+
+    volumes: the config's top-level volumes. A named volume whose driver_opts name a device or mount
+    options is a bind mount of host files too.
+    """
+    mounts = [m for m in service.get("volumes") or [] if isinstance(m, dict)]
+    binds = any(m.get("type") == "bind" or reaches_host(m, volumes or {}) for m in mounts)
     others = ("volumes_from", "devices", "secrets", "configs")
     return binds or any(service.get(key) for key in others)
+
+
+def reaches_host(mount, volumes):
+    """Whether a mount is of a named volume that is set up as something other than plain storage."""
+    if mount.get("type") != "volume":
+        return False
+    opts = (volumes.get(mount.get("source")) or {}).get("driver_opts") or {}
+    plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
+                   and not mount_flags(opts) & BIND_FLAGS)
+    return bool(opts.get("device") or opts.get("o")) and not plain_tmpfs
 
 
 def not_a_name(kind, value):
@@ -193,17 +213,6 @@ def check_user(value, ctx):
         return [not_a_name("group", group)]
     return [f"user {value!r}: {p}"
             for p in ctx.ids.problems(uid, gid, mounts=ctx.mounts, extra=configured_ids(ctx))]
-
-
-def check_group_add(value, ctx):
-    problems = []
-    for extra in value or []:
-        gid = ids.parse_id(extra)
-        if gid is None:
-            problems.append(not_a_name("group_add", extra))
-        elif problem := ctx.ids.problem("gid", gid, ctx.mounts, configured_ids(ctx)):
-            problems.append(f"group_add {extra!r}: {problem}")
-    return problems
 
 
 SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option instead"
@@ -365,7 +374,6 @@ def check_hooks(key):
 
 SERVICE_CHECKS = {
     "user": check_user,
-    "group_add": check_group_add,
     "cap_drop": check_cap_drop,
     "security_opt": check_security_opt,
     **{key: forbidden(key) for key in FORBIDDEN_KEYS},
@@ -406,19 +414,31 @@ def check_volume(key, volume, project, ctx):
     return [*problems, *check_driver_opts(volume.get("driver_opts") or {}, ctx)]
 
 
+def mount_flags(opts):
+    """The comma-separated mount options of a volume's `o`, lower case."""
+    return {flag.strip().lower() for flag in str(opts.get("o", "")).split(",")}
+
+
 def check_driver_opts(opts, ctx):
     # The local driver can turn a named volume into a bind mount or a network mount.
+    problems = unknown_keys(opts, VOLUME_DRIVER_OPTS, "driver_opts key", extensions=False)
     kind = opts.get("type", "")
     if kind not in LOCAL_VOLUME_TYPES:
-        return [f"driver_opts type {kind!r} is not allowed"]
+        return [*problems, f"driver_opts type {kind!r} is not allowed"]
     device = opts.get("device", "")
-    if not device or kind == "tmpfs":
-        return []
+    if kind == "tmpfs":
+        # The kernel ignores the filesystem type when the bind flag is set, so tmpfs with `bind`
+        # mounts whatever `device` names.
+        if device not in ("", "tmpfs") or mount_flags(opts) & BIND_FLAGS:
+            problems.append("a tmpfs volume must not name a device or bind")
+        return problems
+    if not device:
+        return [*problems, *(["bind needs a device"] if mount_flags(opts) & BIND_FLAGS else [])]
     if not os.path.isabs(device):
-        return [f"device {device!r} must be an absolute path"]
+        return [*problems, f"device {device!r} must be an absolute path"]
     if not is_inside_any(device, ctx.mount_roots):
-        return [outside(f"device {device!r}", ctx)]
-    return []
+        return [*problems, outside(f"device {device!r}", ctx)]
+    return problems
 
 
 def check_network(key, network, project, ctx):

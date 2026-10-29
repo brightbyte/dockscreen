@@ -217,7 +217,8 @@ def decide(config, to_run, tools):
                 info = tools.gate_ctx.docker.inspect_container(container)
                 image_id = info.get("Image")
                 assessment = imagedecision.assess(tools.gate_ctx, container, info, explicit=False,
-                                         mounts=policy.has_host_mounts(service), reference=image,
+                                         mounts=policy.has_host_mounts(service, config.get("volumes")),
+                                         reference=image,
                                          built="build" in service)
             except (DockerError, ValueError, KeyError) as e:
                 assessment = imagedecision.Assessment(imagedecision.Kind.FAILED, [str(e)])

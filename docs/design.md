@@ -45,7 +45,7 @@ Who a container runs as is the decision dockscreen spends most of its effort on.
 |---|---|---|
 | Command line: `--user`/`-u`, `--as`, `--as-me`, `--allow-me` | yes | form only (see [Forms](#forms)) |
 | Config file: `user`, `default_user`, `default_home`, `nobody_range`, at the top level and in image and project sections | yes | the file's ownership and permissions (see [Configuration](#configuration-and-options-config)) |
-| Compose file: `user:`, hook `user:`, `group_add`, including values from `.env` | no | all rules |
+| Compose file: `user:`, hook `user:`, including values from `.env` | no | all rules |
 | Image: its `USER`, `/etc/passwd` and `/etc/group` | no | all rules |
 
 ### Terms
@@ -73,7 +73,7 @@ Names in `--as` and `user:` are resolved on this host, through NSS. A name unkno
 
 ### Ids the project and the image may not choose
 
-These apply to the uid, the gid and every supplementary gid, from `user:`, hooks, `group_add` and the image. Allowed ids are exempt.
+These apply to the uid, the gid and every supplementary gid, from `user:`, hooks and the image. Allowed ids are exempt.
 
 | Id | Why |
 |---|---|
@@ -151,7 +151,7 @@ A message has two parts: the facts, and an optional help part that says what to 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
 1. `screen.inspect` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it. A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
-2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:`, hook users and `group_add` to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
+2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
 3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their images decide.
 4. `composeimages.prepare`:
    - asks compose which services will start (`config --services`);
@@ -180,8 +180,8 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 | Area | Rule |
 |---|---|
-| `user`, `group_add`, hook `user` | `uid:gid` after hardening resolved names (a uid alone is refused); each id passes the id rules below, with the service's mounts |
-| privileges | `privileged`, `cap_add`, `devices`, `gpus`, `cgroup_parent`, device reservations: refused; `cap_drop` must include `ALL`; `security_opt` must be exactly no-new-privileges; `runtime` only `runc` |
+| `user`, hook `user` | `uid:gid` after hardening resolved names (a uid alone is refused); each id passes the id rules below, with the service's mounts |
+| privileges | `privileged`, `cap_add`, `devices`, `gpus`, `cgroup_parent`, device reservations: refused; `group_add`: refused, because older daemons resolve a number as a group name from the image first; `cap_drop` must include `ALL`; `security_opt` must be exactly no-new-privileges; `runtime` only `runc` |
 | namespaces | `pid`, `ipc`, `uts`, `userns_mode`, `cgroup`, `network_mode`: no `host`, no `container:` |
 | mounts | bind sources, after `realpath`, inside the project or the configured `mount_dirs`; types `volume`, `tmpfs` and `image` allowed |
 | files read on the host | `env_file`, `label_file`, secret and config `file`, build contexts, `develop.watch` paths: inside the project |

@@ -194,15 +194,14 @@ def test_nobody_passes_and_root_is_refused_once_resolved():
                                               "service web: user '0:0': gid 0 is root"]
 
 
-def test_hook_users_and_group_add_are_resolved_too():
-    original = config(post_start=[{"command": "x", "user": "alice"}], group_add=["docker", "4000", "staff"])
+def test_hook_users_are_resolved_too():
+    original = config(post_start=[{"command": "x", "user": "alice"}])
 
     hardened, additions = hardening.apply(original, Accounts())
 
     web = hardened["services"]["web"]
     assert web["post_start"] == [{"command": "x", "user": "4242:4343"}]
-    assert web["group_add"] == ["999", "4000", "staff"]  # an unknown name stays, for the policy
-    assert {a.key for a in additions} >= {"post_start", "group_add"}
+    assert {a.key for a in additions} >= {"post_start"}
 
 
 def test_the_audit_reports_the_resolution_and_harden_does_not_repeat_it(monkeypatch, capsys, tmp_path):

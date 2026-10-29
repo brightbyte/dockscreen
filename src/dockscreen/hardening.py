@@ -1,7 +1,7 @@
 """Defaults dockscreen adds to every service before running it.
 
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
-or `no-new-privileges` gets them. Names in `user:`, hook users and `group_add` are resolved
+or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
 to ids on this host, so the generated file never asks the image to resolve a name; the policy
 then checks the ids, and refuses a name that does not exist here. A project cannot weaken them, because adding
 `cap_add` or `no-new-privileges:false` is still refused by the policy. The
@@ -51,7 +51,7 @@ def apply(config, accounts):
 
 
 def resolve_user_names(name, service, accounts):
-    """Replace names in the service's user, hook users and group_add by their ids on this host."""
+    """Replace names in the service's user and hook users by their ids on this host."""
     additions = []
     if service.get("user"):
         resolved = resolve_spec(service["user"], accounts)
@@ -67,12 +67,6 @@ def resolve_user_names(name, service, accounts):
                     message = resolved_message(f"{key} user", hook["user"], resolved)
                     additions.append(Addition(name, key, message, help=RESOLVE_HELP))
                     hook["user"] = resolved
-    if service.get("group_add"):
-        resolved = [resolve_group(g, accounts) for g in service["group_add"]]
-        if resolved != service["group_add"]:
-            additions.append(Addition(name, "group_add", resolved_message(
-                "group_add", service["group_add"], resolved), help=RESOLVE_HELP))
-            service["group_add"] = resolved
     return additions
 
 
