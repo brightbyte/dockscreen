@@ -121,6 +121,7 @@ def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tm
     ("nobody_range = [0, 10]", "nobody_range must be [low, high]"),
     ("nobody_range = [65530, 65535]", "nobody_range must be [low, high]"),
     ("nobody_range = [60000, 70000]", "leaving out 65535"),
+    ("nobody_range = [100000, 4294967295]", "high < 4294967295"),
     ('mount_dirs = ["relative"]', "mount_dirs must be a list of absolute paths"),
     ('docker = "docker"', "docker must be an absolute path"),
     ('[images."mariadb:11"]\nuser = "999:999"', "names a repository; leave out the tag or digest"),

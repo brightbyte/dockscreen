@@ -264,7 +264,8 @@ def _id_range(path, value):
     valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
     if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in NO_ID)
             and value[1] < max(NO_ID)):
-        raise ConfigError(f"{path}: nobody_range must be [low, high] with 0 < low <= high, leaving out 65535")
+        raise ConfigError(f"{path}: nobody_range must be [low, high] with 0 < low <= high < 4294967295, "
+                          "leaving out 65535")
     return tuple(value)
 
 
