@@ -6,21 +6,10 @@ go through the gate, everything else is exec'd to the real docker unchanged.
 
 import sys
 
-from dockscreen import (
-    argscan,
-    bake,
-    compose_cli,
-    config,
-    flags,
-    gate,
-    helptext,
-    hostusers,
-    imagedecision,
-    messages,
-    screen,
-    verdict,
-)
+from dockscreen import argscan, bake, config, flags, helptext, hostusers, imagedecision, messages, verdict
+from dockscreen.compose import compose_cli, screen
 from dockscreen.dockerclient import DockerNotFound
+from dockscreen.run import gate
 from dockscreen.runtime import load_runtime
 from dockscreen.verdict import Verdict
 

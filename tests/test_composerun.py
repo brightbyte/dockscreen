@@ -3,7 +3,8 @@ import os
 import pytest
 from fakes import FakeImages, make_image_ctx, read_raw, runtime
 
-from dockscreen import argscan, composerun, config, hostusers, screen
+from dockscreen import argscan, config, hostusers
+from dockscreen.compose import composerun, screen
 from dockscreen.dockerclient import Docker
 
 UID, GID = os.getuid(), os.getgid()

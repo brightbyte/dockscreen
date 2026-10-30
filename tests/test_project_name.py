@@ -1,7 +1,7 @@
 import pytest
 from fakes import FakeDocker, FakeImages, make_image_ctx, runtime
 
-from dockscreen import compose_cli, composerun, screen
+from dockscreen.compose import compose_cli, composerun, screen
 from dockscreen.dockerclient import Docker, DockerError
 
 

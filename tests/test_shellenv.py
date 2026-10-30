@@ -1,6 +1,7 @@
 import pytest
 
-from dockscreen import messages, shellenv
+from dockscreen import messages
+from dockscreen.compose import shellenv
 
 
 def config(**services):

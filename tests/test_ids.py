@@ -2,7 +2,8 @@ import os
 
 import pytest
 
-from dockscreen import compose_cli, ids
+from dockscreen import ids
+from dockscreen.compose import compose_cli
 
 
 def test_export_sets_the_real_ids_and_is_idempotent():

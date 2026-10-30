@@ -1,7 +1,8 @@
 import pytest
 from fakes import Accounts, rules, runtime
 
-from dockscreen import autofix, commands, hardening, messages, policy, screen
+from dockscreen import messages, policy
+from dockscreen.compose import autofix, commands, hardening, screen
 
 NOBODY = "65534:65534"
 

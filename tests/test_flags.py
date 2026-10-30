@@ -2,7 +2,8 @@ import types
 
 import pytest
 
-from dockscreen import compose_cli, docker_cli, flags
+from dockscreen import docker_cli, flags
+from dockscreen.compose import compose_cli
 
 FLAG = "--skip-screening"
 

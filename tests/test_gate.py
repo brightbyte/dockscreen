@@ -3,9 +3,10 @@ import os
 import pytest
 from fakes import FakeDocker, host_account, rules, runtime
 
-from dockscreen import argscan, config, docker_cli, gate, hostusers, imagedecision
+from dockscreen import argscan, config, docker_cli, hostusers, imagedecision
 from dockscreen.dockerclient import DockerError, DockerNotFound, first_file_of_tar
 from dockscreen.messages import BAD, GOOD, WARN
+from dockscreen.run import gate
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 

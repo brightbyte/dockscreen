@@ -2,8 +2,9 @@ import os
 
 import pytest
 
-from dockscreen import argscan, compose_cli, composerun, docker_cli, hostusers, policy, screen
-from dockscreen.commands import COMMANDS
+from dockscreen import argscan, docker_cli, hostusers, policy
+from dockscreen.compose import compose_cli, composerun, screen
+from dockscreen.compose.commands import COMMANDS
 
 
 @pytest.mark.parametrize("argv, expected", [

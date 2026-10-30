@@ -9,18 +9,8 @@ A name in COMMANDS shadows the docker compose subcommand of the same name.
 
 import sys
 
-from dockscreen import (
-    autofix,
-    composeimages,
-    composerun,
-    flags,
-    hardening,
-    messages,
-    policy,
-    screen,
-    shellenv,
-    verdict,
-)
+from dockscreen import flags, messages, policy, verdict
+from dockscreen.compose import autofix, composeimages, composerun, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.verdict import Verdict
 

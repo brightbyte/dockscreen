@@ -2,7 +2,8 @@ import os
 
 from fakes import rules, runtime
 
-from dockscreen import autofix, commands, policy, screen
+from dockscreen import policy
+from dockscreen.compose import autofix, commands, screen
 
 UID = os.getuid()
 GID = os.getgid()

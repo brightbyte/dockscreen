@@ -4,8 +4,9 @@ import os
 
 from fakes import FakeImages, install_image_ctx, make_image_ctx, runtime
 
-from dockscreen import commands, messages, screen
-from dockscreen.composeimages import USER_HELP
+from dockscreen import messages
+from dockscreen.compose import commands, screen
+from dockscreen.compose.composeimages import USER_HELP
 from dockscreen.messages import BAD, GOOD, WARN
 
 UID, GID = os.getuid(), os.getgid()

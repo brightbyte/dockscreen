@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dockscreen import compose_cli
+from dockscreen.compose import compose_cli
 
 
 @pytest.fixture(autouse=True)

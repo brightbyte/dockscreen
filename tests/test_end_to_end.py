@@ -9,7 +9,8 @@ import fakes
 import pytest
 from fakes import PASSWD
 
-from dockscreen import compose_cli, composerun, runtime
+from dockscreen import runtime
+from dockscreen.compose import compose_cli, composerun
 from dockscreen.dockerclient import Docker
 
 UID, GID = os.getuid(), os.getgid()

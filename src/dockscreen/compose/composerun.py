@@ -18,19 +18,8 @@ import os
 import tempfile
 from typing import NamedTuple
 
-from dockscreen import (
-    argscan,
-    composeargs,
-    composeimages,
-    hardening,
-    hostusers,
-    imagedecision,
-    messages,
-    policy,
-    screen,
-    shellenv,
-    verdict,
-)
+from dockscreen import argscan, hostusers, imagedecision, messages, policy, verdict
+from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 
 # Options that select the files and the project; ours replace them.

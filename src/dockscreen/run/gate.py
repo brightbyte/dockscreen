@@ -17,19 +17,7 @@ checked when it is started. `audit` takes a `docker run` command line, creates i
 asks for that a project or an image may not (runpolicy).
 """
 
-from dockscreen import (
-    argscan,
-    flags,
-    hostusers,
-    ids,
-    images,
-    imageuser,
-    messages,
-    policy,
-    runargs,
-    runpolicy,
-    verdict,
-)
+from dockscreen import argscan, flags, hostusers, ids, images, imageuser, messages, policy, verdict
 from dockscreen.dockerclient import DockerError, DockerNotFound
 from dockscreen.imagedecision import (
     Assessment,
@@ -42,6 +30,7 @@ from dockscreen.imagedecision import (
     runs_as,
 )
 from dockscreen.messages import printable
+from dockscreen.run import runargs, runpolicy
 from dockscreen.verdict import Verdict
 
 # Inserted before the user's own arguments, so the user can override both

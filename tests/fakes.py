@@ -245,6 +245,6 @@ def read_raw(cmd):
 
 def install_image_ctx(monkeypatch, image_ctx):
     """Make composerun.image_context return image_ctx, with --allow-me applied as the real one does."""
-    from dockscreen import composerun
+    from dockscreen.compose import composerun
     monkeypatch.setattr(composerun, "image_context",
                         lambda runtime, allow_me=False: image_ctx.allowing_me(allow_me))

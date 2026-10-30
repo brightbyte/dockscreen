@@ -5,20 +5,9 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
-from dockscreen import (
-    argscan,
-    composeargs,
-    composerun,
-    flags,
-    helptext,
-    hostusers,
-    ids,
-    messages,
-    policy,
-    screen,
-    verdict,
-)
-from dockscreen.commands import ALIASES, COMMANDS
+from dockscreen import argscan, flags, helptext, hostusers, ids, messages, policy, verdict
+from dockscreen.compose import composeargs, composerun, screen
+from dockscreen.compose.commands import ALIASES, COMMANDS
 from dockscreen.runtime import load_runtime
 
 # Subcommands that create containers from the config. `alpha` is a group (older

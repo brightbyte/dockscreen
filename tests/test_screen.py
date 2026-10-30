@@ -4,7 +4,8 @@ import subprocess
 import pytest
 from fakes import runtime
 
-from dockscreen import config, messages, screen
+from dockscreen import config, messages
+from dockscreen.compose import screen
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):

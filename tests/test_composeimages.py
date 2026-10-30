@@ -4,8 +4,9 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, rules, runtime
 
-from dockscreen import autofix, composeimages, imagedecision, messages, policy
+from dockscreen import imagedecision, messages, policy
 from dockscreen import config as configuration
+from dockscreen.compose import autofix, composeimages
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import Kind
 from dockscreen.messages import GOOD, WARN
