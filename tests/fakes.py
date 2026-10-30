@@ -80,6 +80,9 @@ class FakeImages:
     def context(self):
         return "default"
 
+    def exporting(self, variables):
+        return self
+
     def project_directories(self, name):
         return self.project_dirs
 

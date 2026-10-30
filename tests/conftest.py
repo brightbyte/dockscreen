@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from dockscreen.compose import compose_cli
@@ -18,12 +16,6 @@ def terse_messages():
 def helpful():
     from dockscreen import messages
     messages.set_helpful(True)
-
-
-@pytest.fixture(autouse=True)
-def isolated_environ(monkeypatch):
-    """compose_cli.main exports UID/GID into os.environ; keep that from leaking between tests."""
-    monkeypatch.setattr(os, "environ", dict(os.environ))
 
 
 @pytest.fixture(autouse=True)

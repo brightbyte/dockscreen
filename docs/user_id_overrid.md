@@ -98,7 +98,7 @@ Images built locally have no repository to check against, so a setting cannot ma
 
 ## Variables for compose files
 
-dockscreen exports `UID` and `GID` as the real ids, always, overwriting any values already in the environment. Projects can then write `user: "${UID}:${GID}"`. This is refused unless `--allow-me` is given.
+dockscreen passes `UID` and `GID` to compose as the real ids, always, overriding any values already in the environment. Projects can then write `user: "${UID}:${GID}"`. This is refused unless `--allow-me` is given.
 
 ## Config file
 

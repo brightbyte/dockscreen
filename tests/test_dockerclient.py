@@ -1,3 +1,5 @@
+import subprocess
+
 import pytest
 
 from dockscreen import docker_cli, runtime
@@ -13,6 +15,23 @@ def test_a_missing_binary_is_docker_not_found(tmp_path):
         docker.read_file("c1", "/etc/passwd")
     with pytest.raises(DockerNotFound):
         docker.start("c1", attach=True, interactive=False, detach_keys=None)
+
+
+def test_exporting_adds_variables_to_the_environment_of_what_it_runs(monkeypatch):
+    seen = []
+    def run(cmd, **kwargs):
+        seen.append(kwargs.get("env"))
+        return subprocess.CompletedProcess(cmd, 0, "default\n", "")
+
+    plain = Docker("docker", run=run)
+    monkeypatch.setenv("KEPT", "1")
+
+    plain.context()
+    plain.exporting({"UID": "7"}).context()
+
+    assert seen[0] is None  # this process's own environment
+    assert seen[1]["UID"] == "7" and seen[1]["KEPT"] == "1"
+    assert plain.env is None
 
 
 def test_the_docker_wrapper_reports_a_missing_binary_without_a_traceback(monkeypatch, tmp_path, capsys):

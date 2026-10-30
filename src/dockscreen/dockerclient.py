@@ -22,10 +22,19 @@ class DockerNotFound(DockerError):
 
 
 class Docker:
-    def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen):
-        """Wraps binary, the real docker (runtime.real_docker); run, call and popen launch it."""
-        self.binary = binary
-        self.run, self.call, self.popen = _found(run), _found(call), _found(popen)
+    def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen, env=None):
+        """Wraps binary, the real docker (runtime.real_docker); run, call and popen launch it.
+
+        env: the environment of everything it runs; None for this process's own.
+        """
+        self.binary, self.env = binary, env
+        self._launchers = (run, call, popen)
+        self.run, self.call, self.popen = (_found(launch, env) for launch in self._launchers)
+
+    def exporting(self, variables):
+        """Returns a Docker like this one that also passes variables in the environment of what it runs."""
+        env = {**(os.environ if self.env is None else self.env), **variables}
+        return Docker(self.binary, *self._launchers, env=env)
 
     def exec(self, args):
         """Replaces this process with `docker args`, keeping tty, signals and exit code.
@@ -33,7 +42,10 @@ class Docker:
         Exits with a message if the binary does not exist.
         """
         try:
-            os.execvp(self.binary, [self.binary, *args])
+            if self.env is None:
+                os.execvp(self.binary, [self.binary, *args])
+            else:
+                os.execvpe(self.binary, [self.binary, *args], self.env)
         except FileNotFoundError:
             messages.fatal(messages.DOCKER_NOT_FOUND)
 
@@ -145,9 +157,13 @@ class Docker:
         return 128 - code if code < 0 else code
 
 
-def _found(launch):
-    """Wraps launch (subprocess.run, call or Popen) to raise DockerNotFound if the binary does not exist."""
+def _found(launch, env):
+    """Wraps launch (subprocess.run, call or Popen) to run with env, unless that is None, and to raise
+    DockerNotFound if the binary does not exist.
+    """
     def launch_found(cmd, **kwargs):
+        if env is not None:
+            kwargs["env"] = env
         try:
             return launch(cmd, **kwargs)
         except FileNotFoundError:

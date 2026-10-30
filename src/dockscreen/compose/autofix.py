@@ -17,8 +17,8 @@ import re
 from dockscreen import ids, policy
 from dockscreen.messages import printable
 
-# What fix puts into `user`: the caller's own ids, which dockscreen exports (ids.py) and allows only with
-# --allow-me. A literal would only fit the person who ran harden.
+# What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
+# only with --allow-me. A literal would only fit the person who ran harden.
 USER_TEMPLATE = "${UID}:${GID}"
 
 # Keys whose removal is a safe fix.

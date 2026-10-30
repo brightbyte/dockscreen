@@ -3,10 +3,9 @@
 import json
 import os
 import re
-import subprocess
 
 from dockscreen import argscan, config, images, messages, policy, verdict
-from dockscreen.dockerclient import DockerError
+from dockscreen.dockerclient import DockerError, DockerNotFound
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
@@ -34,7 +33,7 @@ def inspect(global_args, runtime):
     if found:
         raise ScreenError(f"the project directory {project_dir} contains {found[0]}; "
                          "move the compose file into a directory of its own")
-    return load_config(global_args, runtime.docker.binary), project_dir
+    return load_config(global_args, runtime.docker), project_dir
 
 
 
@@ -97,7 +96,7 @@ def passes(global_args, runtime, rules=policy.check_config):
     return verdict.screened(rules(config, context(project_dir, runtime)))
 
 
-def load_config(global_args, docker_binary):
+def load_config(global_args, docker):
     """Returns the config compose resolves for global_args, with every profile active and env files
     not inlined.
 
@@ -107,11 +106,11 @@ def load_config(global_args, docker_binary):
     # service, which a plain `config` would leave out of the inspected set.
     # --no-env-resolution keeps env_file paths in the output instead of inlining
     # their contents, so the policy can see which files are read.
-    cmd = [docker_binary, "compose", *global_args, "--profile", "*", "config", "--format", "json",
+    cmd = [docker.binary, "compose", *global_args, "--profile", "*", "config", "--format", "json",
            "--no-env-resolution"]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    except FileNotFoundError:
+        result = docker.capture(cmd)
+    except DockerNotFound:
         raise InspectError("'docker' not found in PATH")
     if result.returncode != 0:
         raise InspectError(f"docker compose config failed:\n{result.stderr.strip()}")

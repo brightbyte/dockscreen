@@ -1,9 +1,9 @@
 """Numeric uids and gids, and the uid and gid compose files see.
 
-dockscreen exports UID and GID, the real ids of the caller, for compose files to interpolate
-(`user: "${UID}:${GID}"`); values already in the environment are overwritten. Running as these ids is
-not allowed unless --allow-me is given (see idrules): exporting them only makes the project's intent
-readable.
+dockscreen passes UID and GID, the real ids of the caller, in the environment of the compose commands
+it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); values already in the environment
+are overridden. Running as these ids is not allowed unless --allow-me is given (see idrules): passing
+them only makes the project's intent readable.
 
 Ids given by the command line, the config file or the project are ASCII digits only. How docker reads
 ids out of an image's passwd and group files is different, and lives in imageuser.
@@ -12,9 +12,9 @@ ids out of an image's passwd and group files is different, and lives in imageuse
 EXPORTED = ("UID", "GID")
 
 
-def export(env, me):
-    """Sets UID and GID in env to me, the caller's real (uid, gid), replacing what is there."""
-    env["UID"], env["GID"] = (str(i) for i in me)
+def exported(me):
+    """Returns the variables UID and GID for me, the caller's real (uid, gid)."""
+    return dict(zip(EXPORTED, (str(i) for i in me)))
 
 
 def is_id(text):

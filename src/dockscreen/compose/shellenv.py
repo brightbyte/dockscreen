@@ -3,7 +3,7 @@
 `environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so a
 pass-through is recognised by the value being the shell's own under the same name. That also catches
 `FOO: bar` when the shell happens to have FOO=bar, and misses `X: ${FOO}`, which copies the value under
-another name. The variables dockscreen exports for compose files are left out. Values are never shown.
+another name. The variables dockscreen passes to compose (ids.EXPORTED) are left out. Values are never shown.
 """
 
 from dockscreen import ids, messages

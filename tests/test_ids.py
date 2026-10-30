@@ -6,23 +6,21 @@ from dockscreen import ids
 from dockscreen.compose import compose_cli
 
 
-def test_export_sets_the_real_ids_and_is_idempotent():
-    env = {"UID": "7", "GID": "8"}
-
-    ids.export(env, (os.getuid(), os.getgid()))
-    ids.export(env, (os.getuid(), os.getgid()))
-
-    # a pre-set UID/GID is overwritten: a project's .env cannot make ${UID} mean someone else
-    assert env == {"UID": str(os.getuid()), "GID": str(os.getgid())}
+def test_exported_names_the_ids():
+    assert ids.exported((1000, 1001)) == {"UID": "1000", "GID": "1001"}
 
 
-def test_main_exports_ids_for_compose_interpolation(monkeypatch):
-    monkeypatch.setattr(compose_cli, "forward", lambda argv, runtime: None)
+def test_main_passes_the_real_ids_to_compose_without_changing_its_own_environment(monkeypatch):
+    seen = []
+    monkeypatch.setattr(compose_cli, "forward", lambda argv, runtime: seen.append(runtime.docker.env))
     monkeypatch.setenv("UID", "7")
 
     compose_cli.main(["ps"])
 
-    assert os.environ["UID"] == str(os.getuid())
+    # a pre-set UID is overridden: the shell cannot make ${UID} mean someone else
+    assert seen[0]["UID"] == str(os.getuid()) and seen[0]["GID"] == str(os.getgid())
+    assert seen[0]["PATH"] == os.environ["PATH"]
+    assert os.environ["UID"] == "7"
 
 
 @pytest.mark.parametrize("spec, expected", [

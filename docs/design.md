@@ -128,7 +128,7 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 `--as`, `--as-me` and `--allow-me` are dockscreen's own: docker and compose never see them. The user options go after the subcommand and before the image, service or container.
 
-`--as-me` before a compose subcommand is refused with a pointer to `--allow-me`: choosing one user for every service of `up` at once makes no sense. A project says which services run as the caller with `user: "${UID}:${GID}"`; dockscreen exports `UID` and `GID` as the real ids, overwriting any already set, and the rules refuse them unless `--allow-me` was given.
+`--as-me` before a compose subcommand is refused with a pointer to `--allow-me`: choosing one user for every service of `up` at once makes no sense. A project says which services run as the caller with `user: "${UID}:${GID}"`; dockscreen passes `UID` and `GID` to compose as the real ids, overriding any already set, and the rules refuse them unless `--allow-me` was given.
 
 ### Notices
 

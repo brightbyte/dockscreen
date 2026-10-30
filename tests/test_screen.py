@@ -6,6 +6,7 @@ from fakes import runtime
 
 from dockscreen import config, messages
 from dockscreen.compose import screen
+from dockscreen.dockerclient import Docker
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
@@ -125,6 +126,5 @@ def test_config_is_loaded_without_env_resolution(monkeypatch):
         seen.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, "{}", "")
 
-    monkeypatch.setattr(screen.subprocess, "run", fake_run)
-    screen.load_config(["-f", "a.yml"], "docker")
+    screen.load_config(["-f", "a.yml"], Docker("docker", run=fake_run))
     assert "--no-env-resolution" in seen[0] and seen[0][:4] == ["docker", "compose", "-f", "a.yml"]
