@@ -6,6 +6,7 @@ from dockscreen import argscan
 @pytest.mark.parametrize("args, values", [
     (["-f", "a.yml", "--file", "b.yml"], ["a.yml", "b.yml"]),
     (["--file=a.yml", "-fb.yml"], ["a.yml", "b.yml"]),
+    (["-f=sub/a.yml"], ["sub/a.yml"]),  # as compose reads it, not "=sub/a.yml"
     (["--files", "x", "-f"], []),  # another option, and -f without a value
     ([], []),
 ])

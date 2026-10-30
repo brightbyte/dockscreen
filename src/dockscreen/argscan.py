@@ -26,8 +26,8 @@ def find_subcommand(argv, value_opts):
 
 
 def option_values(args, long_name, short_name):
-    """Returns every value given for the option, in order, in `--opt v`, `--opt=v`, `-o v` and `-ov`
-    forms. short_name may be None.
+    """Returns every value given for the option, in order, in `--opt v`, `--opt=v`, `-o v`, `-ov` and `-o=v`
+    forms, read as compose's flag parser reads them. short_name may be None.
     """
     values = []
     i = 0
@@ -39,7 +39,7 @@ def option_values(args, long_name, short_name):
         elif token.startswith(long_name + "="):
             values.append(token[len(long_name) + 1:])
         elif short_name and token.startswith(short_name) and not token.startswith("--") and len(token) > 2:
-            values.append(token[2:])
+            values.append(token[3:] if token[2] == "=" else token[2:])
         i += 1
     return values
 
