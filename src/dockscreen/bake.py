@@ -57,7 +57,7 @@ def check_definition(found, project_dir):
 
 def check_target(target, project_dir):
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
-    problems += check_sources(target, project_dir)
+    problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
     if target.get("network") not in (None, "", "none"):
         problems.append(f"network {target['network']!r} is not allowed")
     if target.get("entitlements"):
@@ -67,21 +67,6 @@ def check_target(target, project_dir):
     problems += check_outputs(target.get("output") or [], target.get("cache-to") or [])
     problems += check_cache_from(target.get("cache-from") or [], project_dir)
     problems += check_secrets(target.get("secret") or [], project_dir)
-    return problems
-
-
-def check_sources(target, project_dir):
-    problems = []
-    context = target.get("context")
-    if context and policy.is_host_path(context):
-        dockerfile = target.get("dockerfile")
-        if not policy.is_inside(context, project_dir):
-            problems.append(f"context {context!r} is outside {project_dir}")
-        elif dockerfile and not policy.is_inside(os.path.join(context, dockerfile), project_dir):
-            problems.append(f"dockerfile {dockerfile!r} is outside {project_dir}")
-    for name, source in (target.get("contexts") or {}).items():
-        if policy.is_host_path(source) and not policy.is_inside(str(source), project_dir):
-            problems.append(f"contexts {name!r}: {source!r} is outside {project_dir}")
     return problems
 
 

@@ -311,23 +311,35 @@ def check_build(value, ctx):
     # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
     # set outputs and cache destinations on the host. Compose's own build does not pass it on.
     problems = unknown_keys(build, BUILD_KEYS, "build key", extensions=False)
-    context = build.get("context")
-    if context and is_host_path(context):
-        dockerfile = build.get("dockerfile")
-        if not is_inside(context, ctx.project_dir):
-            problems.append(f"build context {context!r} is outside {ctx.project_dir}")
-        elif dockerfile and not is_inside(os.path.join(context, dockerfile), ctx.project_dir):
-            problems.append(f"build dockerfile {dockerfile!r} is outside {ctx.project_dir}")
-    for name, source in (build.get("additional_contexts") or {}).items():
-        if is_host_path(source) and not is_inside(str(source), ctx.project_dir):
-            problems.append(
-                f"build additional_contexts {name!r}: {source!r} is outside {ctx.project_dir}")
+    problems += check_build_sources(build, ctx.project_dir, ("context", "dockerfile", "additional_contexts"),
+                                    "build ")
     if build.get("network") not in (None, "", "none"):
         problems.append(f"build network {build['network']!r} is not allowed")
     if build.get("privileged"):
         problems.append("build privileged is not allowed")
     if build.get("ssh"):
         problems.append("build ssh forwards your SSH agent and is not allowed")
+    return problems
+
+
+def check_build_sources(build, project_dir, keys, prefix=""):
+    """Problems with the build context, Dockerfile and named contexts of a build that lie outside project_dir.
+
+    keys: what the build calls the three, (context, dockerfile, named contexts); prefix: before each key
+    in the problems.
+    """
+    context_key, dockerfile_key, contexts_key = keys
+    problems = []
+    context = build.get(context_key)
+    if context and is_host_path(context):
+        dockerfile = build.get(dockerfile_key)
+        if not is_inside(context, project_dir):
+            problems.append(f"{prefix}{context_key} {context!r} is outside {project_dir}")
+        elif dockerfile and not is_inside(os.path.join(context, dockerfile), project_dir):
+            problems.append(f"{prefix}{dockerfile_key} {dockerfile!r} is outside {project_dir}")
+    for name, source in (build.get(contexts_key) or {}).items():
+        if is_host_path(source) and not is_inside(str(source), project_dir):
+            problems.append(f"{prefix}{contexts_key} {name!r}: {source!r} is outside {project_dir}")
     return problems
 
 
