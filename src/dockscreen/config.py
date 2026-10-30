@@ -65,8 +65,9 @@ def effective(config, repository=None, directory=None):
     sections = [config.images[repository]] if repository in config.images else []
     if directory is not None:
         real = os.path.realpath(directory)
-        matching = [d for d in config.projects if is_inside(real, os.path.realpath(d))]
-        sections += [config.projects[d] for d in sorted(matching, key=lambda d: len(os.path.realpath(d)))]
+        roots = {d: os.path.realpath(d) for d in config.projects}
+        matching = [d for d, root in roots.items() if os.path.commonpath([real, root]) == root]
+        sections += [config.projects[d] for d in sorted(matching, key=lambda d: len(roots[d]))]
     result = config._replace(images=MappingProxyType({}), projects=MappingProxyType({}))
     for section in sections:
         result = amend(result, section)
@@ -81,10 +82,6 @@ def amend(config, section):
         before = getattr(config, key)
         changes[key] = (*before, *(v for v in getattr(section, key) if v not in before))
     return config._replace(**changes)
-
-
-def is_inside(path, root):
-    return os.path.commonpath([path, root]) == root
 
 
 def all_mount_dirs(config):
