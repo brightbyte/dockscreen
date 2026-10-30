@@ -110,12 +110,12 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
         if prepared.problems:
             verdict.screened(prepared.problems, failed=prepared.failed)
             return 1
-        final, vetted = composeimages.finalize(hardened, prepared, image_ctx)
+        final, vetted = prepared.finalize()
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))  # what will run
         if problems:
             verdict.screened(problems)
             return 1
-        for line in [*lines, *composeimages.notices(prepared)]:
+        for line in [*lines, *prepared.notices()]:
             if line:
                 messages.notice(line)
         verdict.screened([])

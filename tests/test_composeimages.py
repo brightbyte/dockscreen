@@ -223,7 +223,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
-    return prepared, *composeimages.finalize(config, prepared, gate_context(images, settings))
+    return prepared, *prepared.finalize()
 
 
 def test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own():
@@ -283,9 +283,8 @@ def test_descriptions_and_notices():
     config = project(web={}, db={}, debug={}, set_={"user": "1:1"})
     images = FakeImages(users={"web:1": "", "db:1": "app"})
     prepared, _, _ = prepare(config, images, active=("web", "db", "set_"))
-    ctx = gate_context(images)
 
-    assert composeimages.describe(config, prepared, ctx) == [
+    assert prepared.describe() == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), gid 100001 "
          "(no local group); accepted"),
         messages.notable_change("service debug: no user set and not started by default; dockscreen runs it "
@@ -293,7 +292,7 @@ def test_descriptions_and_notices():
         messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
         messages.routine_change(f"services db, web: {PIN}"),
     ]
-    assert composeimages.notices(prepared) == [
+    assert prepared.notices() == [
         messages.notable_change(f"service web: {ROOT_FALLBACK}", USER_HELP),
         messages.routine_change(f"services db, web: {PIN}")]
 
@@ -360,9 +359,9 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
 
     assert prepared.decisions["db"].assessment.kind is Kind.CONFIGURED
     assert final["services"]["db"]["user"] == "999:999" and vetted == {"db"}
-    assert composeimages.notices(prepared) == [  # configured: routine only, no surprise
+    assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
-    assert composeimages.describe(mariadb_project(), prepared, gate_context(images, MARIADB)) == [
+    assert prepared.describe() == [
         f"{GOOD} service db: no user set; image mariadb:11 runs as 999:999, "
         "the user the config file sets for it",
         messages.routine_change(f"services db: {PIN}")]
@@ -380,7 +379,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
 
     assessment = prepared.decisions["db"].assessment
     assert assessment.kind is Kind.FALLBACK  # the normal rules: root runs as the default user
-    lines = composeimages.describe(config, prepared, gate_context(images, MARIADB))
+    lines = prepared.describe()
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
             f"but {why}") in lines
 

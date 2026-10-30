@@ -57,10 +57,10 @@ def audit_images(project, brief):
         prepared = composeimages.prepare(command(hardened), hardened, [], image_ctx)
     problems = prepared.problems
     if not problems:  # what `up` checks once more before it runs: image sections need proof now
-        final, vetted = composeimages.finalize(hardened, prepared, image_ctx)
+        final, vetted = prepared.finalize()
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))
     outcome = Verdict.FAILED if prepared.failed else Verdict.REFUSED if problems else Verdict.PASSED
-    return outcome, problems, composeimages.describe(hardened, prepared, image_ctx)
+    return outcome, problems, prepared.describe()
 
 
 def harden(global_args, args, runtime, allow_me=False):

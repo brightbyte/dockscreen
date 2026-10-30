@@ -42,11 +42,82 @@ class Decision(NamedTuple):
 
 
 class Prepared(NamedTuple):
+    """What prepare found for config, and decided with ctx (an imagedecision.Context)."""
+    config: dict
+    ctx: imagedecision.Context
     to_run: frozenset
     decisions: dict   # service -> Decision, for the started services that set no user
     problems: list
     failed: bool = False  # some problems are failures to get or look at an image, not refusals
     verified: dict | None = None  # service -> the repository whose image section its image proved
+
+    def finalize(self):
+        """(config to run, services whose user dockscreen set from the vetted image). config is left alone."""
+        settings = self.ctx.settings
+        final = copy.deepcopy(self.config)
+        vetted = set()
+        for name, service in final["services"].items():
+            if service.get("user"):
+                continue
+            decision = self.decisions.get(name)
+            if decision is None:  # not started by this command
+                # an allowed id: the policy accepts it
+                service["user"] = ids.format_user(settings.default_user)
+                give_default_home(service, settings.default_user, settings.default_home)
+                continue
+            if not decision.assessment.pins_user:
+                continue
+            # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
+            # resolve the image's user to anything but what was checked
+            service["user"] = ids.format_user(decision.assessment.user)
+            if decision.assessment.kind is imagedecision.Kind.FALLBACK:
+                give_default_home(service, decision.assessment.user, decision.assessment.home)
+            else:
+                vetted.add(name)  # ... which needs no vetting
+            service["pull_policy"] = "never"  # the image that was checked is the one that runs
+            if decision.image_id and "build" not in service:
+                service["image"] = decision.image_id  # ... even if the name is moved to another image
+        return final, frozenset(vetted)
+
+    def describe(self):
+        """One line per service without a user: what dockscreen will do about it."""
+        lines = []
+        for name in sorted(unset_user_services(self.config)):
+            decision = self.decisions.get(name)
+            if decision is None:
+                default = ids.format_user(self.ctx.settings.default_user)
+                text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
+                        f"default user ({default}) if it is started")
+                lines.append(messages.notable_change(text, USER_HELP))
+                continue
+            assessment, dot = decision.assessment, verdict.dot(decision.assessment)
+            if assessment.kind in (imagedecision.Kind.OK, imagedecision.Kind.CONFIGURED):
+                runs_as = imagedecision.runs_as(assessment, self.ctx.local)
+                text = f"service {name}: no user set; image {decision.image} {runs_as}"
+                lines.append(messages.Marked(dot, text))
+            elif assessment.kind is imagedecision.Kind.FALLBACK:
+                instead = imagedecision.instead_of_root(assessment)
+                lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
+            if assessment.note:
+                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
+        return [*lines, *self.pin_notices()]
+
+    def notices(self):
+        """What a run is about to do that the project did not ask for, as marked lines."""
+        return [
+            messages.notable_change(
+                f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
+            for name, d in self.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
+        ] + self.pin_notices()
+
+    def pin_notices(self):
+        """One line for the services whose checked user and image are fixed in the generated file, if any."""
+        names = [name for name, d in self.decisions.items() if d.assessment.pins_user]
+        if not names:
+            return []
+        return [messages.routine_change(
+            f"services {', '.join(names)}: user, image id and pull_policy: never fixed to what was checked, "
+            "in the generated file only")]
 
 
 def unset_user_services(config):
@@ -72,9 +143,9 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
         to_run = services_to_run(command, config, args, ctx)
         failures = acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(frozenset(), {}, [str(e)], failed=True)
+        return Prepared(config, ctx, frozenset(), {}, [str(e)], failed=True)
     if failures:
-        return Prepared(to_run, {}, failures, failed=True)
+        return Prepared(config, ctx, to_run, {}, failures, failed=True)
 
     decisions = decide(config, to_run - chosen, ctx)
     verified = verify_sections(config, ctx)
@@ -82,7 +153,7 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
     problems = [decision_problem(name, d, config_file)
                 for name, d in decisions.items() if d.assessment.refused]
     failed = any(d.assessment.failed for d in decisions.values())
-    return Prepared(to_run, decisions, problems, failed=failed, verified=verified)
+    return Prepared(config, ctx, to_run, decisions, problems, failed=failed, verified=verified)
 
 
 def verify_sections(config, ctx):
@@ -224,87 +295,11 @@ def decide(config, to_run, ctx):
     return decisions
 
 
-def finalize(config, prepared, ctx):
-    """(config to run, services whose user dockscreen set from the vetted image). The input is left alone.
-
-    ctx: the imagedecision.Context the decisions were made with, for the default user.
-    """
-    final = copy.deepcopy(config)
-    vetted = set()
-    for name, service in final["services"].items():
-        if service.get("user"):
-            continue
-        decision = prepared.decisions.get(name)
-        if decision is None:  # not started by this command
-            # an allowed id: the policy accepts it
-            service["user"] = ids.format_user(ctx.settings.default_user)
-            give_default_home(service, ctx.settings.default_user, ctx.settings.default_home)
-            continue
-        if not decision.assessment.pins_user:
-            continue
-        # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
-        # resolve the image's user to anything but what was checked
-        service["user"] = ids.format_user(decision.assessment.user)
-        if decision.assessment.kind is imagedecision.Kind.FALLBACK:
-            give_default_home(service, decision.assessment.user, decision.assessment.home)
-        else:
-            vetted.add(name)  # ... which needs no vetting
-        service["pull_policy"] = "never"  # the image that was checked is the one that runs
-        if decision.image_id and "build" not in service:
-            service["image"] = decision.image_id  # ... even if the name is moved to another image
-    return final, frozenset(vetted)
-
-
 def give_default_home(service, user, home):
     """HOME for the default user that replaces root, unless the service sets one."""
     if home := imagedecision.default_home(user, home):
         service["environment"] = {"HOME": home, **(service.get("environment") or {})}
 
 
-def describe(config, prepared, ctx):
-    """One line per service without a user: what dockscreen will do about it.
-
-    ctx: the imagedecision.Context the decisions were made with.
-    """
-    lines = []
-    for name in sorted(unset_user_services(config)):
-        decision = prepared.decisions.get(name)
-        if decision is None:
-            default = ids.format_user(ctx.settings.default_user)
-            text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
-                    f"default user ({default}) if it is started")
-            lines.append(messages.notable_change(text, USER_HELP))
-            continue
-        assessment, dot = decision.assessment, verdict.dot(decision.assessment)
-        if assessment.kind in (imagedecision.Kind.OK, imagedecision.Kind.CONFIGURED):
-            runs_as = imagedecision.runs_as(assessment, ctx.local)
-            text = f"service {name}: no user set; image {decision.image} {runs_as}"
-            lines.append(messages.Marked(dot, text))
-        elif assessment.kind is imagedecision.Kind.FALLBACK:
-            instead = imagedecision.instead_of_root(assessment)
-            lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
-        if assessment.note:
-            lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
-    return [*lines, *pin_notices(prepared)]
-
-
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
              "volumes set up for root")
-
-
-def pin_notices(prepared):
-    """One line for the services whose checked user and image are fixed in the generated file, if any."""
-    names = [name for name, d in prepared.decisions.items() if d.assessment.pins_user]
-    if not names:
-        return []
-    return [messages.routine_change(
-        f"services {', '.join(names)}: user, image id and pull_policy: never fixed to what was checked, "
-        "in the generated file only")]
-
-
-def notices(prepared):
-    """What a run is about to do that the project did not ask for, as marked lines."""
-    return [
-        messages.notable_change(f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
-        for name, d in prepared.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
-    ] + pin_notices(prepared)
