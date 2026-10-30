@@ -7,7 +7,7 @@ ME = (4242, 4343)
 
 
 def parse(*args):
-    return runargs.parse(list(args), ME, fakes.host_account)
+    return runargs.parse(list(args), ME, fakes.Accounts())
 
 
 def test_plain_command():
@@ -69,11 +69,11 @@ def test_double_dash_ends_the_options():
 @pytest.mark.parametrize("args", [[], ["--rm"], ["-it"], ["--name"], ["-p"], ["-a"]])
 def test_incomplete_command_lines_are_errors(args):
     with pytest.raises(runargs.ParseError):
-        runargs.parse(args, ME, fakes.host_account)
+        runargs.parse(args, ME, fakes.Accounts())
 
 
 def test_as_me_means_the_callers_ids_and_resolves_nothing():
-    parsed = runargs.parse(["--as-me", "img"], ME, resolve=lambda v: 1 / 0)
+    parsed = runargs.parse(["--as-me", "img"], ME, accounts=None)  # looking anything up would fail
     assert parsed.create_args == ["--user=4242:4343", "img"]
     assert parsed.user_given and parsed.notices == []
 
@@ -85,7 +85,7 @@ def test_current_user_is_no_longer_a_flag_of_ours():
 
 @pytest.mark.parametrize("flags", [["--as", "alice"], ["--as=alice"]])
 def test_as_resolves_a_local_account_on_the_host(flags):
-    parsed = runargs.parse([*flags, "img"], ME, fakes.host_account)
+    parsed = runargs.parse([*flags, "img"], ME, fakes.Accounts())
     assert parsed.create_args == ["--user=4242:4343", "img"]
     assert parsed.notices == ["Resolving user alice to uid 4242, gid 4343"]
     assert parsed.user_given
@@ -93,11 +93,11 @@ def test_as_resolves_a_local_account_on_the_host(flags):
 
 def test_as_with_an_unknown_account_or_an_id_is_an_error():
     with pytest.raises(hostusers.UnknownUser):
-        runargs.parse(["--as", "ghost", "img"], ME, fakes.host_account)
+        runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
     with pytest.raises(hostusers.UserError):
-        runargs.parse(["--as", "1000", "img"], ME, fakes.host_account)
+        runargs.parse(["--as", "1000", "img"], ME, fakes.Accounts())
     with pytest.raises(runargs.ParseError):
-        runargs.parse(["--as"], ME, fakes.host_account)
+        runargs.parse(["--as"], ME, fakes.Accounts())
 
 
 @pytest.mark.parametrize("flags, user", [

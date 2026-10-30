@@ -57,7 +57,7 @@ VALUE_SHORT = frozenset("st")
 def run(ctx, args):
     """`docker run`; returns the exit code."""
     try:
-        parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.resolve_account)
+        parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.accounts)
     except runargs.ParseError as e:
         verdict.screened([messages.reason(f"cannot read the command line: {e}",
                                           "use the real docker for this one")])
@@ -183,7 +183,7 @@ def audit(ctx, args, strict=False):
     """
     brief, args = flags.strip(args, runargs.VALUE_OPTIONS, flags.BRIEF)
     try:
-        parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.resolve_account)
+        parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.accounts)
     except runargs.ParseError as e:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
@@ -280,7 +280,7 @@ def create_args(args, runtime):
     Returned as they are if they cannot be read: docker will report what is wrong with them.
     """
     try:
-        parsed = runargs.parse(args, runtime.me, runtime.resolve_account)
+        parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError:
         return args
     for message in parsed.notices:

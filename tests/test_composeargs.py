@@ -18,7 +18,7 @@ ME = (1000, 1001)  # what --as-me stands for
     ([], None, False),
 ])
 def test_run_arguments(args, service, user_given):
-    parsed = composeargs.parse("run", args, ME, resolve)
+    parsed = composeargs.parse("run", args, ME, ACCOUNTS)
     assert (parsed.service, parsed.user_given, parsed.args) == (service, user_given, args)
 
 
@@ -28,22 +28,26 @@ def test_run_arguments(args, service, user_given):
 ])
 def test_users_must_be_numeric_uid_gid(args):
     with pytest.raises(hostusers.UserError, match="--user takes numeric ids as uid:gid"):
-        composeargs.parse("run", args, ME, resolve)
+        composeargs.parse("run", args, ME, ACCOUNTS)
 
 
 def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
-    assert composeargs.parse("exec", exec_args, ME, resolve)[:2] == ("web", True)
+    assert composeargs.parse("exec", exec_args, ME, ACCOUNTS)[:2] == ("web", True)
     docker_exec_args = ["--detach-keys", "x", "-it", "c", "sh"]
-    assert composeargs.parse("docker exec", docker_exec_args, ME, resolve)[:2] == ("c", False)
+    assert composeargs.parse("docker exec", docker_exec_args, ME, ACCOUNTS)[:2] == ("c", False)
     with pytest.raises(hostusers.UserError):
-        composeargs.parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"], ME, resolve)
+        composeargs.parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"], ME, ACCOUNTS)
 
 
-def resolve(name):
-    if name != "alice":
-        raise hostusers.UnknownUser(f"user {name!r} does not exist on this host")
-    return "1001:1002", ["Resolving user alice to uid 1001, gid 1002"]
+class Accounts:
+    """A host whose only account is alice, 1001:1002."""
+
+    def user(self, name):
+        return (1001, 1002) if name == "alice" else None
+
+
+ACCOUNTS = Accounts()
 
 
 @pytest.mark.parametrize("subcommand, args, rewritten", [
@@ -55,7 +59,7 @@ def resolve(name):
     ("run", ["web", "tool", "--as", "bob"], ["web", "tool", "--as", "bob"]),
 ])
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
-    parsed = composeargs.parse(subcommand, args, ME, resolve)
+    parsed = composeargs.parse(subcommand, args, ME, ACCOUNTS)
     assert parsed.args == rewritten
     assert parsed.user_given == ("--as" not in rewritten)
     assert parsed.notices == ([] if "--as" in rewritten else ["Resolving user alice to uid 1001, gid 1002"])
@@ -63,15 +67,15 @@ def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, arg
 
 def test_as_with_an_unknown_name_is_an_error():
     with pytest.raises(hostusers.UnknownUser):
-        composeargs.parse("exec", ["--as", "bob", "web", "sh"], ME, resolve)
+        composeargs.parse("exec", ["--as", "bob", "web", "sh"], ME, ACCOUNTS)
 
 
 def test_a_name_given_to_user_points_to_as():
     with pytest.raises(hostusers.UserError, match="--as NAME runs as a local user"):
-        composeargs.parse("exec", ["-u", "postgres", "web", "sh"], ME, resolve)
+        composeargs.parse("exec", ["-u", "postgres", "web", "sh"], ME, ACCOUNTS)
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
-    parsed = composeargs.parse(subcommand, ["-it", "--as-me", "c", "sh"], ME, resolve)
+    parsed = composeargs.parse(subcommand, ["-it", "--as-me", "c", "sh"], ME, ACCOUNTS)
     assert parsed.args == ["-it", "--user=1000:1001", "c", "sh"] and parsed.user_given

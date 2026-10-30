@@ -37,14 +37,14 @@ class Parsed(NamedTuple):
     notices: list     # what resolving user names on this host did, for the caller to print
 
 
-def parse(subcommand, args, current_user, resolve):
+def parse(subcommand, args, me, accounts):
     """The service named in args, and whether a user is given; raises hostusers.UserError for a user
     that is not numeric `uid:gid`, or an --as that does not name a local user.
 
-    current_user: the (uid, gid) that --as-me stands for.
-    resolve: turns the name given to --as into "uid:gid" (hostusers.resolve_account), with messages.
+    me: the (uid, gid) that --as-me stands for.
+    accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     """
-    users = hostusers.UserOptions(current_user, resolve)
+    users = hostusers.UserOptions(me, accounts)
     value_flags = VALUE_FLAGS[subcommand]
     kept = []
     i = 0

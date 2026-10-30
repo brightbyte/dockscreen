@@ -56,14 +56,14 @@ class _State:
         self.detach_keys = None
 
 
-def parse(args, current_user, resolve):
+def parse(args, me, accounts):
     """Split run arguments.
 
-    current_user: the (uid, gid) that --as-me stands for.
-    resolve: turns the name given to --as into "uid:gid" (hostusers.resolve_account), with messages.
+    me: the (uid, gid) that --as-me stands for.
+    accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     Raises hostusers.UserError if --user is not numeric or --as does not name a local user.
     """
-    users = hostusers.UserOptions(current_user, resolve)
+    users = hostusers.UserOptions(me, accounts)
     state = _State(users)
     i = 0
     while i < len(args):

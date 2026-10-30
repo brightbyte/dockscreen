@@ -140,7 +140,7 @@ def command_line(subcommand, args, runtime):
     """
     if subcommand != "run":
         return composeargs.Parsed(None, False, args, [])
-    return composeargs.parse("run", args, runtime.me, runtime.resolve_account)
+    return composeargs.parse("run", args, runtime.me, runtime.accounts)
 
 
 def chosen(parsed):

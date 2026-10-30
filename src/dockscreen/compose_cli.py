@@ -135,7 +135,7 @@ def rewrite_exec(kind, args, runtime):
     None if the user they give cannot be used; that has been reported.
     """
     try:
-        parsed = composeargs.parse(kind, args, runtime.me, runtime.resolve_account)
+        parsed = composeargs.parse(kind, args, runtime.me, runtime.accounts)
     except hostusers.UserError as e:
         messages.report([str(e)])
         return None

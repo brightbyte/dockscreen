@@ -32,10 +32,6 @@ class Runtime(NamedTuple):
         """The caller's own config file, which hints point to; dockscreen creates it if it is missing."""
         return config.user_file(self.env, self.home)
 
-    def resolve_account(self, name):
-        """hostusers.resolve_account with this host's accounts."""
-        return hostusers.resolve_account(name, self.accounts)
-
 
 def load_runtime():
     """The Runtime of this process. Raises config.ConfigError for a config file that cannot be trusted."""

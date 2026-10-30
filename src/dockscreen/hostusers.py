@@ -54,10 +54,10 @@ class UserOptions:
     notices that resolving names produced.
     """
 
-    def __init__(self, current_user, resolve):
-        """current_user: the (uid, gid) --as-me stands for; resolve: like resolve_account."""
-        self.current_user = current_user
-        self.resolve = resolve
+    def __init__(self, me, accounts):
+        """me: the (uid, gid) --as-me stands for; accounts: where --as looks names up (HostAccounts)."""
+        self.callers_ids = me
+        self.accounts = accounts
         self.user_given = False
         self.allow_me = False
         self.notices = []
@@ -70,14 +70,14 @@ class UserOptions:
     def account(self, name):
         """--as: a local account, as ids."""
         self.user_given = True
-        resolved, messages = self.resolve(name)
+        resolved, messages = resolve_account(name, self.accounts)
         self.notices += messages
         return f"--user={resolved}"
 
     def me(self):
         """--as-me: the caller's own ids, which are then allowed."""
         self.user_given = self.allow_me = True
-        return f"--user={ids.format_user(self.current_user)}"
+        return f"--user={ids.format_user(self.callers_ids)}"
 
 
 class HostAccounts:
