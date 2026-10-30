@@ -165,22 +165,22 @@ def topic(topic_, follows_name, width):
     if topic_.aliases:
         lines += ["", "Aliases:", *paragraph(", ".join(topic_.aliases), width, "  ")]
     if topic_.notes:
-        lines += notes(topic_.notes, width)
+        lines += _notes(topic_.notes, width)
     if topic_.options:
         lines += ["", "Options:", *table([(o.left(), o.text) for o in topic_.options], width)]
-    return lines + follows(topic_.docker_help, follows_name)
+    return lines + _follows(topic_.docker_help, follows_name)
 
 
-def overview(usage, summary, options, sections, more, follows_name, width):
+def _overview(usage, summary, options, sections, more, follows_name, width):
     """The help for dockscreen or compose: options, then each (title, {name: Topic}) section."""
     lines = [f"Usage:  {usage}", "", *paragraph(summary, width), "", "Options:",
              *table([(o.left(), o.text) for o in options], width)]
     for title, topics in sections:
         lines += ["", title, *table([(f"  {n}", t.summary) for n, t in sorted(topics.items())], width)]
-    return lines + ["", *paragraph(more, width)] + follows(True, follows_name)
+    return lines + ["", *paragraph(more, width)] + _follows(True, follows_name)
 
 
-def notes(texts, width):
+def _notes(texts, width):
     """Paragraphs, with a blank line before each, and list items, which follow their paragraph."""
     lines = []
     for text in texts:
@@ -221,14 +221,14 @@ def item(text, width):
                          break_long_words=False, break_on_hyphens=False)
 
 
-def follows(docker_help, name):
+def _follows(docker_help, name):
     """The lines that announce name's own help after ours, if docker_help says it follows."""
     return ["", f"{name} help follows:", ""] if docker_help and name else []
 
 
 def docker_overview(width):
     """The help for dockscreen itself, as lines wrapped to width."""
-    return overview(
+    return _overview(
         "dockscreen [OPTIONS] COMMAND",
         "Docker with security checks: dockscreen audits the commands that start containers and passes "
         "everything else to docker unchanged. Its own options go before the command, with docker's.",
@@ -240,7 +240,7 @@ def docker_overview(width):
 
 def compose_overview(commands, width):
     """commands: {name: Topic} of dockscreen's own compose commands."""
-    return overview(
+    return _overview(
         "dockscreen compose [OPTIONS] COMMAND",
         "Docker Compose with security checks: dockscreen audits the project before the commands that "
         "start containers, and passes everything else to docker compose unchanged.",

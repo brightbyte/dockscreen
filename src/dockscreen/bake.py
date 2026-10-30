@@ -51,11 +51,11 @@ def check_definition(found, project_dir):
     """Why the definition may not be built, as a list of problems."""
     problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
     for name, target in (found.get("target") or {}).items():
-        problems += [f"target {name}: {p}" for p in check_target(target or {}, project_dir)]
+        problems += [f"target {name}: {p}" for p in _check_target(target or {}, project_dir)]
     return problems
 
 
-def check_target(target, project_dir):
+def _check_target(target, project_dir):
     """Problems with a bake target: unknown keys, sources outside project_dir, access beyond the build."""
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
     problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
@@ -65,13 +65,13 @@ def check_target(target, project_dir):
         problems.append("entitlements ask for access beyond the build sandbox and are not allowed")
     if target.get("ssh"):
         problems.append("ssh forwards your SSH agent and is not allowed")
-    problems += check_outputs(target.get("output") or [], target.get("cache-to") or [])
-    problems += check_cache_from(target.get("cache-from") or [], project_dir)
-    problems += check_secrets(target.get("secret") or [], project_dir)
+    problems += _check_outputs(target.get("output") or [], target.get("cache-to") or [])
+    problems += _check_cache_from(target.get("cache-from") or [], project_dir)
+    problems += _check_secrets(target.get("secret") or [], project_dir)
     return problems
 
 
-def fields(entry):
+def _fields(entry):
     """{key: value} of a `key=value,key=value` entry, or None if it is not that. A bare word has no keys."""
     try:
         parts = next(csv.reader([str(entry)]), [])
@@ -81,26 +81,26 @@ def fields(entry):
     return {key.strip(): value for key, equals, value in pairs if equals}
 
 
-def check_outputs(outputs, cache_to):
+def _check_outputs(outputs, cache_to):
     """Problems with a target's output and cache-to entries: any that write to the host."""
     problems = []
     for entry in outputs:
-        found = fields(entry)
+        found = _fields(entry)
         # a bare path is a local directory
         if found is None or found.get("type") not in OUTPUT_TYPES or "dest" in found:
             problems.append(f"output {entry!r} writes to the host and is not allowed")
     for entry in cache_to:
-        found = fields(entry)
+        found = _fields(entry)
         if found is None or found.get("type") not in CACHE_TO_TYPES:
             problems.append(f"cache-to {entry!r} writes to the host or an unknown store and is not allowed")
     return problems
 
 
-def check_cache_from(entries, project_dir):
+def _check_cache_from(entries, project_dir):
     """Problems with cache-from entries: a local cache outside project_dir, or one that cannot be read."""
     problems = []
     for entry in entries:
-        found = fields(entry)
+        found = _fields(entry)
         if found is None:
             problems.append(f"cache-from {entry!r} cannot be read")
         elif found.get("type") == "local" and not policy.is_inside(found.get("src", ""), project_dir):
@@ -108,11 +108,11 @@ def check_cache_from(entries, project_dir):
     return problems
 
 
-def check_secrets(secrets, project_dir):
+def _check_secrets(secrets, project_dir):
     """Problems with secret entries: a variable instead of a file, or a file outside project_dir."""
     problems = []
     for entry in secrets:
-        found = fields(entry)
+        found = _fields(entry)
         source = (found or {}).get("src") or (found or {}).get("source")
         if source is None:
             problems.append(f"secret {entry!r} copies a variable or cannot be read, and is not allowed")

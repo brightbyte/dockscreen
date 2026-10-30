@@ -52,7 +52,7 @@ def fix_config(config, ctx):
             if not service["volumes_from"]:
                 del service["volumes_from"]
         if "volumes" in service:
-            service["volumes"] = [fix_mount(m, service_ctx) for m in service["volumes"]]
+            service["volumes"] = [_fix_mount(m, service_ctx) for m in service["volumes"]]
     return fixed
 
 
@@ -65,14 +65,14 @@ def resolve_user_template(config, ctx):
     return resolved
 
 
-def fix_mount(mount, ctx):
+def _fix_mount(mount, ctx):
     """mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
     if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
         return mount
-    return {**mount, "source": placeholder_source(mount["source"], ctx.project_dir)}
+    return {**mount, "source": _placeholder_source(mount["source"], ctx.project_dir)}
 
 
-def placeholder_source(source, project_dir):
+def _placeholder_source(source, project_dir):
     """Relative, upper-case stand-in for a bad source: /etc becomes ./ETC.
 
     The upper case keeps it from naming the same directory as a real
@@ -92,10 +92,10 @@ def render(original, fixed, unfixed=(), notes=()):
     """original: the config the patch is applied to, as it will be run (defaults included)."""
     lines = [HEADER]
     lines += [f"# note: {printable(note)}" for note in notes]
-    lines += [f"# edit: {printable(note)}" for note in mount_notes(original, fixed)]
+    lines += [f"# edit: {printable(note)}" for note in _mount_notes(original, fixed)]
     lines += [f"# not fixed: {printable(problem)}" for problem in unfixed]
 
-    changes = service_changes(original, fixed)
+    changes = _service_changes(original, fixed)
     if any("user" in service for service in changes.values()):
         lines.append("# note: user ${UID}:${GID} runs a service as you: dockscreen allows that only with "
                      "--allow-me, and plain docker compose needs UID and GID exported.")
@@ -105,16 +105,16 @@ def render(original, fixed, unfixed=(), notes=()):
     lines.append("services:")
     for name, service in changes.items():
         lines.append(f"  {json.dumps(name)}:")
-        lines += [f"    {yaml_key(key)}: {value}" for key, value in service.items()]
+        lines += [f"    {_yaml_key(key)}: {value}" for key, value in service.items()]
     return "\n".join([*lines, ""])
 
 
-def yaml_key(key):
+def _yaml_key(key):
     """key as a YAML mapping key, quoted unless it is plainly safe."""
     return key if SAFE_YAML_KEY.match(key) else json.dumps(key)
 
 
-def mount_notes(original, fixed):
+def _mount_notes(original, fixed):
     """One note per mount whose source was replaced by a placeholder."""
     notes = []
     for name, before in original.get("services", {}).items():
@@ -127,13 +127,13 @@ def mount_notes(original, fixed):
     return notes
 
 
-def service_changes(original, fixed):
+def _service_changes(original, fixed):
     """Map service name to {key: rendered YAML value} for the keys that differ."""
     changes = {}
     for name, before in original.get("services", {}).items():
         after = fixed["services"][name]
         service = {
-            key: render_value(after.get(key))
+            key: _render_value(after.get(key))
             for key in sorted(set(before) | set(after))
             if before.get(key) != after.get(key)
         }
@@ -142,7 +142,7 @@ def service_changes(original, fixed):
     return changes
 
 
-def render_value(value):
+def _render_value(value):
     """value as YAML for the override file, tagged so that it replaces what the project set."""
     if value is None:
         return "!reset null"

@@ -3,7 +3,7 @@
 We need the image position and the few flags that `run` has and `create` lacks
 (`-d`, `--sig-proxy`, `--detach-keys`, `-a`). Nothing security-relevant hangs
 on this: the policy looks at the container the daemon created from the result,
-and gate.verify_split checks that our reading of the command line matched the
+and gate._verify_split checks that our reading of the command line matched the
 daemon's.
 """
 
@@ -73,9 +73,9 @@ def parse(args, me, accounts):
             i += 1
             break
         if token.startswith("--"):
-            i = parse_long(args, i, state)
+            i = _parse_long(args, i, state)
         elif token.startswith("-") and token != "-":
-            i = parse_short(args, i, state)
+            i = _parse_short(args, i, state)
         else:
             break
     if i >= len(args):
@@ -84,7 +84,7 @@ def parse(args, me, accounts):
                      users.user_given, users.notices, users.allow_me)
 
 
-def parse_long(args, i, state):
+def _parse_long(args, i, state):
     """Handle one --option; returns the index after it."""
     token = args[i]
     name, has_value, value = token.partition("=")
@@ -95,7 +95,7 @@ def parse_long(args, i, state):
     elif name == flags.AS:
         if not has_value:
             i += 1
-            value = value_at(args, i, name)
+            value = _value_at(args, i, name)
         state.kept.append(state.users.account(value))
     elif name == "--detach":
         state.detach = value.lower() != "false" if has_value else True
@@ -104,23 +104,23 @@ def parse_long(args, i, state):
     elif name in ("--detach-keys", "--attach"):
         if not has_value:
             i += 1
-            value = value_at(args, i, name)
+            value = _value_at(args, i, name)
         if name == "--detach-keys":
             state.detach_keys = value
     elif name == "--user":
         if not has_value:
             i += 1
-            value = value_at(args, i, name)
+            value = _value_at(args, i, name)
         state.kept.append(state.users.numeric(value))
     else:
         state.kept.append(token)
         if name in LONG_VALUE_FLAGS and not has_value:
             i += 1
-            state.kept.append(value_at(args, i, name))
+            state.kept.append(_value_at(args, i, name))
     return i + 1
 
 
-def parse_short(args, i, state):
+def _parse_short(args, i, state):
     """Handle one cluster such as -itv or -p80:80; returns the index after it."""
     token = args[i]
     keep = ""
@@ -134,11 +134,11 @@ def parse_short(args, i, state):
             rest = token[j + 1:]
             if char == "a":  # --attach has no `create` equivalent; dropped with its value
                 if not rest:
-                    value_at(args, i + 1, token)
+                    _value_at(args, i + 1, token)
                     consumed = 2
                 break
             if char == "u":  # a user is a value we may rewrite: move it out of the cluster
-                value = rest or value_at(args, i + 1, token)
+                value = rest or _value_at(args, i + 1, token)
                 consumed = 1 if rest else 2
                 if keep:
                     state.kept.append("-" + keep)
@@ -152,12 +152,12 @@ def parse_short(args, i, state):
     if keep:
         state.kept.append("-" + keep)
     if next_is_value:
-        state.kept.append(value_at(args, i + 1, token))
+        state.kept.append(_value_at(args, i + 1, token))
         consumed = 2
     return i + consumed
 
 
-def value_at(args, index, flag):
+def _value_at(args, index, flag):
     """args[index], the value of flag. Raises ParseError if there is none."""
     if index >= len(args):
         raise ParseError(f"{flag} needs a value")

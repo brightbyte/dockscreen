@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`images.name_matches`). Once the images are there, `composeimages.verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`images.name_matches`). Once the images are there, `composeimages._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -201,7 +201,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 - `run` becomes `create`, `inspect`, check, `start`:
   - The daemon parses the command line. `runargs` reads only far enough to find the image and the `run`-only flags.
-  - `gate.verify_split` refuses if that reading disagrees with what the daemon created.
+  - `gate._verify_split` refuses if that reading disagrees with what the daemon created.
   - Anything accepted removes the container and creates it again with `--user=uid:gid` as numbers: the default user, the configured image user, or the image's own ids.
 - `create` gets the defaults and user resolution. Its container is checked when it is started.
 - `start` and `restart` check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.

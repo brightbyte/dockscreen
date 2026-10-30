@@ -31,7 +31,7 @@ def apply(config, accounts):
     hardened = copy.deepcopy(config)
     additions = []
     for name, service in (hardened.get("services") or {}).items():
-        additions += resolve_user_names(name, service, accounts)
+        additions += _resolve_user_names(name, service, accounts)
         if policy.check_cap_drop(service.get("cap_drop"), None):
             declared = service.get("cap_drop")
             reason = f"lacks {CAP_DROP}" if declared else "is not set"
@@ -50,27 +50,27 @@ def apply(config, accounts):
     return hardened, additions
 
 
-def resolve_user_names(name, service, accounts):
+def _resolve_user_names(name, service, accounts):
     """Replace names in the service's user and hook users by their ids on this host."""
     additions = []
     if service.get("user"):
-        resolved = resolve_spec(service["user"], accounts)
+        resolved = _resolve_spec(service["user"], accounts)
         if resolved != service["user"]:
-            additions.append(Addition(name, "user", resolved_message("user", service["user"], resolved),
+            additions.append(Addition(name, "user", _resolved_message("user", service["user"], resolved),
                                       help=RESOLVE_HELP))
             service["user"] = resolved
     for key in ("post_start", "pre_stop"):
         for hook in service.get(key) or []:
             if isinstance(hook, dict) and hook.get("user"):
-                resolved = resolve_spec(hook["user"], accounts)
+                resolved = _resolve_spec(hook["user"], accounts)
                 if resolved != hook["user"]:
-                    message = resolved_message(f"{key} user", hook["user"], resolved)
+                    message = _resolved_message(f"{key} user", hook["user"], resolved)
                     additions.append(Addition(name, key, message, help=RESOLVE_HELP))
                     hook["user"] = resolved
     return additions
 
 
-def resolve_spec(spec, accounts):
+def _resolve_spec(spec, accounts):
     """`name` becomes that account's `uid:gid`, a group name its gid; numbers and unknown names stay.
 
     A uid alone stays alone: the policy refuses it rather than guess a group.
@@ -79,7 +79,7 @@ def resolve_spec(spec, accounts):
     account = accounts.user(user) if user and ids.parse_id(user) is None else None
     uid = str(account[0]) if account else user
     if has_group:
-        gid = resolve_group(group, accounts)
+        gid = _resolve_group(group, accounts)
     elif account:
         gid = str(account[1])  # a name brings its primary group, as with --as
     else:
@@ -87,7 +87,7 @@ def resolve_spec(spec, accounts):
     return f"{uid}:{gid}"
 
 
-def resolve_group(group, accounts):
+def _resolve_group(group, accounts):
     """group as a gid if accounts knows its name; ids and unknown names unchanged."""
     if ids.parse_id(group) is not None:
         return group
@@ -95,7 +95,7 @@ def resolve_group(group, accounts):
     return group if gid is None else str(gid)
 
 
-def resolved_message(what, before, after):
+def _resolved_message(what, before, after):
     """The notice that what was resolved from before to after on this host."""
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 

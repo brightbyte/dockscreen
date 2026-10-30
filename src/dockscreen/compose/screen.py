@@ -60,7 +60,7 @@ def context(project_dir, runtime, allow_me=False, verified=None):
     return settings_context(config.effective(runtime.settings, None, project_dir))._replace(scope=scope)
 
 
-def sensitive_paths(runtime):
+def _sensitive_paths(runtime):
     """Paths whose directories must not be mountable: system directories, the home directory, the
     config files and the docker socket."""
     return [*SENSITIVE_DIRS, runtime.home, config.SYSTEM_FILE, runtime.config_file, DOCKER_SOCKET]
@@ -69,7 +69,7 @@ def sensitive_paths(runtime):
 def sensitive_inside(directory, runtime):
     """The sensitive paths that directory equals or contains, compared after resolving symlinks."""
     root = os.path.realpath(directory)
-    return [path for path in sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
+    return [path for path in _sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
 
 
 def mount_dir_warnings(runtime):
@@ -190,7 +190,7 @@ def find_compose_dir(start, env_files, home, uid):
     """
     home = os.path.realpath(home)
     for env_file in env_files:
-        refuse_compose_vars_in(os.path.join(start, env_file))
+        _refuse_compose_vars_in(os.path.join(start, env_file))
     directory = os.path.realpath(start)
     while True:
         has_file = any(os.path.exists(os.path.join(directory, n)) for n in COMPOSE_FILE_NAMES)
@@ -199,7 +199,7 @@ def find_compose_dir(start, env_files, home, uid):
                 raise ScreenError(f"the nearest compose file is in {directory}, which is your home directory "
                                  "or not yours; run from the project directory or use -f")
             raise InspectError("no compose file found")
-        refuse_compose_vars_in(os.path.join(directory, ".env"))
+        _refuse_compose_vars_in(os.path.join(directory, ".env"))
         if has_file:
             return directory
         parent = os.path.dirname(directory)
@@ -208,7 +208,7 @@ def find_compose_dir(start, env_files, home, uid):
         directory = parent
 
 
-def refuse_compose_vars_in(path):
+def _refuse_compose_vars_in(path):
     """dockscreen does not read .env files, so a COMPOSE_FILE there would send compose to a
     different project directory than the one we would check mounts against."""
     try:

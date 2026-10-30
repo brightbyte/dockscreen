@@ -36,7 +36,7 @@ def atoi(text):
     return max(INT64_MIN, min(INT64_MAX, int(text)))
 
 
-def fields(line, count):
+def _fields(line, count):
     """The first count colon-separated fields; fields missing from a short line are empty."""
     parts = line.split(":")[:count]
     return parts + [""] * (count - len(parts))
@@ -46,7 +46,7 @@ def parse_passwd(text):
     """[(name, uid, gid)] like moby: a line with missing or malformed numbers has uid 0 and gid 0."""
     entries = []
     for line in lines(text):
-        name, _, uid, gid, *_ = fields(line, 7)
+        name, _, uid, gid, *_ = _fields(line, 7)
         entries.append((name, atoi(uid), atoi(gid)))
     return entries
 
@@ -55,7 +55,7 @@ def parse_group(text):
     """[(name, gid, members)] like moby."""
     entries = []
     for line in lines(text):
-        name, _, gid, members = fields(line, 4)
+        name, _, gid, members = _fields(line, 4)
         entries.append((name, atoi(gid), members.split(",") if members else []))
     return entries
 
@@ -72,7 +72,7 @@ def resolve(spec, passwd_text, group_text):
     user_part, _, group_part = (spec or "0").partition(":")
     user_part = user_part or "0"  # moby: no user means the default, uid 0
 
-    entry = find(passwd, user_part)
+    entry = _find(passwd, user_part)
     if entry:
         username, uid, default_gid = entry
     elif _is_id(user_part):
@@ -82,7 +82,7 @@ def resolve(spec, passwd_text, group_text):
 
     gid = default_gid
     if group_part:
-        group = find(groups, group_part)
+        group = _find(groups, group_part)
         if group:
             gid = group[1]
         elif _is_id(group_part):
@@ -96,7 +96,7 @@ def resolve(spec, passwd_text, group_text):
     return Identity(uid, gid, supplementary)
 
 
-def find(entries, arg):
+def _find(entries, arg):
     """The first entry (name, id, ...) that arg names: by id if arg is a number, else by name."""
     if _is_id(arg):
         return next((e for e in entries if e[1] == int(arg)), None)

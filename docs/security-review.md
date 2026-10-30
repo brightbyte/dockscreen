@@ -44,7 +44,7 @@ In a project, a named volume whose `driver_opts` bind a host path counts as a ho
 
 ### 8. `additional_contexts: oci-layout://…` counts as a remote URL
 
-`is_host_path` treats it as one; buildx reads a local layout. Allowlist the URL schemes. The same applies to the contexts of a bake definition.
+`policy._is_host_path` treats it as one; buildx reads a local layout. Allowlist the URL schemes. The same applies to the contexts of a bake definition.
 
 ### 9. An `ipam` subnet can overlap the LAN
 
@@ -60,7 +60,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 12. `harden` maps a mount source `/` to `./`
 
-`autofix.placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
+`autofix._placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
 
 ### 13. `docker.context()` ignores `--config`
 
@@ -109,7 +109,7 @@ Not defects to fix; the design records them as known gaps or as choices.
 - The generated compose file is checked against what compose reads back from it, before any pull or build; it is written in a private directory (0700) with an exclusive 0600 file; services whose image was looked at are pinned to the image id.
 - `-f`, `--project-directory`, `--project-name`, `-p` from the command line are replaced by the generated file.
 - `imageuser.py` matches moby/sys/user `main` for line splitting, whitespace, `atoi`, zero-filling, first match, numeric specs, NUL, duplicates and `a:b:c`.
-- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `verify_split` catches a misread command line; a uid without a group is refused.
+- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `gate._verify_split` catches a misread command line; a uid without a group is refused.
 - Image sections need a RepoDigests match on the image id; built and retagged images match nothing; sections cannot cross projects.
 - `--skip-screening`, `--allow-me`, `--strict-screen` and `--helpful` come only from argv before the subcommand; `--strict-screen` with anything but `audit` is refused.
 - Every `Docker` call uses `--` before container ids and image names; image files are read through the tar stream, capped at 1 MiB, fail closed.

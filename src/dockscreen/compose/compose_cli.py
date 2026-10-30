@@ -99,7 +99,7 @@ class ComposeCommand:
             if not screen.passes(self.global_args, runtime, policy.check_build_config):
                 return 1
         elif sub in NAMED_PROJECT_SUBCOMMANDS:
-            if not self.name_is_free():
+            if not self._name_is_free():
                 return 1
         elif sub == "exec":
             args = rewrite_exec("exec", self.args, runtime)
@@ -109,7 +109,7 @@ class ComposeCommand:
 
         forward(argv, runtime)
 
-    def name_is_free(self):
+    def _name_is_free(self):
         """Whether the project's name is not that of a project made from another directory.
 
         Said nothing when it is. A project that cannot be inspected is left to compose to report.
@@ -147,10 +147,10 @@ class ComposeCommand:
         """Print dockscreen's help for target, then compose's own if compose has the command too."""
         argv = self.argv
         if target == "":
-            helptext.show(lambda width: helptext.compose_overview(own_commands(), width))
+            helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
             return forward(argv, self.runtime)
         if target in COMMANDS:
-            topic = own_commands()[ALIASES.get(target, target)]
+            topic = _own_commands()[ALIASES.get(target, target)]
             helptext.show(lambda width: helptext.topic(topic, "", width))
             return 0
         if target in helptext.COMPOSE:
@@ -176,7 +176,7 @@ def rewrite_exec(kind, args, runtime):
     return parsed.args
 
 
-def own_commands():
+def _own_commands():
     """{name: Topic} of dockscreen's own compose commands, aliases folded in."""
     return {name: helptext.command_topic(name, fn, [a for a, p in ALIASES.items() if p == name])
             for name, fn in sorted(COMMANDS.items()) if name not in ALIASES}

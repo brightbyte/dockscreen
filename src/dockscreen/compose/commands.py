@@ -34,7 +34,7 @@ def audit(global_args, args, runtime, allow_me=False):
     except (screen.ScreenError, ValueError) as e:
         return verdict.report(Verdict.REFUSED, [str(e)], brief)
 
-    outcome, problems, lines = audit_images(project, brief)
+    outcome, problems, lines = _audit_images(project, brief)
     if not brief:
         warnings = [*screen.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
         for line in [*hardening.describe(project.additions), *warnings, *lines]:
@@ -44,7 +44,7 @@ def audit(global_args, args, runtime, allow_me=False):
     return verdict.report(outcome, problems, brief)
 
 
-def audit_images(project, brief):
+def _audit_images(project, brief):
     """(verdict, problems, report lines) for a project: the static checks, then the images if they pass."""
     problems = project.problems()
     if problems:
@@ -96,7 +96,7 @@ def harden(global_args, args, runtime, allow_me=False):
         messages.notice("the images were not looked at because of the problems below: "
                         "nothing was pulled or built")
     else:
-        remaining, notes = fix_image_users(project, fixed, resolved, notes)
+        remaining, notes = _fix_image_users(project, fixed, resolved, notes)
 
     sys.stdout.write(autofix.render(base, fixed, remaining, notes=notes))
     for problem in remaining:
@@ -104,7 +104,7 @@ def harden(global_args, args, runtime, allow_me=False):
     return 1 if remaining else 0
 
 
-def fix_image_users(project, fixed, resolved, notes):
+def _fix_image_users(project, fixed, resolved, notes):
     """Set a user in fixed on the services whose image chose one that is not acceptable.
     (problems left, notes)
 

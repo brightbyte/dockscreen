@@ -70,11 +70,11 @@ def effective(config, repository=None, directory=None):
         sections += [config.projects[d] for d in sorted(matching, key=lambda d: len(roots[d]))]
     result = config._replace(images=MappingProxyType({}), projects=MappingProxyType({}))
     for section in sections:
-        result = amend(result, section)
+        result = _amend(result, section)
     return result
 
 
-def amend(config, section):
+def _amend(config, section):
     """config with section applied: single values replaced, lists added to."""
     changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
@@ -131,22 +131,22 @@ def load(paths, uid, check=None):
     check = check or strict_modes
     config = Config()
     for path in paths:
-        data = read(path, uid, check)
+        data = _read(path, uid, check)
         if data is not None:
-            config = merge(config, path, data)
+            config = _merge(config, path, data)
     return config
 
 
-def merge(config, path, data):
+def _merge(config, path, data):
     """config with the file at path read over it: its keys replace, its sections replace by name."""
     unknown = sorted(set(data) - KEYS)
     if unknown:
         raise ConfigError(f"{path}: unknown key {unknown[0]!r}")
-    images_ = {repository_key(path, name): section(path, f"images {name!r}", value)
-               for name, value in table(path, "images", data.get("images", {})).items()}
-    projects = {project_key(path, name): section(path, f"projects {name!r}", value)
-                for name, value in table(path, "projects", data.get("projects", {})).items()}
-    top = section(path, "", {k: v for k, v in data.items() if k in SETTINGS})
+    images_ = {_repository_key(path, name): _section(path, f"images {name!r}", value)
+               for name, value in _table(path, "images", data.get("images", {})).items()}
+    projects = {_project_key(path, name): _section(path, f"projects {name!r}", value)
+                for name, value in _table(path, "projects", data.get("projects", {})).items()}
+    top = _section(path, "", {k: v for k, v in data.items() if k in SETTINGS})
     changes = {key: value for key, value in top._asdict().items() if key in data}
     if "docker" in data:
         if not isinstance(data["docker"], str) or not os.path.isabs(data["docker"]):
@@ -156,14 +156,14 @@ def merge(config, path, data):
                            projects=MappingProxyType({**config.projects, **projects}))
 
 
-def table(path, key, value):
+def _table(path, key, value):
     """value, if it is a table; raises ConfigError naming key in path otherwise."""
     if not isinstance(value, dict):
         raise ConfigError(f"{path}: {key} must be a table of sections")
     return value
 
 
-def section(path, where, data):
+def _section(path, where, data):
     """The Section that data sets; where names it in errors ("" for the top level)."""
     prefix = f"{path}: {where} " if where else f"{path}: "
     if not isinstance(data, dict):
@@ -174,14 +174,14 @@ def section(path, where, data):
     fields = {}
     for key in ("user", "default_user"):
         if key in data:
-            fields[key] = user_value(path, f"{where} {key}".strip(), data[key])
+            fields[key] = _user_value(path, f"{where} {key}".strip(), data[key])
     if "default_home" in data:
         value = data["default_home"]
         if not isinstance(value, str) or (value and not os.path.isabs(value)):
             raise ConfigError(f"{prefix}default_home must be an absolute path, or \"\" to leave HOME alone")
         fields["default_home"] = value
     if "nobody_range" in data:
-        fields["nobody_range"] = id_range(path, data["nobody_range"])
+        fields["nobody_range"] = _id_range(path, data["nobody_range"])
     if "mount_dirs" in data:
         value = data["mount_dirs"]
         if not isinstance(value, list) or not all(isinstance(d, str) and os.path.isabs(d) for d in value):
@@ -195,7 +195,7 @@ def section(path, where, data):
     return Section(**fields)
 
 
-def read(path, uid, check):
+def _read(path, uid, check):
     """The TOML in path, or None if there is no file; check(path, uid) must pass for the file that is read.
 
     Raises ConfigError if it does not, or the file cannot be read or parsed.
@@ -231,7 +231,7 @@ def strict_modes(path, uid, stat_path=os.stat):
         current = parent
 
 
-def user_value(path, key, value):
+def _user_value(path, key, value):
     """(uid, gid) from "uid:gid"; names are not resolved here, both must be numbers."""
     user = ids.parse_user(value) if isinstance(value, str) else None
     if user is None:
@@ -239,7 +239,7 @@ def user_value(path, key, value):
     return user
 
 
-def id_range(path, value):
+def _id_range(path, value):
     """An inclusive (low, high) that leaves out root and the ids that mean "no id"."""
     valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
     if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in NO_ID)
@@ -248,7 +248,7 @@ def id_range(path, value):
     return tuple(value)
 
 
-def repository_key(path, name):
+def _repository_key(path, name):
     """The normalised repository an image section names; a tag or digest is an error."""
     try:
         repository, tag, digest = images.split_reference(name)
@@ -259,7 +259,7 @@ def repository_key(path, name):
     return repository
 
 
-def project_key(path, name):
+def _project_key(path, name):
     """The directory a project section names, which must be absolute."""
     if not os.path.isabs(name):
         raise ConfigError(f"{path}: projects {name!r} must be an absolute directory")

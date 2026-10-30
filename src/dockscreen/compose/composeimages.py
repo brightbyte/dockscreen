@@ -63,7 +63,7 @@ class Prepared(NamedTuple):
             if decision is None:  # not started by this command
                 # an allowed id: the policy accepts it
                 service["user"] = ids.format_user(settings.default_user)
-                give_default_home(service, settings.default_user, settings.default_home)
+                _give_default_home(service, settings.default_user, settings.default_home)
                 continue
             if not decision.assessment.pins_user:
                 continue
@@ -71,7 +71,7 @@ class Prepared(NamedTuple):
             # resolve the image's user to anything but what was checked
             service["user"] = ids.format_user(decision.assessment.user)
             if decision.assessment.kind is imagedecision.Kind.FALLBACK:
-                give_default_home(service, decision.assessment.user, decision.assessment.home)
+                _give_default_home(service, decision.assessment.user, decision.assessment.home)
             else:
                 vetted.add(name)  # ... which needs no vetting
             service["pull_policy"] = "never"  # the image that was checked is the one that runs
@@ -100,7 +100,7 @@ class Prepared(NamedTuple):
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
             if assessment.note:
                 lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
-        return [*lines, *self.pin_notices()]
+        return [*lines, *self._pin_notices()]
 
     def notices(self):
         """What a run is about to do that the project did not ask for, as marked lines."""
@@ -108,9 +108,9 @@ class Prepared(NamedTuple):
             messages.notable_change(
                 f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
             for name, d in self.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
-        ] + self.pin_notices()
+        ] + self._pin_notices()
 
-    def pin_notices(self):
+    def _pin_notices(self):
         """One line for the services whose checked user and image are fixed in the generated file, if any."""
         names = [name for name, d in self.decisions.items() if d.assessment.pins_user]
         if not names:
@@ -125,7 +125,7 @@ def unset_user_services(config):
     return frozenset(n for n, s in (config.get("services") or {}).items() if not (s or {}).get("user"))
 
 
-def image_name(config, name, service):
+def _image_name(config, name, service):
     """The image compose uses: the service's own, or <project>-<service> for one that is built."""
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
@@ -139,16 +139,16 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
     chosen: services whose user the command line chooses (`run -u`); their images are not decided.
     """
     try:
-        verify_round_trip(command, config, ctx)
+        _verify_round_trip(command, config, ctx)
         to_run = services_to_run(command, config, args, ctx)
-        failures = acquire(command, config, to_run, args, ctx)
+        failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
         return Prepared(config, ctx, frozenset(), {}, [str(e)], failed=True)
     if failures:
         return Prepared(config, ctx, to_run, {}, failures, failed=True)
 
-    decisions = decide(config, to_run - chosen, ctx)
-    verified = verify_sections(config, ctx)
+    decisions = _decide(config, to_run - chosen, ctx)
+    verified = _verify_sections(config, ctx)
     config_file = ctx.runtime.config_file
     problems = [decision_problem(name, d, config_file)
                 for name, d in decisions.items() if d.assessment.refused]
@@ -156,13 +156,13 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
     return Prepared(config, ctx, to_run, decisions, problems, failed=failed, verified=verified)
 
 
-def verify_sections(config, ctx):
+def _verify_sections(config, ctx):
     """{service: repository} for the services whose image the config file has a section for, and that
     was proven pulled from there. The checks before the images were there trusted the name alone."""
     settings = ctx.runtime.settings
     verified = {}
     for name, service in (config.get("services") or {}).items():
-        image, built = image_name(config, name, service), "build" in service
+        image, built = _image_name(config, name, service), "build" in service
         if images.name_matches(settings, image, built) is None:
             continue
         try:
@@ -186,7 +186,7 @@ def decision_problem(name, decision, config_file=None):
     return messages.Reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
-def verify_round_trip(command, config, ctx):
+def _verify_round_trip(command, config, ctx):
     """Refuse unless compose, given the generated file, resolves it to exactly the config we checked.
 
     Compose interpolates the files it reads; a value that comes back different would run
@@ -231,14 +231,14 @@ def services_to_run(command, config, args, ctx):
     return frozenset(set(result.stdout.split()) | {a for a in args if a in services})
 
 
-def acquire(command, config, to_run, args, ctx):
+def _acquire(command, config, to_run, args, ctx):
     """Pull and build what `up` would, by the project's policy. Returns a list of failures."""
     pull, build = [], []
     override = argscan.option_value(args, "--pull")
     for name in sorted(to_run):
         service = config["services"][name]
-        image = image_name(config, name, service)
-        present = image_exists(ctx.docker, image)
+        image = _image_name(config, name, service)
+        present = _image_exists(ctx.docker, image)
         if "build" in service:
             wanted = service.get("pull_policy") == "build" or "--build" in args or not present
             if wanted and "--no-build" not in args:
@@ -258,7 +258,7 @@ def acquire(command, config, to_run, args, ctx):
     return []
 
 
-def image_exists(docker, image):
+def _image_exists(docker, image):
     """Whether docker has image locally."""
     try:
         docker.inspect_image(image)
@@ -267,12 +267,12 @@ def image_exists(docker, image):
     return True
 
 
-def decide(config, to_run, ctx):
+def _decide(config, to_run, ctx):
     """For each started service without a user: what its image would be allowed to do."""
     decisions = {}
     for name in sorted(to_run & unset_user_services(config)):
         service = config["services"][name]
-        image = image_name(config, name, service)
+        image = _image_name(config, name, service)
         platform = ["--platform", service["platform"]] if service.get("platform") else []
         _, container = ctx.docker.create(["--pull=never", *platform, "--", image])
         image_id = None
@@ -295,7 +295,7 @@ def decide(config, to_run, ctx):
     return decisions
 
 
-def give_default_home(service, user, home):
+def _give_default_home(service, user, home):
     """HOME for the default user that replaces root, unless the service sets one."""
     if home := imagedecision.default_home(user, home):
         service["environment"] = {"HOME": home, **(service.get("environment") or {})}

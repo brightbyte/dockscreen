@@ -25,7 +25,7 @@ class Docker:
     def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen):
         """binary: the real docker (runtime.real_docker)."""
         self.binary = binary
-        self.run, self.call, self.popen = found(run), found(call), found(popen)
+        self.run, self.call, self.popen = _found(run), _found(call), _found(popen)
 
     def exec(self, args):
         """Replace this process with the real docker, keeping tty, signals and exit code."""
@@ -133,7 +133,7 @@ class Docker:
         return 128 - code if code < 0 else code
 
 
-def found(launch):
+def _found(launch):
     """launch (subprocess.run, call or Popen), raising DockerNotFound if the binary does not exist."""
     def launch_found(cmd, **kwargs):
         try:

@@ -57,15 +57,15 @@ def parse(subcommand, args, me, accounts):
             kept.append(users.me())
             i += 1
         elif token.startswith("--"):
-            i = parse_long(args, i, value_flags, users, kept)
+            i = _parse_long(args, i, value_flags, users, kept)
         elif token.startswith("-") and token != "-":
-            i = parse_short(args, i, value_flags, users, kept)
+            i = _parse_short(args, i, value_flags, users, kept)
         else:
             return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices)
     return Parsed(None, users.user_given, kept, users.notices)
 
 
-def parse_long(args, i, value_flags, users, kept):
+def _parse_long(args, i, value_flags, users, kept):
     """Read the --option at args[i] into kept, with --as replaced; returns the index after it."""
     name, has_value, value = args[i].partition("=")
     end = i
@@ -81,7 +81,7 @@ def parse_long(args, i, value_flags, users, kept):
     return end + 1
 
 
-def parse_short(args, i, value_flags, users, kept):
+def _parse_short(args, i, value_flags, users, kept):
     """Read the cluster at args[i] (such as -it or -u0:0) into kept; returns the index after it."""
     token = args[i]
     short_values = {flag[1] for flag in value_flags if len(flag) == 2}

@@ -37,10 +37,10 @@ def findings(info, explicit_user, ctx):
     info: the container as inspected; explicit_user: the command line chose the user;
     ctx: the policy.Context, with the current directory as the project directory.
     """
-    return policy.check_service(service_of(info, explicit_user), ctx, vetted=not explicit_user)
+    return policy.check_service(_service_of(info, explicit_user), ctx, vetted=not explicit_user)
 
 
-def service_of(info, explicit_user):
+def _service_of(info, explicit_user):
     """The compose service keys that the inspected container corresponds to."""
     host = info.get("HostConfig") or {}
     service = {key: host[field] for field, key in FIELDS.items() if host.get(field)}
@@ -48,14 +48,14 @@ def service_of(info, explicit_user):
     service.setdefault("security_opt", [])
     if host.get("VolumesFrom"):
         service["volumes_from"] = [f"container:{source}" for source in host["VolumesFrom"]]
-    if volumes := mounts(info):
+    if volumes := _mounts(info):
         service["volumes"] = volumes
     if explicit_user:
         service["user"] = info["Config"].get("User") or ""
     return service
 
 
-def mounts(info):
+def _mounts(info):
     """The container's mounts as compose writes them (type, source, target), each source once.
 
     -v puts a bind mount in HostConfig.Binds, --mount in HostConfig.Mounts; inspect also lists them all

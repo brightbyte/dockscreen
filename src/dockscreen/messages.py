@@ -112,7 +112,7 @@ def out(text, indent=True):
     if not indent:
         print(paint(text, sys.stdout))
         return
-    for line in wrapped(text, report_width(), wants_colour(sys.stdout)):
+    for line in wrapped(text, report_width(), _wants_colour(sys.stdout)):
         print(f"\t{line}")
 
 
@@ -135,7 +135,7 @@ def wrapped(text, width, colour):
         lines = textwrap.wrap(lead + body, width=width - TAB_WIDTH, subsequent_indent=CONTINUATION,
                               break_long_words=False, break_on_hyphens=False) or [""]
     if lead and colour:
-        lines[0] = coloured(text.mark) + lines[0][len(text.mark):]
+        lines[0] = _coloured(text.mark) + lines[0][len(text.mark):]
     return lines
 
 
@@ -143,16 +143,16 @@ def paint(line, stream):
     """line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
     if not isinstance(line, Marked):
         return printable(line)
-    mark = coloured(line.mark) if wants_colour(stream) else line.mark
+    mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
     return f"{mark} {printable(line.shown)}"
 
 
-def coloured(mark):
+def _coloured(mark):
     """mark in its colour, as terminal escapes."""
     return f"\x1b[1;{mark.colour}m{mark}\x1b[0m"  # bold, for all alike
 
 
-def wants_colour(stream):
+def _wants_colour(stream):
     """Whether to colour what is written to stream: a terminal, without NO_COLOR or TERM=dumb."""
     if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
         return False
@@ -186,10 +186,10 @@ def printable(text):
     Stops a config from forging output lines (newlines), rewriting the terminal
     (escape sequences) or reordering text (bidi overrides).
     """
-    return "".join(c if c.isprintable() else escape(c) for c in str(text))
+    return "".join(c if c.isprintable() else _escape(c) for c in str(text))
 
 
-def escape(char):
+def _escape(char):
     """char as a backslash escape: \\xNN, \\uNNNN or \\UNNNNNNNN."""
     code = ord(char)
     if code < 0x100:

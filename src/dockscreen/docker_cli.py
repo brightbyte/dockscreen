@@ -28,7 +28,7 @@ def main(argv=None):
     """
     argv = sys.argv[1:] if argv is None else list(argv)
     try:
-        return dispatch(argv)
+        return _dispatch(argv)
     except config.ConfigError as e:
         return messages.refuse([f"config file {e}"])
     except DockerNotFound as e:
@@ -36,7 +36,7 @@ def main(argv=None):
         return 1
 
 
-def dispatch(argv):
+def _dispatch(argv):
     """The exit status for argv: dockscreen's own options taken out, then screened, helped or passed on.
 
     config.ConfigError and DockerNotFound are left to main.
@@ -94,13 +94,13 @@ class DockerCommand:
         end = self.idx
         if sub == "container" and end + 1 < len(argv) and argv[end + 1] in GATED - {"audit"}:
             sub, end = argv[end + 1], end + 1
-        if wants_command_help(sub, argv[end + 1:]):
-            return self.show_command_help(sub, argv)
+        if _wants_command_help(sub, argv[end + 1:]):
+            return self._show_command_help(sub, argv)
         if (bake_args := self.bake_arguments()) is not None and bake.wants_screening(bake_args):
-            return self.screened_bake(bake_args)
+            return self._screened_bake(bake_args)
         if sub not in GATED:
             return passthrough(argv, self.runtime)
-        return self.gated(sub, end)
+        return self._gated(sub, end)
 
     def bake_arguments(self):
         """The arguments of `buildx bake`, or None if the command is not that."""
@@ -110,14 +110,14 @@ class DockerCommand:
         at = argscan.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
         return rest[at + 1:] if at is not None and rest[at] == "bake" else None
 
-    def screened_bake(self, args):
+    def _screened_bake(self, args):
         """Run `buildx bake` if the definition it would build passes the policy for builds."""
         reasons, failed = bake.screen(self.runtime.docker, args)
         if not verdict.screened(reasons, failed):
             return 1
         return passthrough(self.argv, self.runtime)
 
-    def gated(self, sub, end):
+    def _gated(self, sub, end):
         """Run the GATED command sub (argv[end]) through the gate; if it passes, docker replaces us."""
         argv, runtime = self.argv, self.runtime
         lead, args = argv[:end + 1], argv[end + 1:]
@@ -159,9 +159,9 @@ class DockerCommand:
             return passthrough(self.argv, self.runtime)
         if rest[0] == "compose":
             return compose_cli.main(["help", *rest[1:]], self.runtime)
-        return self.show_command_help(rest[0], [rest[0], "--help"])
+        return self._show_command_help(rest[0], [rest[0], "--help"])
 
-    def show_command_help(self, name, argv):
+    def _show_command_help(self, name, argv):
         """dockscreen's help for command name, if it has one, then docker's own (argv asks for it)."""
         topic = helptext.DOCKER.get(name)
         if topic is not None:
@@ -171,7 +171,7 @@ class DockerCommand:
         return passthrough(argv, self.runtime)
 
 
-def wants_command_help(sub, args):
+def _wants_command_help(sub, args):
     """--help, or -h, as the first argument after the command. For run and create, -h is --hostname."""
     return args[:1] == ["--help"] or (args[:1] == ["-h"] and sub not in ("run", "create"))
 

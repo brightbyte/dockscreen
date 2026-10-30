@@ -37,8 +37,8 @@ class Subordinate:
 
     def __init__(self, uid_file=None, gid_file=None):
         self.ranges = {
-            "uid": read_ranges(uid_file or SUBUID_FILE),
-            "gid": read_ranges(gid_file or SUBGID_FILE),
+            "uid": _read_ranges(uid_file or SUBUID_FILE),
+            "gid": _read_ranges(gid_file or SUBGID_FILE),
         }
 
     def contains(self, kind, value):
@@ -58,7 +58,7 @@ class Rules(NamedTuple):
         """These rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 
-    def allowed(self, kind, value, extra=()):
+    def _allowed(self, kind, value, extra=()):
         """Whether value is an allowed id. kind: "uid" or "gid"; extra: further allowed (uid, gid) pairs."""
         index = 0 if kind == "uid" else 1
         low, high = self.nobody_range
@@ -68,7 +68,7 @@ class Rules(NamedTuple):
     def problem(self, kind, value, mounts, extra=()):
         """Why value may not be used, or None. kind: "uid", "gid" or "supplementary gid"."""
         base = "uid" if kind == "uid" else "gid"
-        if self.allowed(base, value, extra):
+        if self._allowed(base, value, extra):
             return None
         if value == 0:
             return f"{kind} 0 is root"
@@ -96,7 +96,7 @@ class Rules(NamedTuple):
         return [p for p in found if p]
 
 
-def read_ranges(path):
+def _read_ranges(path):
     """The (start, count) ranges in a subuid or subgid file; none if it cannot be read."""
     try:
         with open(path) as f:

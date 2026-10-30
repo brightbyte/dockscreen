@@ -61,8 +61,8 @@ class Project(NamedTuple):
         return screen.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
 
     def generated(self):
-        """generated() for this project."""
-        return generated(self.global_args, self.directory, self.docker_binary)
+        """_generated() for this project."""
+        return _generated(self.global_args, self.directory, self.docker_binary)
 
 
 def load_project(global_args, runtime, allow_me, image_ctx=None):
@@ -89,7 +89,7 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     try:
-        parsed = command_line(argv[idx], argv[idx + 1:], runtime)
+        parsed = _command_line(argv[idx], argv[idx + 1:], runtime)
         project = load_project(argv[:idx], runtime, allow_me, image_ctx)
         problems = project.problems()
     except (screen.InspectError, DockerNotFound) as e:
@@ -106,7 +106,7 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
              imagedecision.root_default_notice(image_ctx), *hardening.describe(project.additions)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
-        prepared = composeimages.prepare(command(hardened), hardened, parsed.args, image_ctx, chosen(parsed))
+        prepared = composeimages.prepare(command(hardened), hardened, parsed.args, image_ctx, _chosen(parsed))
         if prepared.problems:
             verdict.screened(prepared.problems, failed=prepared.failed)
             return 1
@@ -122,7 +122,7 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
         return image_ctx.docker.run_child([*command(final), argv[idx], *parsed.args])
 
 
-def command_line(subcommand, args, runtime):
+def _command_line(subcommand, args, runtime):
     """args read as composeargs does for `run`, with --as resolved; other subcommands as they are.
 
     Raises hostusers.UserError for a user that is not numeric `uid:gid`, or an unknown --as name.
@@ -132,13 +132,13 @@ def command_line(subcommand, args, runtime):
     return composeargs.parse("run", args, runtime.me, runtime.accounts)
 
 
-def chosen(parsed):
+def _chosen(parsed):
     """The services whose user the command line chooses: `run -u uid:gid SERVICE` or `run --as NAME`."""
     return frozenset({parsed.service}) if parsed.user_given and parsed.service else frozenset()
 
 
 @contextlib.contextmanager
-def generated(global_args, project_dir, docker_binary):
+def _generated(global_args, project_dir, docker_binary):
     """A private temporary directory for generated configs; yields command(config) -> compose command.
 
     The command is `docker compose` on that config alone, with the project directory and name pinned,
