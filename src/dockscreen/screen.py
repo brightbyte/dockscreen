@@ -47,10 +47,7 @@ def context(project_dir, runtime, allow_me=False, verified=None):
     service to the section its image was proven to have been pulled for (images.section_for).
     """
     def settings_context(settings):
-        rules = runtime.rules(allow_me)._replace(
-            nobody_range=settings.nobody_range, default_user=settings.default_user)
-        return policy.Context(project_dir, rules, settings.mount_dirs, config_file=runtime.config_file,
-                              security_opts=settings.security_opts, configured_user=settings.user)
+        return policy.context_for(settings, project_dir, runtime.rules(allow_me), runtime.config_file)
 
     def scope(name, service):
         if verified is None:

@@ -121,6 +121,16 @@ class Context(NamedTuple):
         return self.scope(name, service) if self.scope else self
 
 
+def context_for(settings, project_dir, rules, config_file=None):
+    """The Context for a project with these settings (config.effective).
+
+    rules: the id rules with the caller's allow_me; the settings give them their nobody range and default
+    user. config_file: named in hints, as in Context.
+    """
+    return Context(project_dir, rules.under(settings), settings.mount_dirs, config_file=config_file,
+                   security_opts=settings.security_opts, configured_user=settings.user)
+
+
 def check_config(config, ctx):
     project = config.get("name")
     problems = unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + check_service_names(config)

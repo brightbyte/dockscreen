@@ -203,10 +203,8 @@ def audit(ctx, args, strict=False):
         reason = f"docker could not create a container for {parsed.image}"
         return verdict.report(Verdict.FAILED, [reason], brief)
     try:
-        settings, rules = ctx.for_image(assessment.section)
-        policy_ctx = policy.Context(ctx.directory, rules, settings.mount_dirs,
-                                    config_file=ctx.runtime.config_file, security_opts=settings.security_opts,
-                                    configured_user=settings.user)
+        settings, _ = ctx.for_image(assessment.section)
+        policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
         found = runpolicy.findings(info, parsed.user_given, policy_ctx) if info else []
     finally:
         ctx.docker.remove(container)

@@ -53,6 +53,10 @@ class Rules(NamedTuple):
     local: hostusers.HostAccounts          # the accounts on this host
     subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
+    def under(self, settings):
+        """These rules with the nobody range and default user of settings (config.effective)."""
+        return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
+
     def allowed(self, kind, value, extra=()):
         """Whether value is an allowed id. kind: "uid" or "gid"; extra: further allowed (uid, gid) pairs."""
         index = 0 if kind == "uid" else 1

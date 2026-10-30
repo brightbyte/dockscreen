@@ -46,8 +46,7 @@ class Context(NamedTuple):
     def for_image(self, repository):
         """(settings, id rules) with the image section for repository applied (None: none applies)."""
         settings = config.effective(self.runtime.settings, repository, self.directory)
-        rules = self.ids._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
-        return settings, rules
+        return settings, self.ids.under(settings)
 
     def allowing_me(self, allow_me):
         """This context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
