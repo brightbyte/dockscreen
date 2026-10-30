@@ -1,7 +1,7 @@
 import pytest
 from fakes import Accounts, rules, runtime
 
-from dockscreen import commands, hardening, messages, patch, policy, screen
+from dockscreen import autofix, commands, hardening, messages, policy, screen
 
 NOBODY = "65534:65534"
 
@@ -140,7 +140,7 @@ def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():
 
 
 def test_patch_header_names_the_command():
-    assert "`dockscreen harden`" in patch.HEADER
+    assert "`dockscreen harden`" in autofix.HEADER
 
 
 # --- names in `user:`, hook users and group_add -------------------------------------

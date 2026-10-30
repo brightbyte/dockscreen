@@ -2,7 +2,7 @@ import os
 
 from fakes import rules, runtime
 
-from dockscreen import autofix, commands, messages, patch, policy, screen
+from dockscreen import autofix, commands, messages, policy, screen
 from dockscreen.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
@@ -21,7 +21,7 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
     }}}
     fixed = autofix.fix_config(original, policy.Context("/proj", rules(me=(UID, GID), allow_me=True)))
 
-    text = patch.render(original, fixed, ["bind mount " + evil])
+    text = autofix.render(original, fixed, ["bind mount " + evil])
 
     assert all(line.startswith(("#", " ", "services:")) for line in text.splitlines())
     assert not any(line.startswith("services:") and "pwned" in line for line in text.splitlines())
@@ -31,7 +31,7 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
 def test_patch_quotes_unusual_keys():
     original = {"services": {"web": {"odd\nkey: x": 1}}}
     fixed = {"services": {"web": {}}}
-    assert '"odd\\nkey: x": !reset null' in patch.render(original, fixed)
+    assert '"odd\\nkey: x": !reset null' in autofix.render(original, fixed)
 
 
 def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):

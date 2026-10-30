@@ -2,7 +2,7 @@ import os
 
 from fakes import rules, runtime
 
-from dockscreen import autofix, commands, patch, policy, screen
+from dockscreen import autofix, commands, policy, screen
 
 UID = os.getuid()
 GID = os.getgid()
@@ -20,7 +20,7 @@ def test_patch_resets_removed_keys_and_overrides_changed_ones():
     original = config(user="0:0", privileged=True, group_add=["0", str(GID)], image="x")
     fixed = autofix.fix_config(original, policy.Context('/proj', rules(me=(UID, GID), allow_me=True)))
 
-    lines = patch.render(original, fixed).splitlines()
+    lines = autofix.render(original, fixed).splitlines()
 
     assert '    user: "${UID}:${GID}"' in lines
     assert any("--allow-me" in line and line.startswith("# note") for line in lines)
@@ -33,12 +33,12 @@ def test_patch_resets_removed_keys_and_overrides_changed_ones():
 def test_patch_for_compliant_config_is_empty():
     original = compliant()
     fixed = autofix.fix_config(original, policy.Context('/proj', rules(me=(UID, GID), allow_me=True)))
-    assert patch.render(original, fixed).splitlines()[-1] == "services: {}"
+    assert autofix.render(original, fixed).splitlines()[-1] == "services: {}"
 
 
 def test_unfixed_problems_are_listed_as_comments():
     original = compliant()
-    assert "# not fixed: bind mount /etc" in patch.render(original, original, ["bind mount /etc"])
+    assert "# not fixed: bind mount /etc" in autofix.render(original, original, ["bind mount /etc"])
 
 
 def test_fix_command_prints_patch_and_fails_when_problems_remain(monkeypatch, capsys, tmp_path):
@@ -56,7 +56,7 @@ def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path)
     original = compliant(volumes=[{"type": "bind", "source": "/etc", "target": "/e"}])
     fixed = autofix.fix_config(original, policy.Context(str(tmp_path), rules(me=(UID, GID), allow_me=True)))
 
-    text = patch.render(original, fixed)
+    text = autofix.render(original, fixed)
 
     assert '    volumes: !override [{"type": "bind", "source": "./ETC", "target": "/e"}]' in text
     assert "# edit: service web: mount source /etc was replaced by the placeholder ./ETC" in text

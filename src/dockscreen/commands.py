@@ -16,7 +16,6 @@ from dockscreen import (
     flags,
     hardening,
     messages,
-    patch,
     policy,
     screen,
     shellenv,
@@ -125,7 +124,7 @@ def harden(global_args, args, runtime, allow_me=False):
     else:
         remaining, notes = fix_image_users(project, fixed, resolved, notes)
 
-    sys.stdout.write(patch.render(base, fixed, remaining, notes=notes))
+    sys.stdout.write(autofix.render(base, fixed, remaining, notes=notes))
     for problem in remaining:
         messages.notice(f"cannot fix automatically: {problem}")
     return 1 if remaining else 0
