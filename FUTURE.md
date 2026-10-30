@@ -21,3 +21,9 @@ An image section could name a digest as well as a repository. An image that matc
 ## Image sections with and without a tag
 
 Two sections could match one image: one for the repository (`mariadb`) and one for a tag of it (`mariadb:11`), the tagged one applied after the other. Then settings for every version and settings for one version can live side by side. It needs a rule for an image pulled under several tags.
+
+## A doctor command
+
+`dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`realdocker.locate`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
+
+Why it is not done yet: nobody has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.

@@ -70,7 +70,6 @@ The restrictions imposed by docker-fw can be bypassed using `--network host`, or
 |---|---|
 | `dockscreen compose audit [--brief]` | run the checks and report, without starting anything (it pulls and builds) |
 | `dockscreen compose harden` (also `fix`) | print a compose override that fixes what can be fixed; the rest is listed as comments |
-| `dockscreen compose doctor` | show the compose version in use |
 | `dockscreen audit [--brief] [run options] IMAGE [COMMAND]` | say what `dockscreen run` would do with the same arguments, without starting anything (see [Images](#images)) |
 
 ## Configuration

@@ -7,7 +7,6 @@ a command can pass them on when it shells out to docker compose.
 A name registered here shadows the docker compose subcommand of the same name.
 """
 
-import subprocess
 import sys
 
 from dockscreen import (
@@ -41,12 +40,6 @@ def command(name, *aliases):
 
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
-
-
-@command("doctor")
-def doctor(global_args, args, runtime, allow_me=False):
-    """Show the docker compose version that other commands are forwarded to."""
-    return subprocess.call([runtime.docker.binary, "compose", *global_args, "version", *args])
 
 
 @command("audit")
