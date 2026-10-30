@@ -23,7 +23,7 @@ class DockerNotFound(DockerError):
 
 class Docker:
     def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen):
-        """binary: the real docker (realdocker.locate)."""
+        """binary: the real docker (runtime.real_docker)."""
         self.binary = binary
         self.run, self.call, self.popen = found(run), found(call), found(popen)
 

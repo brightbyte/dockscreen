@@ -20,7 +20,7 @@ Ordered by how likely the problem is to matter, then by how cheap the fix is.
 
 ### 2. Without a real docker, the wrapper execs itself forever
 
-`realdocker.choose` falls back to the plain name `"docker"`, which `execvp` finds on `PATH`, i.e. the wrapper. `DOCKER_NOT_FOUND` is never reached. Code confirmed. Fix: return None or raise `DockerNotFound`.
+`runtime.real_docker` falls back to the plain name `"docker"`, which `execvp` finds on `PATH`, i.e. the wrapper. `DOCKER_NOT_FOUND` is never reached. Code confirmed. Fix: return None or raise `DockerNotFound`.
 
 ### 3. Ctrl-C and SIGTERM on `docker run` leave the container running
 
@@ -68,7 +68,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 14. Relative `PATH` entries are searched for the real docker
 
-`realdocker.find` skips only empty entries; `tests/test_realdocker.py:36` accepts `./docker`. Marginal: the shell would pick the same binary unless the wrapper is first.
+`runtime.find_docker` skips only empty entries; `tests/test_runtime.py` accepts `./docker`. Marginal: the shell would pick the same binary unless the wrapper is first.
 
 ### 15. Unknown value-taking global options fail open
 

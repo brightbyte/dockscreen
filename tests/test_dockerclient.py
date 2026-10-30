@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import docker_cli, realdocker
+from dockscreen import docker_cli, runtime
 from dockscreen.dockerclient import Docker, DockerNotFound
 
 
@@ -16,7 +16,7 @@ def test_a_missing_binary_is_docker_not_found(tmp_path):
 
 
 def test_the_docker_wrapper_reports_a_missing_binary_without_a_traceback(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(realdocker, "locate", lambda settings, env: str(tmp_path / "no-docker"))
+    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: str(tmp_path / "no-docker"))
 
     assert docker_cli.main(["run", "img"]) == 1
     assert capsys.readouterr().err == "[dockscreen] 'docker' not found in PATH\n"

@@ -24,6 +24,6 @@ Two sections could match one image: one for the repository (`mariadb`) and one f
 
 ## A doctor command
 
-`dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`realdocker.locate`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
+`dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`runtime.real_docker`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
 
 Why it is not done yet: nobody has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.

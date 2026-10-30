@@ -44,8 +44,8 @@ def forwarded(monkeypatch):
 @pytest.fixture(autouse=True)
 def fixed_docker_binary(monkeypatch):
     """Commands are asserted against plain "docker", wherever the real binary lives."""
-    from dockscreen import realdocker
-    monkeypatch.setattr(realdocker, "locate", lambda settings, env: "docker")
+    from dockscreen import runtime
+    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: "docker")
 
 
 @pytest.fixture(autouse=True)

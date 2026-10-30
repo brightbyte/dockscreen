@@ -9,7 +9,7 @@ import fakes
 import pytest
 from fakes import PASSWD
 
-from dockscreen import compose_cli, composerun, realdocker
+from dockscreen import compose_cli, composerun, runtime
 from dockscreen.dockerclient import Docker
 
 UID, GID = os.getuid(), os.getgid()
@@ -72,7 +72,7 @@ def project(tmp_path, monkeypatch):
     docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
     (fake_dir / "passwd.tar").write_bytes(tar_of("passwd", PASSWD))
     set_image_user(fake_dir, "")
-    monkeypatch.setattr(realdocker, "locate", lambda settings, env: str(docker))
+    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: str(docker))
     # the real Docker: real subprocesses against the fake script
     image_ctx = composerun.imagedecision.Context(
         Docker(str(docker)), fakes.rules(), fakes.runtime(me=(1000, 1000)))

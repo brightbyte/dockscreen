@@ -5,10 +5,11 @@ caller's ids, the environment or the host's accounts on its own.
 """
 
 import os
+import sys
 from collections.abc import MutableMapping
 from typing import NamedTuple
 
-from dockscreen import config, hostusers, idrules, realdocker
+from dockscreen import config, hostusers, idrules
 from dockscreen.dockerclient import Docker
 
 
@@ -39,7 +40,7 @@ def load_runtime():
     settings = config.load_current(env, home, me[0])
     return Runtime(
         settings=settings,
-        docker=Docker(realdocker.locate(settings, env)),
+        docker=Docker(real_docker(settings, env)),
         accounts=hostusers.HostAccounts(),
         subordinate=idrules.Subordinate(),
         me=me,
@@ -47,3 +48,30 @@ def load_runtime():
         home=home,
         cwd=os.getcwd(),
     )
+
+
+def real_docker(settings, env, wrappers=None):
+    """The docker the config file names, else the first one on PATH that is not a wrapper, else plain
+    "docker", so that exec reports the usual error.
+
+    wrappers: real paths of the wrappers to skip; by default the one this process was started as.
+    """
+    if wrappers is None:
+        wrappers = {os.path.realpath(sys.argv[0])}
+    return settings.docker or find_docker(env, wrappers) or "docker"
+
+
+def find_docker(env, wrappers):
+    """The first `docker` on PATH that is not one of the wrappers, or None.
+
+    Empty PATH entries (meaning the current directory) are skipped: a hostile
+    project must not be able to supply the binary we run.
+    """
+    for directory in env.get("PATH", "").split(os.pathsep):
+        if not directory:
+            continue
+        candidate = os.path.join(directory, "docker")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
+                and os.path.realpath(candidate) not in wrappers:
+            return candidate
+    return None
