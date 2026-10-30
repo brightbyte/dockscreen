@@ -40,9 +40,11 @@ class Docker:
         return result.returncode, (result.stdout.strip() if result.returncode == 0 else None)
 
     def inspect_container(self, ref):
+        """`docker container inspect` of ref, as a dict. Raises DockerError if there is no such container."""
         return self._inspect("container", ref)
 
     def inspect_image(self, ref):
+        """`docker image inspect` of ref, as a dict. Raises DockerError if there is no such image."""
         return self._inspect("image", ref)
 
     def _inspect(self, kind, ref):
@@ -68,6 +70,7 @@ class Docker:
         return first_file_of_tar(data)
 
     def start(self, container, attach, interactive, detach_keys):
+        """Start container with the given attach options; the exit status of `docker start`."""
         args = ["start"]
         if attach:
             args.append("--attach")
@@ -78,6 +81,7 @@ class Docker:
         return self.call([self.binary, *args, "--", container])
 
     def remove(self, container):
+        """Remove container, running or not; failures are ignored."""
         self.run([self.binary, "rm", "--force", "--", container], capture_output=True)
 
     def project_directories(self, name):
@@ -93,6 +97,7 @@ class Docker:
         return result.stdout.splitlines()
 
     def context(self):
+        """The name of the current docker context, or None if docker cannot tell."""
         result = self.run([self.binary, "context", "show"], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None
 
@@ -139,6 +144,9 @@ def found(launch):
 
 
 def first_file_of_tar(data):
+    """The text of the first entry of a tar archive, or None if that is not a regular file or the
+    archive cannot be read.
+    """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
             member = archive.next()

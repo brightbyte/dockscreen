@@ -88,6 +88,7 @@ def resolve_spec(spec, accounts):
 
 
 def resolve_group(group, accounts):
+    """group as a gid if accounts knows its name; ids and unknown names unchanged."""
     if ids.parse_id(group) is not None:
         return group
     gid = accounts.group(str(group))
@@ -95,6 +96,7 @@ def resolve_group(group, accounts):
 
 
 def resolved_message(what, before, after):
+    """The notice that what was resolved from before to after on this host."""
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 
 

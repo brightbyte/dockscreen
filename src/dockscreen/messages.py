@@ -98,6 +98,7 @@ def notable_change(text, help=None):
 
 
 def notice(text):
+    """Print text to stderr as dockscreen's (paint)."""
     print(f"{PREFIX} {paint(text, sys.stderr)}", file=sys.stderr)
 
 
@@ -147,10 +148,12 @@ def paint(line, stream):
 
 
 def coloured(mark):
+    """mark in its colour, as terminal escapes."""
     return f"\x1b[1;{mark.colour}m{mark}\x1b[0m"  # bold, for all alike
 
 
 def wants_colour(stream):
+    """Whether to colour what is written to stream: a terminal, without NO_COLOR or TERM=dumb."""
     if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
         return False
     try:
@@ -160,6 +163,7 @@ def wants_colour(stream):
 
 
 def warning(text):
+    """Print text as a warning (notice)."""
     notice(f"warning: {text}")
 
 
@@ -186,6 +190,7 @@ def printable(text):
 
 
 def escape(char):
+    """char as a backslash escape: \\xNN, \\uNNNN or \\UNNNNNNNN."""
     code = ord(char)
     if code < 0x100:
         return f"\\x{code:02x}"

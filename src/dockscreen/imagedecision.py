@@ -32,10 +32,12 @@ class Context(NamedTuple):
 
     @property
     def local(self):
+        """The id rules' local ids, for naming the users an image runs as."""
         return self.ids.local
 
     @property
     def directory(self):
+        """The directory a bind mount is judged against: the project's, else the current one."""
         return self.project_dir or self.runtime.cwd
 
     @property
@@ -78,6 +80,7 @@ class Assessment(NamedTuple):
 
     @property
     def failed(self):
+        """Whether the image could not be assessed at all."""
         return self.kind is Kind.FAILED
 
     @property

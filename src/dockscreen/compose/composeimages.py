@@ -50,6 +50,7 @@ class Prepared(NamedTuple):
 
 
 def unset_user_services(config):
+    """The names of the services in config that set no user."""
     return frozenset(n for n, s in (config.get("services") or {}).items() if not (s or {}).get("user"))
 
 
@@ -187,6 +188,7 @@ def acquire(command, config, to_run, args, ctx):
 
 
 def image_exists(docker, image):
+    """Whether docker has image locally."""
     try:
         docker.inspect_image(image)
     except DockerError:

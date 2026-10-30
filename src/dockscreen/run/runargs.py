@@ -158,6 +158,7 @@ def parse_short(args, i, state):
 
 
 def value_at(args, index, flag):
+    """args[index], the value of flag. Raises ParseError if there is none."""
     if index >= len(args):
         raise ParseError(f"{flag} needs a value")
     return args[index]

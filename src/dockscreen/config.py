@@ -157,6 +157,7 @@ def merge(config, path, data):
 
 
 def table(path, key, value):
+    """value, if it is a table; raises ConfigError naming key in path otherwise."""
     if not isinstance(value, dict):
         raise ConfigError(f"{path}: {key} must be a table of sections")
     return value
@@ -195,6 +196,10 @@ def section(path, where, data):
 
 
 def read(path, uid, check):
+    """The TOML in path, or None if there is no file; check(path, uid) must pass for the file that is read.
+
+    Raises ConfigError if it does not, or the file cannot be read or parsed.
+    """
     try:
         with open(path, "rb") as f:
             check(path, uid)

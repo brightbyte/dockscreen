@@ -23,6 +23,9 @@ BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 
 
 def main(argv=None):
+    """The `dockscreen` entry point: the exit status for argv (default sys.argv[1:]), unless docker replaces
+    this process.
+    """
     argv = sys.argv[1:] if argv is None else list(argv)
     try:
         return dispatch(argv)
@@ -34,6 +37,10 @@ def main(argv=None):
 
 
 def dispatch(argv):
+    """The exit status for argv: dockscreen's own options taken out, then screened, helped or passed on.
+
+    config.ConfigError and DockerNotFound are left to main.
+    """
     skipped, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE)
     runtime = load_runtime()  # a config file that cannot be trusted stops everything, before any docker runs
     if skipped:
@@ -93,6 +100,7 @@ def screened_bake(argv, args, runtime):
 
 
 def gated(argv, sub, idx, end, runtime, allow_me=False, strict=False):
+    """Run the GATED command sub (argv[end]) through the gate; if it passes, docker replaces this process."""
     lead, args = argv[:end + 1], argv[end + 1:]
     if sub == "audit" and not args:
         messages.notice(gate.AUDIT_USAGE)

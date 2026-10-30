@@ -110,6 +110,7 @@ def _is_id(text):
 
 
 def involves_root(identity):
+    """Whether identity has uid 0 or gid 0, also among its supplementary groups."""
     return 0 in (identity.uid, identity.gid, *identity.supplementary)
 
 

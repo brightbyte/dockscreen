@@ -66,6 +66,7 @@ def resolve_user_template(config, ctx):
 
 
 def fix_mount(mount, ctx):
+    """mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
     if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
         return mount
     return {**mount, "source": placeholder_source(mount["source"], ctx.project_dir)}
@@ -109,6 +110,7 @@ def render(original, fixed, unfixed=(), notes=()):
 
 
 def yaml_key(key):
+    """key as a YAML mapping key, quoted unless it is plainly safe."""
     return key if SAFE_YAML_KEY.match(key) else json.dumps(key)
 
 
@@ -141,6 +143,7 @@ def service_changes(original, fixed):
 
 
 def render_value(value):
+    """value as YAML for the override file, tagged so that it replaces what the project set."""
     if value is None:
         return "!reset null"
     if isinstance(value, list):

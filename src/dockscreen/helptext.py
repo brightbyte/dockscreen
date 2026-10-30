@@ -22,6 +22,7 @@ class Option(NamedTuple):
     value: str = ""  # what the option takes, as docker names it: string, list, ...
 
     def left(self):
+        """The option's left column in the help: its names and value."""
         short = f"-{self.short}, " if self.short else "    "
         return f"  {short}{self.long}" + (f" {self.value}" if self.value else "")
 
@@ -205,6 +206,7 @@ def table(rows, width):
 
 
 def paragraph(text, width, indent=""):
+    """text as lines wrapped to width and indented; one line if width is None."""
     if width is None:
         return [indent + text]
     return textwrap.wrap(text, width, initial_indent=indent, subsequent_indent=indent,
@@ -220,10 +222,12 @@ def item(text, width):
 
 
 def follows(docker_help, name):
+    """The lines that announce name's own help after ours, if docker_help says it follows."""
     return ["", f"{name} help follows:", ""] if docker_help and name else []
 
 
 def docker_overview(width):
+    """The help for dockscreen itself, as lines wrapped to width."""
     return overview(
         "dockscreen [OPTIONS] COMMAND",
         "Docker with security checks: dockscreen audits the commands that start containers and passes "

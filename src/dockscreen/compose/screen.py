@@ -96,6 +96,10 @@ def passes(global_args, runtime, rules=policy.check_config):
 
 
 def load_config(global_args, docker_binary):
+    """The config compose resolves for global_args, with every profile active and env files not inlined.
+
+    Raises InspectError if compose cannot be run or its output cannot be read.
+    """
     # '*' activates all profiles: `up svc` enables the profile of a named
     # service, which a plain `config` would leave out of the inspected set.
     # --no-env-resolution keeps env_file paths in the output instead of inlining

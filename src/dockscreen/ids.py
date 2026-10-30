@@ -18,6 +18,7 @@ def export(env, me):
 
 
 def is_id(text):
+    """Whether text is a numeric id: ASCII digits only."""
     return text.isascii() and text.isdigit()
 
 

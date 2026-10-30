@@ -67,5 +67,6 @@ def strip_helpful(argv, value_opts):
 
 
 def banner():
+    """Warn that screening is turned off for this command."""
     messages.warning(f"{SKIP_SCREENING} given: screening is disabled.")
     messages.warning("nothing in this command is checked, and no defaults are added.")

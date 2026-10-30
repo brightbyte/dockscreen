@@ -116,6 +116,7 @@ def defaults_notice():
 
 
 def fallback_notice(assessment):
+    """The notice that the default user replaces the image's root, and what to do about it."""
     home = default_home(assessment.user, assessment.home)
     return messages.notable_change(
         instead_of_root(assessment),
@@ -250,6 +251,7 @@ def report_findings(found, strict):
 
 
 def describe_outcome(ctx, assessment):
+    """What the assessment means for running the image, as text."""
     if assessment.kind in (Kind.OK, Kind.CONFIGURED):
         return runs_as(assessment, ctx.local)
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None

@@ -42,6 +42,7 @@ class Subordinate:
         }
 
     def contains(self, kind, value):
+        """Whether value is in one of the subordinate ranges of kind ("uid" or "gid")."""
         return any(start <= value < start + count for start, count in self.ranges[kind])
 
 
@@ -96,6 +97,7 @@ class Rules(NamedTuple):
 
 
 def read_ranges(path):
+    """The (start, count) ranges in a subuid or subgid file; none if it cannot be read."""
     try:
         with open(path) as f:
             text = f.read()

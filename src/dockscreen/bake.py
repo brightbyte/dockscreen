@@ -56,6 +56,7 @@ def check_definition(found, project_dir):
 
 
 def check_target(target, project_dir):
+    """Problems with a bake target: unknown keys, sources outside project_dir, access beyond the build."""
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
     problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
     if target.get("network") not in (None, "", "none"):
@@ -81,6 +82,7 @@ def fields(entry):
 
 
 def check_outputs(outputs, cache_to):
+    """Problems with a target's output and cache-to entries: any that write to the host."""
     problems = []
     for entry in outputs:
         found = fields(entry)
@@ -95,6 +97,7 @@ def check_outputs(outputs, cache_to):
 
 
 def check_cache_from(entries, project_dir):
+    """Problems with cache-from entries: a local cache outside project_dir, or one that cannot be read."""
     problems = []
     for entry in entries:
         found = fields(entry)
@@ -106,6 +109,7 @@ def check_cache_from(entries, project_dir):
 
 
 def check_secrets(secrets, project_dir):
+    """Problems with secret entries: a variable instead of a file, or a file outside project_dir."""
     problems = []
     for entry in secrets:
         found = fields(entry)
