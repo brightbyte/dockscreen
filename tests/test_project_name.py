@@ -112,7 +112,7 @@ def test_commands_that_remove_or_stop_are_refused_for_a_name_that_is_not_the_pro
     forwarded = []
     monkeypatch.setattr(compose_cli, "forward", lambda argv, rt: forwarded.append(argv))
 
-    code = compose_cli.dispatch([sub, "-v"] if sub == "down" else [sub], runtime(docker=images))
+    code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime(docker=images))
 
     assert code == 1 and forwarded == []
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
@@ -126,15 +126,15 @@ def test_down_goes_on_for_the_projects_own_name_with_p_and_for_a_project_that_ca
     monkeypatch.setattr(compose_cli, "forward", lambda argv, rt: forwarded.append(argv))
     monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
 
-    compose_cli.dispatch(["-p", "mine", "down"], runtime(docker=images))
+    compose_cli.main(["-p", "mine", "down"], runtime(docker=images))
     images.project_dirs = [str(tmp_path)]
-    compose_cli.dispatch(["down"], runtime(docker=images))
+    compose_cli.main(["down"], runtime(docker=images))
 
     def unreadable(global_args, rt):
         raise screen.InspectError("no compose file")
 
     monkeypatch.setattr(screen, "inspect", unreadable)
     images.project_dirs = ["/victim"]
-    compose_cli.dispatch(["down"], runtime(docker=images))
+    compose_cli.main(["down"], runtime(docker=images))
 
     assert forwarded == [["-p", "mine", "down"], ["down"], ["down"]]

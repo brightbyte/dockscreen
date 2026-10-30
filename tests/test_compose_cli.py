@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dockscreen import argscan, compose_cli, composerun, hostusers, policy, screen
+from dockscreen import argscan, compose_cli, composerun, docker_cli, hostusers, policy, screen
 from dockscreen.commands import COMMANDS
 
 
@@ -204,5 +204,5 @@ def test_a_config_file_that_cannot_be_trusted_stops_everything(forwarded, monkey
         raise config.ConfigError("/home/me/.config/dockscreen/config.toml: /home/me is writable by others")
     monkeypatch.setattr(config, "load_current", broken)
 
-    assert compose_cli.main(["ps"]) == 1
+    assert docker_cli.main(["compose", "ps"]) == 1
     assert "refusing: config file /home/me/.config" in capsys.readouterr().err and forwarded == []

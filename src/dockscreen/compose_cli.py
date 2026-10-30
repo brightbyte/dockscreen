@@ -5,14 +5,10 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
-import os
-import sys
-
 from dockscreen import (
     argscan,
     composeargs,
     composerun,
-    config,
     flags,
     helptext,
     hostusers,
@@ -23,7 +19,6 @@ from dockscreen import (
     verdict,
 )
 from dockscreen.commands import ALIASES, COMMANDS
-from dockscreen.dockerclient import DockerNotFound
 from dockscreen.runtime import load_runtime
 
 # Subcommands that create containers from the config. `alpha` is a group (older
@@ -51,26 +46,14 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 
 def forward(argv, runtime):
     """Replace this process with `docker compose argv`, keeping tty, signals and exit code."""
-    binary = runtime.docker.binary
-    try:
-        os.execvp(binary, [binary, "compose", *argv])
-    except FileNotFoundError:
-        messages.fatal(messages.DOCKER_NOT_FOUND)
+    runtime.docker.exec(["compose", *argv])
 
 
-def main(argv=None, runtime=None):
-    """runtime: the Runtime the `docker` wrapper already loaded, if it was called by that."""
-    argv = sys.argv[1:] if argv is None else list(argv)
-    try:
-        return dispatch(argv, runtime)
-    except config.ConfigError as e:
-        return messages.refuse([f"config file {e}"])
-    except DockerNotFound as e:
-        messages.notice(e)
-        return 1
+def main(argv, runtime=None):
+    """`docker compose argv`, screened. runtime: the Runtime the `docker` wrapper already loaded.
 
-
-def dispatch(argv, runtime=None):
+    Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
+    """
     skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
     if skipped:
         flags.banner()
@@ -181,6 +164,3 @@ def own_commands():
     """{name: Topic} of dockscreen's own compose commands, aliases folded in."""
     return {name: helptext.command_topic(name, fn, [a for a, p in ALIASES.items() if p == name])
             for name, fn in sorted(COMMANDS.items()) if name not in ALIASES}
-
-if __name__ == "__main__":
-    sys.exit(main())

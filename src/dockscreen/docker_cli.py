@@ -4,7 +4,6 @@
 go through the gate, everything else is exec'd to the real docker unchanged.
 """
 
-import os
 import sys
 
 from dockscreen import (
@@ -164,11 +163,7 @@ def show_command_help(name, argv, runtime):
 
 def passthrough(argv, runtime):
     """Replace this process with the real docker."""
-    binary = runtime.docker.binary
-    try:
-        os.execvp(binary, [binary, *argv])
-    except FileNotFoundError:
-        messages.fatal(messages.DOCKER_NOT_FOUND)
+    runtime.docker.exec(argv)
 
 
 if __name__ == "__main__":

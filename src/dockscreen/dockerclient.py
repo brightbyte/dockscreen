@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import signal
 import subprocess
 import tarfile
@@ -25,6 +26,13 @@ class Docker:
         """binary: the real docker (realdocker.locate)."""
         self.binary = binary
         self.run, self.call, self.popen = found(run), found(call), found(popen)
+
+    def exec(self, args):
+        """Replace this process with the real docker, keeping tty, signals and exit code."""
+        try:
+            os.execvp(self.binary, [self.binary, *args])
+        except FileNotFoundError:
+            messages.fatal(messages.DOCKER_NOT_FOUND)
 
     def create(self, args):
         """(exit code, container id or None). stderr stays on the terminal so pull progress shows."""
