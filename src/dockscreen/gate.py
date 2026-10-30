@@ -42,7 +42,7 @@ from dockscreen.imagedecision import (
     root_default_notice,
     runs_as,
 )
-from dockscreen.text import printable
+from dockscreen.messages import printable
 from dockscreen.verdict import Verdict
 
 # Inserted before the user's own arguments, so the user can override both

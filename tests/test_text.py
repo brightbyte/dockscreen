@@ -3,7 +3,7 @@ import os
 from fakes import rules, runtime
 
 from dockscreen import autofix, commands, messages, patch, policy, screen
-from dockscreen.text import printable
+from dockscreen.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
 

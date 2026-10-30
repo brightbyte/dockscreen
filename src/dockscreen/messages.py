@@ -15,8 +15,6 @@ import shutil
 import sys
 import textwrap
 
-from dockscreen.text import printable
-
 PREFIX = "[dockscreen]"
 DOCKER_NOT_FOUND = "'docker' not found in PATH"
 
@@ -184,6 +182,22 @@ def refuse(problems):
     """report(), then exit code 1: called when something is refused, even if no reason was found."""
     report(problems)
     return 1
+
+
+def printable(text):
+    """One line of text with control, format and line-separator characters escaped.
+
+    Stops a config from forging output lines (newlines), rewriting the terminal
+    (escape sequences) or reordering text (bidi overrides).
+    """
+    return "".join(c if c.isprintable() else escape(c) for c in str(text))
+
+
+def escape(char):
+    code = ord(char)
+    if code < 0x100:
+        return f"\\x{code:02x}"
+    return f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}"
 
 
 def fatal(text):

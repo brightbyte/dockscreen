@@ -239,7 +239,7 @@ Mount dirs and the project directory are checked against sensitive paths (system
 | `--strict-screen` | `audit` treats the command line as untrusted too; refused before any other subcommand until it is supported there |
 | `--skip-screening` | no checks, no defaults, and a warning on every use |
 
-Text from the project or the image is escaped (`text.printable`) before it is printed or written into a `harden` patch, so it cannot forge output lines or send terminal control sequences.
+Text from the project or the image is escaped (`messages.printable`) before it is printed or written into a `harden` patch, so it cannot forge output lines or send terminal control sequences.
 
 ## Tradeoffs and decisions
 

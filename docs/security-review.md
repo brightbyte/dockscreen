@@ -82,7 +82,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 `getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `gate.py:152-159` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
 
-### 18. `text.printable` does not escape `\`
+### 18. `messages.printable` does not escape `\`
 
 A literal `\x0a` in a project name looks like an escape; invisible printable characters (U+2800, U+3164) pass. The verdict line cannot be forged inside project strings, because every sink escapes. Raw docker, pull and build output can print `[dockscreen] ✔ audit passed` before the real verdict, and container output follows it; inherent to passing output through.
 

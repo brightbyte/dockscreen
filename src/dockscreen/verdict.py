@@ -10,7 +10,7 @@ import enum
 
 from dockscreen import messages
 from dockscreen.imagedecision import Kind
-from dockscreen.text import printable
+from dockscreen.messages import printable
 
 
 class Verdict(enum.IntEnum):
