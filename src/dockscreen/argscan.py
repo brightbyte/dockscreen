@@ -67,6 +67,7 @@ def strip_options(args, names):
         token = args[i]
         if token in names:
             i += 2
+        # compose reads `-fvalue` and `-f=value` as -f with a value, so a short name matches a prefix
         elif any(token.startswith(n + "=") for n in names if n.startswith("--")) \
                 or any(token.startswith(n) for n in names if not n.startswith("--")):
             i += 1

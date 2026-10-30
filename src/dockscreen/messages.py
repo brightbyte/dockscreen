@@ -139,7 +139,7 @@ def wrapped(text, width, colour):
     else:
         lines = textwrap.wrap(lead + body, width=width - TAB_WIDTH, subsequent_indent=CONTINUATION,
                               break_long_words=False, break_on_hyphens=False) or [""]
-    if lead and colour:
+    if lead and colour:  # coloured after wrapping, so the escape codes take up no width
         lines[0] = _coloured(text.mark) + lines[0][len(text.mark):]
     return lines
 

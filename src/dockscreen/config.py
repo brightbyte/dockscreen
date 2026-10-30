@@ -218,6 +218,7 @@ def _read(path, uid, check):
     try:
         with open(path, "rb") as f:
             check(path, uid)
+            # check looked at the path; what is read is the file already open, so they must be the same
             opened, checked = os.fstat(f.fileno()), os.stat(path)
             if (opened.st_dev, opened.st_ino) != (checked.st_dev, checked.st_ino):
                 raise ConfigError(f"{path}: the file was replaced while it was read")
@@ -263,7 +264,7 @@ def _id_range(path, value):
     """
     valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
     if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in NO_ID)
-            and value[1] < max(NO_ID)):
+            and value[1] < max(NO_ID)):  # also keeps out ids beyond 32 bits
         raise ConfigError(f"{path}: nobody_range must be [low, high] with 0 < low <= high < 4294967295, "
                           "leaving out 65535")
     return tuple(value)

@@ -92,7 +92,7 @@ def run(ctx, args):
     return ctx.docker.start(
         container,
         attach=not parsed.detach,
-        interactive=bool(info["Config"].get("OpenStdin")),
+        interactive=bool(info["Config"].get("OpenStdin")),  # -i is kept by create; start needs it again
         detach_keys=parsed.detach_keys,
     )
 
@@ -158,7 +158,7 @@ def _create_assessed(ctx, parsed, extra):
     info = None
     try:
         info = ctx.docker.inspect_container(container)
-        problems = _verify_split(info, parsed)
+        problems = _verify_split(info, parsed)  # a misread command line may hide a --user: assess nothing
         assessment = Assessment(Kind.REFUSED, problems) if problems else assess(
             ctx, container, info, explicit=parsed.user_given or bool(extra), reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
@@ -322,6 +322,7 @@ def _verify_split(info, parsed):
     """
     config = info["Config"]
     misread_image = config.get("Image") != parsed.image
+    # without a command of its own the container has the image's Cmd, which says nothing about our reading
     misread_command = parsed.command and (config.get("Cmd") or []) != parsed.command
     if misread_image or misread_command:
         return [messages.Reason("could not reliably tell the image from the command line",

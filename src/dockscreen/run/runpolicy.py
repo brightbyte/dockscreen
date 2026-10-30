@@ -67,7 +67,7 @@ def _mounts(info):
     found = []
     for bind in host.get("Binds") or []:
         source, _, rest = str(bind).partition(":")
-        if source.startswith("/"):
+        if source.startswith("/"):  # otherwise the source names a volume
             found.append({"type": "bind", "source": source, "target": rest.partition(":")[0]})
     for mount in [*(host.get("Mounts") or []), *(info.get("Mounts") or [])]:
         kind = str(mount.get("Type") or "").lower()

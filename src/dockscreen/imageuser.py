@@ -94,6 +94,7 @@ def resolve(spec, passwd_text, group_text):
 
     if min(uid, gid) < 0:
         raise ValueError("the image's user has a negative id")
+    # moby finds supplementary groups by user name, so a uid without a passwd entry has none
     supplementary = tuple(sorted({g[1] for g in groups if username and username in g[2]}))
     return Identity(uid, gid, supplementary)
 

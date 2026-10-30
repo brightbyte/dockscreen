@@ -80,6 +80,7 @@ def _fields(entry):
     A bare word has no keys.
     """
     try:
+        # buildx reads these as CSV, so a quoted value may hold commas
         parts = next(csv.reader([str(entry)]), [])
     except csv.Error:
         return None
@@ -119,7 +120,7 @@ def _check_secrets(secrets, project_dir):
     problems = []
     for entry in secrets:
         found = _fields(entry)
-        source = (found or {}).get("src") or (found or {}).get("source")
+        source = (found or {}).get("src") or (found or {}).get("source")  # buildx takes either name
         if source is None:
             problems.append(f"secret {entry!r} copies a variable or cannot be read, and is not allowed")
         elif not policy.is_inside(source, project_dir):

@@ -76,6 +76,7 @@ class Rules(NamedTuple):
         only allowed ids. extra: further allowed (uid, gid) pairs.
         """
         base = "uid" if kind == "uid" else "gid"
+        # first: allowed ids such as nobody usually exist on this host too
         if self._allowed(base, value, extra):
             return None
         if value == 0:
@@ -84,6 +85,7 @@ class Rules(NamedTuple):
             return f"{kind} {value} means \"no id\" to many tools"
         if value > MAX_ID:
             return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
+        # before the account lookup, which finds the caller too but cannot give the --allow-me hint
         if value == self.me[0 if base == "uid" else 1]:
             return f"{kind} {value} is yours; pass --allow-me to allow it"
         name = self.local.user_name(value) if base == "uid" else self.local.group_name(value)

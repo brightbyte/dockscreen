@@ -293,7 +293,7 @@ def has_no_new_privileges(options):
 
 def check_cap_drop(value, ctx):
     """Checks cap_drop; returns a problem unless it drops ALL."""
-    if CAP_DROP not in {str(c).upper() for c in value or []}:
+    if CAP_DROP not in {str(c).upper() for c in value or []}:  # docker reads capability names in any case
         return [f"cap_drop must include {CAP_DROP}"]
     return []
 
@@ -379,6 +379,7 @@ def check_build_sources(build, project_dir, keys, prefix=""):
         dockerfile = build.get(dockerfile_key)
         if not is_inside(context, project_dir):
             problems.append(f"{prefix}{context_key} {context!r} is outside {project_dir}")
+        # a relative dockerfile is read from the context, not the project directory
         elif dockerfile and not is_inside(os.path.join(context, dockerfile), project_dir):
             problems.append(f"{prefix}{dockerfile_key} {dockerfile!r} is outside {project_dir}")
     for name, source in (build.get(contexts_key) or {}).items():
@@ -446,7 +447,7 @@ def _check_hooks(key):
             problems += unknown_keys(hook, HOOK_KEYS, f"{key} key")
             if hook.get("privileged"):
                 problems.append(f"{key} privileged is not allowed")
-            if hook.get("user") is not None:
+            if hook.get("user") is not None:  # without one, the hook runs as the service's checked user
                 problems += check_user(hook["user"], ctx)
         return problems
     return check
@@ -482,6 +483,7 @@ def _check_scope(key, item, project):
         return ["external resources are not allowed, they may belong to another project"]
     if not project:
         return []
+    # compose's own name for it; a name set in the file can be that of another project's volume or network
     expected = f"{project}_{key}"
     if item.get("name") != expected:
         return [f"name {item.get('name')!r} is not the project-scoped {expected!r}"]
@@ -522,7 +524,7 @@ def _check_driver_opts(opts, ctx):
         return problems
     if not device:
         return [*problems, *(["bind needs a device"] if _mount_flags(opts) & BIND_FLAGS else [])]
-    if not os.path.isabs(device):
+    if not os.path.isabs(device):  # the daemon would resolve it against its own working directory
         return [*problems, f"device {device!r} must be an absolute path"]
     if not is_inside_any(device, ctx.mount_roots):
         return [*problems, _outside(f"device {device!r}", ctx)]

@@ -19,7 +19,7 @@ def exported(me):
 
 def is_id(text):
     """Tells whether text is a numeric id, which is ASCII digits only."""
-    return text.isascii() and text.isdigit()
+    return text.isascii() and text.isdigit()  # isdigit alone takes other scripts' digits, which int() reads
 
 
 def parse_id(value):

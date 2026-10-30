@@ -69,6 +69,7 @@ class Docker:
         return self._inspect("image", ref)
 
     def _inspect(self, kind, ref):
+        # `--`: a ref from the project or the command line must not be read as an option
         result = self.run([self.binary, kind, "inspect", "--", ref], capture_output=True, text=True)
         if result.returncode != 0:
             raise DockerError(result.stderr.strip() or f"docker {kind} inspect failed")
@@ -79,6 +80,8 @@ class Docker:
 
         Raises DockerError if the file is larger than MAX_FILE_BYTES.
         """
+        # `docker cp SRC -` streams a tar archive to stdout, so nothing from the hostile image is written
+        # to the host; -L reads through a symlink, as docker does when it resolves the user
         process = self.popen([self.binary, "cp", "-L", f"{container}:{path}", "-"],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         data = process.stdout.read(MAX_FILE_BYTES + 1)
@@ -177,7 +180,7 @@ def first_file_of_tar(data):
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            member = archive.next()
+            member = archive.next()  # `docker cp` of one file archives just that file
             if member is None or not member.isreg():
                 return None
             return archive.extractfile(member).read().decode("utf-8", errors="replace")

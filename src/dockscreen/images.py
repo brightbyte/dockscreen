@@ -29,9 +29,10 @@ def split_reference(reference):
     name, _, digest = reference.partition("@")
     tag = ""
     last_slash = name.rfind("/")
-    if ":" in name[last_slash + 1:]:
+    if ":" in name[last_slash + 1:]:  # a colon before the last slash is a registry's port, not a tag
         name, _, tag = name.rpartition(":")
     first, slash, rest = name.partition("/")
+    # docker's rule: the first component is a registry only if it looks like a host
     if slash and ("." in first or ":" in first or first == "localhost"):
         domain, path = first, rest
     else:

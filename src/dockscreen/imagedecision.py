@@ -102,6 +102,7 @@ def has_host_mounts(info):
     """
     host = info.get("HostConfig") or {}
     mounts = [*(info.get("Mounts") or []), *(host.get("Mounts") or [])]
+    # a Binds source that is not a path names a volume
     binds = [b for b in host.get("Binds") or [] if str(b).split(":")[0].startswith("/")]
     binds_or_devices = any(m.get("Type") == "bind" for m in mounts) or binds
     return bool(binds_or_devices or host.get("Devices") or host.get("VolumesFrom"))
@@ -122,7 +123,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
                                image.get("RepoDigests"), built)
     found = {"note": match.problem, "section": match.repository}
     spec = info["Config"].get("User") or ""
-    if explicit is None:
+    if explicit is None:  # the container's user differs from the image's only if the command line set one
         explicit = spec != (image["Config"].get("User") or "")
     if explicit:
         return Assessment(Kind.EXPLICIT, [], **found)  # trusted: the person typing the command chose it
@@ -132,6 +133,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
         return Assessment(Kind.CONFIGURED, [], imageuser.Identity(*settings.user, ()), user=settings.user,
                           **found)
 
+    # a missing file has no names in it, for docker as for us
     passwd = ctx.docker.read_file(container, "/etc/passwd") or ""
     groups = ctx.docker.read_file(container, "/etc/group") or ""
     try:

@@ -150,6 +150,7 @@ def _generated(global_args, project_dir, docker_binary):
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:
         def command(config):
             path = os.path.join(directory, f"compose-{next(counter)}.yaml")
+            # 0600: the config can hold secrets; O_EXCL: never write through a file or link already there
             with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
                 json.dump(config, f)  # JSON is YAML
             return [

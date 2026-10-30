@@ -229,6 +229,7 @@ def first_difference(expected, actual, path="config"):
             if where := first_difference(e, a, f"{path}[{i}]"):
                 return where
         return None
+    # True == 1 and 1 == 1.0 in Python, but not to compose
     return None if expected == actual and type(expected) is type(actual) else path
 
 
@@ -293,6 +294,7 @@ def _decide(config, to_run, ctx):
         service = config["services"][name]
         image = _image_name(config, name, service)
         platform = ["--platform", service["platform"]] if service.get("platform") else []
+        # a container that is never started shows the user docker would run, and its files can be copied out
         _, container = ctx.docker.create(["--pull=never", *platform, "--", image])
         image_id = None
         if container is None:

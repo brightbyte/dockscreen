@@ -96,6 +96,6 @@ def _parse_short(args, i, value_flags, users, kept):
             value = args[end] if end < len(args) else ""
         if char == "u":
             users.numeric(value)
-        break
+        break  # a flag that takes a value ends the cluster: the rest of it is the value
     kept += args[i:end + 1]
     return end + 1

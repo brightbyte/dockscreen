@@ -90,13 +90,14 @@ class DockerCommand:
             return self.show_help()
 
         if sub == "compose":
-            if self.idx != 0:
+            if self.idx != 0:  # compose_cli gets what follows `compose`: these would not reach it
                 messages.notice("docker options before `compose` are not supported")
                 return 1
             lead = [*([flags.ALLOW_ME] if self.allow_me else []), *([flags.HELPFUL] if self.helpful else [])]
             return compose_cli.main([*lead, *argv[1:]], self.runtime)
 
         end = self.idx
+        # `docker container run` is `docker run`; audit is ours and has no such form
         if sub == "container" and end + 1 < len(argv) and argv[end + 1] in GATED - {"audit"}:
             sub, end = argv[end + 1], end + 1
         if _wants_command_help(sub, argv[end + 1:]):

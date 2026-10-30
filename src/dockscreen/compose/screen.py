@@ -133,6 +133,7 @@ def name_conflicts(name, directory, docker):
     except DockerError as e:
         return [f"cannot tell whether another project is called {name!r}: {e}"]
     here = os.path.realpath(directory)
+    # a container without the label cannot be shown to come from here
     others = sorted({path for path in found if not path or os.path.realpath(path) != here})
     if not others:
         return []
@@ -161,7 +162,7 @@ def is_remote(global_args, env, docker):
         return True
     if env.get("DOCKER_CONTEXT") not in (None, "", "default"):
         return True
-    return docker.context() != "default"
+    return docker.context() != "default"  # the current context can also come from docker's config file
 
 
 def project_directory(global_args, cwd, runtime):
@@ -172,14 +173,14 @@ def project_directory(global_args, cwd, runtime):
     env = runtime.env
     explicit = argscan.option_values(global_args, "--project-directory", None)
     if explicit:
-        return os.path.realpath(os.path.join(cwd, explicit[-1]))
+        return os.path.realpath(os.path.join(cwd, explicit[-1]))  # the last one wins, as in compose
 
     files = argscan.option_values(global_args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
         raise ScreenError("a compose file read from stdin cannot be inspected")
-    if files:
+    if files:  # compose takes the project directory from the first file
         return os.path.realpath(os.path.dirname(os.path.join(cwd, files[0])))
 
     env_files = argscan.option_values(global_args, "--env-file", None)
