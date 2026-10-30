@@ -1,6 +1,9 @@
 import os
 
-from dockscreen import config, runtime
+import pytest
+
+from dockscreen import config, docker_cli, runtime
+from dockscreen.dockerclient import DockerNotFound
 
 REAL_DOCKER = runtime.real_docker  # conftest replaces it for every test
 
@@ -29,16 +32,37 @@ def test_the_configured_path_wins(tmp_path):
     env = {"PATH": str(tmp_path / "real")}
     assert REAL_DOCKER(config.Config(docker="/opt/docker"), env, set()) == "/opt/docker"
     assert REAL_DOCKER(config.Config(), env, set()) == str(tmp_path / "real" / "docker")
-    assert REAL_DOCKER(config.Config(), {"PATH": ""}, set()) == "docker"
+    with pytest.raises(DockerNotFound):
+        REAL_DOCKER(config.Config(), {"PATH": ""}, set())
 
 
-def test_current_directory_is_never_searched(tmp_path, monkeypatch):
-    make_docker(tmp_path)
+def test_empty_and_relative_entries_are_never_searched(tmp_path, monkeypatch):
+    make_docker(tmp_path / "bin")
     monkeypatch.chdir(tmp_path)
-    assert runtime.find_docker({"PATH": os.pathsep.join(["", "."])}, set()) is None or \
-        runtime.find_docker({"PATH": os.pathsep.join(["", "."])}, set()) == "./docker"
-    assert runtime.find_docker({"PATH": os.pathsep.join(["", str(tmp_path / "nothing")])}, set()) is None
+    assert runtime.find_docker({"PATH": os.pathsep.join(["", ".", "bin", "./bin"])}, set()) is None
+    assert runtime.find_docker({"PATH": os.pathsep.join(["bin", str(tmp_path / "bin")])}, set()) == \
+        str(tmp_path / "bin" / "docker")
+
+
+@pytest.mark.parametrize("path, warned", [
+    ("/usr/local/bin:/usr/bin", False),
+    ("/usr/bin::/bin", True),
+    ("/usr/bin:.", True),
+    ("bin:/usr/bin", True),
+])
+def test_empty_or_relative_path_entries_are_warned_about(monkeypatch, capsys, path, warned):
+    monkeypatch.setenv("PATH", path)
+    monkeypatch.setattr(config, "load_current", lambda env, home, uid: config.Config())
+    runtime.load_runtime()
+    assert ("PATH has empty or relative entries" in capsys.readouterr().err) == warned
 
 
 def test_nothing_found(tmp_path):
     assert runtime.find_docker({"PATH": str(tmp_path)}, set()) is None
+
+
+def test_without_a_real_docker_dockscreen_stops_instead_of_running_itself(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(runtime, "real_docker", REAL_DOCKER)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert docker_cli.main(["ps"]) == 1
+    assert capsys.readouterr().err == "[dockscreen] 'docker' not found in PATH\n"

@@ -9,8 +9,8 @@ import sys
 from collections.abc import MutableMapping
 from typing import NamedTuple
 
-from dockscreen import config, hostusers, idrules
-from dockscreen.dockerclient import Docker
+from dockscreen import config, hostusers, idrules, messages
+from dockscreen.dockerclient import Docker, DockerNotFound
 
 
 class Runtime(NamedTuple):
@@ -35,11 +35,17 @@ class Runtime(NamedTuple):
 
 
 def load_runtime():
-    """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted.
+    """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted,
+    and DockerNotFound if there is no real docker.
 
-    Creates the caller's config file if it is missing (config.load_current).
+    Creates the caller's config file if it is missing (config.load_current). Warns about empty or
+    relative PATH entries.
     """
     env, home, me = os.environ, os.path.expanduser("~"), (os.getuid(), os.getgid())
+    # docker, compose and their plugins and credential helpers look up programs on PATH too
+    if any(not os.path.isabs(directory) for directory in env.get("PATH", "").split(os.pathsep)):
+        messages.warning("PATH has empty or relative entries: a project directory can supply the programs "
+                         "that docker and compose run")
     settings = config.load_current(env, home, me[0])
     return Runtime(
         settings=settings,
@@ -55,23 +61,27 @@ def load_runtime():
 
 def real_docker(settings, env, wrappers=None):
     """Returns the docker to run: the one settings names, else the first one on PATH that is not a
-    wrapper, else plain "docker", so that exec reports the usual error.
+    wrapper. Raises DockerNotFound if there is none.
 
     wrappers: real paths of the wrappers to skip; by default the one this process was started as.
     """
     if wrappers is None:
         wrappers = {os.path.realpath(sys.argv[0])}
-    return settings.docker or find_docker(env, wrappers) or "docker"
+    # not plain "docker" as a fallback: exec would search PATH for it and find the wrapper or ./docker
+    docker = settings.docker or find_docker(env, wrappers)
+    if not docker:
+        raise DockerNotFound(messages.DOCKER_NOT_FOUND)
+    return docker
 
 
 def find_docker(env, wrappers):
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
-    Empty PATH entries (meaning the current directory) are skipped: a hostile
+    Empty and relative PATH entries (an empty one means the current directory) are skipped: a hostile
     project must not be able to supply the binary we run.
     """
     for directory in env.get("PATH", "").split(os.pathsep):
-        if not directory:
+        if not os.path.isabs(directory):
             continue
         candidate = os.path.join(directory, "docker")
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
