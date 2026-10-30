@@ -42,7 +42,7 @@ class Subordinate:
         }
 
     def contains(self, kind, value):
-        """Whether value is in one of the subordinate ranges of kind ("uid" or "gid")."""
+        """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
         return any(start <= value < start + count for start, count in self.ranges[kind])
 
 
@@ -55,18 +55,26 @@ class Rules(NamedTuple):
     subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
     def under(self, settings):
-        """These rules with the nobody range and default user of settings (config.effective)."""
+        """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 
     def _allowed(self, kind, value, extra=()):
-        """Whether value is an allowed id. kind: "uid" or "gid"; extra: further allowed (uid, gid) pairs."""
+        """Tells whether value is an allowed id of kind ("uid" or "gid").
+
+        Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
+        caller if allow_me is set.
+        """
         index = 0 if kind == "uid" else 1
         low, high = self.nobody_range
         pairs = [self.default_user, *extra, *([self.me] if self.allow_me else [])]
         return low <= value <= high or any(pair[index] == value for pair in pairs)
 
     def problem(self, kind, value, mounts, extra=()):
-        """Why value may not be used, or None. kind: "uid", "gid" or "supplementary gid"."""
+        """Returns why value may not be used as an id of kind, or None if it may.
+
+        kind: "uid", "gid" or "supplementary gid". mounts: the container has host mounts, which leaves
+        only allowed ids. extra: further allowed (uid, gid) pairs.
+        """
         base = "uid" if kind == "uid" else "gid"
         if self._allowed(base, value, extra):
             return None
@@ -90,14 +98,17 @@ class Rules(NamedTuple):
         return None
 
     def problems(self, uid, gid, supplementary=(), mounts=False, extra=()):
-        """Problems with running as these ids; empty if acceptable."""
+        """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
+
+        An id that is None is not checked. mounts and extra are as for problem().
+        """
         checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
         found = [self.problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
         return [p for p in found if p]
 
 
 def _read_ranges(path):
-    """The (start, count) ranges in a subuid or subgid file; none if it cannot be read."""
+    """Reads the (start, count) ranges of a subuid or subgid file; none if it cannot be read."""
     try:
         with open(path) as f:
             text = f.read()

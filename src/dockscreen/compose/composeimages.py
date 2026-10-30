@@ -52,7 +52,12 @@ class Prepared(NamedTuple):
     verified: dict | None = None  # service -> the repository whose image section its image proved
 
     def finalize(self):
-        """(config to run, services whose user dockscreen set from the vetted image). config is left alone."""
+        """Builds the config to run from config and the decisions, leaving config alone.
+
+        Returns (config to run, services whose user was pinned from an image that was accepted). Services that
+        start and set no user get the decided user, pinned to the image that was checked; those that do not
+        start get the default user.
+        """
         settings = self.ctx.settings
         final = copy.deepcopy(self.config)
         vetted = set()
@@ -80,7 +85,7 @@ class Prepared(NamedTuple):
         return final, frozenset(vetted)
 
     def describe(self):
-        """One line per service without a user: what dockscreen will do about it."""
+        """Describes, in one line per service that sets no user, what dockscreen does about it."""
         lines = []
         for name in sorted(unset_user_services(self.config)):
             decision = self.decisions.get(name)
@@ -103,7 +108,7 @@ class Prepared(NamedTuple):
         return [*lines, *self._pin_notices()]
 
     def notices(self):
-        """What a run is about to do that the project did not ask for, as marked lines."""
+        """Lists, as marked lines, what a run does that the project did not ask for."""
         return [
             messages.notable_change(
                 f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
@@ -111,7 +116,7 @@ class Prepared(NamedTuple):
         ] + self._pin_notices()
 
     def _pin_notices(self):
-        """One line for the services whose checked user and image are fixed in the generated file, if any."""
+        """Returns one line naming the services whose checked user and image are pinned, if any."""
         names = [name for name, d in self.decisions.items() if d.assessment.pins_user]
         if not names:
             return []
@@ -121,17 +126,20 @@ class Prepared(NamedTuple):
 
 
 def unset_user_services(config):
-    """The names of the services in config that set no user."""
+    """Returns the names of the services in config that set no user."""
     return frozenset(n for n, s in (config.get("services") or {}).items() if not (s or {}).get("user"))
 
 
 def _image_name(config, name, service):
-    """The image compose uses: the service's own, or <project>-<service> for one that is built."""
+    """Returns the image compose uses for a service: its own, or <project>-<service> if it is built."""
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
 def prepare(command, config, args, ctx, chosen=frozenset()):
-    """Acquire the images of the services that will start and decide about those without a user.
+    """Acquires the images of the services that start, and decides on those that set no user.
+
+    Pulls and builds as `up` would. Returns a Prepared; its problems are empty if every image was acquired
+    and accepted.
 
     command: the compose command line (up to the subcommand) on the config to run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
@@ -157,8 +165,10 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
 
 
 def _verify_sections(config, ctx):
-    """{service: repository} for the services whose image the config file has a section for, and that
-    was proven pulled from there. The checks before the images were there trusted the name alone."""
+    """Determines which services' images were proven pulled from the repository of their image section.
+
+    Returns {service: repository}. The checks before the images were there trusted the name alone.
+    """
     settings = ctx.runtime.settings
     verified = {}
     for name, service in (config.get("services") or {}).items():
@@ -175,7 +185,7 @@ def _verify_sections(config, ctx):
 
 
 def decision_problem(name, decision, config_file=None):
-    """Why the service must not run, for a decision that refused or failed.
+    """Returns why the service must not run, for a decision that refused or failed.
 
     config_file: named in the hint for an image that is pulled, whose repository can be given a user.
     """
@@ -187,10 +197,10 @@ def decision_problem(name, decision, config_file=None):
 
 
 def _verify_round_trip(command, config, ctx):
-    """Refuse unless compose, given the generated file, resolves it to exactly the config we checked.
+    """Checks that compose reads the generated file back as exactly config.
 
-    Compose interpolates the files it reads; a value that comes back different would run
-    differently from what the policy saw. Done before anything is pulled or built.
+    Raises ImageError if it cannot read it or reads any value differently: that value would run differently
+    from what the policy saw.
     """
     result = ctx.docker.capture(
         [*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
@@ -206,7 +216,7 @@ def _verify_round_trip(command, config, ctx):
 
 
 def first_difference(expected, actual, path="config"):
-    """Where two JSON values first differ (a path), or None."""
+    """Returns the path at which two JSON values first differ, or None if they are equal."""
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in sorted(set(expected) | set(actual), key=str):
             if key not in expected or key not in actual:
@@ -223,7 +233,10 @@ def first_difference(expected, actual, path="config"):
 
 
 def services_to_run(command, config, args, ctx):
-    """Services in the active profiles, plus any named on the command line."""
+    """Determines the services the command starts: those in the active profiles, plus any named in args.
+
+    Raises ImageError if compose cannot list them.
+    """
     result = ctx.docker.capture([*command, "config", "--services"])
     if result.returncode != 0:
         raise ImageError("docker compose config --services failed")
@@ -232,7 +245,10 @@ def services_to_run(command, config, args, ctx):
 
 
 def _acquire(command, config, to_run, args, ctx):
-    """Pull and build what `up` would, by the project's policy. Returns a list of failures."""
+    """Pulls and builds the images of to_run that `up` would, by each service's pull policy and args.
+
+    Returns the failures, empty if everything was acquired.
+    """
     pull, build = [], []
     override = argscan.option_value(args, "--pull")
     for name in sorted(to_run):
@@ -259,7 +275,7 @@ def _acquire(command, config, to_run, args, ctx):
 
 
 def _image_exists(docker, image):
-    """Whether docker has image locally."""
+    """Tells whether docker has image locally."""
     try:
         docker.inspect_image(image)
     except DockerError:
@@ -268,7 +284,10 @@ def _image_exists(docker, image):
 
 
 def _decide(config, to_run, ctx):
-    """For each started service without a user: what its image would be allowed to do."""
+    """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
+
+    Returns {service: Decision}. An image that cannot be looked at gets a failed assessment.
+    """
     decisions = {}
     for name in sorted(to_run & unset_user_services(config)):
         service = config["services"][name]
@@ -296,7 +315,7 @@ def _decide(config, to_run, ctx):
 
 
 def _give_default_home(service, user, home):
-    """HOME for the default user that replaces root, unless the service sets one."""
+    """Sets HOME in service for the default user that replaces root, unless the service sets HOME."""
     if home := imagedecision.default_home(user, home):
         service["environment"] = {"HOME": home, **(service.get("environment") or {})}
 

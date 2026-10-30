@@ -23,7 +23,7 @@ ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Ver
 
 
 def dot(assessment):
-    """The dot for a decision about an image's user."""
+    """Returns the mark for an assessment of an image's user: BAD if refused, GOOD if accepted, else WARN."""
     if assessment.refused:
         return messages.BAD
     return messages.GOOD if assessment.kind in (Kind.OK, Kind.CONFIGURED) else messages.WARN
@@ -34,12 +34,14 @@ LINES = {Verdict.PASSED: "audit passed", Verdict.REFUSED: "denied by audit", Ver
 
 
 def line(verdict):
-    """The closing line of an audit, or of the check before a command runs: mark and verdict."""
+    """Builds the closing line of an audit, or of the check before a command runs: mark and verdict."""
     return messages.Marked(ICONS[verdict], LINES[verdict])
 
 
 def brief(verdict, reasons):
-    """The verdict in one line, for --brief: the closing line, with the first reason if it did not pass."""
+    """Builds the verdict as one line, for --brief: the closing line, then the first reason if it did not
+    pass and how many more there are.
+    """
     if verdict is Verdict.PASSED:
         return line(verdict)
     first = printable(reasons[0]) if reasons else "no reason given"
@@ -48,8 +50,10 @@ def brief(verdict, reasons):
 
 
 def report(verdict, reasons, brief_mode=False):
-    """Print the verdict: one line on stdout with brief_mode, else each reason and the closing line on
-    stderr. Returns the exit status."""
+    """Prints the verdict and returns it as the exit status.
+
+    brief_mode: print one line on stdout (brief); otherwise each reason and the closing line go to stderr.
+    """
     if brief_mode:
         messages.out(brief(verdict, reasons), indent=False)
         return int(verdict)
@@ -61,7 +65,8 @@ def report(verdict, reasons, brief_mode=False):
 
 
 def screened(reasons, failed=False):
-    """Report the screening of a command, just before it runs or instead: True if it may run.
+    """Prints the verdict of screening a command and returns whether it may run: only if there are no
+    reasons.
 
     reasons: why it may not; failed: the reasons are failures to look, not refusals.
     """

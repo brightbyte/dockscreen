@@ -6,7 +6,11 @@ and the callers are written so that a misreading refuses or changes nothing.
 
 
 def find_subcommand(argv, value_opts):
-    """Return the index of the subcommand in argv, or None. value_opts: options that take a value."""
+    """Returns the index of the first argument that is not an option or an option's value, or None if
+    there is none before `--`.
+
+    value_opts: the options that take a value.
+    """
     i = 0
     while i < len(argv):
         token = argv[i]
@@ -22,7 +26,9 @@ def find_subcommand(argv, value_opts):
 
 
 def option_values(args, long_name, short_name):
-    """All values given for an option, in `--opt v`, `--opt=v` and `-ov` forms."""
+    """Returns every value given for the option, in order, in `--opt v`, `--opt=v`, `-o v` and `-ov`
+    forms. short_name may be None.
+    """
     values = []
     i = 0
     while i < len(args):
@@ -39,7 +45,7 @@ def option_values(args, long_name, short_name):
 
 
 def option_value(args, name):
-    """The value of `--name value` or `--name=value` before any `--`, if given."""
+    """Returns the value of the first `--name value` or `--name=value` before any `--`, or None."""
     for i, arg in enumerate(args):
         if arg == "--":
             break
@@ -51,7 +57,10 @@ def option_value(args, name):
 
 
 def strip_options(args, names):
-    """args without the given options, which take a value: `--opt v`, `--opt=v` and `-ov` forms."""
+    """Returns args without the given options and their values, in `--opt v`, `--opt=v` and `-ov` forms.
+
+    names: options that take a value, long and short.
+    """
     kept = []
     i = 0
     while i < len(args):
@@ -68,9 +77,10 @@ def strip_options(args, names):
 
 
 def positionals(args, long_values, short_values):
-    """The arguments that are not options or their values.
+    """Returns the arguments that are not options or option values, and everything after `--`.
 
-    long_values: long options that take a value; short_values: letters of short options that do.
+    long_values: long options that take a value; short_values: letters of short options that do, which
+    take the next argument when they end a cluster.
     """
     found = []
     i = 0

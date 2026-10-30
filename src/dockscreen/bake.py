@@ -29,12 +29,15 @@ NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
 
 
 def wants_screening(args):
-    """Whether `bake` with these arguments builds, and so needs screening."""
+    """Tells whether `bake` with these arguments builds, and so needs screening."""
     return not NOT_SCREENED & set(args)
 
 
 def definition(docker, args):
-    """The bake definition for the arguments (a dict), or raise DockerError with why not."""
+    """Returns the bake definition for the arguments, as `--print` gives it, without building anything.
+
+    Raises DockerError, saying why, if docker cannot give one or it is not a JSON object.
+    """
     result = docker.capture([docker.binary, "buildx", "bake", "--print", *args])
     if result.returncode != 0:
         raise DockerError(result.stderr.strip() or "docker buildx bake --print failed")
@@ -48,7 +51,7 @@ def definition(docker, args):
 
 
 def check_definition(found, project_dir):
-    """Why the definition may not be built, as a list of problems."""
+    """Returns the problems that forbid building the definition, with sources judged against project_dir."""
     problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
     for name, target in (found.get("target") or {}).items():
         problems += [f"target {name}: {p}" for p in _check_target(target or {}, project_dir)]
@@ -56,7 +59,7 @@ def check_definition(found, project_dir):
 
 
 def _check_target(target, project_dir):
-    """Problems with a bake target: unknown keys, sources outside project_dir, access beyond the build."""
+    """Returns the problems with a target: unknown keys, sources outside project_dir, host access."""
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
     problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
     if target.get("network") not in (None, "", "none"):
@@ -72,7 +75,10 @@ def _check_target(target, project_dir):
 
 
 def _fields(entry):
-    """{key: value} of a `key=value,key=value` entry, or None if it is not that. A bare word has no keys."""
+    """Returns the {key: value} of a `key=value,key=value` entry, or None if it is not one.
+
+    A bare word has no keys.
+    """
     try:
         parts = next(csv.reader([str(entry)]), [])
     except csv.Error:
@@ -82,7 +88,7 @@ def _fields(entry):
 
 
 def _check_outputs(outputs, cache_to):
-    """Problems with a target's output and cache-to entries: any that write to the host."""
+    """Returns the problems with a target's output and cache-to entries: any that write to the host."""
     problems = []
     for entry in outputs:
         found = _fields(entry)
@@ -97,7 +103,7 @@ def _check_outputs(outputs, cache_to):
 
 
 def _check_cache_from(entries, project_dir):
-    """Problems with cache-from entries: a local cache outside project_dir, or one that cannot be read."""
+    """Returns the problems with cache-from entries: unreadable ones, and local caches outside project_dir."""
     problems = []
     for entry in entries:
         found = _fields(entry)
@@ -109,7 +115,7 @@ def _check_cache_from(entries, project_dir):
 
 
 def _check_secrets(secrets, project_dir):
-    """Problems with secret entries: a variable instead of a file, or a file outside project_dir."""
+    """Returns the problems with secret entries: variables instead of files, and files outside project_dir."""
     problems = []
     for entry in secrets:
         found = _fields(entry)
@@ -122,7 +128,10 @@ def _check_secrets(secrets, project_dir):
 
 
 def screen(docker, args):
-    """(reasons, failed): why `bake` with these arguments may not run, and whether that is a failure to look."""
+    """Screens `bake` with these arguments against the current directory as the project directory.
+
+    Returns (reasons, failed): why it may not run, and whether that is a failure to get the definition.
+    """
     try:
         found = definition(docker, args)
     except DockerError as e:

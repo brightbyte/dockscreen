@@ -23,28 +23,37 @@ class DockerNotFound(DockerError):
 
 class Docker:
     def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen):
-        """binary: the real docker (runtime.real_docker)."""
+        """Wraps binary, the real docker (runtime.real_docker); run, call and popen launch it."""
         self.binary = binary
         self.run, self.call, self.popen = _found(run), _found(call), _found(popen)
 
     def exec(self, args):
-        """Replace this process with the real docker, keeping tty, signals and exit code."""
+        """Replaces this process with `docker args`, keeping tty, signals and exit code.
+
+        Exits with a message if the binary does not exist.
+        """
         try:
             os.execvp(self.binary, [self.binary, *args])
         except FileNotFoundError:
             messages.fatal(messages.DOCKER_NOT_FOUND)
 
     def create(self, args):
-        """(exit code, container id or None). stderr stays on the terminal so pull progress shows."""
+        """Runs `docker create args` and returns (exit code, container id or None if it failed).
+
+        stderr stays on the terminal, so pull progress shows.
+        """
         result = self.run([self.binary, "create", *args], stdout=subprocess.PIPE, text=True)
         return result.returncode, (result.stdout.strip() if result.returncode == 0 else None)
 
     def inspect_container(self, ref):
-        """`docker container inspect` of ref, as a dict. Raises DockerError if there is no such container."""
+        """Returns `docker container inspect` of ref, as a dict.
+
+        Raises DockerError if there is no such container.
+        """
         return self._inspect("container", ref)
 
     def inspect_image(self, ref):
-        """`docker image inspect` of ref, as a dict. Raises DockerError if there is no such image."""
+        """Returns `docker image inspect` of ref, as a dict. Raises DockerError if there is no such image."""
         return self._inspect("image", ref)
 
     def _inspect(self, kind, ref):
@@ -54,7 +63,7 @@ class Docker:
         return json.loads(result.stdout)[0]
 
     def read_file(self, container, path):
-        """Contents of a file in a container that has not been started, or None if it is not there.
+        """Returns the text of a file in a container that has not been started, or None if it cannot be read.
 
         Raises DockerError if the file is larger than MAX_FILE_BYTES.
         """
@@ -70,7 +79,7 @@ class Docker:
         return first_file_of_tar(data)
 
     def start(self, container, attach, interactive, detach_keys):
-        """Start container with the given attach options; the exit status of `docker start`."""
+        """Runs `docker start` on container with the given attach options and returns its exit status."""
         args = ["start"]
         if attach:
             args.append("--attach")
@@ -81,11 +90,11 @@ class Docker:
         return self.call([self.binary, *args, "--", container])
 
     def remove(self, container):
-        """Remove container, running or not; failures are ignored."""
+        """Removes container, running or not, ignoring failures."""
         self.run([self.binary, "rm", "--force", "--", container], capture_output=True)
 
     def project_directories(self, name):
-        """The working directory label of each container, running or not, of the compose project `name`.
+        """Returns the working directory label of each container, running or not, of compose project `name`.
 
         Empty for one that has no such label. Raises DockerError if docker cannot say.
         """
@@ -97,16 +106,19 @@ class Docker:
         return result.stdout.splitlines()
 
     def context(self):
-        """The name of the current docker context, or None if docker cannot tell."""
+        """Returns the name of the current docker context, or None if docker cannot tell."""
         result = self.run([self.binary, "context", "show"], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None
 
     def capture(self, cmd):
-        """Run cmd, a whole command line such as `docker compose ... config`, with its output as text."""
+        """Runs cmd, a whole command line such as `docker compose ... config`, and returns the completed
+        process with its output captured as text.
+        """
         return self.run(cmd, capture_output=True, text=True, check=False)
 
     def run_child(self, cmd):
-        """Run cmd, a whole command line, with the terminal and exit code of the real thing.
+        """Runs cmd, a whole command line, on this terminal and returns its exit status, 128 + the signal
+        if a signal ended it, or 127 if docker does not exist.
 
         Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
         """
@@ -134,7 +146,7 @@ class Docker:
 
 
 def _found(launch):
-    """launch (subprocess.run, call or Popen), raising DockerNotFound if the binary does not exist."""
+    """Wraps launch (subprocess.run, call or Popen) to raise DockerNotFound if the binary does not exist."""
     def launch_found(cmd, **kwargs):
         try:
             return launch(cmd, **kwargs)
@@ -144,8 +156,8 @@ def _found(launch):
 
 
 def first_file_of_tar(data):
-    """The text of the first entry of a tar archive, or None if that is not a regular file or the
-    archive cannot be read.
+    """Returns the text of the first entry of a tar archive, or None if that is not a regular file or
+    the archive cannot be read.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:

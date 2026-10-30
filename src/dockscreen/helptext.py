@@ -22,7 +22,7 @@ class Option(NamedTuple):
     value: str = ""  # what the option takes, as docker names it: string, list, ...
 
     def left(self):
-        """The option's left column in the help: its names and value."""
+        """Returns the option's left column in the help: its short and long name and its value."""
         short = f"-{self.short}, " if self.short else "    "
         return f"  {short}{self.long}" + (f" {self.value}" if self.value else "")
 
@@ -149,8 +149,11 @@ COMMAND_OPTIONS = {"audit": (Option(flags.BRIEF, "Print only the verdict, in one
 
 
 def command_topic(name, fn, aliases=()):
-    """The Topic of one of dockscreen's own compose commands (commands.COMMANDS), from its docstring:
-    the first line is the summary, each further paragraph a note."""
+    """Builds the Topic of one of dockscreen's own compose commands from fn's docstring.
+
+    The first line becomes the summary and each further paragraph a note. aliases: other names of the
+    command, listed in the help.
+    """
     summary, _, rest = (fn.__doc__ or "").strip().partition("\n")
     notes = tuple(" ".join(p.split()) for p in rest.split("\n\n") if p.strip())
     names = tuple(f"dockscreen compose {n}" for n in (name, *aliases)) if aliases else ()
@@ -160,7 +163,10 @@ def command_topic(name, fn, aliases=()):
 
 
 def topic(topic_, follows_name, width):
-    """The help for one command, as lines; follows_name: whose help follows ours, if any does."""
+    """Returns the help for one command as lines wrapped to width.
+
+    follows_name: whose help follows ours, announced at the end if the topic says it does.
+    """
     lines = [f"Usage:  {topic_.usage}", "", *paragraph(topic_.summary, width)]
     if topic_.aliases:
         lines += ["", "Aliases:", *paragraph(", ".join(topic_.aliases), width, "  ")]
@@ -172,7 +178,9 @@ def topic(topic_, follows_name, width):
 
 
 def _overview(usage, summary, options, sections, more, follows_name, width):
-    """The help for dockscreen or compose: options, then each (title, {name: Topic}) section."""
+    """Returns the help for dockscreen or compose as lines: options, then each (title, {name: Topic})
+    section, then more and the announcement of follows_name's help.
+    """
     lines = [f"Usage:  {usage}", "", *paragraph(summary, width), "", "Options:",
              *table([(o.left(), o.text) for o in options], width)]
     for title, topics in sections:
@@ -181,7 +189,7 @@ def _overview(usage, summary, options, sections, more, follows_name, width):
 
 
 def _notes(texts, width):
-    """Paragraphs, with a blank line before each, and list items, which follow their paragraph."""
+    """Returns texts as lines: a paragraph after a blank line, or a list item (`- `) right after it."""
     lines = []
     for text in texts:
         if text.startswith("- "):
@@ -192,7 +200,9 @@ def _notes(texts, width):
 
 
 def table(rows, width):
-    """(left, right) rows, the right column after the widest left one and wrapped under itself."""
+    """Returns (left, right) rows as lines, the right column after the widest left one and wrapped under
+    itself; not wrapped if width is None or leaves it under 20 columns.
+    """
     column = max(len(left) for left, _ in rows) + 3
     lines = []
     for left, right in rows:
@@ -206,7 +216,7 @@ def table(rows, width):
 
 
 def paragraph(text, width, indent=""):
-    """text as lines wrapped to width and indented; one line if width is None."""
+    """Returns text as lines wrapped to width, each indented; one line if width is None."""
     if width is None:
         return [indent + text]
     return textwrap.wrap(text, width, initial_indent=indent, subsequent_indent=indent,
@@ -214,7 +224,7 @@ def paragraph(text, width, indent=""):
 
 
 def item(text, width):
-    """A list item: `  - text`, continued under the text."""
+    """Returns a list item (text starting with `- `) as lines: `  - text`, continued under the text."""
     if width is None:
         return [f"  {text}"]
     return textwrap.wrap(text[2:], width, initial_indent="  - ", subsequent_indent="    ",
@@ -222,12 +232,12 @@ def item(text, width):
 
 
 def _follows(docker_help, name):
-    """The lines that announce name's own help after ours, if docker_help says it follows."""
+    """Returns the lines that announce name's own help after ours, if docker_help says it follows."""
     return ["", f"{name} help follows:", ""] if docker_help and name else []
 
 
 def docker_overview(width):
-    """The help for dockscreen itself, as lines wrapped to width."""
+    """Returns the help for dockscreen itself, as lines wrapped to width."""
     return _overview(
         "dockscreen [OPTIONS] COMMAND",
         "Docker with security checks: dockscreen audits the commands that start containers and passes "
@@ -239,7 +249,10 @@ def docker_overview(width):
 
 
 def compose_overview(commands, width):
-    """commands: {name: Topic} of dockscreen's own compose commands."""
+    """Returns the help for `dockscreen compose`, as lines wrapped to width.
+
+    commands: {name: Topic} of dockscreen's own compose commands.
+    """
     return _overview(
         "dockscreen compose [OPTIONS] COMMAND",
         "Docker Compose with security checks: dockscreen audits the project before the commands that "
@@ -251,7 +264,8 @@ def compose_overview(commands, width):
 
 
 def show(build):
-    """Print the help that build(width) gives, wrapped as the audit report is, except that without a
-    terminal it is wrapped at 80 columns, as docker does: help is read in less more than grepped."""
+    """Prints the lines build(width) returns, with the width of the audit report, or 80 columns without
+    a terminal, as docker does: help is read in less more than grepped.
+    """
     # flush: the exec of docker that follows discards unflushed buffers
     print("\n".join(build(messages.report_width(fallback=HELP_FALLBACK_WIDTH))), flush=True)

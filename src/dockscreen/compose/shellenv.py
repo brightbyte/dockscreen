@@ -10,7 +10,7 @@ from dockscreen import ids, messages
 
 
 def copied(config, env):
-    """{service: [variable names]} for the service environment values that are the shell's own."""
+    """Returns {service: [variable names]} for the environment values of services that are the shell's own."""
     found = {}
     for name, service in sorted((config.get("services") or {}).items()):
         environment = (service or {}).get("environment")
@@ -26,7 +26,7 @@ def copied(config, env):
 
 
 def describe(config, env):
-    """One line per service that gets variables from the shell."""
+    """Returns one warning per service that gets variables from the shell (env)."""
     return [
         messages.Marked(
             messages.WARN, f"service {name}: environment variables taken from your shell: {', '.join(names)}",

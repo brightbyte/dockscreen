@@ -32,7 +32,7 @@ FIELDS = {
 
 
 def findings(info, explicit_user, ctx):
-    """What the policy would refuse in a project that asked for what this container has.
+    """Returns what the policy would refuse in a project that asked for what this container has.
 
     info: the container as inspected; explicit_user: the command line chose the user;
     ctx: the policy.Context, with the current directory as the project directory.
@@ -41,7 +41,9 @@ def findings(info, explicit_user, ctx):
 
 
 def _service_of(info, explicit_user):
-    """The compose service keys that the inspected container corresponds to."""
+    """Returns the compose service keys that the inspected container corresponds to; with its user if
+    explicit_user, since only a user the command line chose is judged.
+    """
     host = info.get("HostConfig") or {}
     service = {key: host[field] for field, key in FIELDS.items() if host.get(field)}
     service.setdefault("cap_drop", [])
@@ -56,7 +58,7 @@ def _service_of(info, explicit_user):
 
 
 def _mounts(info):
-    """The container's mounts as compose writes them (type, source, target), each source once.
+    """Returns the container's mounts as compose writes them (type, source, target), each one once.
 
     -v puts a bind mount in HostConfig.Binds, --mount in HostConfig.Mounts; inspect also lists them all
     in Mounts.

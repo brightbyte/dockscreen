@@ -32,26 +32,26 @@ class Context(NamedTuple):
 
     @property
     def local(self):
-        """The id rules' local ids, for naming the users an image runs as."""
+        """Returns the host accounts of the id rules, for naming the users an image runs as."""
         return self.ids.local
 
     @property
     def directory(self):
-        """The directory a bind mount is judged against: the project's, else the current one."""
+        """Returns the directory a bind mount is judged against: the project's, else the current one."""
         return self.project_dir or self.runtime.cwd
 
     @property
     def settings(self):
-        """The settings for this project, without any image section."""
+        """Returns the config file's settings for this directory's project, without any image section."""
         return config.effective(self.runtime.settings, None, self.directory)
 
     def for_image(self, repository):
-        """(settings, id rules) with the image section for repository applied (None: none applies)."""
+        """Returns (settings, id rules) with the image section for repository applied (None: none applies)."""
         settings = config.effective(self.runtime.settings, repository, self.directory)
         return settings, self.ids.under(settings)
 
     def allowing_me(self, allow_me):
-        """This context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
+        """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
         return self._replace(ids=self.ids._replace(allow_me=True)) if allow_me else self
 
 
@@ -75,27 +75,27 @@ class Assessment(NamedTuple):
 
     @property
     def refused(self):
-        """Whether the container must not run: refused, or not assessed at all."""
+        """Tells whether the container must not run: refused, or not assessed at all."""
         return self.kind in (Kind.REFUSED, Kind.FAILED)
 
     @property
     def failed(self):
-        """Whether the image could not be assessed at all."""
+        """Tells whether the image could not be assessed at all."""
         return self.kind is Kind.FAILED
 
     @property
     def pins_user(self):
-        """Whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
+        """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
         return self.kind in (Kind.CONFIGURED, Kind.OK, Kind.FALLBACK)
 
     @property
     def replaces_image_user(self):
-        """Whether the user dockscreen decided differs from the one the image chose."""
+        """Tells whether the user dockscreen decided differs from the one the image chose."""
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK)
 
 
 def has_host_mounts(info):
-    """Whether the container, as inspected, reaches host files or devices.
+    """Tells whether the container, as inspected, reaches host files or devices.
 
     Bind mounts, devices and volumes taken from another container all do. Named volumes live in
     docker's own directory and tmpfs in memory, so the user id means nothing to the host there.
@@ -108,8 +108,10 @@ def has_host_mounts(info):
 
 
 def assess(ctx, container, info, explicit=None, mounts=None, reference=None, built=False):
-    """What the image would be allowed to do.
+    """Decides which user the container's image may run as, by the rules in this module's docstring.
 
+    Returns an Assessment. Raises DockerError if the image cannot be inspected or its passwd or group
+    file is too large.
     explicit: the user was set on the command line, if known.
     mounts: the container reaches host files or devices; worked out from info if not given.
     reference: the image name as the command line or the service gave it (the container's if None).
@@ -149,7 +151,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
 def default_home(user, home):
-    """The HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
+    """Returns the HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
 
     home: the configured default_home. Root keeps its own.
     """
@@ -157,7 +159,7 @@ def default_home(user, home):
 
 
 def env_value(env, name):
-    """The value of `name` in an `Env` list of `NAME=value` strings, or None."""
+    """Returns the value the last `name=` entry of an `Env` list of `NAME=value` strings sets, or None."""
     for entry in reversed(env or []):
         key, equals, value = entry.partition("=")
         if equals and key == name:
@@ -166,19 +168,19 @@ def env_value(env, name):
 
 
 def runs_as(assessment, local):
-    """What an accepted image runs as, in words (Kind.OK or Kind.CONFIGURED); local: HostAccounts."""
+    """Describes what an accepted image (Kind.OK or Kind.CONFIGURED) runs as; local: HostAccounts."""
     if assessment.kind is Kind.CONFIGURED:
         return f"runs as {ids.format_user(assessment.user)}, the user the config file sets for it"
     return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
 
 
 def instead_of_root(assessment):
-    """What a Kind.FALLBACK assessment does, in words."""
+    """Describes what a Kind.FALLBACK assessment does instead of running as root."""
     return f"running as {ids.format_user(assessment.user)} instead of root"
 
 
 def root_default_notice(ctx):
-    """A notice for every run when the configured default user is root, or None."""
+    """Returns the warning to give on every run if the configured default user is root, else None."""
     if 0 in ctx.settings.default_user:
         default = ids.format_user(ctx.settings.default_user)
         return messages.Marked(

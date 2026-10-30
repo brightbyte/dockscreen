@@ -18,7 +18,7 @@ HARDEN_HINT = "the harden subcommand prints a compose override file with these f
 
 
 def audit(global_args, args, runtime, allow_me=False):
-    """Run the checks that screen `up` without starting anything; pulls and builds images as up would.
+    """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
     (verdict). --brief prints only the verdict, in one line.
@@ -45,7 +45,10 @@ def audit(global_args, args, runtime, allow_me=False):
 
 
 def _audit_images(project, brief):
-    """(verdict, problems, report lines) for a project: the static checks, then the images if they pass."""
+    """Checks the project, then its images if the checks pass.
+
+    Returns (verdict, problems, report lines).
+    """
     problems = project.problems()
     if problems:
         return Verdict.REFUSED, problems, [
@@ -64,7 +67,7 @@ def _audit_images(project, brief):
 
 
 def harden(global_args, args, runtime, allow_me=False):
-    """Print a compose override that fixes what can be fixed; exit 1 if problems remain.
+    """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
     included: only what is needed on top of them to pass the audit is written out,
@@ -105,10 +108,10 @@ def harden(global_args, args, runtime, allow_me=False):
 
 
 def _fix_image_users(project, fixed, resolved, notes):
-    """Set a user in fixed on the services whose image chose one that is not acceptable.
-    (problems left, notes)
+    """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
-    resolved: fixed as it will run, which is what the images are looked at with.
+    Returns (problems left, notes). resolved: fixed as it will run, which is what the images are looked at
+    with.
     """
     with project.generated() as command:
         prepared = composeimages.prepare(command(resolved), resolved, [], project.image_ctx)

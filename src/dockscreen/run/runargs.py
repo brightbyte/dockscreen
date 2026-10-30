@@ -57,11 +57,13 @@ class _State:
 
 
 def parse(args, me, accounts):
-    """Split run arguments.
+    """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
+    the options `create` lacks, with users given as ids.
 
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
-    Raises hostusers.UserError if --user is not numeric or --as does not name a local user.
+    Raises ParseError if there is no image or an option lacks its value, and hostusers.UserError if
+    --user is not numeric or --as does not name a local user.
     """
     users = hostusers.UserOptions(me, accounts)
     state = _State(users)
@@ -85,7 +87,7 @@ def parse(args, me, accounts):
 
 
 def _parse_long(args, i, state):
-    """Handle one --option; returns the index after it."""
+    """Reads the --option at args[i] into state and returns the index after it, and after its value."""
     token = args[i]
     name, has_value, value = token.partition("=")
     if name == flags.AS_ME:
@@ -121,7 +123,9 @@ def _parse_long(args, i, state):
 
 
 def _parse_short(args, i, state):
-    """Handle one cluster such as -itv or -p80:80; returns the index after it."""
+    """Reads the option cluster at args[i], such as -itv or -p80:80, into state and returns the index
+    after it, and after its value.
+    """
     token = args[i]
     keep = ""
     next_is_value = False
@@ -158,7 +162,7 @@ def _parse_short(args, i, state):
 
 
 def _value_at(args, index, flag):
-    """args[index], the value of flag. Raises ParseError if there is none."""
+    """Returns args[index], the value of flag. Raises ParseError if args end before it."""
     if index >= len(args):
         raise ParseError(f"{flag} needs a value")
     return args[index]

@@ -26,12 +26,11 @@ REMOVABLE_SERVICE_KEYS = (*policy.FORBIDDEN_KEYS, "runtime", *policy.NAMESPACE_K
 
 
 def fix_config(config, ctx):
-    """Return a copy of config with the mechanically fixable problems removed.
+    """Returns a copy of config with the problems that have a mechanical fix fixed.
 
-    Fixable: user/group, privileges, host namespaces, and bind mount sources
-    outside the project, which become placeholder paths for the user to edit.
-    Unknown keys, volumes, networks, secrets, build contexts and env files have
-    no safe automatic fix; they stay and are reported by check_config on the result.
+    Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
+    become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
+    and env files have no safe automatic fix; they stay and are reported by check_config on the result.
     """
     fixed = copy.deepcopy(config)
     for name, service in fixed.get("services", {}).items():
@@ -57,7 +56,7 @@ def fix_config(config, ctx):
 
 
 def resolve_user_template(config, ctx):
-    """Copy of config with USER_TEMPLATE replaced by the ids it should resolve to, for re-checking."""
+    """Returns a copy of config with USER_TEMPLATE replaced by the caller's ids, for checking it."""
     resolved = copy.deepcopy(config)
     for service in resolved.get("services", {}).values():
         if service.get("user") == USER_TEMPLATE:
@@ -66,17 +65,17 @@ def resolve_user_template(config, ctx):
 
 
 def _fix_mount(mount, ctx):
-    """mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
+    """Returns mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
     if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
         return mount
     return {**mount, "source": _placeholder_source(mount["source"], ctx.project_dir)}
 
 
 def _placeholder_source(source, project_dir):
-    """Relative, upper-case stand-in for a bad source: /etc becomes ./ETC.
+    """Returns a relative, upper-case stand-in for a source outside the project: /etc becomes ./ETC.
 
-    The upper case keeps it from naming the same directory as a real
-    lower-case one, and marks it as something to edit.
+    The upper case keeps it from naming the same directory as a real lower-case one, and marks it as
+    something to edit.
     """
     relative = os.path.relpath(source, project_dir)
     if relative.startswith(os.pardir):
@@ -89,7 +88,11 @@ SAFE_YAML_KEY = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def render(original, fixed, unfixed=(), notes=()):
-    """original: the config the patch is applied to, as it will be run (defaults included)."""
+    """Renders the compose override that turns original into fixed, as YAML text.
+
+    original: the config the patch is applied to, as it will be run (defaults included).
+    unfixed and notes become comments.
+    """
     lines = [HEADER]
     lines += [f"# note: {printable(note)}" for note in notes]
     lines += [f"# edit: {printable(note)}" for note in _mount_notes(original, fixed)]
@@ -110,12 +113,12 @@ def render(original, fixed, unfixed=(), notes=()):
 
 
 def _yaml_key(key):
-    """key as a YAML mapping key, quoted unless it is plainly safe."""
+    """Returns key as a YAML mapping key, quoted unless it is plainly safe."""
     return key if SAFE_YAML_KEY.match(key) else json.dumps(key)
 
 
 def _mount_notes(original, fixed):
-    """One note per mount whose source was replaced by a placeholder."""
+    """Returns one note per mount whose source fixed replaced by a placeholder."""
     notes = []
     for name, before in original.get("services", {}).items():
         after = fixed["services"][name]
@@ -128,7 +131,7 @@ def _mount_notes(original, fixed):
 
 
 def _service_changes(original, fixed):
-    """Map service name to {key: rendered YAML value} for the keys that differ."""
+    """Returns {service: {key: rendered YAML value}} for the keys that fixed changes in original."""
     changes = {}
     for name, before in original.get("services", {}).items():
         after = fixed["services"][name]
@@ -143,7 +146,7 @@ def _service_changes(original, fixed):
 
 
 def _render_value(value):
-    """value as YAML for the override file, tagged so that it replaces what the project set."""
+    """Renders value as YAML for the override file, tagged so that it replaces what the project set."""
     if value is None:
         return "!reset null"
     if isinstance(value, list):

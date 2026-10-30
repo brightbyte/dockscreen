@@ -21,15 +21,17 @@ INT64_MIN = -(2**63)
 
 
 def lines(text):
-    """The non-empty lines of a passwd or group file as moby reads them: split on newlines only,
-    each stripped of surrounding whitespace."""
+    """Returns the non-empty lines of a passwd or group file as moby reads them: split on newlines only,
+    each stripped of surrounding whitespace as Go defines it.
+    """
     stripped = (line.strip(GO_SPACE) for line in text.split("\n"))
     return [line for line in stripped if line]
 
 
 def atoi(text):
-    """Go's strconv.Atoi with the error ignored, as moby does: a sign and ASCII digits, else 0;
-    a number out of range is the nearest limit."""
+    """Reads text as moby does with Go's strconv.Atoi: an optional sign and ASCII digits, else 0;
+    a number out of the int64 range becomes the nearest limit.
+    """
     digits = text[1:] if text[:1] in "+-" else text
     if not (digits and all(c in "0123456789" for c in digits)):
         return 0
@@ -37,13 +39,13 @@ def atoi(text):
 
 
 def _fields(line, count):
-    """The first count colon-separated fields; fields missing from a short line are empty."""
+    """Returns the first count colon-separated fields of line, padding a short line with empty ones."""
     parts = line.split(":")[:count]
     return parts + [""] * (count - len(parts))
 
 
 def parse_passwd(text):
-    """[(name, uid, gid)] like moby: a line with missing or malformed numbers has uid 0 and gid 0."""
+    """Parses a passwd file into [(name, uid, gid)] like moby: a missing or malformed number is 0."""
     entries = []
     for line in lines(text):
         name, _, uid, gid, *_ = _fields(line, 7)
@@ -52,7 +54,7 @@ def parse_passwd(text):
 
 
 def parse_group(text):
-    """[(name, gid, members)] like moby."""
+    """Parses a group file into [(name, gid, members)] like moby: a missing or malformed gid is 0."""
     entries = []
     for line in lines(text):
         name, _, gid, members = _fields(line, 4)
@@ -61,7 +63,7 @@ def parse_group(text):
 
 
 def resolve(spec, passwd_text, group_text):
-    """Mirror how docker turns a `user[:group]` spec into ids, using the image's files.
+    """Resolves a `user[:group]` spec to the Identity docker would run it as, using the image's files.
 
     A numeric user or group is an id, never a name (moby looks it up by number only). A numeric
     uid without a passwd entry gets gid 0. Raises ValueError for a name the image does not define,
@@ -97,25 +99,29 @@ def resolve(spec, passwd_text, group_text):
 
 
 def _find(entries, arg):
-    """The first entry (name, id, ...) that arg names: by id if arg is a number, else by name."""
+    """Returns the first entry (name, id, ...) that arg names, by id if arg is a number, else by name;
+    None if there is none.
+    """
     if _is_id(arg):
         return next((e for e in entries if e[1] == int(arg)), None)
     return next((e for e in entries if e[0] == arg), None)
 
 
 def _is_id(text):
-    """Whether Go's Atoi reads text as a number: an optional sign and ASCII digits."""
+    """Tells whether Go's Atoi reads text as a number: an optional sign and ASCII digits."""
     digits = text[1:] if text[:1] in "+-" else text
     return bool(digits) and all(c in "0123456789" for c in digits)
 
 
 def involves_root(identity):
-    """Whether identity has uid 0 or gid 0, also among its supplementary groups."""
+    """Tells whether identity has uid 0 or gid 0, also among its supplementary groups."""
     return 0 in (identity.uid, identity.gid, *identity.supplementary)
 
 
 def describe(identity, local=None):
-    """The identity in words; with local (hostusers.HostAccounts), also which local accounts the ids are."""
+    """Describes the identity in words; with local (hostusers.HostAccounts), also which local accounts the
+    ids are.
+    """
     def who(kind, value):
         if local is None:
             return str(value)

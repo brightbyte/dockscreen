@@ -24,18 +24,21 @@ class Runtime(NamedTuple):
     cwd: str                                # the directory dockscreen was started in
 
     def rules(self, allow_me=False):
-        """The id rules; allow_me: --allow-me was given, so the caller's own ids are allowed."""
+        """Returns the id rules for the config file's settings; allow_me: the caller's own ids are allowed."""
         return idrules.Rules(self.me, allow_me, self.settings.nobody_range, self.settings.default_user,
                              self.accounts, self.subordinate)
 
     @property
     def config_file(self):
-        """The caller's own config file, which hints point to; dockscreen creates it if it is missing."""
+        """Returns the path of the caller's own config file, which hints point to (config.user_file)."""
         return config.user_file(self.env, self.home)
 
 
 def load_runtime():
-    """The Runtime of this process. Raises config.ConfigError for a config file that cannot be trusted."""
+    """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted.
+
+    Creates the caller's config file if it is missing (config.load_current).
+    """
     env, home, me = os.environ, os.path.expanduser("~"), (os.getuid(), os.getgid())
     settings = config.load_current(env, home, me[0])
     return Runtime(
@@ -51,8 +54,8 @@ def load_runtime():
 
 
 def real_docker(settings, env, wrappers=None):
-    """The docker the config file names, else the first one on PATH that is not a wrapper, else plain
-    "docker", so that exec reports the usual error.
+    """Returns the docker to run: the one settings names, else the first one on PATH that is not a
+    wrapper, else plain "docker", so that exec reports the usual error.
 
     wrappers: real paths of the wrappers to skip; by default the one this process was started as.
     """
@@ -62,7 +65,7 @@ def real_docker(settings, env, wrappers=None):
 
 
 def find_docker(env, wrappers):
-    """The first `docker` on PATH that is not one of the wrappers, or None.
+    """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
     Empty PATH entries (meaning the current directory) are skipped: a hostile
     project must not be able to supply the binary we run.

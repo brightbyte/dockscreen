@@ -24,8 +24,9 @@ class Addition(NamedTuple):
 
 
 def apply(config, accounts):
-    """(config with the defaults added and user names resolved, the list of additions).
+    """Adds dockscreen's defaults to every service of config and resolves user names to ids.
 
+    Returns (a hardened copy of config, the list of additions).
     accounts: the users and groups to resolve names with (hostusers.HostAccounts).
     """
     hardened = copy.deepcopy(config)
@@ -51,7 +52,7 @@ def apply(config, accounts):
 
 
 def _resolve_user_names(name, service, accounts):
-    """Replace names in the service's user and hook users by their ids on this host."""
+    """Replaces names in the service's user and hook users by their ids, and returns the additions."""
     additions = []
     if service.get("user"):
         resolved = _resolve_spec(service["user"], accounts)
@@ -71,9 +72,9 @@ def _resolve_user_names(name, service, accounts):
 
 
 def _resolve_spec(spec, accounts):
-    """`name` becomes that account's `uid:gid`, a group name its gid; numbers and unknown names stay.
+    """Resolves a user spec: `name` becomes that account's `uid:gid`, a group name its gid.
 
-    A uid alone stays alone: the policy refuses it rather than guess a group.
+    Numbers and unknown names stay. A uid alone stays alone: the policy refuses it rather than guess a group.
     """
     user, has_group, group = str(spec).partition(":")
     account = accounts.user(user) if user and ids.parse_id(user) is None else None
@@ -88,7 +89,7 @@ def _resolve_spec(spec, accounts):
 
 
 def _resolve_group(group, accounts):
-    """group as a gid if accounts knows its name; ids and unknown names unchanged."""
+    """Returns group as a gid if accounts knows its name; ids and unknown names are unchanged."""
     if ids.parse_id(group) is not None:
         return group
     gid = accounts.group(str(group))
@@ -96,7 +97,7 @@ def _resolve_group(group, accounts):
 
 
 def _resolved_message(what, before, after):
-    """The notice that what was resolved from before to after on this host."""
+    """Returns the notice that what was resolved from before to after on this host."""
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 
 
@@ -108,10 +109,10 @@ RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
 def describe(additions):
-    """Marked lines for an audit or a run: what dockscreen changed, and how much it deserves a look.
+    """Describes the additions as marked lines for an audit or a run, by how much each deserves a look.
 
-    A default added where the project set nothing is routine, and one line names the services, since it
-    is the same for all. A key the project set itself, and a name resolved on this host, get a line each.
+    A default added where the project set nothing is routine, and one line names the services, since it is
+    the same for all. A key the project set itself, and a name resolved on this host, get a line each.
     """
     lines = []
     for a in additions:
@@ -128,7 +129,7 @@ def describe(additions):
 
 
 def defaults_note():
-    """One general sentence for generated files, instead of a line per service."""
+    """Returns one general sentence about the defaults for generated files, instead of a line per service."""
     return (f'dockscreen also adds cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] to every '
             "service that lacks them, resolves user and group names to ids on this host, and runs a "
             "service that sets no user as the configured default user when its image would run as root, "

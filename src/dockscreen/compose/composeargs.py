@@ -38,9 +38,10 @@ class Parsed(NamedTuple):
 
 
 def parse(subcommand, args, me, accounts):
-    """The service named in args, and whether a user is given; raises hostusers.UserError for a user
-    that is not numeric `uid:gid`, or an --as that does not name a local user.
+    """Parses the arguments of `run` or `exec` far enough to find the service and whether a user is given.
 
+    Returns a Parsed, with --as and --as-me replaced by ids. Raises hostusers.UserError for a user that is
+    not numeric `uid:gid`, or an --as that does not name a local user.
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     """
@@ -66,7 +67,7 @@ def parse(subcommand, args, me, accounts):
 
 
 def _parse_long(args, i, value_flags, users, kept):
-    """Read the --option at args[i] into kept, with --as replaced; returns the index after it."""
+    """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
     end = i
     if (name in value_flags or name == flags.AS) and not has_value:
@@ -82,7 +83,7 @@ def _parse_long(args, i, value_flags, users, kept):
 
 
 def _parse_short(args, i, value_flags, users, kept):
-    """Read the cluster at args[i] (such as -it or -u0:0) into kept; returns the index after it."""
+    """Reads the cluster at args[i] (such as -it or -u0:0) into kept, and returns the index after it."""
     token = args[i]
     short_values = {flag[1] for flag in value_flags if len(flag) == 2}
     end = i

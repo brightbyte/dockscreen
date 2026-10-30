@@ -45,7 +45,12 @@ VALUE_SHORT = frozenset("st")
 
 
 def run(ctx, args):
-    """`docker run`; returns the exit code."""
+    """Runs `docker run` with args through the gate and returns the exit status.
+
+    The container starts only if the user it would run as is accepted, given as numbers where the image
+    or the config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it
+    could not create the container.
+    """
     try:
         parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.accounts)
     except runargs.ParseError as e:
@@ -93,7 +98,7 @@ def run(ctx, args):
 
 
 def _home_args(ctx, info, assessment):
-    """`-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
+    """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
 
     The container as created has the merged environment: a HOME that differs from the image's own
     was set by the person running it, and stays.
@@ -108,7 +113,7 @@ def _home_args(ctx, info, assessment):
 
 
 def defaults_notice():
-    """The change `run` and `create` make to every container, as a marked line."""
+    """Returns the notice of the defaults `run` and `create` add to every container, as a marked line."""
     return messages.routine_change(
         f"added {' '.join(DEFAULTS)}",
         "a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
@@ -116,7 +121,7 @@ def defaults_notice():
 
 
 def _fallback_notice(assessment):
-    """The notice that the default user replaces the image's root, and what to do about it."""
+    """Returns the notice that the default user replaces the image's root, and what to do about it."""
     home = default_home(assessment.user, assessment.home)
     return messages.notable_change(
         instead_of_root(assessment),
@@ -125,10 +130,10 @@ def _fallback_notice(assessment):
 
 
 def _create_checked(ctx, parsed, extra):
-    """Create the container; (container, info, assessment), or an exit code if it must not start.
+    """Creates the container; returns (container, info, assessment), or the exit status if it may not start.
 
-    A container that would be refused is removed. Any other assessment is returned to the caller,
-    which re-creates the container with the user as numbers.
+    A container that would be refused is removed and the refusal printed. Any other assessment is
+    returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
     code, container, info, assessment = _create_assessed(ctx, parsed, extra)
     if container is None:  # docker said why
@@ -142,7 +147,7 @@ def _create_checked(ctx, parsed, extra):
 
 
 def _create_assessed(ctx, parsed, extra):
-    """Create the container as `docker run` would and assess it: (exit code, container, info, assessment).
+    """Creates the container as `docker run` would and returns (exit status, container, info, assessment).
 
     extra: arguments that go before the command line's own. Without a container (docker could not
     create one; it said why) the others are None. The container is left for the caller to remove.
@@ -166,12 +171,12 @@ AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief]
 
 
 def audit(ctx, args, strict=False):
-    """`audit` with a `docker run` command line: what `docker run` would do with it, without starting it.
+    """Reports what `docker run` would do with the command line args, without starting anything.
 
     The container is created as `run` would create it, pulling the image if `run` would, and removed.
-    The exit status is the verdict: 1 if `run` would refuse, or with strict (--strict-screen) if the
-    command line asks for something a project or an image may not; 3 if the audit failed to get that far.
-    --brief, before the image, prints only the verdict, in one line.
+    Returns the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the
+    command line asks for something a project or an image may not; 3 if the audit failed to get that far;
+    2 if args cannot be read. --brief, before the image, prints only the verdict, in one line.
     """
     brief, args = flags.strip(args, runargs.VALUE_OPTIONS, flags.BRIEF)
     try:
@@ -212,7 +217,7 @@ def audit(ctx, args, strict=False):
 
 
 def _audit_verdict(ctx, assessment, found, strict, image):
-    """(verdict, reasons) of an audit: the assessment's, then the command line's findings if strict."""
+    """Returns the (verdict, reasons) of an audit: the assessment's, then the findings if strict."""
     reasons = [*(_explain(ctx, assessment, image) if assessment.refused else []), *(found if strict else [])]
     if assessment.failed:
         return Verdict.FAILED, reasons
@@ -220,7 +225,7 @@ def _audit_verdict(ctx, assessment, found, strict, image):
 
 
 def _report_assessment(ctx, image, assessment):
-    """Print what `docker run` would do about the user."""
+    """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.kind is Kind.EXPLICIT:
         messages.out(messages.Marked(
@@ -241,7 +246,7 @@ def _report_assessment(ctx, image, assessment):
 
 
 def _report_findings(found, strict):
-    """Print what the command line asks for that a project or an image may not."""
+    """Prints what the command line asks for that a project or an image may not; as failures if strict."""
     dot = messages.BAD if strict else messages.WARN
     for finding in found:
         messages.out(messages.Marked(dot, f"command line: {finding}"))
@@ -251,7 +256,7 @@ def _report_findings(found, strict):
 
 
 def _describe_outcome(ctx, assessment):
-    """What the assessment means for running the image, as text."""
+    """Returns, as text, what the assessment means for running the image."""
     if assessment.kind in (Kind.OK, Kind.CONFIGURED):
         return runs_as(assessment, ctx.local)
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
@@ -265,9 +270,10 @@ def _describe_outcome(ctx, assessment):
 
 
 def create_args(args, runtime):
-    """The arguments of `docker create` with --as and --as-me replaced by ids, and --user checked.
+    """Returns the arguments of `docker create` with --as and --as-me replaced by ids, and prints notices.
 
-    Returned as they are if they cannot be read: docker will report what is wrong with them.
+    Arguments that cannot be read are returned as they are: docker will report what is wrong with them.
+    Raises hostusers.UserError for a user that cannot be used.
     """
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
@@ -279,7 +285,7 @@ def create_args(args, runtime):
 
 
 def check_existing(ctx, args):
-    """Problems for the containers named in `docker start`/`restart` arguments.
+    """Returns the problems that forbid starting the containers named in `docker start`/`restart` args.
 
     An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
     default user or a configured one) is refused like one whose user is not accepted, unless it
@@ -305,12 +311,15 @@ def check_existing(ctx, args):
 
 
 def _runs_as_pinned_user(info, assessment):
-    """Whether the container was created with the numeric user dockscreen would have chosen."""
+    """Tells whether the container was created with the numeric user dockscreen would have chosen."""
     return ids.parse_user(info["Config"].get("User") or "") == assessment.user
 
 
 def _verify_split(info, parsed):
-    """Our reading of the command line must match what the daemon created, or we refuse."""
+    """Checks that our reading of the command line matches the container the daemon created.
+
+    Returns the problem if it does not, else an empty list.
+    """
     config = info["Config"]
     misread_image = config.get("Image") != parsed.image
     misread_command = parsed.command and (config.get("Cmd") or []) != parsed.command
@@ -321,12 +330,12 @@ def _verify_split(info, parsed):
 
 
 def _explain(ctx, assessment, image):
-    """The problems, with how to get past them when they come from the image's own identity."""
+    """Returns the assessment's problems, with how to get past them if they come from the image's user."""
     if assessment.identity is None:
         return assessment.problems
     return [messages.Reason(p, f"{CHOOSE_HINT}, {_config_hint(ctx, image)}") for p in assessment.problems]
 
 
 def _config_hint(ctx, image):
-    """How the config file could give the image a user, if docker records it as pulled."""
+    """Returns the hint how the config file can give image a user, for an image pulled from a registry."""
     return f"or, for an image pulled from a registry, {images.section_hint(image, ctx.runtime.config_file)}"

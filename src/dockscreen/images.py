@@ -21,8 +21,11 @@ class Match(NamedTuple):
 
 
 def split_reference(reference):
-    """(normalised repository, tag, digest) as docker reads a reference: `mariadb` is
-    docker.io/library/mariadb. Raises ValueError for something that is not a reference."""
+    """Splits an image reference into (normalised repository, tag, digest) as docker reads it:
+    `mariadb` is docker.io/library/mariadb. Tag and digest are empty if not given.
+
+    Raises ValueError for something that is not a reference.
+    """
     name, _, digest = reference.partition("@")
     tag = ""
     last_slash = name.rfind("/")
@@ -43,7 +46,7 @@ def split_reference(reference):
 
 
 def repository(reference):
-    """The normalised repository of a reference, or None if it is not one."""
+    """Returns the normalised repository of a reference, or None if it is not one."""
     try:
         return split_reference(reference)[0]
     except ValueError:
@@ -51,7 +54,7 @@ def repository(reference):
 
 
 def section_for(config, reference, repo_digests, built):
-    """Which image section of the config file applies to this image.
+    """Determines which image section of the config file applies to this image, as a Match.
 
     reference: the image name the service or command line uses.
     repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
@@ -68,7 +71,7 @@ def section_for(config, reference, repo_digests, built):
 
 
 def shown(repository):
-    """A normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
+    """Returns a normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
     for prefix in (f"{DEFAULT_DOMAIN}/library/", f"{DEFAULT_DOMAIN}/"):
         if repository.startswith(prefix):
             return repository[len(prefix):]
@@ -76,7 +79,9 @@ def shown(repository):
 
 
 def section_hint(reference, config_file, built=False):
-    """How the config file could give this image a user, or None for a built image."""
+    """Returns how config_file could give this image a user, or None for a built image or a reference
+    that is not one.
+    """
     name = repository(reference)
     if built or not name:
         return None
@@ -84,6 +89,8 @@ def section_hint(reference, config_file, built=False):
 
 
 def name_matches(config, reference, built):
-    """The image section the image name alone points to, before the image is there to prove it."""
+    """Returns the repository of the image section the name alone points to, or None if there is none or
+    the image is built. The name proves nothing: this is for before the image is there.
+    """
     name = repository(reference)
     return name if name in config.images and not built else None

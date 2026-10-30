@@ -37,7 +37,10 @@ AS_ME_MESSAGE = messages.Marked(
 
 
 def strip(argv, value_opts, flag=SKIP_SCREENING):
-    """(whether flag was given, argv without it). Only options before the subcommand count."""
+    """Returns (whether flag was given, argv without it), looking only at the options before the command.
+
+    value_opts: the options that take the next token as their value, which is then not the command.
+    """
     kept = []
     found = False
     i = 0
@@ -60,13 +63,13 @@ def strip(argv, value_opts, flag=SKIP_SCREENING):
 
 
 def strip_helpful(argv, value_opts):
-    """(whether --helpful or --verbose was given, argv without them)."""
+    """Returns (whether --helpful or --verbose was given, argv without them), as strip does."""
     helpful, argv = strip(argv, value_opts, HELPFUL)
     verbose, argv = strip(argv, value_opts, VERBOSE)
     return helpful or verbose, argv
 
 
 def banner():
-    """Warn that screening is turned off for this command."""
+    """Warns on stderr that screening is turned off for this command."""
     messages.warning(f"{SKIP_SCREENING} given: screening is disabled.")
     messages.warning("nothing in this command is checked, and no defaults are added.")

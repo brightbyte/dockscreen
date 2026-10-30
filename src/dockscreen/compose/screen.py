@@ -24,10 +24,10 @@ class InspectError(ScreenError):
 
 
 def inspect(global_args, runtime):
-    """Return (config, project_dir) for the config selected by global_args.
+    """Returns (config, project directory) for the project global_args select.
 
-    A project directory that is, or contains, a sensitive path ($HOME, /etc, ...) is refused: everything
-    in it can be bind-mounted.
+    Raises ScreenError if the project directory is, or contains, a sensitive path ($HOME, /etc, ...), since
+    everything in it can be bind-mounted; InspectError if compose cannot give the config.
     """
     project_dir = project_directory(global_args, runtime.cwd, runtime)
     found = sensitive_inside(project_dir, runtime)
@@ -40,11 +40,12 @@ def inspect(global_args, runtime):
 
 
 def context(project_dir, runtime, allow_me=False, verified=None):
-    """The policy context for project_dir, from the config file; allow_me: --allow-me was given.
+    """Builds the policy context for project_dir from the config file.
 
-    Each service is checked with the settings of its image section, if one applies. Before the images
-    are there, that is the section the image name points to; verified, once they are, maps each
-    service to the section its image was proven to have been pulled for (images.section_for).
+    allow_me: --allow-me was given, so the caller's own ids are allowed.
+    Each service is checked with the settings of its image section, if one applies. Before the images are
+    there, that is the section the image name points to; verified, once they are, maps each service to the
+    section its image was proven to have been pulled for (images.section_for).
     """
     def settings_context(settings):
         return policy.context_for(settings, project_dir, runtime.rules(allow_me), runtime.config_file)
@@ -61,19 +62,20 @@ def context(project_dir, runtime, allow_me=False, verified=None):
 
 
 def _sensitive_paths(runtime):
-    """Paths whose directories must not be mountable: system directories, the home directory, the
-    config files and the docker socket."""
+    """Returns the paths whose directories must not be mountable: system directories, the home
+    directory, the config files and the docker socket.
+    """
     return [*SENSITIVE_DIRS, runtime.home, config.SYSTEM_FILE, runtime.config_file, DOCKER_SOCKET]
 
 
 def sensitive_inside(directory, runtime):
-    """The sensitive paths that directory equals or contains, compared after resolving symlinks."""
+    """Returns the sensitive paths that directory equals or contains, with symlinks resolved."""
     root = os.path.realpath(directory)
     return [path for path in _sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
 
 
 def mount_dir_warnings(runtime):
-    """One warning per configured mount dir that equals or contains a sensitive path."""
+    """Returns one warning per configured mount dir that equals or contains a sensitive path."""
     return [
         messages.Marked(
             messages.WARN,
@@ -85,7 +87,7 @@ def mount_dir_warnings(runtime):
 
 
 def passes(global_args, runtime, rules=policy.check_config):
-    """Whether rules(config, ctx) finds nothing, with the screening verdict on stderr."""
+    """Tells whether rules(config, ctx) finds nothing in the selected project, printing the verdict."""
     try:
         config, project_dir = inspect(global_args, runtime)
     except InspectError as e:
@@ -96,7 +98,8 @@ def passes(global_args, runtime, rules=policy.check_config):
 
 
 def load_config(global_args, docker_binary):
-    """The config compose resolves for global_args, with every profile active and env files not inlined.
+    """Returns the config compose resolves for global_args, with every profile active and env files
+    not inlined.
 
     Raises InspectError if compose cannot be run or its output cannot be read.
     """
@@ -119,12 +122,12 @@ def load_config(global_args, docker_binary):
 
 
 def name_conflicts(name, directory, docker):
-    """Problems with running the project `name` in `directory`: containers of a project of that name
-    already exist that were made from another directory.
+    """Checks whether containers of a project called name exist that were made from another directory.
 
-    The name is the project's own choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`), and it
-    decides which volumes, networks and containers compose uses, replaces and, for `down -v`, removes.
-    Volumes and networks alone say nothing about where they came from, so only containers count.
+    Returns the problems, empty if there are none. The name is the project's own choice (`name:`, or
+    `COMPOSE_PROJECT_NAME` in its `.env`), and it decides which volumes, networks and containers compose
+    uses, replaces and, for `down -v`, removes. Volumes and networks alone say nothing about where they came
+    from, so only containers count.
     """
     try:
         found = docker.project_directories(name)
@@ -141,7 +144,7 @@ def name_conflicts(name, directory, docker):
 
 
 def names_project(global_args, env):
-    """Whether the person chose the project name, with -p or COMPOSE_PROJECT_NAME in the environment."""
+    """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME in env."""
     return bool(argscan.option_values(global_args, "--project-name", "-p") or env.get("COMPOSE_PROJECT_NAME"))
 
 
@@ -149,7 +152,7 @@ REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot 
 
 
 def is_remote(global_args, env, docker):
-    """Whether the daemon might not be this host's own, where host ids and paths mean nothing."""
+    """Tells whether the daemon might not be this host's own, where host ids and paths mean nothing."""
     if argscan.option_values(global_args, "--host", "-H"):
         return True
     if argscan.option_values(global_args, "--context", "-c"):
@@ -163,7 +166,10 @@ def is_remote(global_args, env, docker):
 
 
 def project_directory(global_args, cwd, runtime):
-    """Mirror how docker compose picks the project directory."""
+    """Determines the project directory as docker compose would from global_args and cwd.
+
+    Raises ScreenError if that cannot be checked (a compose file from stdin, or as find_compose_dir says).
+    """
     env = runtime.env
     explicit = argscan.option_values(global_args, "--project-directory", None)
     if explicit:
@@ -182,11 +188,12 @@ def project_directory(global_args, cwd, runtime):
 
 
 def find_compose_dir(start, env_files, home, uid):
-    """Walk up like compose does, refusing if a .env could redirect compose elsewhere.
+    """Finds the directory of the nearest compose file, walking up from start as compose does.
 
-    The walk stops at the home directory and at the first directory not owned by uid: a compose file
-    found there was not put there for this project, and is an error. The starting directory is the
-    caller's own choice and is not subject to the ownership rule.
+    The walk stops at home and at the first directory not owned by uid: a compose file found there was not
+    put there for this project, and raises ScreenError. The starting directory is the caller's own choice
+    and is not subject to the ownership rule. Raises ScreenError if a .env (or an env_files entry) could
+    send compose elsewhere, InspectError if there is no compose file.
     """
     home = os.path.realpath(home)
     for env_file in env_files:
@@ -209,8 +216,11 @@ def find_compose_dir(start, env_files, home, uid):
 
 
 def _refuse_compose_vars_in(path):
-    """dockscreen does not read .env files, so a COMPOSE_FILE there would send compose to a
-    different project directory than the one we would check mounts against."""
+    """Raises ScreenError if the .env file at path sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR.
+
+    dockscreen does not read .env files, so such a setting would send compose to a different project
+    directory than the one mounts are checked against. A file that cannot be read is ignored.
+    """
     try:
         with open(path) as f:
             content = f.read()

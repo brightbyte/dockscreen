@@ -13,23 +13,23 @@ EXPORTED = ("UID", "GID")
 
 
 def export(env, me):
-    """Set UID and GID in env to me, the caller's real (uid, gid). Idempotent."""
+    """Sets UID and GID in env to me, the caller's real (uid, gid), replacing what is there."""
     env["UID"], env["GID"] = (str(i) for i in me)
 
 
 def is_id(text):
-    """Whether text is a numeric id: ASCII digits only."""
+    """Tells whether text is a numeric id, which is ASCII digits only."""
     return text.isascii() and text.isdigit()
 
 
 def parse_id(value):
-    """The numeric id, or None."""
+    """Returns value as a numeric id, or None if its text is not one (is_id)."""
     text = str(value)
     return int(text) if is_id(text) else None
 
 
 def parse_user(spec):
-    """(uid, gid) from "uid:gid" with numeric ids, or None for anything else."""
+    """Returns (uid, gid) for a spec "uid:gid" of two numeric ids, or None for anything else."""
     user, colon, group = spec.partition(":")
     if not (colon and is_id(user) and is_id(group)):
         return None
@@ -37,6 +37,6 @@ def parse_user(spec):
 
 
 def format_user(ids):
-    """"uid:gid" from (uid, gid)."""
+    """Formats ids, a (uid, gid) pair, as "uid:gid"."""
     uid, gid = ids
     return f"{uid}:{gid}"

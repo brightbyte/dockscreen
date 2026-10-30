@@ -42,7 +42,7 @@ class Marked(str):
 
     @property
     def shown(self):
-        """The text, with the help after it in helpful mode."""
+        """Returns the text, followed by the help if there is one and helpful mode is on."""
         return f"{self.text} - {self.help}" if self.help and _helpful else self.text
 
 
@@ -56,7 +56,7 @@ class Reason(str):
 
 
 def help_of(reason):
-    """The help of a Reason, or None for a plain string."""
+    """Returns the help of a Reason, or None for a plain string."""
     return getattr(reason, "help", None)
 
 
@@ -64,7 +64,7 @@ _helpful = False
 
 
 def set_helpful(on):
-    """Show the second part of messages that have one: for --helpful, --verbose and the audit commands."""
+    """Turns helpful mode on or off: whether messages show their help (--helpful, --verbose, audit)."""
     global _helpful
     _helpful = on
 
@@ -88,26 +88,26 @@ CONTINUATION = "  "
 
 
 def routine_change(text, help=None):
-    """A line about something dockscreen changes that rarely affects how the thing runs."""
+    """Builds a line about something dockscreen changes that rarely affects how the thing runs."""
     return Marked(ROUTINE, text, help)
 
 
 def notable_change(text, help=None):
-    """A line about something dockscreen changes that can alter how the thing runs: worth a look."""
+    """Builds a line about something dockscreen changes that can alter how the thing runs."""
     return Marked(WARN, text, help)
 
 
 def notice(text):
-    """Print text to stderr as dockscreen's (paint)."""
+    """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted."""
     print(f"{PREFIX} {paint(text, sys.stderr)}", file=sys.stderr)
 
 
 def out(text, indent=True):
-    """A line of a report on stdout, escaped and with its mark coloured.
+    """Prints a line of a report to stdout, escaped and with its mark coloured.
 
-    indent: after a tab, which sets the report apart from the [dockscreen] messages on stderr that
-    interleave with it, and wrapped to the terminal (report_width) with the text lined up after the
-    mark. A line that is all of the output (--brief) goes as it is.
+    indent: print it after a tab, which sets the report apart from the [dockscreen] messages on stderr,
+    wrapped to report_width() with the text lined up after the mark. Without it, the line is printed
+    as it is, for output that is all one line (--brief).
     """
     if not indent:
         print(paint(text, sys.stdout))
@@ -117,16 +117,21 @@ def out(text, indent=True):
 
 
 def report_width(fallback=0):
-    """The width to wrap report lines at: COLUMNS or the terminal's, at most MAX_WIDTH; None (no
-    wrapping) below MIN_WIDTH. fallback: the width when neither is known, as when the output goes to
-    grep or less; 0 for no wrapping."""
+    """Returns the width to wrap report lines at: COLUMNS or the terminal's, at most MAX_WIDTH, or None
+    (no wrapping) below MIN_WIDTH.
+
+    fallback: the width when neither is known, as when the output goes to grep or less; 0 for no wrapping.
+    """
     columns = shutil.get_terminal_size((fallback, 24)).columns
     return None if columns < MIN_WIDTH else min(columns, MAX_WIDTH)
 
 
 def wrapped(text, width, colour):
-    """text as lines of at most width columns after a tab (TAB_WIDTH), continued under the text after
-    the mark (CONTINUATION). Words are never broken: a long path stays whole."""
+    """Splits text into escaped lines that fit width columns after a tab, never breaking a word.
+
+    Continued lines line up under the text after the mark. width: None for one line; colour: whether
+    to colour the mark.
+    """
     lead = f"{text.mark} " if isinstance(text, Marked) else ""
     body = printable(text.shown if lead else text)
     if width is None:
@@ -140,7 +145,7 @@ def wrapped(text, width, colour):
 
 
 def paint(line, stream):
-    """line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
+    """Returns line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
     if not isinstance(line, Marked):
         return printable(line)
     mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
@@ -148,12 +153,12 @@ def paint(line, stream):
 
 
 def _coloured(mark):
-    """mark in its colour, as terminal escapes."""
+    """Returns mark wrapped in the terminal escapes for its colour, bold."""
     return f"\x1b[1;{mark.colour}m{mark}\x1b[0m"  # bold, for all alike
 
 
 def _wants_colour(stream):
-    """Whether to colour what is written to stream: a terminal, without NO_COLOR or TERM=dumb."""
+    """Tells whether to colour what is written to stream: a terminal, without NO_COLOR or TERM=dumb."""
     if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
         return False
     try:
@@ -163,25 +168,25 @@ def _wants_colour(stream):
 
 
 def warning(text):
-    """Print text as a warning (notice)."""
+    """Prints text as a warning message (notice)."""
     notice(f"warning: {text}")
 
 
 def report(problems):
-    """One refusal per problem; True if there were none."""
+    """Prints a refusal for each problem, with its help; returns whether there were none."""
     for problem in problems:
         notice(Marked(BAD, f"refusing: {problem}", help_of(problem)))
     return not problems
 
 
 def refuse(problems):
-    """report(), then exit code 1: called when something is refused, even if no reason was found."""
+    """Prints the problems as refusals (report) and returns exit status 1, even if there are none."""
     report(problems)
     return 1
 
 
 def printable(text):
-    """One line of text with control, format and line-separator characters escaped.
+    """Returns str(text) as one line, with every character that is not printable escaped.
 
     Stops a config from forging output lines (newlines), rewriting the terminal
     (escape sequences) or reordering text (bidi overrides).
@@ -190,7 +195,7 @@ def printable(text):
 
 
 def _escape(char):
-    """char as a backslash escape: \\xNN, \\uNNNN or \\UNNNNNNNN."""
+    """Returns char as a backslash escape: \\xNN, \\uNNNN or \\UNNNNNNNN, by its code point."""
     code = ord(char)
     if code < 0x100:
         return f"\\x{code:02x}"
@@ -198,5 +203,5 @@ def _escape(char):
 
 
 def fatal(text):
-    """Exit with status 1 and text as the message."""
+    """Exits with status 1, printing text (escaped) as a dockscreen message."""
     sys.exit(f"{PREFIX} {printable(text)}")

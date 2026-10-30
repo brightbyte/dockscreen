@@ -34,13 +34,14 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 
 
 def forward(argv, runtime):
-    """Replace this process with `docker compose argv`, keeping tty, signals and exit code."""
+    """Replaces this process with `docker compose argv`, keeping tty, signals and exit code."""
     runtime.docker.exec(["compose", *argv])
 
 
 def main(argv, runtime=None):
-    """`docker compose argv`, screened. runtime: the Runtime the `docker` wrapper already loaded.
+    """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
+    runtime: the Runtime the `docker` wrapper already loaded; loaded here if not given.
     Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
     """
     skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
@@ -69,21 +70,24 @@ class ComposeCommand:
 
     @property
     def sub(self):
-        """The subcommand, or None if there is none."""
+        """Returns the subcommand, or None if there is none."""
         return None if self.idx is None else self.argv[self.idx]
 
     @property
     def global_args(self):
-        """The options before the subcommand, which select the project."""
+        """Returns the options before the subcommand, which select the project."""
         return self.argv if self.idx is None else self.argv[:self.idx]
 
     @property
     def args(self):
-        """The arguments after the subcommand."""
+        """Returns the arguments after the subcommand."""
         return [] if self.idx is None else self.argv[self.idx + 1:]
 
     def dispatch(self):
-        """The exit status: screened, helped or forwarded; docker replaces this process if it runs."""
+        """Screens, helps with or forwards the command, and returns its exit status.
+
+        Docker replaces this process if the command runs.
+        """
         argv, sub, runtime = self.argv, self.sub, self.runtime
         messages.set_helpful(self.helpful or sub == "audit")
         target = self.help_request()
@@ -110,9 +114,10 @@ class ComposeCommand:
         forward(argv, runtime)
 
     def _name_is_free(self):
-        """Whether the project's name is not that of a project made from another directory.
+        """Tells whether the project's name is free: chosen on the command line, or not used by containers
+        made from another directory.
 
-        Said nothing when it is. A project that cannot be inspected is left to compose to report.
+        Reports the conflict if it is not. A project that cannot be inspected is left to compose to report.
         """
         runtime = self.runtime
         if screen.names_project(self.global_args, runtime.env):
@@ -127,11 +132,11 @@ class ComposeCommand:
         return not reasons or verdict.screened(reasons)
 
     def is_screened(self):
-        """Whether screening must run: SCREENED_SUBCOMMANDS (help_request has taken out help)."""
+        """Tells whether the subcommand is one that is screened (SCREENED_SUBCOMMANDS)."""
         return self.sub in SCREENED_SUBCOMMANDS
 
     def help_request(self):
-        """What help the command line asks for: None for none, "" for the overview, else a command's name.
+        """Determines what help the command line asks for: None for none, "" for the overview, else a command.
 
         `help`, `help COMMAND`, or --help or -h as the first argument after the command. Only a leading one
         counts: after `run SERVICE` the rest belongs to the service's command (`run app grep -h x`).
@@ -144,7 +149,7 @@ class ComposeCommand:
         return argv[idx] if argv[idx + 1:idx + 2] in (["--help"], ["-h"]) else None
 
     def show_help(self, target):
-        """Print dockscreen's help for target, then compose's own if compose has the command too."""
+        """Prints dockscreen's help for target, then forwards to compose's own help if it has one."""
         argv = self.argv
         if target == "":
             helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
@@ -162,9 +167,9 @@ class ComposeCommand:
 
 
 def rewrite_exec(kind, args, runtime):
-    """The arguments of `exec` (kind: "exec" or "docker exec") with --as and --as-me replaced by ids.
+    """Returns the arguments of `exec` (kind: "exec" or "docker exec") with --as and --as-me replaced by ids.
 
-    None if the user they give cannot be used; that has been reported.
+    Prints the notices of resolving names. Returns None, and reports why, if the user cannot be used.
     """
     try:
         parsed = composeargs.parse(kind, args, runtime.me, runtime.accounts)
@@ -177,6 +182,6 @@ def rewrite_exec(kind, args, runtime):
 
 
 def _own_commands():
-    """{name: Topic} of dockscreen's own compose commands, aliases folded in."""
+    """Returns the Topics of dockscreen's own compose commands, by name, aliases folded in."""
     return {name: helptext.command_topic(name, fn, [a for a, p in ALIASES.items() if p == name])
             for name, fn in sorted(COMMANDS.items()) if name not in ALIASES}

@@ -22,7 +22,7 @@ DOCKER_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yourself"
 
 
 def require_numeric(spec, alternatives=DOCKER_ALTERNATIVES):
-    """`uid:gid`, as typed; anything else is an error that says what to use instead.
+    """Returns spec as typed if it is numeric `uid:gid`; raises UserError saying what to use otherwise.
 
     A uid alone would leave the group to the image: docker takes it, and the supplementary groups,
     from the image's own passwd and group files, which can say root.
@@ -34,9 +34,10 @@ def require_numeric(spec, alternatives=DOCKER_ALTERNATIVES):
 
 
 def resolve_account(name, accounts):
-    """(`uid:gid`, messages) for the account called name on this host, with its primary group.
+    """Resolves name to the account of that name on this host; returns (`uid:gid`, notices).
 
-    accounts: where to look the name up (HostAccounts).
+    The gid is the account's primary group. accounts: where to look the name up (HostAccounts).
+    Raises UserError for an empty name, an id or a `:`, UnknownUser if there is no such account.
     """
     if not name or ":" in name or ids.is_id(name):
         raise UserError(f"--as takes the name of a local user, not {name!r}; use --user for ids")
@@ -55,7 +56,7 @@ class UserOptions:
     """
 
     def __init__(self, me, accounts):
-        """me: the (uid, gid) --as-me stands for; accounts: where --as looks names up (HostAccounts)."""
+        """Starts with no user given; me: the (uid, gid) --as-me stands for; accounts: where --as looks."""
         self.callers_ids = me
         self.accounts = accounts
         self.user_given = False
@@ -63,19 +64,22 @@ class UserOptions:
         self.notices = []
 
     def numeric(self, spec):
-        """--user or -u: numeric ids only."""
+        """Returns `--user=` for spec (--user or -u); raises UserError unless it is numeric `uid:gid`."""
         self.user_given = True
         return f"--user={require_numeric(spec)}"
 
     def account(self, name):
-        """--as: a local account, as ids."""
+        """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice.
+
+        Raises UserError if there is no such account (resolve_account).
+        """
         self.user_given = True
         resolved, messages = resolve_account(name, self.accounts)
         self.notices += messages
         return f"--user={resolved}"
 
     def me(self):
-        """--as-me: the caller's own ids, which are then allowed."""
+        """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
         self.user_given = self.allow_me = True
         return f"--user={ids.format_user(self.callers_ids)}"
 
@@ -84,7 +88,7 @@ class HostAccounts:
     """Users and groups on this host, through NSS (so LDAP and sssd accounts count)."""
 
     def user(self, name):
-        """(uid, primary gid) of the user called name, or None."""
+        """Returns (uid, primary gid) of the user called name, or None if there is none."""
         try:
             account = pwd.getpwnam(name)
         except KeyError:
@@ -92,21 +96,21 @@ class HostAccounts:
         return account.pw_uid, account.pw_gid
 
     def group(self, name):
-        """The gid of the group called name, or None."""
+        """Returns the gid of the group called name, or None if there is none."""
         try:
             return grp.getgrnam(name).gr_gid
         except KeyError:
             return None
 
     def user_name(self, uid):
-        """The name of the user with this uid, or None."""
+        """Returns the name of the user with this uid, or None if there is none."""
         try:
             return pwd.getpwuid(uid).pw_name
         except KeyError:
             return None
 
     def group_name(self, gid):
-        """The name of the group with this gid, or None."""
+        """Returns the name of the group with this gid, or None if there is none."""
         try:
             return grp.getgrgid(gid).gr_name
         except KeyError:

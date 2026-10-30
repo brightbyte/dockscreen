@@ -40,11 +40,11 @@ class Project(NamedTuple):
     allow_me: bool = False
 
     def static_ctx(self):
-        """ctx for the checks that run before any image is looked at: unset users are decided later."""
+        """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
         return self.ctx._replace(vetted=composeimages.unset_user_services(self.hardened))
 
     def problems(self):
-        """What is refused before any image is looked at."""
+        """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
         if not self.hardened.get("name"):
             problems.append("config has no project name")
@@ -56,19 +56,21 @@ class Project(NamedTuple):
         return problems
 
     def final_ctx(self, prepared, vetted):
-        """ctx for the config that will run: image sections only where the image proved them."""
+        """Returns ctx for the config that will run, with vetted as the services pinned to an accepted
+        image, and image sections only where prepared proved them.
+        """
         verified = prepared.verified or {}
         return screen.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
 
     def generated(self):
-        """_generated() for this project."""
+        """Returns _generated() for this project."""
         return _generated(self.global_args, self.directory, self.docker_binary)
 
 
 def load_project(global_args, runtime, allow_me, image_ctx=None):
-    """The project global_args select, hardened. Raises screen.ScreenError or ValueError if it cannot be
-    inspected.
+    """Loads the project global_args select, hardened.
 
+    Raises screen.ScreenError or ValueError if it cannot be inspected.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     image_ctx: what to pull, build, decide and run with; image_context() if not given.
     """
@@ -82,10 +84,11 @@ def load_project(global_args, runtime, allow_me, image_ctx=None):
 
 
 def run(argv, idx, runtime, image_ctx=None, allow_me=False):
-    """Harden and check the project, then run argv[idx:] (a subcommand that starts containers) on it.
+    """Runs argv[idx:], a subcommand that starts containers, on the project if it passes the checks.
 
-    The images of services that set no user are acquired first, by the project's pull policy, and
-    decided on (composeimages); the config that runs is the one that was checked, with the result.
+    Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
+    subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
+    and decided on (composeimages); the config that runs is the one that was checked, with the result.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     try:
@@ -123,7 +126,8 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
 
 
 def _command_line(subcommand, args, runtime):
-    """args read as composeargs does for `run`, with --as resolved; other subcommands as they are.
+    """Parses args for `run` as composeargs does, with --as resolved; other subcommands keep them as
+    they are.
 
     Raises hostusers.UserError for a user that is not numeric `uid:gid`, or an unknown --as name.
     """
@@ -133,16 +137,16 @@ def _command_line(subcommand, args, runtime):
 
 
 def _chosen(parsed):
-    """The services whose user the command line chooses: `run -u uid:gid SERVICE` or `run --as NAME`."""
+    """Returns the services whose user the command line chooses: `run -u uid:gid` or `run --as NAME`."""
     return frozenset({parsed.service}) if parsed.user_given and parsed.service else frozenset()
 
 
 @contextlib.contextmanager
 def _generated(global_args, project_dir, docker_binary):
-    """A private temporary directory for generated configs; yields command(config) -> compose command.
+    """Provides a private temporary directory for generated configs, and yields command(config).
 
-    The command is `docker compose` on that config alone, with the project directory and name pinned,
-    ready for a subcommand to be appended. Everything is removed afterwards.
+    command writes config there and returns the `docker compose` command line on it alone, with the project
+    directory and name pinned, ready for a subcommand to be appended. Everything is removed afterwards.
     """
     counter = itertools.count()
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:
@@ -158,5 +162,5 @@ def _generated(global_args, project_dir, docker_binary):
 
 
 def image_context(runtime, allow_me=False):
-    """The imagedecision.Context to pull, build, decide and run with."""
+    """Returns the imagedecision.Context to pull, build, decide and run with."""
     return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)
