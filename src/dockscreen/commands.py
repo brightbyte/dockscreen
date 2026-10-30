@@ -4,7 +4,7 @@ A command is a callable(global_args, args, runtime, allow_me) -> exit code. `glo
 compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), so
 a command can pass them on when it shells out to docker compose.
 
-A name registered here shadows the docker compose subcommand of the same name.
+A name in COMMANDS shadows the docker compose subcommand of the same name.
 """
 
 import sys
@@ -24,24 +24,9 @@ from dockscreen import (
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.verdict import Verdict
 
-COMMANDS = {}
-ALIASES = {}  # alias -> command it stands for
-
-
-def command(name, *aliases):
-    def register(fn):
-        COMMANDS[name] = fn
-        for alias in aliases:
-            COMMANDS[alias] = fn
-            ALIASES[alias] = name
-        return fn
-    return register
-
-
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 
 
-@command("audit")
 def audit(global_args, args, runtime, allow_me=False):
     """Run the checks that screen `up` without starting anything; pulls and builds images as up would.
 
@@ -88,7 +73,6 @@ def audit_images(project, brief):
     return outcome, problems, composeimages.describe(hardened, prepared, image_ctx)
 
 
-@command("harden", "fix")
 def harden(global_args, args, runtime, allow_me=False):
     """Print a compose override that fixes what can be fixed; exit 1 if problems remain.
 
@@ -149,3 +133,7 @@ def fix_image_users(project, fixed, resolved, notes):
             notes.append(f"service {name}: image {decision.image} chose a user that is not acceptable, "
                          "so user is set explicitly")
     return remaining, notes
+
+
+COMMANDS = {"audit": audit, "harden": harden, "fix": harden}
+ALIASES = {"fix": "harden"}  # alias -> command it stands for
