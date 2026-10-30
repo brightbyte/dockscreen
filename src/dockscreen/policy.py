@@ -278,7 +278,7 @@ def check_security_opt(value, ctx):
     Allowed are no-new-privileges and the security_opts of ctx.
     """
     options = [str(o) for o in value or []]
-    allowed = NO_NEW_PRIVILEGES | set(ctx.security_opts if ctx else ())
+    allowed = NO_NEW_PRIVILEGES | set(ctx.security_opts)
     problems = [f"security_opt {o!r} is not allowed{SELINUX_HINT if _is_selinux_label(o) else ''}"
                 for o in options if o not in allowed]
     if not has_no_new_privileges(options):
