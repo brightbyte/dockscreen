@@ -17,8 +17,6 @@ checked when it is started. `audit` takes a `docker run` command line, creates i
 asks for that a project or an image may not (runpolicy).
 """
 
-from typing import Protocol, runtime_checkable
-
 from dockscreen import (
     argscan,
     flags,
@@ -35,7 +33,6 @@ from dockscreen import (
 from dockscreen.dockerclient import DockerError, DockerNotFound
 from dockscreen.imagedecision import (
     Assessment,
-    DockerAccess,
     Kind,
     assess,
     default_home,
@@ -45,14 +42,6 @@ from dockscreen.imagedecision import (
 )
 from dockscreen.text import printable
 from dockscreen.verdict import Verdict
-
-@runtime_checkable
-class RunnableDocker(DockerAccess, Protocol):
-    """What `docker run` needs from docker on top of deciding: ctx.docker in this module is one."""
-
-    def start(self, container, attach, interactive, detach_keys):
-        """Start the container; its exit code when attached."""
-
 
 # Inserted before the user's own arguments, so the user can override both
 # (for example `--cap-add NET_BIND_SERVICE`).

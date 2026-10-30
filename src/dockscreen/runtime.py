@@ -15,8 +15,8 @@ from dockscreen.dockerclient import Docker
 class Runtime(NamedTuple):
     settings: config.Config
     docker: Docker                          # the real docker
-    accounts: hostusers.Accounts
-    subordinate: idrules.SubordinateRanges  # ranges in /etc/subuid and /etc/subgid
+    accounts: hostusers.HostAccounts
+    subordinate: idrules.Subordinate        # ranges in /etc/subuid and /etc/subgid
     me: tuple                               # the caller's real (uid, gid)
     env: MutableMapping                     # the environment, which compose and docker inherit
     home: str                               # the caller's home directory

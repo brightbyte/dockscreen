@@ -20,7 +20,7 @@ Allowed ids: the nobody range and the default user from the config file, ids the
 check (a configured image user), and the caller's own ids when --allow-me was given.
 """
 
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import NamedTuple
 
 from dockscreen import config as configuration
 from dockscreen import hostusers
@@ -32,10 +32,17 @@ SUBGID_FILE = "/etc/subgid"
 MAX_ID = 2**31 - 1
 
 
-@runtime_checkable
-class SubordinateRanges(Protocol):
+class Subordinate:
+    """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
+
+    def __init__(self, uid_file=None, gid_file=None):
+        self.ranges = {
+            "uid": read_ranges(uid_file or SUBUID_FILE),
+            "gid": read_ranges(gid_file or SUBGID_FILE),
+        }
+
     def contains(self, kind, value):
-        """Whether value is in a subordinate range; kind: "uid" or "gid"."""
+        return any(start <= value < start + count for start, count in self.ranges[kind])
 
 
 class Rules(NamedTuple):
@@ -43,8 +50,8 @@ class Rules(NamedTuple):
     allow_me: bool                         # --allow-me (or --as-me on docker run)
     nobody_range: tuple                    # inclusive (low, high)
     default_user: tuple                    # (uid, gid) that replaces root
-    local: hostusers.AccountsById          # the accounts on this host
-    subordinate: SubordinateRanges         # ranges in /etc/subuid and /etc/subgid (Subordinate)
+    local: hostusers.HostAccounts          # the accounts on this host
+    subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
     def allowed(self, kind, value, extra=()):
         """Whether value is an allowed id. kind: "uid" or "gid"; extra: further allowed (uid, gid) pairs."""
@@ -82,19 +89,6 @@ class Rules(NamedTuple):
         checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
         found = [self.problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
         return [p for p in found if p]
-
-
-class Subordinate:
-    """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
-
-    def __init__(self, uid_file=None, gid_file=None):
-        self.ranges = {
-            "uid": read_ranges(uid_file or SUBUID_FILE),
-            "gid": read_ranges(gid_file or SUBGID_FILE),
-        }
-
-    def contains(self, kind, value):
-        return any(start <= value < start + count for start, count in self.ranges[kind])
 
 
 def read_ranges(path):
