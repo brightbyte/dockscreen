@@ -146,8 +146,7 @@ def test_unscreened_subcommand_is_not_inspected(forwarded, monkeypatch):
     ([], ""),
 ])
 def test_help_request(argv, help_for):
-    assert compose_cli.help_request(argv, argscan.find_subcommand(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE)) \
-        == help_for
+    assert compose_cli.ComposeCommand(argv, runtime=None).help_request() == help_for
 
 
 @pytest.mark.parametrize("argv, screened", [
@@ -157,8 +156,7 @@ def test_help_request(argv, help_for):
     ([], False),
 ])
 def test_is_screened(argv, screened):
-    idx = argscan.find_subcommand(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE)
-    assert compose_cli.is_screened(argv, idx) == screened
+    assert compose_cli.ComposeCommand(argv, runtime=None).is_screened() == screened
 
 
 # --- dockscreen's own options and the config file ------------------------------------
