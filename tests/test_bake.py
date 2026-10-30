@@ -118,7 +118,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     (["run", "bake"], None),
 ])
 def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
-    assert docker_cli.bake_arguments(argv, 0) == args
+    assert docker_cli.DockerCommand(argv, runtime=None).bake_arguments() == args
 
 
 @pytest.mark.parametrize("reasons, failed, passed", [([], False, True), (["no"], False, False), (["x"], True, False)])
