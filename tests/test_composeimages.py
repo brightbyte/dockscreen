@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_tools, rules, runtime
+from fakes import FakeImages, make_image_ctx, rules, runtime
 
 from dockscreen import autofix, composeimages, imagedecision, messages, policy
 from dockscreen import config as configuration
@@ -25,10 +25,9 @@ def project(**services):
 
 
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
-    gate_ctx = gate_context(images, settings)
-    tools, recorder = make_tools(images, active=active, codes=codes, reads=lambda _: config,
-                                 gate_ctx=gate_ctx)
-    return composeimages.prepare(COMMAND, config, list(args), tools, chosen), recorder, images
+    image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
+                                         ctx=gate_context(images, settings))
+    return composeimages.prepare(COMMAND, config, list(args), image_ctx, chosen), recorder, images
 
 
 def gate_context(images, settings=None):
@@ -44,8 +43,8 @@ def subcommands(recorder):
 
 def test_services_to_run_are_the_active_ones_plus_those_named():
     config = project(web={}, db={}, debug={})
-    tools, recorder = make_tools(active=("web", "db"))
-    assert composeimages.services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], tools) == {
+    image_ctx, recorder = make_image_ctx(active=("web", "db"))
+    assert composeimages.services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
         "web", "db", "debug"}
     assert recorder.captured == [[*COMMAND, "config", "--services"]]
 
@@ -112,15 +111,16 @@ def test_pulling_before_building_and_failure_stops_everything():
 
 def test_listing_the_services_can_fail_closed():
     config = project()
-    tools, _ = make_tools(reads=lambda _: config)
-    capture = tools.capture
+    image_ctx, _ = make_image_ctx(reads=lambda _: config)
+    capture = image_ctx.docker.capture
 
     def failing_listing(cmd):
         if "--services" in cmd:
             return subprocess.CompletedProcess(cmd, 1, "", "boom")
         return capture(cmd)
 
-    prepared = composeimages.prepare(COMMAND, config, [], tools._replace(capture=failing_listing))
+    image_ctx.docker.capture = failing_listing
+    prepared = composeimages.prepare(COMMAND, config, [], image_ctx)
     assert prepared.problems == ["docker compose config --services failed"]
 
 
@@ -131,8 +131,8 @@ def test_a_config_that_compose_reads_differently_is_refused_before_anything_is_p
     images = FakeImages(users={"web:1": "app"})
 
     interpolated = {**config, "services": {"web": {**config["services"]["web"], "pid": "host"}}}
-    tools, recorder = make_tools(images, reads=lambda _: interpolated)
-    prepared = composeimages.prepare(COMMAND, config, [], tools)
+    image_ctx, recorder = make_image_ctx(images, reads=lambda _: interpolated)
+    prepared = composeimages.prepare(COMMAND, config, [], image_ctx)
 
     assert prepared.problems == [
         "docker compose reads the checked config differently at config.services.web.pid; not running it"]
@@ -140,9 +140,9 @@ def test_a_config_that_compose_reads_differently_is_refused_before_anything_is_p
 
 
 def test_a_config_that_cannot_be_read_back_is_refused():
-    tools, _ = make_tools()
-    tools = tools._replace(capture=lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom"))
-    prepared = composeimages.prepare(COMMAND, project(), [], tools)
+    image_ctx, _ = make_image_ctx()
+    image_ctx.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
+    prepared = composeimages.prepare(COMMAND, project(), [], image_ctx)
     assert prepared.problems == ["docker compose could not read back the config that was checked"]
 
 

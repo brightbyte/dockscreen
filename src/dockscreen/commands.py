@@ -78,15 +78,15 @@ def audit_images(project, brief):
             "the images were not looked at because of the problems below: nothing was pulled or built"]
     if not brief:
         messages.notice("pulling or building the images as `up` would, to look at the users they run as")
-    hardened, tools = project.hardened, project.tools
+    hardened, image_ctx = project.hardened, project.image_ctx
     with project.generated() as command:
-        prepared = composeimages.prepare(command(hardened), hardened, [], tools)
+        prepared = composeimages.prepare(command(hardened), hardened, [], image_ctx)
     problems = prepared.problems
     if not problems:  # what `up` checks once more before it runs: image sections need proof now
-        final, vetted = composeimages.finalize(hardened, prepared, tools.gate_ctx)
+        final, vetted = composeimages.finalize(hardened, prepared, image_ctx)
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))
     outcome = Verdict.FAILED if prepared.failed else Verdict.REFUSED if problems else Verdict.PASSED
-    return outcome, problems, composeimages.describe(hardened, prepared, tools.gate_ctx)
+    return outcome, problems, composeimages.describe(hardened, prepared, image_ctx)
 
 
 @command("harden", "fix")
@@ -138,7 +138,7 @@ def fix_image_users(project, fixed, resolved, notes):
     resolved: fixed as it will run, which is what the images are looked at with.
     """
     with project.generated() as command:
-        prepared = composeimages.prepare(command(resolved), resolved, [], project.tools)
+        prepared = composeimages.prepare(command(resolved), resolved, [], project.image_ctx)
     if not prepared.decisions:
         return prepared.problems, notes  # nothing could be looked at: pulling or building failed
     remaining = []

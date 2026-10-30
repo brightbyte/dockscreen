@@ -24,8 +24,6 @@ chose (`run -u`), which the command line then overrides.
 
 import copy
 import json
-import subprocess
-from collections.abc import Callable
 from typing import NamedTuple
 
 from dockscreen import argscan, imagedecision, images, imageuser, messages, policy, verdict
@@ -34,12 +32,6 @@ from dockscreen.dockerclient import DockerError
 
 class ImageError(Exception):
     pass
-
-
-class Tools(NamedTuple):
-    gate_ctx: imagedecision.Context                         # with the docker to use
-    capture: Callable[[list], subprocess.CompletedProcess]  # with text stdout
-    run_child: Callable[[list], int]                        # the exit code, with the terminal
 
 
 class Decision(NamedTuple):
@@ -66,42 +58,43 @@ def image_name(config, name, service):
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
-def prepare(command, config, args, tools, chosen=frozenset()):
+def prepare(command, config, args, ctx, chosen=frozenset()):
     """Acquire the images of the services that will start and decide about those without a user.
 
     command: the compose command line (up to the subcommand) on the config to run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
+    ctx: the imagedecision.Context to pull, build, decide and run with.
     chosen: services whose user the command line chooses (`run -u`); their images are not decided.
     """
     try:
-        verify_round_trip(command, config, tools)
-        to_run = services_to_run(command, config, args, tools)
-        failures = acquire(command, config, to_run, args, tools)
+        verify_round_trip(command, config, ctx)
+        to_run = services_to_run(command, config, args, ctx)
+        failures = acquire(command, config, to_run, args, ctx)
     except ImageError as e:
         return Prepared(frozenset(), {}, [str(e)], failed=True)
     if failures:
         return Prepared(to_run, {}, failures, failed=True)
 
-    decisions = decide(config, to_run - chosen, tools)
-    verified = verify_sections(config, tools)
-    config_file = tools.gate_ctx.runtime.config_file
+    decisions = decide(config, to_run - chosen, ctx)
+    verified = verify_sections(config, ctx)
+    config_file = ctx.runtime.config_file
     problems = [decision_problem(name, d, config_file)
                 for name, d in decisions.items() if d.assessment.refused]
     failed = any(d.assessment.failed for d in decisions.values())
     return Prepared(to_run, decisions, problems, failed=failed, verified=verified)
 
 
-def verify_sections(config, tools):
+def verify_sections(config, ctx):
     """{service: repository} for the services whose image the config file has a section for, and that
     was proven pulled from there. The checks before the images were there trusted the name alone."""
-    settings = tools.gate_ctx.runtime.settings
+    settings = ctx.runtime.settings
     verified = {}
     for name, service in (config.get("services") or {}).items():
         image, built = image_name(config, name, service), "build" in service
         if images.name_matches(settings, image, built) is None:
             continue
         try:
-            digests = tools.gate_ctx.docker.inspect_image(image).get("RepoDigests")
+            digests = ctx.docker.inspect_image(image).get("RepoDigests")
         except DockerError:
             continue  # not there: the section does not apply, and the final check says what that means
         if repository := images.section_for(settings, image, digests, built).repository:
@@ -121,13 +114,14 @@ def decision_problem(name, decision, config_file=None):
     return messages.reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
-def verify_round_trip(command, config, tools):
+def verify_round_trip(command, config, ctx):
     """Refuse unless compose, given the generated file, resolves it to exactly the config we checked.
 
     Compose interpolates the files it reads; a value that comes back different would run
     differently from what the policy saw. Done before anything is pulled or built.
     """
-    result = tools.capture([*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
+    result = ctx.docker.capture(
+        [*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
     try:
         resolved = json.loads(result.stdout) if result.returncode == 0 else None
     except ValueError:
@@ -156,23 +150,23 @@ def first_difference(expected, actual, path="config"):
     return None if expected == actual and type(expected) is type(actual) else path
 
 
-def services_to_run(command, config, args, tools):
+def services_to_run(command, config, args, ctx):
     """Services in the active profiles, plus any named on the command line."""
-    result = tools.capture([*command, "config", "--services"])
+    result = ctx.docker.capture([*command, "config", "--services"])
     if result.returncode != 0:
         raise ImageError("docker compose config --services failed")
     services = config.get("services") or {}
     return frozenset(set(result.stdout.split()) | {a for a in args if a in services})
 
 
-def acquire(command, config, to_run, args, tools):
+def acquire(command, config, to_run, args, ctx):
     """Pull and build what `up` would, by the project's policy. Returns a list of failures."""
     pull, build = [], []
     override = argscan.option_value(args, "--pull")
     for name in sorted(to_run):
         service = config["services"][name]
         image = image_name(config, name, service)
-        present = image_exists(tools.gate_ctx.docker, image)
+        present = image_exists(ctx.docker, image)
         if "build" in service:
             wanted = service.get("pull_policy") == "build" or "--build" in args or not present
             if wanted and "--no-build" not in args:
@@ -187,7 +181,7 @@ def acquire(command, config, to_run, args, tools):
         else:
             pull.append(name)  # always, and the periodic ones: pulling each run never serves stale images
     for subcommand, names in (("pull", pull), ("build", build)):
-        if names and tools.run_child([*command, subcommand, "--", *names]) != 0:
+        if names and ctx.docker.run_child([*command, subcommand, "--", *names]) != 0:
             return [f"docker compose {subcommand} {' '.join(names)} failed"]
     return []
 
@@ -200,30 +194,30 @@ def image_exists(docker, image):
     return True
 
 
-def decide(config, to_run, tools):
+def decide(config, to_run, ctx):
     """For each started service without a user: what its image would be allowed to do."""
     decisions = {}
     for name in sorted(to_run & unset_user_services(config)):
         service = config["services"][name]
         image = image_name(config, name, service)
         platform = ["--platform", service["platform"]] if service.get("platform") else []
-        _, container = tools.gate_ctx.docker.create(["--pull=never", *platform, "--", image])
+        _, container = ctx.docker.create(["--pull=never", *platform, "--", image])
         image_id = None
         if container is None:
             assessment = imagedecision.Assessment(
                 imagedecision.Kind.FAILED, ["the image is not available locally"])
         else:
             try:
-                info = tools.gate_ctx.docker.inspect_container(container)
+                info = ctx.docker.inspect_container(container)
                 image_id = info.get("Image")
-                assessment = imagedecision.assess(tools.gate_ctx, container, info, explicit=False,
+                assessment = imagedecision.assess(ctx, container, info, explicit=False,
                                          mounts=policy.has_host_mounts(service, config.get("volumes")),
                                          reference=image,
                                          built="build" in service)
             except (DockerError, ValueError, KeyError) as e:
                 assessment = imagedecision.Assessment(imagedecision.Kind.FAILED, [str(e)])
             finally:
-                tools.gate_ctx.docker.remove(container)
+                ctx.docker.remove(container)
         decisions[name] = Decision(image, assessment, image_id, built="build" in service)
     return decisions
 

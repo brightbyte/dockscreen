@@ -1,13 +1,15 @@
-"""The few docker operations the gate needs, as thin wrappers around the real binary."""
+"""The docker operations dockscreen needs, as thin wrappers around the real binary."""
 
 import io
 import json
+import signal
 import subprocess
 import tarfile
 
 from dockscreen import messages
 
 MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from a hostile image
+FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class DockerError(Exception):
@@ -85,6 +87,37 @@ class Docker:
     def context(self):
         result = self.run([self.binary, "context", "show"], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None
+
+    def capture(self, cmd):
+        """Run cmd, a whole command line such as `docker compose ... config`, with its output as text."""
+        return self.run(cmd, capture_output=True, text=True, check=False)
+
+    def run_child(self, cmd):
+        """Run cmd, a whole command line, with the terminal and exit code of the real thing.
+
+        Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
+        """
+        try:
+            process = self.popen(cmd)
+        except DockerNotFound:
+            messages.notice(messages.DOCKER_NOT_FOUND)
+            return 127
+
+        def forward(number, frame):
+            process.send_signal(number)
+
+        previous = {s: signal.signal(s, forward) for s in FORWARDED_SIGNALS}
+        try:
+            while True:
+                try:
+                    code = process.wait()
+                    break
+                except KeyboardInterrupt:
+                    continue  # the terminal sent the same SIGINT to the child
+        finally:
+            for number, handler in previous.items():
+                signal.signal(number, handler)
+        return 128 - code if code < 0 else code
 
 
 def found(launch):

@@ -2,7 +2,7 @@
 import json
 import os
 
-from fakes import FakeImages, install_tools, make_tools, runtime
+from fakes import FakeImages, install_image_ctx, make_image_ctx, runtime
 
 from dockscreen import commands, messages, screen
 from dockscreen.composeimages import USER_HELP
@@ -23,8 +23,8 @@ def project(**services):
 
 def setup(monkeypatch, tmp_path, config, images, **kwargs):
     monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (config, str(tmp_path)))
-    tools, recorder = make_tools(images, **kwargs)
-    install_tools(monkeypatch, tools)
+    image_ctx, recorder = make_image_ctx(images, **kwargs)
+    install_image_ctx(monkeypatch, image_ctx)
     return recorder
 
 
@@ -194,7 +194,7 @@ def test_harden_leaves_a_user_the_config_file_sets_for_the_image(monkeypatch, ca
         {"type": "bind", "source": str(tmp_path / "data"), "target": "/data"}]})
     images = FakeImages(users={"db:1": "app"}, digests={"db:1": ["db@sha256:x"]})
     setup(monkeypatch, tmp_path, config, images, active=("db",),
-          gate_ctx=imagedecision.Context(images, rules(), runtime(settings=settings)))
+          ctx=imagedecision.Context(images, rules(), runtime(settings=settings)))
 
     assert commands.harden([], [], runtime(settings=settings)) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "services: {}"  # nothing to fix

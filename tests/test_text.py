@@ -42,13 +42,13 @@ def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):
 
 
 def test_audit_info_lines_are_escaped(monkeypatch, capsys, tmp_path):
-    from fakes import FakeImages, install_tools, make_tools
+    from fakes import FakeImages, install_image_ctx, make_image_ctx
 
     image = "x\x1b[31m:1"
     cfg = {"name": "p", "services": {"web": {"image": image}}}
     monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (cfg, str(tmp_path)))
-    tools, _ = make_tools(FakeImages(users={image: "app"}))
-    install_tools(monkeypatch, tools)
+    image_ctx, _ = make_image_ctx(FakeImages(users={image: "app"}))
+    install_image_ctx(monkeypatch, image_ctx)
 
     commands.audit([], [], runtime())
 

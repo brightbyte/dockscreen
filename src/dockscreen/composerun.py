@@ -15,8 +15,6 @@ import contextlib
 import itertools
 import json
 import os
-import signal
-import subprocess
 import tempfile
 from typing import NamedTuple
 
@@ -37,7 +35,6 @@ from dockscreen.dockerclient import DockerNotFound
 
 # Options that select the files and the project; ours replace them.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
-FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class Project(NamedTuple):
@@ -47,7 +44,7 @@ class Project(NamedTuple):
     hardened: dict             # the resolved config with hardening applied
     additions: list            # what hardening added (hardening.Addition)
     ctx: policy.Context        # with nothing vetted yet
-    tools: composeimages.Tools
+    image_ctx: imagedecision.Context  # to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
     docker_binary: str         # the real docker, to run `docker compose` with
     runtime: object = None     # runtime.Runtime it was loaded with
@@ -66,7 +63,7 @@ class Project(NamedTuple):
             problems.append(screen.REMOTE_MESSAGE)
         elif not problems and not screen.names_project(self.global_args, self.runtime.env):
             problems += screen.name_conflicts(self.hardened["name"], self.directory,
-                                              self.tools.gate_ctx.docker)
+                                              self.image_ctx.docker)
         return problems
 
     def final_ctx(self, prepared, vetted):
@@ -79,24 +76,23 @@ class Project(NamedTuple):
         return generated(self.global_args, self.directory, self.docker_binary)
 
 
-def load_project(global_args, runtime, allow_me, tools=None):
+def load_project(global_args, runtime, allow_me, image_ctx=None):
     """The project global_args select, hardened. Raises screen.ScreenError or ValueError if it cannot be
     inspected.
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
-    tools: what to pull, build and run with; default_tools() if not given.
+    image_ctx: what to pull, build, decide and run with; image_context() if not given.
     """
     config, directory = screen.inspect(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
-    tools = tools or default_tools(runtime, allow_me)
-    tools = tools._replace(gate_ctx=tools.gate_ctx._replace(project_dir=directory))
-    remote = screen.is_remote(global_args, runtime.env, tools.gate_ctx.docker)
+    image_ctx = (image_ctx or image_context(runtime, allow_me))._replace(project_dir=directory)
+    remote = screen.is_remote(global_args, runtime.env, image_ctx.docker)
     ctx = screen.context(directory, runtime, allow_me)
-    return Project(global_args, directory, hardened, additions, ctx, tools, remote, runtime.docker.binary,
+    return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
 
 
-def run(argv, idx, runtime, tools=None, allow_me=False):
+def run(argv, idx, runtime, image_ctx=None, allow_me=False):
     """Harden and check the project, then run argv[idx:] (a subcommand that starts containers) on it.
 
     The images of services that set no user are acquired first, by the project's pull policy, and
@@ -105,7 +101,7 @@ def run(argv, idx, runtime, tools=None, allow_me=False):
     """
     try:
         parsed = command_line(argv[idx], argv[idx + 1:], runtime)
-        project = load_project(argv[:idx], runtime, allow_me, tools)
+        project = load_project(argv[:idx], runtime, allow_me, image_ctx)
         problems = project.problems()
     except (screen.InspectError, DockerNotFound) as e:
         verdict.screened([str(e)], failed=True)
@@ -116,16 +112,16 @@ def run(argv, idx, runtime, tools=None, allow_me=False):
         verdict.screened(problems)
         return 1
 
-    hardened, tools = project.hardened, project.tools
+    hardened, image_ctx = project.hardened, project.image_ctx
     lines = [*parsed.notices, *screen.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(tools.gate_ctx), *hardening.describe(project.additions)]
+             imagedecision.root_default_notice(image_ctx), *hardening.describe(project.additions)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
-        prepared = composeimages.prepare(command(hardened), hardened, parsed.args, tools, chosen(parsed))
+        prepared = composeimages.prepare(command(hardened), hardened, parsed.args, image_ctx, chosen(parsed))
         if prepared.problems:
             verdict.screened(prepared.problems, failed=prepared.failed)
             return 1
-        final, vetted = composeimages.finalize(hardened, prepared, tools.gate_ctx)
+        final, vetted = composeimages.finalize(hardened, prepared, image_ctx)
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))  # what will run
         if problems:
             verdict.screened(problems)
@@ -134,7 +130,7 @@ def run(argv, idx, runtime, tools=None, allow_me=False):
             if line:
                 messages.notice(line)
         verdict.screened([])
-        return tools.run_child([*command(final), argv[idx], *parsed.args])
+        return image_ctx.docker.run_child([*command(final), argv[idx], *parsed.args])
 
 
 def command_line(subcommand, args, runtime):
@@ -172,34 +168,6 @@ def generated(global_args, project_dir, docker_binary):
         yield command
 
 
-def default_tools(runtime, allow_me=False):
-    gate_ctx = imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)
-    return composeimages.Tools(
-        gate_ctx, lambda cmd: subprocess.run(cmd, capture_output=True, text=True, check=False), run_child)
-
-
-def run_child(cmd):
-    """Run cmd with the terminal and exit code of the real thing.
-
-    Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
-    """
-    try:
-        process = subprocess.Popen(cmd)
-    except FileNotFoundError:
-        messages.notice(messages.DOCKER_NOT_FOUND)
-        return 127
-    def forward(number, frame):
-        process.send_signal(number)
-
-    previous = {s: signal.signal(s, forward) for s in FORWARDED_SIGNALS}
-    try:
-        while True:
-            try:
-                code = process.wait()
-                break
-            except KeyboardInterrupt:
-                continue  # the terminal sent the same SIGINT to the child
-    finally:
-        for number, handler in previous.items():
-            signal.signal(number, handler)
-    return 128 - code if code < 0 else code
+def image_context(runtime, allow_me=False):
+    """The imagedecision.Context to pull, build, decide and run with."""
+    return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)

@@ -73,12 +73,10 @@ def project(tmp_path, monkeypatch):
     (fake_dir / "passwd.tar").write_bytes(tar_of("passwd", PASSWD))
     set_image_user(fake_dir, "")
     monkeypatch.setattr(realdocker, "locate", lambda settings, env: str(docker))
-    # the real tools: real subprocesses against the fake script
-    tools = composerun.composeimages.Tools(
-        composerun.imagedecision.Context(Docker(str(docker)), fakes.rules(), fakes.runtime(me=(1000, 1000))),
-        lambda cmd: __import__("subprocess").run(cmd, capture_output=True, text=True, check=False),
-        composerun.run_child)
-    fakes.install_tools(monkeypatch, tools)
+    # the real Docker: real subprocesses against the fake script
+    image_ctx = composerun.imagedecision.Context(
+        Docker(str(docker)), fakes.rules(), fakes.runtime(me=(1000, 1000)))
+    fakes.install_image_ctx(monkeypatch, image_ctx)
 
     work = tmp_path / "work"
     work.mkdir()

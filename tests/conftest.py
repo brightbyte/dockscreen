@@ -49,12 +49,12 @@ def fixed_docker_binary(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def fake_image_tools(monkeypatch):
+def fake_image_ctx(monkeypatch):
     """`audit` and `harden` pull and build; tests get a docker with no images unless they say otherwise."""
-    from fakes import FakeImages, install_tools, make_tools
+    from fakes import FakeImages, install_image_ctx, make_image_ctx
 
-    tools, recorder = make_tools(FakeImages())
-    install_tools(monkeypatch, tools)
+    image_ctx, recorder = make_image_ctx(FakeImages())
+    install_image_ctx(monkeypatch, image_ctx)
     return recorder
 
 

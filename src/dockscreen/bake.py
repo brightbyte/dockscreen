@@ -35,8 +35,7 @@ def wants_screening(args):
 
 def definition(docker, args):
     """The bake definition for the arguments (a dict), or raise DockerError with why not."""
-    result = docker.run([docker.binary, "buildx", "bake", "--print", *args],
-                            capture_output=True, text=True)
+    result = docker.capture([docker.binary, "buildx", "bake", "--print", *args])
     if result.returncode != 0:
         raise DockerError(result.stderr.strip() or "docker buildx bake --print failed")
     try:

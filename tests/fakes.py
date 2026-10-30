@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 
-from dockscreen import composeimages, config, hostusers, idrules, imagedecision
+from dockscreen import config, hostusers, idrules, imagedecision
 from dockscreen.dockerclient import DockerError
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"
@@ -186,7 +186,7 @@ class FakeDocker:
 
 
 class Recorder:
-    """What the tools were asked to run: compose commands, and the config file each one would read."""
+    """What docker was asked to run: compose commands, and the config file each one would read."""
 
     def __init__(self):
         self.children = []
@@ -194,8 +194,10 @@ class Recorder:
         self.captured = []
 
 
-def make_tools(images=None, active=("web",), codes=None, on_child=None, reads=None, gate_ctx=None):
-    """(tools, recorder). codes: exit code by compose subcommand, default 0; the last child is `up` etc.
+def make_image_ctx(images=None, active=("web",), codes=None, on_child=None, reads=None, ctx=None):
+    """(imagedecision.Context, recorder), with images as its docker, which also runs the compose commands.
+
+    codes: exit code by compose subcommand, default 0; the last child is `up` etc.
 
     reads: changes the config `docker compose config` reports for a generated file (a compose that
     reads it differently from what was written).
@@ -222,8 +224,9 @@ def make_tools(images=None, active=("web",), codes=None, on_child=None, reads=No
             return subprocess.CompletedProcess(cmd, 0, json.dumps(reads(config) if reads else config), "")
         return subprocess.CompletedProcess(cmd, 0, "\n".join(active) + "\n", "")
 
-    gate_ctx = gate_ctx or imagedecision.Context(images, rules(), runtime(me=(1000, 1000)))
-    return composeimages.Tools(gate_ctx, capture, run_child), recorder
+    images.run_child, images.capture = run_child, capture
+    ctx = ctx or imagedecision.Context(images, rules(), runtime(me=(1000, 1000)))
+    return ctx, recorder
 
 
 def read_config(cmd):
@@ -240,8 +243,8 @@ def read_raw(cmd):
         return f.read()
 
 
-def install_tools(monkeypatch, tools):
-    """Make composerun.default_tools return tools, with --allow-me applied as the real one does."""
+def install_image_ctx(monkeypatch, image_ctx):
+    """Make composerun.image_context return image_ctx, with --allow-me applied as the real one does."""
     from dockscreen import composerun
-    monkeypatch.setattr(composerun, "default_tools", lambda runtime, allow_me=False: tools._replace(
-        gate_ctx=tools.gate_ctx.allowing_me(allow_me)))
+    monkeypatch.setattr(composerun, "image_context",
+                        lambda runtime, allow_me=False: image_ctx.allowing_me(allow_me))

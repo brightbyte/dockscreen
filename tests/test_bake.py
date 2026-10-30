@@ -78,7 +78,7 @@ class Docker:
         self.result = subprocess.CompletedProcess([], code, out, err)
         self.commands = []
 
-    def run(self, cmd, **kwargs):
+    def capture(self, cmd):
         self.commands.append(cmd)
         return self.result
 
