@@ -26,7 +26,7 @@ import copy
 import json
 from typing import NamedTuple
 
-from dockscreen import argscan, imagedecision, images, imageuser, messages, policy, verdict
+from dockscreen import argscan, imagedecision, images, messages, policy, verdict
 from dockscreen.dockerclient import DockerError
 
 
@@ -273,17 +273,13 @@ def describe(config, prepared, ctx):
             lines.append(messages.notable_change(text, USER_HELP))
             continue
         assessment, dot = decision.assessment, verdict.dot(decision.assessment)
-        if assessment.kind is imagedecision.Kind.OK:
-            who = imageuser.describe(assessment.identity, ctx.local)
-            lines.append(messages.marked(dot, f"service {name}: no user set; image {decision.image} runs as "
-                                              f"{who}; accepted"))
-        elif assessment.kind is imagedecision.Kind.CONFIGURED:
-            user = imagedecision.pinned_user(assessment)
-            lines.append(messages.marked(dot, f"service {name}: no user set; image {decision.image} runs as "
-                                              f"{user}, the user the config file sets for it"))
+        if assessment.kind in (imagedecision.Kind.OK, imagedecision.Kind.CONFIGURED):
+            runs_as = imagedecision.runs_as(assessment, ctx.local)
+            text = f"service {name}: no user set; image {decision.image} {runs_as}"
+            lines.append(messages.marked(dot, text))
         elif assessment.kind is imagedecision.Kind.FALLBACK:
-            lines.append(messages.notable_change(f"service {name}: no user set; {fallback_text(decision)}",
-                                                 USER_HELP))
+            instead = imagedecision.instead_of_root(assessment)
+            lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
         if assessment.note:
             lines.append(messages.marked(verdict.WARN, f"service {name}: note: {assessment.note}"))
     return [*lines, *pin_notices(prepared)]
@@ -291,10 +287,6 @@ def describe(config, prepared, ctx):
 
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
              "volumes set up for root")
-
-
-def fallback_text(decision):
-    return f"running as {imagedecision.pinned_user(decision.assessment)} instead of root"
 
 
 def pin_notices(prepared):
@@ -310,6 +302,6 @@ def pin_notices(prepared):
 def notices(prepared):
     """What a run is about to do that the project did not ask for, as marked lines."""
     return [
-        messages.notable_change(f"service {name}: {fallback_text(d)}", USER_HELP)
+        messages.notable_change(f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
         for name, d in prepared.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
     ] + pin_notices(prepared)

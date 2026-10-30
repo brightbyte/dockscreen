@@ -37,8 +37,10 @@ from dockscreen.imagedecision import (
     assess,
     default_home,
     env_value,
+    instead_of_root,
     pinned_user,
     root_default_notice,
+    runs_as,
 )
 from dockscreen.text import printable
 from dockscreen.verdict import Verdict
@@ -127,7 +129,7 @@ def defaults_notice():
 def fallback_notice(assessment):
     home = default_home(assessment.user, assessment.home)
     return messages.notable_change(
-        f"running as {pinned_user(assessment)} instead of root",
+        instead_of_root(assessment),
         f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
@@ -258,11 +260,9 @@ def report_findings(found, strict):
 
 
 def describe_outcome(ctx, assessment):
+    if assessment.kind in (Kind.OK, Kind.CONFIGURED):
+        return runs_as(assessment, ctx.local)
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
-    if assessment.kind is Kind.OK:
-        return f"runs as {who}; accepted"
-    if assessment.kind is Kind.CONFIGURED:
-        return f"runs as {pinned_user(assessment)}, the user the config file sets for it"
     if assessment.kind is Kind.FALLBACK:
         return (f"would run as {who}; docker run would run it as the default user "
                 f"({pinned_user(assessment)}) instead")

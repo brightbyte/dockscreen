@@ -172,6 +172,18 @@ def pinned_user(assessment):
     return ids.format_user(assessment.user)
 
 
+def runs_as(assessment, local):
+    """What an accepted image runs as, in words (Kind.OK or Kind.CONFIGURED); local: HostAccounts."""
+    if assessment.kind is Kind.CONFIGURED:
+        return f"runs as {pinned_user(assessment)}, the user the config file sets for it"
+    return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
+
+
+def instead_of_root(assessment):
+    """What a Kind.FALLBACK assessment does, in words."""
+    return f"running as {pinned_user(assessment)} instead of root"
+
+
 def root_default_notice(ctx):
     """A notice for every run when the configured default user is root, or None."""
     if 0 in ctx.settings.default_user:
