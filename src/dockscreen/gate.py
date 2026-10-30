@@ -38,7 +38,6 @@ from dockscreen.imagedecision import (
     default_home,
     env_value,
     instead_of_root,
-    pinned_user,
     root_default_notice,
     runs_as,
 )
@@ -61,7 +60,7 @@ def run(ctx, args):
     try:
         parsed = runargs.parse(args, ctx.runtime.me, ctx.runtime.accounts)
     except runargs.ParseError as e:
-        verdict.screened([messages.reason(f"cannot read the command line: {e}",
+        verdict.screened([messages.Reason(f"cannot read the command line: {e}",
                                           "use the real docker for this one")])
         return 1
     except hostusers.UserError as e:
@@ -81,12 +80,13 @@ def run(ctx, args):
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         ctx.docker.remove(container)
+        user = ids.format_user(assessment.user)
         if assessment.kind is Kind.FALLBACK:
             messages.notice(fallback_notice(assessment))
         else:
             messages.notice(messages.routine_change(
-                f"image {parsed.image} runs as {pinned_user(assessment)}, passed to docker as numbers"))
-        extra = [f"--user={pinned_user(assessment)}"]
+                f"image {parsed.image} runs as {user}, passed to docker as numbers"))
+        extra = [f"--user={user}"]
         if assessment.kind is Kind.FALLBACK:
             extra += home_args(ctx, info, assessment)
         created = create_checked(ctx, parsed, extra)
@@ -233,29 +233,30 @@ def report_assessment(ctx, image, assessment):
     """Print what `docker run` would do about the user."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.kind is Kind.EXPLICIT:
-        messages.out(messages.marked(
+        messages.out(messages.Marked(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        messages.out(messages.marked(dot, f"image {name}: {describe_outcome(ctx, assessment)}"))
+        messages.out(messages.Marked(dot, f"image {name}: {describe_outcome(ctx, assessment)}"))
         if assessment.note:
-            messages.out(messages.marked(verdict.WARN, f"note: {assessment.note}"))
+            messages.out(messages.Marked(messages.WARN, f"note: {assessment.note}"))
     if assessment.refused:
         if not assessment.failed:
-            messages.out(messages.marked(verdict.HINT, CHOOSE_HINT))
-            messages.out(messages.marked(verdict.HINT, config_hint(ctx, image)))
+            messages.out(messages.Marked(messages.HINT, CHOOSE_HINT))
+            messages.out(messages.Marked(messages.HINT, config_hint(ctx, image)))
         return
     if assessment.pins_user:
-        messages.out(f"  docker run would create it again with --user={pinned_user(assessment)}, as numbers")
+        user = ids.format_user(assessment.user)
+        messages.out(f"  docker run would create it again with --user={user}, as numbers")
     messages.out("  docker run also adds " + " ".join(DEFAULTS) + "; later options override them")
 
 
 def report_findings(found, strict):
     """Print what the command line asks for that a project or an image may not."""
-    dot = verdict.BAD if strict else verdict.WARN
+    dot = messages.BAD if strict else messages.WARN
     for finding in found:
-        messages.out(messages.marked(dot, f"command line: {finding}"))
+        messages.out(messages.Marked(dot, f"command line: {finding}"))
     if found and not strict:
-        messages.out(messages.marked(verdict.HINT, "docker run allows these because you gave them; "
+        messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
 
 
@@ -265,7 +266,7 @@ def describe_outcome(ctx, assessment):
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
     if assessment.kind is Kind.FALLBACK:
         return (f"would run as {who}; docker run would run it as the default user "
-                f"({pinned_user(assessment)}) instead")
+                f"({ids.format_user(assessment.user)}) instead")
     reasons = "; ".join(printable(p) for p in assessment.problems)
     if assessment.failed:
         return f"could not be assessed: {reasons}"
@@ -299,13 +300,13 @@ def check_existing(ctx, args):
             info = ctx.docker.inspect_container(ref)
             assessment = assess(ctx, info["Id"], info)
             if assessment.replaces_image_user and not runs_as_pinned_user(info, assessment):
-                user = pinned_user(assessment)
-                problems.append(messages.reason(
+                user = ids.format_user(assessment.user)
+                problems.append(messages.Reason(
                     f"{ref}: cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", f"recreate it with --user {user}"))
             else:
                 image = info["Config"].get("Image") or ""
-                problems += [messages.reason(f"{ref}: {p}", messages.help_of(p))
+                problems += [messages.Reason(f"{ref}: {p}", messages.help_of(p))
                              for p in explain(ctx, assessment, image)]
         except (DockerError, ValueError, KeyError) as e:
             problems.append(f"{ref}: {e}")
@@ -323,7 +324,7 @@ def verify_split(info, parsed):
     misread_image = config.get("Image") != parsed.image
     misread_command = parsed.command and (config.get("Cmd") or []) != parsed.command
     if misread_image or misread_command:
-        return [messages.reason("could not reliably tell the image from the command line",
+        return [messages.Reason("could not reliably tell the image from the command line",
                                 "use the real docker for this one")]
     return []
 
@@ -332,7 +333,7 @@ def explain(ctx, assessment, image):
     """The problems, with how to get past them when they come from the image's own identity."""
     if assessment.identity is None:
         return assessment.problems
-    return [messages.reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
+    return [messages.Reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
 
 
 def config_hint(ctx, image):

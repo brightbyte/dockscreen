@@ -57,7 +57,7 @@ def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeyp
     settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
     assert screen.mount_dir_warnings(runtime(env={}, settings=settings)) == [
-        messages.marked(messages.WARN, f"the configured mount dir {tmp_path} contains {home}, so containers "
+        messages.Marked(messages.WARN, f"the configured mount dir {tmp_path} contains {home}, so containers "
                                        "can mount it")]
 
 

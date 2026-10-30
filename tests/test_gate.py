@@ -5,7 +5,7 @@ from fakes import FakeDocker, host_account, rules, runtime
 
 from dockscreen import argscan, config, docker_cli, gate, hostusers, imagedecision
 from dockscreen.dockerclient import DockerError, DockerNotFound, first_file_of_tar
-from dockscreen.verdict import BAD, GOOD, WARN
+from dockscreen.messages import BAD, GOOD, WARN
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 

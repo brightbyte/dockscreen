@@ -5,7 +5,7 @@ print. Text is escaped with printable(), because much of it quotes the untrusted
 Command output that is meant as data (audit reports, harden patches, help) goes to stdout and is not
 a message.
 
-A line can start with a mark (marked()): a plain text symbol, coloured as docker colours its own when the
+A line can start with a mark (Marked): a plain text symbol, coloured as docker colours its own when the
 line goes to a terminal and NO_COLOR is not set. The line keeps its mark as an attribute, so the same
 symbol can stand for different things in different colours.
 """
@@ -55,10 +55,6 @@ class Reason(str):
         return reason
 
 
-def reason(text, help=None):
-    return Reason(text, help)
-
-
 def help_of(reason):
     """The help of a Reason, or None for a plain string."""
     return getattr(reason, "help", None)
@@ -89,10 +85,6 @@ FAILED = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
 # up with the text after the mark.
 MAX_WIDTH, MIN_WIDTH, TAB_WIDTH = 120, 20, 8
 CONTINUATION = "  "
-
-
-def marked(mark, text, help=None):
-    return Marked(mark, text, help)
 
 
 def routine_change(text, help=None):

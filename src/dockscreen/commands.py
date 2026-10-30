@@ -65,7 +65,7 @@ def audit(global_args, args, runtime, allow_me=False):
         for line in [*hardening.describe(project.additions), *warnings, *lines]:
             messages.out(line)
         if problems or project.additions:
-            messages.out(messages.marked(verdict.HINT, HARDEN_HINT))
+            messages.out(messages.Marked(messages.HINT, HARDEN_HINT))
     return verdict.report(outcome, problems, brief)
 
 

@@ -10,7 +10,7 @@ this order:
 - otherwise the image's own user, if the id rules accept it; refused if not.
 
 Whatever is accepted is not left for the runtime to resolve a second time: it runs as `uid:gid`, the
-checked numbers (pinned_user), so a difference between our reading of the image's passwd and group
+checked numbers, so a difference between our reading of the image's passwd and group
 files and the runtime's can at worst refuse a good image, never run root.
 
 Used by `docker run` (gate) and by compose (composeimages) alike.
@@ -162,32 +162,24 @@ def env_value(env, name):
     return None
 
 
-def default_user_spec(ctx):
-    """The `uid:gid` that replaces an image's root user in this project, without an image section."""
-    return ids.format_user(ctx.settings.default_user)
-
-
-def pinned_user(assessment):
-    """The `uid:gid` a fallback, configured or accepted image user runs as, spelled as numbers."""
-    return ids.format_user(assessment.user)
-
-
 def runs_as(assessment, local):
     """What an accepted image runs as, in words (Kind.OK or Kind.CONFIGURED); local: HostAccounts."""
     if assessment.kind is Kind.CONFIGURED:
-        return f"runs as {pinned_user(assessment)}, the user the config file sets for it"
+        return f"runs as {ids.format_user(assessment.user)}, the user the config file sets for it"
     return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
 
 
 def instead_of_root(assessment):
     """What a Kind.FALLBACK assessment does, in words."""
-    return f"running as {pinned_user(assessment)} instead of root"
+    return f"running as {ids.format_user(assessment.user)} instead of root"
 
 
 def root_default_notice(ctx):
     """A notice for every run when the configured default user is root, or None."""
     if 0 in ctx.settings.default_user:
-        return messages.marked(
-            messages.WARN, f"the configured default user is {default_user_spec(ctx)}: images that would "
-                           "run as root run as root", "set default_user in the config file to change it")
+        default = ids.format_user(ctx.settings.default_user)
+        return messages.Marked(
+            messages.WARN,
+            f"the configured default user is {default}: images that would run as root run as root",
+            "set default_user in the config file to change it")
     return None

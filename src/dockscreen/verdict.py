@@ -19,16 +19,14 @@ class Verdict(enum.IntEnum):
     FAILED = 3
 
 
-# Text symbols, as docker uses them; messages colours them on a terminal.
-GOOD, WARN, BAD, HINT = messages.GOOD, messages.WARN, messages.BAD, messages.HINT
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
 
 
 def dot(assessment):
     """The dot for a decision about an image's user."""
     if assessment.refused:
-        return BAD
-    return GOOD if assessment.kind in (Kind.OK, Kind.CONFIGURED) else WARN
+        return messages.BAD
+    return messages.GOOD if assessment.kind in (Kind.OK, Kind.CONFIGURED) else messages.WARN
 
 
 # The closing line, the same for an audit, for --brief and for the check before a command runs.
@@ -37,7 +35,7 @@ LINES = {Verdict.PASSED: "audit passed", Verdict.REFUSED: "denied by audit", Ver
 
 def line(verdict):
     """The closing line of an audit, or of the check before a command runs: mark and verdict."""
-    return messages.marked(ICONS[verdict], LINES[verdict])
+    return messages.Marked(ICONS[verdict], LINES[verdict])
 
 
 def brief(verdict, reasons):
@@ -46,7 +44,7 @@ def brief(verdict, reasons):
         return line(verdict)
     first = printable(reasons[0]) if reasons else "no reason given"
     more = f" (+{len(reasons) - 1} more)" if len(reasons) > 1 else ""
-    return messages.marked(ICONS[verdict], f"{LINES[verdict]}: {first}{more}")
+    return messages.Marked(ICONS[verdict], f"{LINES[verdict]}: {first}{more}")
 
 
 def report(verdict, reasons, brief_mode=False):
@@ -57,7 +55,7 @@ def report(verdict, reasons, brief_mode=False):
         return int(verdict)
     for reason in reasons:
         text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
-        messages.notice(messages.marked(BAD, text, messages.help_of(reason)))
+        messages.notice(messages.Marked(messages.BAD, text, messages.help_of(reason)))
     messages.notice(line(verdict))
     return int(verdict)
 

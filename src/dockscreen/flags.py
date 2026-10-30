@@ -30,7 +30,7 @@ STRICT_SCREEN = "--strict-screen"
 HELPFUL = "--helpful"
 VERBOSE = "--verbose"
 BRIEF = "--brief"
-AS_ME_MESSAGE = messages.marked(
+AS_ME_MESSAGE = messages.Marked(
     messages.BAD, "--as-me goes after run or exec, before the service",
     "for up, give --allow-me before the subcommand, and user: \"${UID}:${GID}\" to the services that should "
     "run as you")

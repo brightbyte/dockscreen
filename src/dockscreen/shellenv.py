@@ -28,7 +28,7 @@ def copied(config, env):
 def describe(config, env):
     """One line per service that gets variables from the shell."""
     return [
-        messages.marked(
+        messages.Marked(
             messages.WARN, f"service {name}: environment variables taken from your shell: {', '.join(names)}",
             "unset them in your shell, or give the project literal values, to keep them out")
         for name, names in copied(config, env).items()

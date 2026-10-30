@@ -14,8 +14,8 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_
     assert shellenv.copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
     lines = shellenv.describe(cfg, shell)
     assert lines == [
-        messages.marked(messages.WARN, "service db: environment variables taken from your shell: HOME"),
-        messages.marked(messages.WARN, "service web: environment variables taken from your shell: TOKEN")]
+        messages.Marked(messages.WARN, "service db: environment variables taken from your shell: HOME"),
+        messages.Marked(messages.WARN, "service web: environment variables taken from your shell: TOKEN")]
     assert all("s3cret" not in line for line in lines)
 
 

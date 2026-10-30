@@ -8,7 +8,7 @@ from dockscreen import autofix, composeimages, imagedecision, messages, policy
 from dockscreen import config as configuration
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import Kind
-from dockscreen.verdict import GOOD, WARN
+from dockscreen.messages import GOOD, WARN
 
 NOBODY = "65534:65534"
 

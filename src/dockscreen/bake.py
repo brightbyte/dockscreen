@@ -123,5 +123,5 @@ def screen(docker, args):
         found = definition(docker, args)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
-        return [messages.reason(str(e), hint)], True
+        return [messages.Reason(str(e), hint)], True
     return check_definition(found, os.getcwd()), False

@@ -75,7 +75,7 @@ def sensitive_inside(directory, runtime):
 def mount_dir_warnings(runtime):
     """One warning per configured mount dir that equals or contains a sensitive path."""
     return [
-        messages.marked(
+        messages.Marked(
             messages.WARN,
             f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
             "narrow mount_dirs in the config file")
@@ -131,7 +131,7 @@ def name_conflicts(name, directory, docker):
     if not others:
         return []
     shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
-    return [messages.reason(
+    return [messages.Reason(
         f"project name {name!r} is used by containers made from {shown}, not from {here}",
         "pass -p NAME to choose the name yourself")]
 

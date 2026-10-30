@@ -26,7 +26,7 @@ import copy
 import json
 from typing import NamedTuple
 
-from dockscreen import argscan, imagedecision, images, messages, policy, verdict
+from dockscreen import argscan, ids, imagedecision, images, messages, policy, verdict
 from dockscreen.dockerclient import DockerError
 
 
@@ -111,7 +111,7 @@ def decision_problem(name, decision, config_file=None):
     if decision.assessment.failed:
         return text
     hint = images.section_hint(decision.image, config_file, decision.built) if config_file else None
-    return messages.reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
+    return messages.Reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
 def verify_round_trip(command, config, ctx):
@@ -234,14 +234,15 @@ def finalize(config, prepared, ctx):
             continue
         decision = prepared.decisions.get(name)
         if decision is None:  # not started by this command
-            service["user"] = imagedecision.default_user_spec(ctx)  # an allowed id: the policy accepts it
+            # an allowed id: the policy accepts it
+            service["user"] = ids.format_user(ctx.settings.default_user)
             give_default_home(service, ctx.settings.default_user, ctx.settings.default_home)
             continue
         if not decision.assessment.pins_user:
             continue
         # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
         # resolve the image's user to anything but what was checked
-        service["user"] = imagedecision.pinned_user(decision.assessment)
+        service["user"] = ids.format_user(decision.assessment.user)
         if decision.assessment.kind is imagedecision.Kind.FALLBACK:
             give_default_home(service, decision.assessment.user, decision.assessment.home)
         else:
@@ -267,7 +268,7 @@ def describe(config, prepared, ctx):
     for name in sorted(unset_user_services(config)):
         decision = prepared.decisions.get(name)
         if decision is None:
-            default = imagedecision.default_user_spec(ctx)
+            default = ids.format_user(ctx.settings.default_user)
             text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
                     f"default user ({default}) if it is started")
             lines.append(messages.notable_change(text, USER_HELP))
@@ -276,12 +277,12 @@ def describe(config, prepared, ctx):
         if assessment.kind in (imagedecision.Kind.OK, imagedecision.Kind.CONFIGURED):
             runs_as = imagedecision.runs_as(assessment, ctx.local)
             text = f"service {name}: no user set; image {decision.image} {runs_as}"
-            lines.append(messages.marked(dot, text))
+            lines.append(messages.Marked(dot, text))
         elif assessment.kind is imagedecision.Kind.FALLBACK:
             instead = imagedecision.instead_of_root(assessment)
             lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
         if assessment.note:
-            lines.append(messages.marked(verdict.WARN, f"service {name}: note: {assessment.note}"))
+            lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
     return [*lines, *pin_notices(prepared)]
 
 

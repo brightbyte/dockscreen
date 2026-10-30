@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import verdict
+from dockscreen import messages, verdict
 from dockscreen.verdict import Verdict
 
 
@@ -24,8 +24,8 @@ def test_report(capsys):
     assert verdict.report(Verdict.FAILED, ["b"]) == 3
     assert verdict.report(Verdict.PASSED, []) == 0
     assert capsys.readouterr().err.splitlines() == [
-        f"[dockscreen] {verdict.BAD} refusing: a", "[dockscreen] \u2296 denied by audit",
-        f"[dockscreen] {verdict.BAD} b", "[dockscreen] \u2718 audit failed",
+        f"[dockscreen] {messages.BAD} refusing: a", "[dockscreen] \u2296 denied by audit",
+        f"[dockscreen] {messages.BAD} b", "[dockscreen] \u2718 audit failed",
         "[dockscreen] \u2714 audit passed",
     ]
 
