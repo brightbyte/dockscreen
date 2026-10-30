@@ -355,8 +355,8 @@ def test_external_and_foreign_named_volumes_and_networks_are_refused(project):
     assert_refused(check(project, {"networks": {"n": {"name": "n", "external": True}}}), external)
     assert_refused(check(project, {"networks": {"n": {"name": "other_n"}}}),
                    "name 'other_n' is not the project-scoped 'proj_n'")
-    assert_refused(check(project, {"volumes": {"v": {"name": "proj_v"}}} | {"name": ""}),
-                   "config has no project name")
+    unnamed = check(project, {"volumes": {"v": {"name": "proj_v"}}, "networks": {"n": {}}} | {"name": ""})
+    assert unnamed.count("config has no project name") == 1  # once, not for each volume and network
 
 
 def test_volume_drivers_and_options(project):

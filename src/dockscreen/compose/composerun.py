@@ -46,8 +46,6 @@ class Project(NamedTuple):
     def problems(self):
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
-        if not self.hardened.get("name"):
-            problems.append("config has no project name")
         if self.remote:
             problems.append(screen.REMOTE_MESSAGE)
         elif not problems and not screen.names_project(self.global_args, self.runtime.env):

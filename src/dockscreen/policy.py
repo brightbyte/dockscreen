@@ -140,6 +140,8 @@ def check_config(config, ctx):
     """
     project = config.get("name")
     problems = unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + _check_service_names(config)
+    if not project:  # volumes and networks are scoped to the project by its name
+        problems.append("config has no project name")
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
         problems += [f"service {name}: {p}"
@@ -474,12 +476,12 @@ SERVICE_CHECKS = {
 def _check_scope(key, item, project):
     """Returns a problem unless the volume or network item called key belongs to project, by its name.
 
-    External ones, and any in a config without a project name, are refused.
+    External ones are refused. Without a project name there is nothing to compare; check_config refuses that.
     """
     if item.get("external"):
         return ["external resources are not allowed, they may belong to another project"]
     if not project:
-        return ["config has no project name"]
+        return []
     expected = f"{project}_{key}"
     if item.get("name") != expected:
         return [f"name {item.get('name')!r} is not the project-scoped {expected!r}"]
