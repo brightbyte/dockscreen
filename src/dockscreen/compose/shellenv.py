@@ -1,15 +1,27 @@
-"""Which environment variables of the shell end up in which service.
+"""Which environment variables of the shell end up in which service, and the ids dockscreen adds.
+
+dockscreen passes UID and GID, the real ids of the caller, in the environment of the compose commands
+it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); values already in the environment
+are overridden. Running as these ids is not allowed unless --allow-me is given (see idrules): passing
+them only makes the project's intent readable.
 
 `environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so a
 pass-through is recognised by the value being the shell's own under the same name. That also catches
 `FOO: bar` when the shell happens to have FOO=bar, and misses `X: ${FOO}`, which copies the value under
-another name. The variables dockscreen passes to compose (ids.EXPORTED) are left out. Values are never shown.
+another name. The variables dockscreen passes to compose (EXPORTED) are left out. Values are never shown.
 """
 
 from collections.abc import Mapping
 from typing import Any
 
-from dockscreen import ids, messages
+from dockscreen import messages
+
+EXPORTED = ("UID", "GID")
+
+
+def exported(me: tuple[int, int]) -> dict[str, str]:
+    """Returns the variables UID and GID for me, the caller's real (uid, gid)."""
+    return dict(zip(EXPORTED, (str(i) for i in me)))
 
 
 def _copied(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
@@ -21,7 +33,7 @@ def _copied(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[st
             continue
         names = sorted(
             key for key, value in environment.items()
-            if value and key not in ids.EXPORTED and env.get(key) == value
+            if value and key not in EXPORTED and env.get(key) == value
         )
         if names:
             found[name] = names

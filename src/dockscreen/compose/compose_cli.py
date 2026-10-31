@@ -8,8 +8,8 @@ parse is the position of the subcommand.
 from collections.abc import Collection, Sequence
 from typing import NoReturn
 
-from dockscreen import commandline, helptext, ids, messages, policy, userargs, verdict
-from dockscreen.compose import audit, composeargs, gate, screen
+from dockscreen import commandline, helptext, messages, policy, userargs, verdict
+from dockscreen.compose import audit, composeargs, gate, screen, shellenv
 from dockscreen.runtime import Runtime
 
 # Subcommands that create containers from the config. `alpha` is a group (older
@@ -64,7 +64,7 @@ def main(argv: Sequence[str], runtime: Runtime, given: Collection[str]) -> int:
         return _passthrough(command.argv, runtime)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
     # with --skip-screening, which leaves compose as it is
-    command.runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
+    command.runtime = runtime._replace(docker=runtime.docker.with_env(shellenv.exported(runtime.me)))
     return command.dispatch()
 
 
