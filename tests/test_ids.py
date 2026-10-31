@@ -23,7 +23,7 @@ def test_main_passes_the_callers_ids_to_compose_without_changing_its_own_environ
     (tmp_path / "compose.yaml").write_text("")
     monkeypatch.setenv("UID", "7")
 
-    compose_cli.main(["build"], make_runtime(docker=Docker.new_for_testing(run), cwd=str(tmp_path)))
+    compose_cli.main(["build"], make_runtime(docker=Docker.new_for_testing(run), cwd=str(tmp_path)), ())
 
     # a pre-set UID is overridden: the shell cannot make ${UID} mean someone else
     assert seen[0]["UID"] == "4242" and seen[0]["GID"] == "4343"  # fakes.ME

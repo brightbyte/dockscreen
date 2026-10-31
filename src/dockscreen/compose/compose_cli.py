@@ -5,7 +5,7 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
-from dockscreen import argscan, flags, helptext, ids, messages, policy, userargs, verdict
+from dockscreen import flags, helptext, ids, messages, policy, userargs, verdict
 from dockscreen.compose import audit, composeargs, gate, screen
 
 # Subcommands that create containers from the config. `alpha` is a group (older
@@ -21,6 +21,9 @@ NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", 
 # args, runtime, allow_me) that returns the exit status
 COMMANDS = {"audit": audit.audit, "harden": audit.harden, "fix": audit.harden}
 ALIASES = {"fix": "harden"}  # alias -> command it stands for
+
+# dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
+OWN_OPTIONS = frozenset({flags.SKIP_SCREENING, flags.ALLOW_ME, flags.AS_ME, flags.HELPFUL, flags.VERBOSE})
 
 # Global `docker compose` options that consume the following token as their value.
 # Needed to tell `-f foo.yml up` (subcommand "up") from `-f up` (a value).
@@ -41,51 +44,32 @@ def _passthrough(argv, runtime):
     runtime.docker.exec(["compose", *argv])
 
 
-def main(argv, runtime):
+def main(argv, runtime, given):
     """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
-    runtime: the Runtime the `docker` wrapper loaded.
+    runtime: the Runtime the `docker` wrapper loaded. given: dockscreen's own options that the docker
+    command line gave before `compose` (flags.CommandLine.given).
     Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
     """
-    skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
-    if skipped:
+    command = ComposeCommand(argv, runtime, given)
+    if command.skip_screening:
         flags.banner()
-        return _passthrough(argv, runtime)
-    # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process
-    runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
-    return ComposeCommand.parse(argv, runtime).dispatch()
+        return _passthrough(command.argv, runtime)
+    # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
+    # with --skip-screening, which leaves compose as it is
+    command.runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
+    return command.dispatch()
 
 
-class ComposeCommand:
-    """A docker compose command line, without dockscreen's own options, and what those asked for."""
+class ComposeCommand(flags.CommandLine):
+    """A docker compose command line, without dockscreen's own options, and what those asked for.
 
-    def __init__(self, argv, runtime, allow_me=False, as_me=False, helpful=False):
-        self.argv, self.runtime = argv, runtime
-        self.allow_me, self.as_me, self.helpful = allow_me, as_me, helpful
-        self.idx = argscan.find_subcommand(argv, GLOBAL_OPTS_WITH_VALUE)  # None if there is no command
+    global_args are the options before the subcommand, which select the project.
+    """
 
-    @classmethod
-    def parse(cls, argv, runtime):
-        """Builds the command for argv, taking out --allow-me, --as-me and --helpful or --verbose."""
-        allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
-        helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
-        as_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.AS_ME)
-        return cls(argv, runtime, allow_me, as_me, helpful)
-
-    @property
-    def sub(self):
-        """Returns the subcommand, or None if there is none."""
-        return None if self.idx is None else self.argv[self.idx]
-
-    @property
-    def global_args(self):
-        """Returns the options before the subcommand, which select the project."""
-        return self.argv if self.idx is None else self.argv[:self.idx]
-
-    @property
-    def args(self):
-        """Returns the arguments after the subcommand."""
-        return [] if self.idx is None else self.argv[self.idx + 1:]
+    def __init__(self, argv, runtime, given=()):
+        super().__init__(argv, GLOBAL_OPTS_WITH_VALUE, OWN_OPTIONS, given)
+        self.runtime = runtime
 
     def dispatch(self):
         """Screens, helps with or forwards the command, and returns its exit status.

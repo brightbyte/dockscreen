@@ -20,6 +20,10 @@ DOCKER_OPTS_WITH_VALUE = frozenset({
 # Commands that start a container or run in one, and our audit: they go through the gate.
 SCREENED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
+# dockscreen's own options before the docker command
+OWN_OPTIONS = frozenset({
+    flags.SKIP_SCREENING, flags.ALLOW_ME, flags.STRICT_SCREEN, flags.HELPFUL, flags.VERBOSE,
+})
 
 
 def main(argv=None):
@@ -45,33 +49,19 @@ def _dispatch(argv, runtime):
 
     Raises DockerNotFound for main to report.
     """
-    skipped, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE)
-    if skipped:
+    command = DockerCommand(argv, runtime)
+    if command.skip_screening:
         flags.banner()
-        return _passthrough(argv, runtime)
-    return DockerCommand.parse(argv, runtime).dispatch()
+        return _passthrough(command.argv, runtime)
+    return command.dispatch()
 
 
-class DockerCommand:
+class DockerCommand(flags.CommandLine):
     """A docker command line, without dockscreen's own options, and what those asked for."""
 
-    def __init__(self, argv, runtime, allow_me=False, strict=False, helpful=False):
-        self.argv, self.runtime = argv, runtime
-        self.allow_me, self.strict, self.helpful = allow_me, strict, helpful
-        self.idx = argscan.find_subcommand(argv, DOCKER_OPTS_WITH_VALUE)  # None if there is no command
-
-    @classmethod
-    def parse(cls, argv, runtime):
-        """Builds the command for argv, taking out --allow-me, --strict-screen and --helpful or --verbose."""
-        allow_me, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE, flags.ALLOW_ME)
-        strict, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE, flags.STRICT_SCREEN)
-        helpful, argv = flags.strip_helpful(argv, DOCKER_OPTS_WITH_VALUE)
-        return cls(argv, runtime, allow_me, strict, helpful)
-
-    @property
-    def sub(self):
-        """Returns the docker command (the first argument that is not a global option), or None."""
-        return None if self.idx is None else self.argv[self.idx]
+    def __init__(self, argv, runtime):
+        super().__init__(argv, DOCKER_OPTS_WITH_VALUE, OWN_OPTIONS)
+        self.runtime = runtime
 
     def dispatch(self):
         """Runs the command, screened, helped or passed on, and returns the exit status, unless docker
@@ -92,8 +82,7 @@ class DockerCommand:
             if self.idx != 0:  # compose_cli gets what follows `compose`: these would not reach it
                 messages.notice("docker options before `compose` are not supported")
                 return 1
-            lead = [*([flags.ALLOW_ME] if self.allow_me else []), *([flags.HELPFUL] if self.helpful else [])]
-            return compose_cli.main([*lead, *argv[1:]], self.runtime)
+            return compose_cli.main(argv[1:], self.runtime, self.given)
 
         if (bake_args := self._bake_arguments()) is not None and bake.wants_screening(bake_args):
             return self._screened_bake(bake_args)
@@ -180,7 +169,7 @@ class DockerCommand:
             helptext.show(helptext.docker_overview)
             return _passthrough(self.argv, self.runtime)
         if target == "compose":
-            return compose_cli.main(["help", *self.argv[self.idx + 2:]], self.runtime)
+            return compose_cli.main(["help", *self.argv[self.idx + 2:]], self.runtime, self.given)
         argv = self.argv
         if self.sub == "help":
             argv = [*argv[:self.idx], target, "--help"]

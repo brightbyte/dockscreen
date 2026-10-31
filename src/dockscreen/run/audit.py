@@ -26,7 +26,8 @@ def audit(global_args, args, runtime, allow_me=False, strict=False):
     2 if args cannot be read. --brief, before the image, prints only the verdict, in one line.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    brief, args = flags.strip(args, runargs.VALUE_OPTIONS, flags.BRIEF)
+    line = flags.CommandLine(args, runargs.VALUE_OPTIONS, {flags.BRIEF})
+    brief, args = line.has(flags.BRIEF), line.argv
     if daemon.is_remote(global_args, runtime.env, runtime.docker):
         return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE], brief)
     ctx = gate.image_context(runtime, allow_me)

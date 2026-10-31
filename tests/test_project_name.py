@@ -92,7 +92,7 @@ def test_commands_that_remove_or_stop_are_refused_for_a_name_that_is_not_the_pro
     images.project_dirs = ["/victim"]
     runtime, _ = compose_project(tmp_path, PROJECT, images)
 
-    code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime)
+    code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime, ())
 
     assert code == 1 and images.forwarded == []
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
@@ -103,12 +103,12 @@ def test_down_goes_on_for_the_projects_own_name_with_p_and_for_a_project_that_ca
     images.project_dirs = ["/victim"]
     runtime, _ = compose_project(tmp_path, PROJECT, images)
 
-    compose_cli.main(["-p", "mine", "down"], runtime)
+    compose_cli.main(["-p", "mine", "down"], runtime, ())
     images.project_dirs = [str(tmp_path)]
-    compose_cli.main(["down"], runtime)
+    compose_cli.main(["down"], runtime, ())
 
     (tmp_path / "compose.yaml").write_text("services: [")  # compose cannot read it
     images.project_dirs = ["/victim"]
-    compose_cli.main(["down"], runtime)
+    compose_cli.main(["down"], runtime, ())
 
     assert images.forwarded == [["-p", "mine", "down"], ["down"], ["down"]]

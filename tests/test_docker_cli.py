@@ -1,5 +1,5 @@
 import pytest
-from fakes import FakeDocker, make_runtime
+from fakes import FakeDocker, compose_project, make_runtime
 
 from dockscreen import config, docker_cli
 from dockscreen.dockerclient import Docker
@@ -110,6 +110,13 @@ def test_exec_as_a_local_user_reaches_docker_as_numeric_ids():
 def test_exec_as_me_reaches_docker_as_the_callers_ids():
     executed = dispatch(["exec", "--as-me", "c", "sh"])[1]
     assert executed == [["exec", "--user=4242:4343", "c", "sh"]]  # fakes.ME
+
+
+def test_our_options_before_compose_reach_compose(tmp_path):
+    mine = {"name": "proj", "services": {"web": {"image": "x:1", "user": "4242:4343"}}}  # fakes.ME
+    runtime, recorder = compose_project(tmp_path, mine)
+    assert docker_cli._dispatch(["--allow-me", "compose", "up"], runtime) == 0  # your ids, allowed
+    assert recorder.children[-1][-1] == "up" and runtime.docker.forwarded == []
 
 
 def test_allow_me_before_the_subcommand_reaches_the_gate_and_not_docker():
