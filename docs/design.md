@@ -157,14 +157,14 @@ The code is in layers, each of which imports only its own and the ones before it
 
 The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). Each front end's package, `run` or `compose`, has a `gate` that checks and then runs, an `audit` that checks and reports, and the parser of its command lines (`runargs`, `composeargs`). The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
-### Compose (`compose_cli`, `screen`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)
+### Compose (`compose_cli`, `inspect`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
-1. `screen.inspect` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it. A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
+1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it. A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
 2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
 3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their images decide.
-   The project's name is checked too (`screen.name_conflicts`). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
+   The project's name is checked too (`inspect.name_conflicts`). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
 4. `composeimages.prepare`:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
@@ -184,7 +184,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose.audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `screen.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
+`audit` (`compose.audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
 
 ### The policy (`policy.py`)
 

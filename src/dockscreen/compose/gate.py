@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen import commandline, messages, userargs, verdict
-from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
+from dockscreen.compose import composeargs, composeimages, hardening, inspect, shellenv
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
@@ -52,8 +52,8 @@ class Project(NamedTuple):
         problems = policy.check_config(self.hardened, self.static_ctx())
         if self.remote:
             problems.append(REMOTE_MESSAGE)
-        elif not problems and not screen.names_project(self.global_args, self.runtime.env):
-            problems += screen.name_conflicts(self.hardened["name"], self.directory,
+        elif not problems and not inspect.names_project(self.global_args, self.runtime.env):
+            problems += inspect.name_conflicts(self.hardened["name"], self.directory,
                                               self.image_ctx.docker)
         return problems
 
@@ -62,7 +62,7 @@ class Project(NamedTuple):
         image, and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
-        return screen.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
+        return inspect.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
@@ -72,14 +72,14 @@ class Project(NamedTuple):
 def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Project:
     """Loads the project global_args select, hardened.
 
-    Raises screen.ScreenError or ValueError if it cannot be inspected.
+    Raises inspect.ScreenError or ValueError if it cannot be inspected.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    config, directory = screen.inspect(global_args, runtime)
+    config, directory = inspect.project(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
     image_ctx = _image_context(runtime, allow_me)._replace(project_dir=directory)
     remote = is_remote(global_args, image_ctx.docker)
-    ctx = screen.context(directory, runtime, allow_me)
+    ctx = inspect.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
 
@@ -97,17 +97,17 @@ def run(global_args: list[str], sub: str, args: list[str], runtime: Runtime, all
         parsed = _command_line(sub, args, runtime)
         project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
-    except (screen.InspectError, DockerNotFound) as e:
+    except (inspect.InspectError, DockerNotFound) as e:
         verdict.screened([str(e)], failed=True)
         return 1
-    except (screen.ScreenError, hostusers.UserError, ValueError) as e:
+    except (inspect.ScreenError, hostusers.UserError, ValueError) as e:
         problems = [str(e)]
     if problems:
         verdict.screened(problems)
         return 1
 
     hardened, image_ctx = project.hardened, project.image_ctx
-    lines = [*parsed.notices, *screen.mount_dir_warnings(runtime),
+    lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
              imagedecision.root_default_notice(image_ctx), *hardening.describe(project.additions)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:

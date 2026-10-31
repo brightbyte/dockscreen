@@ -218,7 +218,7 @@ services:
 The name decides which volumes (`victim_data`), networks and containers compose uses, replaces and removes. The hostile project reads and writes the victim's volume, replaces a service of the same name, joins its network, and makes `down -v` or `--remove-orphans` delete its data.
 
 - Expected: refused when containers of a project called `victim`, running or stopped, were made from another directory, or have no directory label.
-- Check: `screen.name_conflicts` compares the `com.docker.compose.project.working_dir` label of those containers with this project's directory. It runs with the other checks for `up`, `create`, `run`, `watch`, `scale` and `alpha`, and alone before `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause`. If docker cannot say, a project is refused.
+- Check: `inspect.name_conflicts` compares the `com.docker.compose.project.working_dir` label of those containers with this project's directory. It runs with the other checks for `up`, `create`, `run`, `watch`, `scale` and `alpha`, and alone before `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause`. If docker cannot say, a project is refused.
 - Variants: the name comes from `COMPOSE_PROJECT_NAME` in the project's `.env`, which is the project's choice and is checked; `-p NAME` and `COMPOSE_PROJECT_NAME` in your real environment are your choice and are not.
 - Not covered: volumes and networks carry no directory label, so a project whose containers are all gone can still have its volumes taken over by name.
 - Status: tested (`tests/test_project_name.py`). The label and the `docker ps` format were not run against a daemon.

@@ -1,7 +1,7 @@
 import pytest
 from fakes import FakeImages, compose_project
 
-from dockscreen.compose import compose_cli, gate, screen
+from dockscreen.compose import compose_cli, gate, inspect
 from dockscreen.host.dockerclient import DockerError
 
 
@@ -13,14 +13,14 @@ def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_w
             asked.append((label, value, wanted))
             return []
 
-    screen.name_conflicts("proj", "/p", Labels())
+    inspect.name_conflicts("proj", "/p", Labels())
     assert asked == [("com.docker.compose.project", "proj", "com.docker.compose.project.working_dir")]
 
 
 def conflicts(found, directory="/p"):
     docker = FakeImages()
     docker.project_dirs = found
-    return screen.name_conflicts("proj", directory, docker)
+    return inspect.name_conflicts("proj", directory, docker)
 
 
 def test_a_name_is_free_when_no_container_or_only_ones_of_this_directory_have_it(tmp_path):
@@ -45,7 +45,7 @@ def test_not_being_able_to_ask_is_a_refusal():
         def label_values(self, label, value, wanted):
             raise DockerError("daemon down")
 
-    assert screen.name_conflicts("proj", "/p", Broken()) == [
+    assert inspect.name_conflicts("proj", "/p", Broken()) == [
         "cannot tell whether another project is called 'proj': daemon down"]
 
 
@@ -58,7 +58,7 @@ def test_not_being_able_to_ask_is_a_refusal():
     (["-f", "-p"], {}, False),
 ])
 def test_the_person_chooses_the_name_with_p_or_the_environment(args, env, chosen):
-    assert screen.names_project(args, env) is chosen
+    assert inspect.names_project(args, env) is chosen
 
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}

@@ -9,7 +9,7 @@ from collections.abc import Collection, Sequence
 from typing import NoReturn
 
 from dockscreen import commandline, helptext, messages, userargs, verdict
-from dockscreen.compose import audit, composeargs, gate, screen, shellenv
+from dockscreen.compose import audit, composeargs, gate, inspect, shellenv
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
 
@@ -101,7 +101,7 @@ class ComposeCommand(commandline.CommandLine):
         if self._is_screened():
             if sub not in BUILD_SUBCOMMANDS:
                 return gate.run(self.global_args, sub, self.args, runtime, allow_me=self.allow_me)
-            if not screen.passes(self.global_args, runtime, policy.check_build_config):
+            if not inspect.passes(self.global_args, runtime, policy.check_build_config):
                 return 1
         elif sub in NAMED_PROJECT_SUBCOMMANDS:
             if not self._name_is_free():
@@ -121,15 +121,15 @@ class ComposeCommand(commandline.CommandLine):
         Reports the conflict if it is not. A project that cannot be inspected is left to compose to report.
         """
         runtime = self.runtime
-        if screen.names_project(self.global_args, runtime.env):
+        if inspect.names_project(self.global_args, runtime.env):
             return True
         try:
-            config, directory = screen.inspect(self.global_args, runtime)
-        except screen.ScreenError:
+            config, directory = inspect.project(self.global_args, runtime)
+        except inspect.ScreenError:
             return True
         if not config.get("name"):
             return True
-        reasons = screen.name_conflicts(config["name"], directory, runtime.docker)
+        reasons = inspect.name_conflicts(config["name"], directory, runtime.docker)
         return not reasons or verdict.screened(reasons)
 
     def _is_screened(self) -> bool:

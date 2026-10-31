@@ -27,7 +27,7 @@ class InspectError(ScreenError):
     """The config could not be inspected: no compose file, or compose could not read it."""
 
 
-def inspect(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
+def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
     """Returns (config, project directory) for the project global_args select.
 
     Raises ScreenError if the project directory is, or contains, a sensitive path ($HOME, /etc, ...), since
@@ -96,7 +96,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
            rules: Callable[[dict[str, Any], policy.Context], list[str]] = policy.check_config) -> bool:
     """Tells whether rules(config, ctx) finds nothing in the selected project, printing the verdict."""
     try:
-        config, project_dir = inspect(global_args, runtime)
+        config, project_dir = project(global_args, runtime)
     except InspectError as e:
         return verdict.screened([str(e)], failed=True)
     except ScreenError as e:

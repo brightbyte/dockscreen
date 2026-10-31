@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen import commandline, messages, verdict
-from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
+from dockscreen.compose import autofix, composeimages, gate, hardening, inspect, shellenv
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
@@ -30,14 +30,14 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
         return 2
     try:
         project = gate.load_project(global_args, runtime, allow_me)
-    except (screen.InspectError, DockerNotFound) as e:
+    except (inspect.InspectError, DockerNotFound) as e:
         return verdict.report(Verdict.FAILED, [str(e)], brief)
-    except (screen.ScreenError, ValueError) as e:
+    except (inspect.ScreenError, ValueError) as e:
         return verdict.report(Verdict.REFUSED, [str(e)], brief)
 
     outcome, problems, lines = _audit_images(project, brief)
     if not brief:
-        warnings = [*screen.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
+        warnings = [*inspect.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
         for line in [*hardening.describe(project.additions), *warnings, *lines]:
             messages.out(line)
         if problems or project.additions:
@@ -82,7 +82,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     """
     try:
         project = gate.load_project(global_args, runtime, allow_me=True)
-    except (screen.ScreenError, ValueError) as e:
+    except (inspect.ScreenError, ValueError) as e:
         messages.notice(e)
         return 1
     if project.remote:
