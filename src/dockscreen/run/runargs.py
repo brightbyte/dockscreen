@@ -9,7 +9,7 @@ daemon's.
 
 from typing import NamedTuple
 
-from dockscreen import flags, hostusers
+from dockscreen import commandline, hostusers
 
 # Long options of `docker run`/`create` that take a value in the next argument.
 LONG_VALUE_FLAGS = frozenset({
@@ -30,7 +30,7 @@ LONG_VALUE_FLAGS = frozenset({
 })
 SHORT_VALUE_FLAGS = frozenset("acehlmpuvw")
 # Every option that takes the next argument as its value, ours included, as it is typed.
-VALUE_OPTIONS = LONG_VALUE_FLAGS | {flags.AS} | {f"-{c}" for c in SHORT_VALUE_FLAGS}
+VALUE_OPTIONS = LONG_VALUE_FLAGS | {commandline.AS} | {f"-{c}" for c in SHORT_VALUE_FLAGS}
 # Options of `docker exec` that take a value in the next argument, as userargs reads them.
 EXEC_VALUE_FLAGS = frozenset({
     "--detach-keys", "-e", "--env", "--env-file", "-u", "--user", "-w", "--workdir",
@@ -94,11 +94,11 @@ def _parse_long(args, i, state):
     """Reads the --option at args[i] into state and returns the index after it, and after its value."""
     token = args[i]
     name, has_value, value = token.partition("=")
-    if name == flags.AS_ME:
+    if name == commandline.AS_ME:
         state.kept.append(state.users.me())
-    elif name == flags.ALLOW_ME:  # not a docker option: dropped
+    elif name == commandline.ALLOW_ME:  # not a docker option: dropped
         state.users.allow_me = True
-    elif name == flags.AS:
+    elif name == commandline.AS:
         if not has_value:
             i += 1
             value = _value_at(args, i, name)

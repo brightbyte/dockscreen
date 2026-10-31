@@ -18,7 +18,7 @@ import os
 import tempfile
 from typing import NamedTuple
 
-from dockscreen import argscan, daemon, hostusers, imagedecision, messages, policy, userargs, verdict
+from dockscreen import commandline, daemon, hostusers, imagedecision, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 
@@ -154,7 +154,7 @@ def _generated(global_args, project_dir, docker_binary):
             with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
                 json.dump(config, f)  # JSON is YAML
             return [
-                docker_binary, "compose", *argscan.strip_options(global_args, REPLACED_OPTIONS),
+                docker_binary, "compose", *commandline.strip_options(global_args, REPLACED_OPTIONS),
                 "-f", path, "--project-directory", project_dir, "--project-name", config["name"],
             ]
         yield command

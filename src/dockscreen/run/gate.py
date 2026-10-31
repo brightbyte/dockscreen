@@ -16,7 +16,7 @@ checked when it is started. `audit` (run/audit) creates the container as `run` d
 what `run` would do.
 """
 
-from dockscreen import argscan, daemon, hostusers, ids, imagedecision, images, messages, verdict
+from dockscreen import commandline, daemon, hostusers, ids, imagedecision, images, messages, verdict
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import (
     Assessment,
@@ -194,7 +194,7 @@ def check_existing(global_args, args, runtime, allow_me=False):
         return [daemon.REMOTE_MESSAGE]
     ctx = image_context(runtime, allow_me)
     problems = []
-    for ref in argscan.positionals(args, VALUE_LONG, VALUE_SHORT):
+    for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
             assessment = assess(ctx, info["Id"], info)

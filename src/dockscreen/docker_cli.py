@@ -6,7 +6,7 @@ go through the gate, everything else is exec'd to the real docker unchanged.
 
 import sys
 
-from dockscreen import argscan, bake, config, flags, helptext, hostusers, messages, userargs, verdict
+from dockscreen import bake, commandline, config, helptext, hostusers, messages, userargs, verdict
 from dockscreen.compose import compose_cli
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.run import audit, gate, runargs
@@ -22,7 +22,8 @@ SCREENED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 # dockscreen's own options before the docker command
 OWN_OPTIONS = frozenset({
-    flags.SKIP_SCREENING, flags.ALLOW_ME, flags.STRICT_SCREEN, flags.HELPFUL, flags.VERBOSE,
+    commandline.SKIP_SCREENING, commandline.ALLOW_ME, commandline.STRICT_SCREEN, commandline.HELPFUL,
+    commandline.VERBOSE,
 })
 
 
@@ -51,12 +52,12 @@ def _dispatch(argv, runtime):
     """
     command = DockerCommand(argv, runtime)
     if command.skip_screening:
-        flags.banner()
+        commandline.banner()
         return _passthrough(command.argv, runtime)
     return command.dispatch()
 
 
-class DockerCommand(flags.CommandLine):
+class DockerCommand(commandline.CommandLine):
     """A docker command line, without dockscreen's own options, and what those asked for."""
 
     def __init__(self, argv, runtime):
@@ -71,7 +72,7 @@ class DockerCommand(flags.CommandLine):
         messages.set_helpful(self.helpful or sub == "audit")
         if self.strict and sub != "audit":
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            return messages.refuse([f"{flags.STRICT_SCREEN} is only supported for audit so far"])
+            return messages.refuse([f"{commandline.STRICT_SCREEN} is only supported for audit so far"])
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
@@ -104,7 +105,7 @@ class DockerCommand(flags.CommandLine):
         if self.sub != "buildx":
             return None
         rest = self.argv[self.idx + 1:]
-        at = argscan.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
+        at = commandline.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
         return rest[at + 1:] if at is not None and rest[at] == "bake" else None
 
     def _screened_bake(self, args):

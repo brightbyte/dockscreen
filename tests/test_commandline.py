@@ -1,7 +1,7 @@
 import pytest
 from fakes import FakeDocker, compose_project, make_runtime
 
-from dockscreen import docker_cli, flags
+from dockscreen import commandline, docker_cli
 from dockscreen.compose import compose_cli
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}
@@ -20,19 +20,19 @@ FLAG = "--skip-screening"
     ([], False, []),
 ])
 def test_only_a_global_option_counts(argv, found, rest):
-    line = flags.CommandLine(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE, {FLAG})
+    line = commandline.CommandLine(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE, {FLAG})
     assert (line.skip_screening, line.argv) == (found, rest)
 
 
 def test_options_given_before_count_with_the_ones_taken_out():
-    line = flags.CommandLine(["--helpful", "up"], compose_cli.GLOBAL_OPTS_WITH_VALUE, compose_cli.OWN_OPTIONS,
-                             given={flags.ALLOW_ME})
+    line = commandline.CommandLine(["--helpful", "up"], compose_cli.GLOBAL_OPTS_WITH_VALUE,
+                                   compose_cli.OWN_OPTIONS, given={commandline.ALLOW_ME})
     assert line.allow_me and line.helpful and not line.skip_screening
     assert (line.argv, line.sub, line.global_args, line.args) == (["up"], "up", [], [])
 
 
 def test_banner_goes_to_stderr(capsys):
-    flags.banner()
+    commandline.banner()
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "screening is disabled" in captured.err and "no defaults are added" in captured.err
@@ -76,12 +76,13 @@ def test_docker_without_a_global_flag_gets_no_exemption():
 
 @pytest.mark.parametrize("argv", [["--helpful", "up"], ["--verbose", "up"], ["--verbose", "--helpful", "up"]])
 def test_helpful_and_verbose_are_ours_and_not_passed_on(argv):
-    line = flags.CommandLine(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE, compose_cli.OWN_OPTIONS)
+    line = commandline.CommandLine(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE, compose_cli.OWN_OPTIONS)
     assert (line.helpful, line.argv) == (True, ["up"])
 
 
 def test_verbose_after_the_subcommand_is_dockers_own():
-    line = flags.CommandLine(["up", "--verbose"], compose_cli.GLOBAL_OPTS_WITH_VALUE, compose_cli.OWN_OPTIONS)
+    line = commandline.CommandLine(["up", "--verbose"], compose_cli.GLOBAL_OPTS_WITH_VALUE,
+                                   compose_cli.OWN_OPTIONS)
     assert (line.helpful, line.argv) == (False, ["up", "--verbose"])
 
 
@@ -103,3 +104,26 @@ def test_compose_audit_is_helpful(tmp_path):
     assert messages._helpful is True
     compose_cli.main(["--verbose", "ps"], runtime, ())
     assert messages._helpful is True and runtime.docker.forwarded == [["ps"]]  # --verbose stays ours
+
+
+# --- scanning helpers ------------------------------------------------------
+
+@pytest.mark.parametrize("args, values", [
+    (["-f", "a.yml", "--file", "b.yml"], ["a.yml", "b.yml"]),
+    (["--file=a.yml", "-fb.yml"], ["a.yml", "b.yml"]),
+    (["-f=sub/a.yml"], ["sub/a.yml"]),  # as compose reads it, not "=sub/a.yml"
+    (["--files", "x", "-f"], []),  # another option, and -f without a value
+    ([], []),
+])
+def test_option_values(args, values):
+    assert commandline.option_values(args, "--file", "-f") == values
+
+
+@pytest.mark.parametrize("args, value", [
+    (["--pull", "always", "web"], "always"),
+    (["--pull=never"], "never"),
+    (["--", "--pull", "always"], None),  # belongs to the command
+    (["--pull"], None),
+])
+def test_option_value(args, value):
+    assert commandline.option_value(args, "--pull") == value

@@ -3,7 +3,7 @@ import os
 import pytest
 from fakes import ME, FakeImages, compose_project, make_runtime, read_raw
 
-from dockscreen import argscan, config
+from dockscreen import commandline, config
 from dockscreen.compose import gate
 from dockscreen.dockerclient import Docker
 
@@ -240,7 +240,7 @@ def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(tmp_
     ([], []),
 ])
 def test_strip_options(args, kept):
-    assert argscan.strip_options(args, gate.REPLACED_OPTIONS) == kept
+    assert commandline.strip_options(args, gate.REPLACED_OPTIONS) == kept
 
 
 def test_run_child_exit_codes_and_signals():

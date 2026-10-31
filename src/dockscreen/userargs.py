@@ -14,7 +14,7 @@ if no user had been chosen.
 
 from typing import NamedTuple
 
-from dockscreen import flags, hostusers, messages
+from dockscreen import commandline, hostusers, messages
 
 
 class Parsed(NamedTuple):
@@ -41,7 +41,7 @@ def parse(args, value_flags, me, accounts):
         if token == "--":
             service = args[i + 1] if i + 1 < len(args) else None
             return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices)
-        if token == flags.AS_ME:
+        if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
         elif token.startswith("--"):
@@ -72,10 +72,10 @@ def _parse_long(args, i, value_flags, users, kept):
     """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
     end = i
-    if (name in value_flags or name == flags.AS) and not has_value:
+    if (name in value_flags or name == commandline.AS) and not has_value:
         end = i + 1
         value = args[end] if end < len(args) else ""
-    if name == flags.AS:
+    if name == commandline.AS:
         kept.append(users.account(value))
         return end + 1
     if name == "--user":

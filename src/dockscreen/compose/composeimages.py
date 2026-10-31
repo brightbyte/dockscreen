@@ -26,7 +26,7 @@ import copy
 import json
 from typing import NamedTuple
 
-from dockscreen import argscan, ids, imagedecision, images, messages, policy, verdict
+from dockscreen import commandline, ids, imagedecision, images, messages, policy, verdict
 from dockscreen.dockerclient import DockerError
 
 
@@ -251,7 +251,7 @@ def _acquire(command, config, to_run, args, ctx):
     Returns the failures, empty if everything was acquired.
     """
     pull, build = [], []
-    override = argscan.option_value(args, "--pull")
+    override = commandline.option_value(args, "--pull")
     for name in sorted(to_run):
         service = config["services"][name]
         image = _image_name(config, name, service)

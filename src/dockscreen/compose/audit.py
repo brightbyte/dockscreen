@@ -6,7 +6,7 @@ compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
 
 import sys
 
-from dockscreen import daemon, flags, messages, policy, verdict
+from dockscreen import commandline, daemon, messages, policy, verdict
 from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.verdict import Verdict
@@ -20,9 +20,9 @@ def audit(global_args, args, runtime, allow_me=False):
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
     (verdict). --brief prints only the verdict, in one line.
     """
-    brief = args == [flags.BRIEF]
+    brief = args == [commandline.BRIEF]
     if args and not brief:
-        messages.notice(f"usage: dockscreen compose [compose options] audit [{flags.BRIEF}]")
+        messages.notice(f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF}]")
         return 2
     try:
         project = gate.load_project(global_args, runtime, allow_me)

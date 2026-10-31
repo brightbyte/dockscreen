@@ -5,7 +5,7 @@ command line is trusted, so what it asks for that a project or an image may not 
 (runpolicy), and fails the audit only with --strict-screen.
 """
 
-from dockscreen import daemon, flags, hostusers, ids, imageuser, messages, policy, verdict
+from dockscreen import commandline, daemon, hostusers, ids, imageuser, messages, policy, verdict
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.imagedecision import Kind, runs_as
 from dockscreen.messages import printable
@@ -26,8 +26,8 @@ def audit(global_args, args, runtime, allow_me=False, strict=False):
     2 if args cannot be read. --brief, before the image, prints only the verdict, in one line.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    line = flags.CommandLine(args, runargs.VALUE_OPTIONS, {flags.BRIEF})
-    brief, args = line.has(flags.BRIEF), line.argv
+    line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
+    brief, args = line.has(commandline.BRIEF), line.argv
     if daemon.is_remote(global_args, runtime.env, runtime.docker):
         return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE], brief)
     ctx = gate.image_context(runtime, allow_me)

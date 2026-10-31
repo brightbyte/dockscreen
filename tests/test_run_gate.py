@@ -1,7 +1,7 @@
 import pytest
 from fakes import FakeDocker, make_runtime
 
-from dockscreen import argscan, config, imagedecision
+from dockscreen import commandline, config, imagedecision
 from dockscreen.dockerclient import _first_file_of_tar
 from dockscreen.run import gate
 
@@ -359,7 +359,7 @@ def test_unreadable_command_line_is_refused(capsys):
     (["--time=5", "a", "--", "-weird"], ["a", "-weird"]),
 ])
 def test_container_refs(args, refs):
-    assert argscan.positionals(args, gate.VALUE_LONG, gate.VALUE_SHORT) == refs
+    assert commandline.positionals(args, gate.VALUE_LONG, gate.VALUE_SHORT) == refs
 
 
 def test_existing_containers_are_checked_by_the_same_rule():

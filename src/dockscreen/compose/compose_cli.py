@@ -5,7 +5,7 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
-from dockscreen import flags, helptext, ids, messages, policy, userargs, verdict
+from dockscreen import commandline, helptext, ids, messages, policy, userargs, verdict
 from dockscreen.compose import audit, composeargs, gate, screen
 
 # Subcommands that create containers from the config. `alpha` is a group (older
@@ -23,7 +23,10 @@ COMMANDS = {"audit": audit.audit, "harden": audit.harden, "fix": audit.harden}
 ALIASES = {"fix": "harden"}  # alias -> command it stands for
 
 # dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
-OWN_OPTIONS = frozenset({flags.SKIP_SCREENING, flags.ALLOW_ME, flags.AS_ME, flags.HELPFUL, flags.VERBOSE})
+OWN_OPTIONS = frozenset({
+    commandline.SKIP_SCREENING, commandline.ALLOW_ME, commandline.AS_ME, commandline.HELPFUL,
+    commandline.VERBOSE,
+})
 
 # Global `docker compose` options that consume the following token as their value.
 # Needed to tell `-f foo.yml up` (subcommand "up") from `-f up` (a value).
@@ -48,12 +51,12 @@ def main(argv, runtime, given):
     """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
     runtime: the Runtime the `docker` wrapper loaded. given: dockscreen's own options that the docker
-    command line gave before `compose` (flags.CommandLine.given).
+    command line gave before `compose` (commandline.CommandLine.given).
     Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
     """
     command = ComposeCommand(argv, runtime, given)
     if command.skip_screening:
-        flags.banner()
+        commandline.banner()
         return _passthrough(command.argv, runtime)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
     # with --skip-screening, which leaves compose as it is
@@ -61,7 +64,7 @@ def main(argv, runtime, given):
     return command.dispatch()
 
 
-class ComposeCommand(flags.CommandLine):
+class ComposeCommand(commandline.CommandLine):
     """A docker compose command line, without dockscreen's own options, and what those asked for.
 
     global_args are the options before the subcommand, which select the project.
@@ -79,7 +82,7 @@ class ComposeCommand(flags.CommandLine):
         argv, sub, runtime = self.argv, self.sub, self.runtime
         messages.set_helpful(self.helpful or sub == "audit")
         if self.as_me:
-            messages.notice(flags.AS_ME_MESSAGE)
+            messages.notice(commandline.AS_ME_MESSAGE)
             return 2
         target = self._help_request()
         if target is not None:

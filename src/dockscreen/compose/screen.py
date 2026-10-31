@@ -4,7 +4,7 @@ import json
 import os
 import re
 
-from dockscreen import argscan, config, images, messages, policy, verdict
+from dockscreen import commandline, config, images, messages, policy, verdict
 from dockscreen.dockerclient import DockerError, DockerNotFound
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -150,7 +150,8 @@ def name_conflicts(name, directory, docker):
 
 def names_project(global_args, env):
     """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME in env."""
-    return bool(argscan.option_values(global_args, "--project-name", "-p") or env.get("COMPOSE_PROJECT_NAME"))
+    chosen = commandline.option_values(global_args, "--project-name", "-p")
+    return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 
 
 def _project_directory(global_args, cwd, runtime):
@@ -159,11 +160,11 @@ def _project_directory(global_args, cwd, runtime):
     Raises ScreenError if that cannot be checked (a compose file from stdin, or as _find_compose_dir says).
     """
     env = runtime.env
-    explicit = argscan.option_values(global_args, "--project-directory", None)
+    explicit = commandline.option_values(global_args, "--project-directory", None)
     if explicit:
         return os.path.realpath(os.path.join(cwd, explicit[-1]))  # the last one wins, as in compose
 
-    files = argscan.option_values(global_args, "--file", "-f")
+    files = commandline.option_values(global_args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
@@ -171,7 +172,7 @@ def _project_directory(global_args, cwd, runtime):
     if files:  # compose takes the project directory from the first file
         return os.path.realpath(os.path.dirname(os.path.join(cwd, files[0])))
 
-    env_files = argscan.option_values(global_args, "--env-file", None)
+    env_files = commandline.option_values(global_args, "--env-file", None)
     return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 

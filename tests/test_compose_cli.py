@@ -1,7 +1,7 @@
 import pytest
 from fakes import compose_project
 
-from dockscreen import argscan
+from dockscreen import commandline
 from dockscreen.compose import compose_cli
 
 
@@ -16,7 +16,7 @@ from dockscreen.compose import compose_cli
     (["--help"], None),
 ])
 def test_find_subcommand(argv, expected):
-    assert argscan.find_subcommand(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE) == expected
+    assert commandline.find_subcommand(argv, compose_cli.GLOBAL_OPTS_WITH_VALUE) == expected
 
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}

@@ -9,7 +9,7 @@ under their own column, as docker does.
 import textwrap
 from typing import NamedTuple
 
-from dockscreen import flags, messages
+from dockscreen import commandline, messages
 
 
 HELP_FALLBACK_WIDTH = 80
@@ -36,10 +36,10 @@ class Topic(NamedTuple):
     docker_help: bool = True   # docker (or compose) has its own help for the command, to follow ours
 
 
-ALLOW_ME = Option(flags.ALLOW_ME, "Allow your own ids as the image's user (--as-me implies it)")
+ALLOW_ME = Option(commandline.ALLOW_ME, "Allow your own ids as the image's user (--as-me implies it)")
 USER_OPTIONS = (
-    Option(flags.AS, "Run as the local user NAME, resolved on this host", value="string"),
-    Option(flags.AS_ME, "Run as yourself"),
+    Option(commandline.AS, "Run as the local user NAME, resolved on this host", value="string"),
+    Option(commandline.AS_ME, "Run as yourself"),
     Option("--user", "Numeric UID:GID only; --as is for names", short="u", value="string"),
 )
 DEFAULTS = ("It adds --cap-drop=ALL and --security-opt=no-new-privileges:true before your options, which "
@@ -55,21 +55,23 @@ VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖
           "✘ audit failed."
 
 DOCKER_OPTIONS = (
-    Option(flags.ALLOW_ME, "Allow containers to run as you"),
-    Option(flags.HELPFUL, "Say what to do about a message too (also --verbose, which is not passed on)"),
-    Option(flags.SKIP_SCREENING, "Turn all checks off; warns every time"),
-    Option(flags.STRICT_SCREEN, "For audit: also deny what the command line asks for that a project or "
-                                "image may not have"),
+    Option(commandline.ALLOW_ME, "Allow containers to run as you"),
+    Option(commandline.HELPFUL,
+           "Say what to do about a message too (also --verbose, which is not passed on)"),
+    Option(commandline.SKIP_SCREENING, "Turn all checks off; warns every time"),
+    Option(commandline.STRICT_SCREEN, "For audit: also deny what the command line asks for that a project or "
+                                      "image may not have"),
 )
 COMPOSE_OPTIONS = (
-    Option(flags.ALLOW_ME, "Allow services to run as you"),
-    Option(flags.HELPFUL, "Say what to do about a message too (also --verbose, which is not passed on)"),
-    Option(flags.SKIP_SCREENING, "Turn all checks off; warns every time"),
+    Option(commandline.ALLOW_ME, "Allow services to run as you"),
+    Option(commandline.HELPFUL,
+           "Say what to do about a message too (also --verbose, which is not passed on)"),
+    Option(commandline.SKIP_SCREENING, "Turn all checks off; warns every time"),
 )
 
 DOCKER = {
     "run": Topic(
-        f"dockscreen [{flags.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
+        f"dockscreen [{commandline.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Create and run a container, after checking the user its image runs as",
         ("dockscreen creates the container, checks it, and only then starts it:", *IMAGE_RULES, DEFAULTS,
          VERDICT),
@@ -94,16 +96,16 @@ DOCKER = {
         "Run a command in a running container; --as and --as-me choose the user",
         (), USER_OPTIONS, aliases=("dockscreen container exec", "dockscreen exec")),
     "audit": Topic(
-        f"dockscreen [{flags.ALLOW_ME}] [{flags.STRICT_SCREEN}] audit [{flags.BRIEF}] [RUN OPTIONS] IMAGE "
-        "[COMMAND] [ARG...]",
+        f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
+        "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Say what run would do with the same arguments, without starting anything",
         ("The container is created as run would create it, pulling the image if run would, judged, and "
          "removed. It also points out what the command line asks for that a compose project or an image "
          "may not have; run allows that, because the command line is trusted.",
          "Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
          "image could not be pulled or created)."),
-        (Option(flags.BRIEF, "Print only the verdict, in one line"),
-         Option(flags.STRICT_SCREEN, "(before audit) Deny for what the command line asks for, too"),
+        (Option(commandline.BRIEF, "Print only the verdict, in one line"),
+         Option(commandline.STRICT_SCREEN, "(before audit) Deny for what the command line asks for, too"),
          ALLOW_ME, *USER_OPTIONS),
         docker_help=False),
     "compose": Topic(
@@ -145,7 +147,7 @@ COMPOSE = {
                   "Run a command in a running service; --as and --as-me choose the user", (), USER_OPTIONS),
 }
 # Options of dockscreen's own compose commands, which their docstrings do not list.
-COMMAND_OPTIONS = {"audit": (Option(flags.BRIEF, "Print only the verdict, in one line"),)}
+COMMAND_OPTIONS = {"audit": (Option(commandline.BRIEF, "Print only the verdict, in one line"),)}
 
 
 def command_topic(name, fn, aliases=()):
