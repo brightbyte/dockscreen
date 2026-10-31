@@ -14,7 +14,7 @@ from dockscreen.compose.commands import ALIASES, COMMANDS
 RUNTIME_SUBCOMMANDS = frozenset({"up", "create", "run", "watch", "scale", "alpha"})
 # Subcommands that only build: they get the build-related checks, not the runtime policy.
 BUILD_SUBCOMMANDS = frozenset({"build", "bake"})
-SCREENED_SUBCOMMANDS = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
+SCREENED = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
 # Subcommands that stop, change or remove what the project's name stands for. Only the name is checked.
 NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", "start", "pause", "unpause"})
 
@@ -32,7 +32,7 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 })
 
 
-def _forward(argv, runtime):
+def _passthrough(argv, runtime):
     """Replaces this process with `docker compose argv`, keeping tty, signals and exit code."""
     runtime.docker.exec(["compose", *argv])
 
@@ -46,25 +46,27 @@ def main(argv, runtime):
     skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
     if skipped:
         flags.banner()
-        return _forward(argv, runtime)
-
-    allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
-    helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
-    as_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.AS_ME)
-    if as_me:
-        messages.notice(flags.AS_ME_MESSAGE)
-        return 2
+        return _passthrough(argv, runtime)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process
     runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
-    return ComposeCommand(argv, runtime, allow_me, helpful).dispatch()
+    return ComposeCommand.parse(argv, runtime).dispatch()
 
 
 class ComposeCommand:
     """A docker compose command line, without dockscreen's own options, and what those asked for."""
 
-    def __init__(self, argv, runtime, allow_me=False, helpful=False):
-        self.argv, self.runtime, self.allow_me, self.helpful = argv, runtime, allow_me, helpful
+    def __init__(self, argv, runtime, allow_me=False, as_me=False, helpful=False):
+        self.argv, self.runtime = argv, runtime
+        self.allow_me, self.as_me, self.helpful = allow_me, as_me, helpful
         self.idx = argscan.find_subcommand(argv, GLOBAL_OPTS_WITH_VALUE)  # None if there is no command
+
+    @classmethod
+    def parse(cls, argv, runtime):
+        """Builds the command for argv, taking out --allow-me, --as-me and --helpful or --verbose."""
+        allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
+        helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
+        as_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.AS_ME)
+        return cls(argv, runtime, allow_me, as_me, helpful)
 
     @property
     def sub(self):
@@ -88,6 +90,9 @@ class ComposeCommand:
         """
         argv, sub, runtime = self.argv, self.sub, self.runtime
         messages.set_helpful(self.helpful or sub == "audit")
+        if self.as_me:
+            messages.notice(flags.AS_ME_MESSAGE)
+            return 2
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
@@ -109,7 +114,7 @@ class ComposeCommand:
                 return 1
             argv = [*argv[:self.idx + 1], *args]
 
-        _forward(argv, runtime)
+        _passthrough(argv, runtime)
 
     def _name_is_free(self):
         """Tells whether the project's name is free: chosen on the command line, or not used by containers
@@ -130,8 +135,8 @@ class ComposeCommand:
         return not reasons or verdict.screened(reasons)
 
     def _is_screened(self):
-        """Tells whether the subcommand is one that is screened (SCREENED_SUBCOMMANDS)."""
-        return self.sub in SCREENED_SUBCOMMANDS
+        """Tells whether the subcommand is one that is screened (SCREENED)."""
+        return self.sub in SCREENED
 
     def _help_request(self):
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.
@@ -151,7 +156,7 @@ class ComposeCommand:
         argv = self.argv
         if target == "":
             helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
-            return _forward(argv, self.runtime)
+            return _passthrough(argv, self.runtime)
         if target in COMMANDS:
             topic = _own_commands()[ALIASES.get(target, target)]
             helptext.show(lambda width: helptext.topic(topic, "", width))
@@ -161,7 +166,7 @@ class ComposeCommand:
             helptext.show(lambda width: helptext.topic(topic, "Docker Compose's own", width))
         if self.sub == "help":
             argv = [*self.global_args, target, "--help"]
-        return _forward(argv, self.runtime)
+        return _passthrough(argv, self.runtime)
 
 
 def rewrite_exec(kind, args, runtime):

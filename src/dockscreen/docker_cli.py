@@ -18,7 +18,8 @@ DOCKER_OPTS_WITH_VALUE = frozenset({
     "--config", "-c", "--context", "-H", "--host", "-l", "--log-level",
     "--tlscacert", "--tlscert", "--tlskey",
 })
-GATED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
+# Commands that start a container or run in one, and our audit: they go through the gate.
+SCREENED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 
 
@@ -82,12 +83,11 @@ class DockerCommand:
         if self.strict and sub != "audit":
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
             return messages.refuse([f"{flags.STRICT_SCREEN} is only supported for audit so far"])
+        target = self._help_request()
+        if target is not None:
+            return self.show_help(target)
         if sub is None:
-            if not argv or "--help" in argv or "-h" in argv:
-                helptext.show(helptext.docker_overview)
             return _passthrough(argv, self.runtime)
-        if sub == "help":
-            return self.show_help()
 
         if sub == "compose":
             if self.idx != 0:  # compose_cli gets what follows `compose`: these would not reach it
@@ -96,17 +96,20 @@ class DockerCommand:
             lead = [*([flags.ALLOW_ME] if self.allow_me else []), *([flags.HELPFUL] if self.helpful else [])]
             return compose_cli.main([*lead, *argv[1:]], self.runtime)
 
-        end = self.idx
-        # `docker container run` is `docker run`; audit is ours and has no such form
-        if sub == "container" and end + 1 < len(argv) and argv[end + 1] in GATED - {"audit"}:
-            sub, end = argv[end + 1], end + 1
-        if _wants_command_help(sub, argv[end + 1:]):
-            return self._show_command_help(sub, argv)
         if (bake_args := self._bake_arguments()) is not None and bake.wants_screening(bake_args):
             return self._screened_bake(bake_args)
-        if sub not in GATED:
+        sub, end = self._command()
+        if sub not in SCREENED:
             return _passthrough(argv, self.runtime)
         return self._gated(sub, end)
+
+    def _command(self):
+        """Returns (name, index) of the command: `docker container run` is `run`, at the index of `run`."""
+        argv, end = self.argv, self.idx
+        # audit is ours and has no such form
+        if argv[end] == "container" and end + 1 < len(argv) and argv[end + 1] in SCREENED - {"audit"}:
+            end += 1
+        return argv[end], end
 
     def _bake_arguments(self):
         """Returns the arguments of `buildx bake`, or None if the command is not that."""
@@ -127,7 +130,7 @@ class DockerCommand:
         return _passthrough(self.argv, self.runtime)
 
     def _gated(self, sub, end):
-        """Runs the GATED command sub (argv[end]) through the gate and returns the exit status, unless it
+        """Runs the SCREENED command sub (argv[end]) through the gate and returns the exit status, unless it
         passes and docker replaces this process.
         """
         argv, runtime = self.argv, self.runtime
@@ -162,22 +165,33 @@ class DockerCommand:
             return 1
         return _passthrough(argv, runtime)
 
-    def show_help(self):
-        """Prints dockscreen's help for `help` or `help COMMAND`, then passes on to docker for its own."""
-        rest = self.argv[self.idx + 1:]
-        if not rest:
+    def _help_request(self):
+        """Determines what help the command line asks for: None for none, "" for the overview, else a command.
+
+        `help`, `help COMMAND`, or --help or -h as the first argument after the command; for run and create,
+        -h is --hostname. `compose` gives its own help (compose_cli), except for `help compose`.
+        """
+        argv, idx = self.argv, self.idx
+        if idx is None:
+            return "" if not argv or "--help" in argv or "-h" in argv else None
+        if argv[idx] == "help":
+            return argv[idx + 1] if idx + 1 < len(argv) else ""
+        if argv[idx] == "compose":
+            return None
+        sub, end = self._command()
+        return sub if _wants_command_help(sub, argv[end + 1:]) else None
+
+    def show_help(self, target):
+        """Prints dockscreen's help for target, then passes on to docker for its own if it has one."""
+        if target == "":
             helptext.show(helptext.docker_overview)
             return _passthrough(self.argv, self.runtime)
-        if rest[0] == "compose":
-            return compose_cli.main(["help", *rest[1:]], self.runtime)
-        return self._show_command_help(rest[0], [rest[0], "--help"])
-
-    def _show_command_help(self, name, argv):
-        """Prints dockscreen's help for command name, if it has one, then runs argv for docker's own.
-
-        Returns 0 if docker has no help to add.
-        """
-        topic = helptext.DOCKER.get(name)
+        if target == "compose":
+            return compose_cli.main(["help", *self.argv[self.idx + 2:]], self.runtime)
+        argv = self.argv
+        if self.sub == "help":
+            argv = [*argv[:self.idx], target, "--help"]
+        topic = helptext.DOCKER.get(target)
         if topic is not None:
             helptext.show(lambda width: helptext.topic(topic, "Docker's own", width))
             if not topic.docker_help:
