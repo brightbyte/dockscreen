@@ -8,7 +8,7 @@ difference between this reading and docker's can at worst refuse a good image.
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import hostusers
+from dockscreen.host import hostusers
 
 
 class Identity(NamedTuple):

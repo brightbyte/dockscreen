@@ -4,9 +4,10 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen import config, messages
+from dockscreen import messages
 from dockscreen.compose import screen
-from dockscreen.dockerclient import Docker
+from dockscreen.host import config
+from dockscreen.host.dockerclient import Docker
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):

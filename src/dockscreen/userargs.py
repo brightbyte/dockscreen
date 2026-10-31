@@ -15,8 +15,9 @@ if no user had been chosen.
 from collections.abc import Collection, Sequence
 from typing import NamedTuple
 
-from dockscreen import commandline, hostusers, messages
-from dockscreen.runtime import Runtime
+from dockscreen import commandline, messages
+from dockscreen.host import hostusers
+from dockscreen.host.runtime import Runtime
 
 
 class Parsed(NamedTuple):

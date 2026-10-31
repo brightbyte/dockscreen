@@ -2,9 +2,10 @@ import os
 
 from fakes import FakeImages, compose_project, rules
 
-from dockscreen import messages, policy
+from dockscreen import messages
 from dockscreen.compose import audit, autofix
 from dockscreen.messages import printable
+from dockscreen.screen import policy
 
 UID, GID = os.getuid(), os.getgid()
 

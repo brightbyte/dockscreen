@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from dockscreen import config, runtime
-from dockscreen.dockerclient import DockerNotFound
+from dockscreen.host import config, runtime
+from dockscreen.host.dockerclient import DockerNotFound
 
 
 def make_docker(directory):

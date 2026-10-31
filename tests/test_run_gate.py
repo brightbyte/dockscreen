@@ -1,9 +1,11 @@
 import pytest
 from fakes import FakeDocker, make_runtime
 
-from dockscreen import commandline, config, imagedecision
-from dockscreen.dockerclient import _first_file_of_tar
+from dockscreen import commandline
+from dockscreen.host import config
+from dockscreen.host.dockerclient import _first_file_of_tar
 from dockscreen.run import gate
+from dockscreen.screen import imagedecision
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 

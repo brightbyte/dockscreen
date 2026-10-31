@@ -1,7 +1,7 @@
 from fakes import rules
 
-from dockscreen import policy
 from dockscreen.run import runpolicy
+from dockscreen.screen import policy
 
 HARDENED = {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"]}
 

@@ -2,7 +2,7 @@ import pytest
 from fakes import FakeImages, compose_project
 
 from dockscreen.compose import compose_cli, gate, screen
-from dockscreen.dockerclient import DockerError
+from dockscreen.host.dockerclient import DockerError
 
 
 def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():

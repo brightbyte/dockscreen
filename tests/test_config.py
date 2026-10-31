@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dockscreen import config
+from dockscreen.host import config
 
 
 def write(path, text, mode=0o600):

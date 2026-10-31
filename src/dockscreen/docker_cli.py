@@ -8,11 +8,12 @@ import sys
 from collections.abc import Sequence
 from typing import NoReturn
 
-from dockscreen import bake, commandline, config, helptext, hostusers, messages, userargs, verdict
+from dockscreen import bake, commandline, helptext, messages, userargs, verdict
 from dockscreen.compose import compose_cli
-from dockscreen.dockerclient import DockerNotFound
+from dockscreen.host import config, hostusers
+from dockscreen.host.dockerclient import DockerNotFound
+from dockscreen.host.runtime import Runtime, load_runtime
 from dockscreen.run import audit, gate, runargs
-from dockscreen.runtime import Runtime, load_runtime
 
 # Global `docker` options that consume the following token as their value.
 DOCKER_OPTS_WITH_VALUE = frozenset({

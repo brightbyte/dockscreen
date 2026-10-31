@@ -7,21 +7,14 @@ command line is trusted, so what it asks for that a project or an image may not 
 
 from collections.abc import Sequence
 
-from dockscreen import (
-    commandline,
-    hostusers,
-    ids,
-    imagedecision,
-    imageuser,
-    messages,
-    policy,
-    verdict,
-)
-from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
-from dockscreen.imagedecision import Assessment, Kind, runs_as
+from dockscreen import commandline, ids, messages, verdict
+from dockscreen.host import hostusers
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
+from dockscreen.host.runtime import Runtime
 from dockscreen.messages import printable
 from dockscreen.run import gate, runargs, runpolicy
-from dockscreen.runtime import Runtime
+from dockscreen.screen import imagedecision, imageuser, policy
+from dockscreen.screen.imagedecision import Assessment, Kind, runs_as
 from dockscreen.verdict import Verdict
 
 AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief] [docker run options] "

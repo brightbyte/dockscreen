@@ -8,9 +8,10 @@ parse is the position of the subcommand.
 from collections.abc import Collection, Sequence
 from typing import NoReturn
 
-from dockscreen import commandline, helptext, messages, policy, userargs, verdict
+from dockscreen import commandline, helptext, messages, userargs, verdict
 from dockscreen.compose import audit, composeargs, gate, screen, shellenv
-from dockscreen.runtime import Runtime
+from dockscreen.host.runtime import Runtime
+from dockscreen.screen import policy
 
 # Subcommands that create containers from the config. `alpha` is a group (older
 # compose has `alpha watch`); screening it is cheap and errs on the safe side.

@@ -27,9 +27,10 @@ import json
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, ids, imagedecision, images, messages, policy, verdict
-from dockscreen import config as configuration
-from dockscreen.dockerclient import Docker, DockerError
+from dockscreen import commandline, ids, images, messages, verdict
+from dockscreen.host import config as configuration
+from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.screen import imagedecision, policy
 
 
 class ImageError(Exception):

@@ -1,7 +1,8 @@
 import pytest
 
-from dockscreen import hostusers, userargs
+from dockscreen import userargs
 from dockscreen.compose import composeargs
+from dockscreen.host import hostusers
 from dockscreen.run import runargs
 
 ME = (1000, 1001)  # what --as-me stands for

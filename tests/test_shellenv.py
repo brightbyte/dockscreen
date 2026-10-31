@@ -6,7 +6,7 @@ from fakes import make_runtime
 
 from dockscreen import messages
 from dockscreen.compose import compose_cli, shellenv
-from dockscreen.dockerclient import Docker
+from dockscreen.host.dockerclient import Docker
 
 
 def config(**services):

@@ -1,8 +1,9 @@
 import pytest
 from fakes import FakeDocker, compose_project, make_runtime
 
-from dockscreen import config, docker_cli
-from dockscreen.dockerclient import Docker
+from dockscreen import docker_cli
+from dockscreen.host import config
+from dockscreen.host.dockerclient import Docker
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 

@@ -5,12 +5,20 @@ import pytest
 
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 ENTRY = "dockscreen.docker_cli"
-FRONT_ENDS = ("compose", "run")
+FRONT_ENDS = ("compose", "run", "bake")
+SHARED = ("messages", "ids", "images", "commandline")
+# Each layer may import its own and the ones before it: the shared vocabulary, then what describes the
+# host (host), then the checks (screen), then the command line's own modules, then the front ends.
+LAYERS = ("shared", "host", "screen", "command line", "front end", "entry point")
 
 
 def module_name(path):
     parts = path.relative_to(SOURCE.parent).with_suffix("").parts
     return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
+
+
+MODULES = sorted(SOURCE.rglob("*.py"))
+KNOWN = {module_name(p) for p in MODULES}
 
 
 def imported(path):
@@ -21,29 +29,37 @@ def imported(path):
             names |= {a.name for a in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module:
             names |= {node.module, *(f"{node.module}.{a.name}" for a in node.names)}
-    return {n for n in names if n.split(".")[0] == "dockscreen" and n != "dockscreen"}
+    names = {n for n in names if n.split(".")[0] == "dockscreen" and n != "dockscreen"}
+    return {n.rsplit(".", 1)[0] if n not in KNOWN else n for n in names}  # p.Name counts as p
 
 
 def layer(module):
-    """compose or run for a front end's package and modules, else None for the core and the entry point."""
-    parts = module.split(".")
-    return parts[1] if len(parts) > 1 and parts[1] in FRONT_ENDS else None
+    """Returns the layer the module belongs to (LAYERS)."""
+    top = module.split(".")[1:2]
+    if module == ENTRY:
+        return "entry point"
+    if front_end(module):
+        return "front end"
+    if top in (["host"], ["screen"]):
+        return top[0]
+    return "shared" if not top or top[0] in SHARED else "command line"
 
 
-MODULES = sorted(SOURCE.rglob("*.py"))
+def front_end(module):
+    """Returns the front end the module belongs to, or None."""
+    top = module.split(".")[1:2]
+    return top[0] if top and top[0] in FRONT_ENDS else None
 
 
 @pytest.mark.parametrize("path", MODULES, ids=lambda p: module_name(p))
-def test_imports_go_from_the_entry_point_through_a_front_end_to_the_core(path):
+def test_imports_go_from_the_entry_point_down_the_layers(path):
     module = module_name(path)
-    if module == ENTRY:
-        return
     for name in imported(path):
-        # the core imports neither front end, and neither front end the other
-        assert layer(name) in (None, layer(module)), f"{module} imports {name}"
-        assert name != ENTRY, f"{module} imports {name}"
+        assert LAYERS.index(layer(name)) <= LAYERS.index(layer(module)), f"{module} imports {name}"
+        if layer(module) == "front end":  # and none imports another
+            assert front_end(name) in (None, front_end(module)), f"{module} imports {name}"
 
 
-@pytest.mark.parametrize("package", FRONT_ENDS)
-def test_front_end_packages_import_nothing_themselves(package):
+@pytest.mark.parametrize("package", ["compose", "run", "host", "screen"])
+def test_packages_import_nothing_themselves(package):
     assert (SOURCE / package / "__init__.py").read_text() == ""

@@ -26,8 +26,9 @@ import os
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import config as configuration
-from dockscreen import idrules, ids
+from dockscreen import ids
+from dockscreen.host import config as configuration
+from dockscreen.screen import idrules
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
 # What every service must have; hardening adds them where they are missing.

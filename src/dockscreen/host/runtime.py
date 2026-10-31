@@ -9,8 +9,9 @@ import sys
 from collections.abc import Collection, Mapping, MutableMapping
 from typing import NamedTuple
 
-from dockscreen import config, hostusers, messages
-from dockscreen.dockerclient import Docker, DockerNotFound
+from dockscreen import messages
+from dockscreen.host import config, hostusers
+from dockscreen.host.dockerclient import Docker, DockerNotFound
 
 
 class Runtime(NamedTuple):

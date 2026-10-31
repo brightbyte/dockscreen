@@ -3,8 +3,8 @@ import os
 import pytest
 from fakes import rules
 
-from dockscreen import policy
 from dockscreen.compose import autofix
+from dockscreen.screen import policy
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
 # for the rest of the host).

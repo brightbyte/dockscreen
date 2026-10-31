@@ -20,9 +20,11 @@ import enum
 from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen import config, hostusers, idrules, ids, imageuser, messages
-from dockscreen.dockerclient import Docker
-from dockscreen.runtime import Runtime
+from dockscreen import ids, messages
+from dockscreen.host import config, hostusers
+from dockscreen.host.dockerclient import Docker
+from dockscreen.host.runtime import Runtime
+from dockscreen.screen import idrules, imageuser
 
 
 class Context(NamedTuple):

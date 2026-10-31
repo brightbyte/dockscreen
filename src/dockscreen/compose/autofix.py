@@ -16,8 +16,9 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from dockscreen import ids, policy
+from dockscreen import ids
 from dockscreen.messages import printable
+from dockscreen.screen import policy
 
 # What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
 # only with --allow-me. A literal would only fit the person who ran harden.

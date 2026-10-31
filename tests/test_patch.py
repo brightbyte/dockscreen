@@ -2,8 +2,8 @@ import os
 
 from fakes import compose_project, rules
 
-from dockscreen import policy
 from dockscreen.compose import audit, autofix
+from dockscreen.screen import policy
 
 UID = os.getuid()
 GID = os.getgid()

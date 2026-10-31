@@ -22,7 +22,7 @@ ddocker = "dockscreen.docker_cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-dockscreen = ["config.template.toml"]
+"dockscreen.host" = ["config.template.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -8,10 +8,11 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen import commandline, messages, policy, verdict
+from dockscreen import commandline, messages, verdict
 from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
-from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound
-from dockscreen.runtime import Runtime
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound
+from dockscreen.host.runtime import Runtime
+from dockscreen.screen import policy
 from dockscreen.verdict import Verdict
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"

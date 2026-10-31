@@ -1,8 +1,8 @@
 import pytest
 from fakes import host_account
 
-from dockscreen import hostusers
-from dockscreen.hostusers import HostAccounts
+from dockscreen.host import hostusers
+from dockscreen.host.hostusers import HostAccounts
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])

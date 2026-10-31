@@ -156,7 +156,7 @@ def _create_user_file(path: str) -> bool:
     Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
     symlink in its place, is never touched.
     """
-    template = importlib.resources.files("dockscreen").joinpath("config.template.toml").read_bytes()
+    template = importlib.resources.files("dockscreen.host").joinpath("config.template.toml").read_bytes()
     try:
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)

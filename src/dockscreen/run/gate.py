@@ -19,9 +19,13 @@ what `run` would do.
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, hostusers, idrules, ids, imagedecision, images, messages, verdict
-from dockscreen.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
-from dockscreen.imagedecision import (
+from dockscreen import commandline, ids, images, messages, verdict
+from dockscreen.host import hostusers
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
+from dockscreen.host.runtime import Runtime
+from dockscreen.run import runargs
+from dockscreen.screen import idrules, imagedecision
+from dockscreen.screen.imagedecision import (
     Assessment,
     Kind,
     assess,
@@ -30,8 +34,6 @@ from dockscreen.imagedecision import (
     instead_of_root,
     root_default_notice,
 )
-from dockscreen.run import runargs
-from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
 # Inserted before the user's own arguments, so the user can override both

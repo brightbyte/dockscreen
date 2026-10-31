@@ -146,6 +146,15 @@ A message has two parts: the facts, and an optional help part that says what to 
 
 ## Mechanisms
 
+The code is in layers, each of which imports only its own and the ones before it (`tests/test_layering.py` checks this):
+
+1. Shared vocabulary at the top of the package: `messages`, `ids`, `images`, `commandline`.
+2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`.
+3. `screen`: the checks: `policy`, `idrules`, `imagedecision`, `imageuser`.
+4. The command line's own modules at the top of the package: `userargs`, `helptext`, `verdict`.
+5. The front ends, none of which imports another: the `compose` and `run` packages, and `bake`.
+6. The entry point, `docker_cli`.
+
 The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). Each front end's package, `run` or `compose`, has a `gate` that checks and then runs, an `audit` that checks and reports, and the parser of its command lines (`runargs`, `composeargs`). The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
 ### Compose (`compose_cli`, `screen`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)

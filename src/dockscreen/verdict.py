@@ -10,8 +10,8 @@ import enum
 from collections.abc import Sequence
 
 from dockscreen import messages
-from dockscreen.imagedecision import Assessment, Kind
 from dockscreen.messages import printable
+from dockscreen.screen.imagedecision import Assessment, Kind
 
 
 class Verdict(enum.IntEnum):

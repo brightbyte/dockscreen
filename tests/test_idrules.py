@@ -1,7 +1,7 @@
 import pytest
 from fakes import rules
 
-from dockscreen import config, hostusers
+from dockscreen.host import config, hostusers
 
 
 class Accounts:

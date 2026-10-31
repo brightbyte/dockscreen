@@ -15,8 +15,9 @@ import os
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from dockscreen import messages, policy
-from dockscreen.dockerclient import Docker, DockerError
+from dockscreen import messages
+from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.screen import policy
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
 TARGET_KEYS = frozenset({

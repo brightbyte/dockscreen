@@ -19,10 +19,12 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, hostusers, idrules, imagedecision, messages, policy, userargs, verdict
+from dockscreen import commandline, messages, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
-from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
-from dockscreen.runtime import Runtime
+from dockscreen.host import hostusers
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
+from dockscreen.host.runtime import Runtime
+from dockscreen.screen import idrules, imagedecision, policy
 
 # Options that select the files and the project; ours replace them.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")

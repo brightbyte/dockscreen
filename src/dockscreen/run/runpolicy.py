@@ -10,7 +10,7 @@ A user the command line chooses is judged by the id rules too, as if a project h
 
 from typing import Any
 
-from dockscreen import policy
+from dockscreen.screen import policy
 
 # Inspected HostConfig fields that hold what the compose key of the same meaning holds.
 FIELDS = {

@@ -183,7 +183,7 @@ def test_harden_looks_at_the_images_with_the_users_it_writes_resolved(capsys, tm
 
 
 def test_harden_leaves_a_user_the_config_file_sets_for_the_image(capsys, tmp_path):
-    from dockscreen import config as configuration
+    from dockscreen.host import config as configuration
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(900, 900))})
     config = project(db={"user": "900:900", "volumes": [
         {"type": "bind", "source": str(tmp_path / "data"), "target": "/data"}]})

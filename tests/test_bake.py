@@ -6,7 +6,7 @@ import pytest
 from fakes import make_runtime
 
 from dockscreen import bake, docker_cli
-from dockscreen.dockerclient import DockerError
+from dockscreen.host.dockerclient import DockerError
 
 
 @pytest.fixture

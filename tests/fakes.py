@@ -3,8 +3,9 @@ import json
 import os
 import subprocess
 
-from dockscreen import config, hostusers, idrules, imagedecision
-from dockscreen.dockerclient import DockerError
+from dockscreen.host import config, hostusers
+from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen import idrules, imagedecision
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"
           "pg:x:998:998::/:/bin/sh\nnobody:x:65534:65534::/:/bin/sh\n")
@@ -69,7 +70,7 @@ def make_runtime(**fields):
     caller, whatever this host has, and a FakeImages with no images as its docker; fields replace any of
     that. The environment, home and directory are this process's own.
     """
-    from dockscreen.runtime import Runtime
+    from dockscreen.host.runtime import Runtime
     if "docker" not in fields:
         fields["docker"] = FakeImages()
         fake_compose(fields["docker"])

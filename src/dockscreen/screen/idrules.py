@@ -23,9 +23,9 @@ check (a configured image user), and the caller's own ids when --allow-me was gi
 from collections.abc import Collection, Iterable
 from typing import NamedTuple, Self
 
-from dockscreen import config as configuration
-from dockscreen import hostusers
-from dockscreen.runtime import Runtime
+from dockscreen.host import config as configuration
+from dockscreen.host import hostusers
+from dockscreen.host.runtime import Runtime
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
 # caller's own uid, so they are refused here with or without host mounts.

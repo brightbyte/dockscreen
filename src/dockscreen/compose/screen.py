@@ -6,9 +6,11 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
-from dockscreen import commandline, config, idrules, messages, policy, verdict
-from dockscreen.dockerclient import Docker, DockerError, DockerNotFound
-from dockscreen.runtime import Runtime
+from dockscreen import commandline, messages, verdict
+from dockscreen.host import config
+from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
+from dockscreen.host.runtime import Runtime
+from dockscreen.screen import idrules, policy
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)

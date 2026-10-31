@@ -1,8 +1,9 @@
 import pytest
 from fakes import Accounts, compose_project, rules
 
-from dockscreen import messages, policy
+from dockscreen import messages
 from dockscreen.compose import audit, autofix, compose_cli, hardening
+from dockscreen.screen import policy
 
 NOBODY = "65534:65534"
 
