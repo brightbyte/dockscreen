@@ -377,9 +377,9 @@ def test_a_service_may_name_the_user_its_image_section_sets(tmp_path, capsys):
 
 
 def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(tmp_path, capsys):
-    runtime, recorder = compose_project(tmp_path, project_config(user="900:900", **inside(tmp_path)),
-                                        FakeImages(users={"x:1": "app"}),  # no digest: tagged locally
-                                        settings=X_USER)
+    runtime, _ = compose_project(tmp_path, project_config(user="900:900", **inside(tmp_path)),
+                                 FakeImages(users={"x:1": "app"}),  # no digest: tagged locally
+                                 settings=X_USER)
 
     assert up(["up"], 0, runtime) == 1
     assert "user '900:900': uid 900 is not in the nobody range" in capsys.readouterr().err

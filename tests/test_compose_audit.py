@@ -1,11 +1,12 @@
 """`audit` and `harden` pull and build as `up` would, then say what happens to services without a user."""
 import json
+
 from fakes import ME, FakeImages, compose_project, make_runtime
 
 from dockscreen import messages
 from dockscreen.compose import audit
 from dockscreen.compose.composeimages import USER_HELP
-from dockscreen.messages import BAD, GOOD, WARN
+from dockscreen.messages import BAD, GOOD
 
 UID, GID = ME
 
@@ -139,7 +140,8 @@ def test_harden_writes_nothing_for_a_root_image_and_never_the_pull_pin(capsys, t
     assert out.splitlines()[-1] == "services: {}"       # nothing is needed: dockscreen does it all
     assert "pull_policy" not in out and "never" not in out  # the pin lives in the generated file only
     assert "user:" not in out.replace("sets no user", "")
-    assert pulls(recorder) == [["pull", "--", "web"]]  # the project's always policy: the images were looked at
+    # the project's always policy: the images were looked at
+    assert pulls(recorder) == [["pull", "--", "web"]]
     assert ("runs a service that sets no user as the configured default user when its image would run "
             "as root") in out
 

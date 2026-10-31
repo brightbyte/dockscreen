@@ -15,7 +15,7 @@ import shutil
 import sys
 import textwrap
 from collections.abc import Sequence
-from typing import NoReturn, TextIO
+from typing import NoReturn, Self, TextIO
 
 PREFIX = "[dockscreen]"
 DOCKER_NOT_FOUND = "'docker' not found in PATH"
@@ -26,7 +26,7 @@ class Mark(str):
 
     colour: str
 
-    def __new__(cls, glyph: str, colour: str) -> "Mark":
+    def __new__(cls, glyph: str, colour: str) -> Self:
         mark = super().__new__(cls, glyph)
         mark.colour = colour
         return mark
@@ -43,7 +43,7 @@ class Marked(str):
     text: str
     help: str | None
 
-    def __new__(cls, mark: Mark, text: str, help: str | None = None) -> "Marked":
+    def __new__(cls, mark: Mark, text: str, help: str | None = None) -> Self:
         line = super().__new__(cls, f"{mark} {text}")
         line.mark, line.text, line.help = mark, text, help
         return line
@@ -59,7 +59,7 @@ class Reason(str):
 
     help: str | None
 
-    def __new__(cls, text: str, help: str | None = None) -> "Reason":
+    def __new__(cls, text: str, help: str | None = None) -> Self:
         reason = super().__new__(cls, text)
         reason.help = help
         return reason

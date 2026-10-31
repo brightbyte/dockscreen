@@ -1,5 +1,5 @@
 import pytest
-from fakes import Accounts, rules
+from fakes import rules
 
 from dockscreen import config, idrules
 

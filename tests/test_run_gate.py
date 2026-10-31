@@ -302,8 +302,8 @@ def test_existing_containers_cannot_be_rewritten_so_a_root_image_is_refused():
     docker = FakeDocker(image_user="")
     problems = gate.check_existing([], ["c1"], runtime(docker))
     assert problems == [
-        "c1: cannot change the user of an existing container; it would run as the image's user, "
-        "not as 65534:65534"]
+        ("c1: cannot change the user of an existing container; it would run as the image's user, "
+         "not as 65534:65534")]
     assert problems[0].help == "recreate it with --user 65534:65534"
 
 

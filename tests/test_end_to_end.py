@@ -125,7 +125,8 @@ def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(pr
     assert compose_cli.main(["up"], runtime, ()) == 5
 
     calls_of_compose = compose_calls(fake_dir)[2:4]
-    assert [calls_of_compose[0][-2:], calls_of_compose[1][-3:]] == [["config", "--services"], ["pull", "--", "web"]]
+    assert [calls_of_compose[0][-2:], calls_of_compose[1][-3:]] == [
+        ["config", "--services"], ["pull", "--", "web"]]
     create = next(c for c in calls(fake_dir) if c[0] == "create")
     assert create == ["create", "--pull=never", "--", "x:1"]  # looked at, never started
     assert any(c[0] == "rm" for c in calls(fake_dir))

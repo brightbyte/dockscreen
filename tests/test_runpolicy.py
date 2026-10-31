@@ -30,8 +30,8 @@ def test_bind_mounts_from_v_and_mount_are_judged_once_each():
 
 def test_volumes_from_and_devices_are_found():
     info = container(VolumesFrom=["db"], Devices=[{"PathOnHost": "/dev/kvm"}])
-    assert findings(info) == ["devices is not allowed", "volumes_from 'container:db' reaches a container "
-                                                        "outside the project"]
+    assert findings(info) == ["devices is not allowed", ("volumes_from 'container:db' reaches a container "
+                                                         "outside the project")]
 
 
 def test_a_user_is_judged_only_when_the_command_line_chose_it():

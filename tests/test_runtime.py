@@ -6,7 +6,6 @@ from dockscreen import config, runtime
 from dockscreen.dockerclient import DockerNotFound
 
 
-
 def make_docker(directory):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "docker"

@@ -43,7 +43,6 @@ def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):
 
 
 def test_audit_info_lines_are_escaped(capsys, tmp_path):
-    from fakes import FakeImages, compose_project
 
     image = "x\x1b[31m:1"
     cfg = {"name": "p", "services": {"web": {"image": image}}}

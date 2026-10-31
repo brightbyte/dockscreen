@@ -12,7 +12,6 @@ from typing import NamedTuple
 
 from dockscreen import commandline, messages
 
-
 HELP_FALLBACK_WIDTH = 80
 
 
@@ -47,8 +46,8 @@ DEFAULTS = ("It adds --cap-drop=ALL and --security-opt=no-new-privileges:true be
             "can override them.")
 IMAGE_RULES = (
     "- an image that would run as root runs as the default user instead (nobody unless configured)",
-    "- an image user that is an account of this host, or with mounts an id outside the nobody range, is "
-    "denied",
+    ("- an image user that is an account of this host, or with mounts an id outside the nobody range, is "
+     "denied"),
     "- a user the config file sets for the image, its project or every image is used",
     "- the user is passed to docker as numbers, so the image's passwd file cannot change it",
 )
@@ -85,8 +84,8 @@ DOCKER = {
     "start": Topic(
         "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
         "Start containers, denied if they would fail the check of run",
-        ("An existing container cannot be changed, so one whose image's user dockscreen would replace or "
-         "deny is denied.", VERDICT),
+        (("An existing container cannot be changed, so one whose image's user dockscreen would replace or "
+          "deny is denied."), VERDICT),
         aliases=("dockscreen container start", "dockscreen start")),
     "restart": Topic(
         "dockscreen restart [OPTIONS] CONTAINER [CONTAINER...]",
@@ -100,11 +99,11 @@ DOCKER = {
         f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
         "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Say what run would do with the same arguments, without starting anything",
-        ("The container is created as run would create it, pulling the image if run would, judged, and "
-         "removed. It also points out what the command line asks for that a compose project or an image "
-         "may not have; run allows that, because the command line is trusted.",
-         "Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
-         "image could not be pulled or created)."),
+        (("The container is created as run would create it, pulling the image if run would, judged, and "
+          "removed. It also points out what the command line asks for that a compose project or an image "
+          "may not have; run allows that, because the command line is trusted."),
+         ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
+          "image could not be pulled or created).")),
         (Option(commandline.BRIEF, "Print only the verdict, in one line"),
          Option(commandline.STRICT_SCREEN, "(before audit) Deny for what the command line asks for, too"),
          ALLOW_ME, *USER_OPTIONS),
@@ -122,8 +121,8 @@ SCREENED_COMPOSE = (
     "- cap_drop: [ALL] and no-new-privileges added where they are missing",
     VERDICT,
 )
-BUILD_RULES = ("Builds may not read outside the project, use the host network, run privileged or forward "
-               "your SSH agent.", VERDICT)
+BUILD_RULES = (("Builds may not read outside the project, use the host network, run privileged or forward "
+                "your SSH agent."), VERDICT)
 COMPOSE = {
     "up": Topic("dockscreen compose up [OPTIONS] [SERVICE...]",
                 "Create and start containers, after the project passes the audit", SCREENED_COMPOSE),

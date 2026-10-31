@@ -10,6 +10,7 @@ from typing import Any, NamedTuple
 
 from dockscreen import hostusers
 
+
 class Identity(NamedTuple):
     uid: int
     gid: int

@@ -73,9 +73,8 @@ def make_runtime(**fields):
     if "docker" not in fields:
         fields["docker"] = FakeImages()
         fake_compose(fields["docker"])
-    defaults = dict(settings=config.Config(), accounts=Accounts(), subordinate=NoSubordinate(),
-                    me=ME, env=os.environ, home=os.path.expanduser("~"),
-                    cwd=os.getcwd())
+    defaults = {"settings": config.Config(), "accounts": Accounts(), "subordinate": NoSubordinate(),
+                "me": ME, "env": os.environ, "home": os.path.expanduser("~"), "cwd": os.getcwd()}
     return Runtime(**{**defaults, **fields})
 
 

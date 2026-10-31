@@ -4,8 +4,8 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, make_runtime, rules
 
-from dockscreen import imagedecision, messages, policy
 from dockscreen import config as configuration
+from dockscreen import imagedecision, messages, policy
 from dockscreen.compose import autofix, composeimages
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import Kind
@@ -106,7 +106,8 @@ def test_pulling_before_building_and_failure_stops_everything():
     prepared, recorder, images = prepare(config, FakeImages(users={}, local=set()), active=("web", "app"),
                                          codes={"pull": 1})
     assert prepared.problems == ["docker compose pull web failed"]
-    assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]  # build never started
+    # build never started
+    assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]
     assert images.calls == []  # and nothing was created
 
 
@@ -362,8 +363,8 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
     assert prepared.describe() == [
-        f"{GOOD} service db: no user set; image mariadb:11 runs as 999:999, "
-        "the user the config file sets for it",
+        (f"{GOOD} service db: no user set; image mariadb:11 runs as 999:999, "
+         "the user the config file sets for it"),
         messages.routine_change(f"services db: {PIN}")]
 
 

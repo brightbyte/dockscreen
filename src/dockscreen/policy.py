@@ -157,8 +157,8 @@ def check_config(config: dict[str, Any], ctx: Context) -> list[str]:
         problems.append("config has no project name")
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
-        problems += [f"service {name}: {p}"
-                     for p in check_service(service or {}, service_ctx, name in ctx.vetted, config.get("volumes"))]
+        found = check_service(service or {}, service_ctx, name in ctx.vetted, config.get("volumes"))
+        problems += [f"service {name}: {p}" for p in found]
     for key, volume in (config.get("volumes") or {}).items():
         problems += [f"volume {key}: {p}" for p in _check_volume(key, volume, project, ctx)]
     for key, network in (config.get("networks") or {}).items():

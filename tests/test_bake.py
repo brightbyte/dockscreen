@@ -26,7 +26,7 @@ def test_a_definition_of_ordinary_builds_has_no_problems(project):
     assert check(project, context=".", dockerfile="Dockerfile", args={"A": "1"}, tags=["app:1"],
                  platforms=["linux/amd64"], output=["type=image,push=false"], network="none",
                  contexts={"base": "docker-image://alpine", "lib": "app"},
-                 **{"cache-from": ["type=registry,ref=r/app", f"type=local,src=app"],
+                 **{"cache-from": ["type=registry,ref=r/app", "type=local,src=app"],
                     "cache-to": ["type=inline"], "secret": ["id=npm,src=app/.npmrc"]}) == []
 
 
@@ -42,7 +42,8 @@ def test_a_definition_of_ordinary_builds_has_no_problems(project):
     ({"output": ["type=local,dest=/etc"]}, "output 'type=local,dest=/etc' writes to the host"),
     ({"output": ["type=docker,dest=/tmp/x.tar"]}, "writes to the host"),
     ({"cache-to": ["type=local,dest=/etc"]}, "cache-to 'type=local,dest=/etc' writes to the host"),
-    ({"cache-to": ["type=s3,bucket=b"]}, "cache-to 'type=s3,bucket=b' writes to the host or an unknown store"),
+    ({"cache-to": ["type=s3,bucket=b"]},
+     "cache-to 'type=s3,bucket=b' writes to the host or an unknown store"),
     ({"cache-from": ["type=local,src=/etc"]}, "cache-from 'type=local,src=/etc' is outside"),
     ({"secret": ["id=k,src=/home/me/.ssh/id_rsa"]}, "secret 'id=k,src=/home/me/.ssh/id_rsa' is outside"),
     ({"secret": ["id=k,env=AWS_SECRET_ACCESS_KEY"]}, "copies a variable"),

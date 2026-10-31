@@ -25,7 +25,6 @@ from dockscreen.run import gate, runargs, runpolicy
 from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
-
 AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief] [docker run options] "
                "IMAGE [COMMAND]")
 

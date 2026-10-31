@@ -199,8 +199,10 @@ def test_services_in_the_same_project_may_be_referenced(project):
     (None, ["must include no-new-privileges"]),
     (["no-new-privileges:true", "seccomp=unconfined"], ["'seccomp=unconfined' is not allowed"]),
     (["apparmor=unconfined"], ["'apparmor=unconfined' is not allowed", "must include no-new-privileges"]),
-    (["no-new-privileges:true", "label=disable"], ["'label=disable' is not allowed", "the :z or :Z mount option"]),
-    (["no-new-privileges:true", "label:disable"], ["'label:disable' is not allowed", "the :z or :Z mount option"]),
+    (["no-new-privileges:true", "label=disable"],
+     ["'label=disable' is not allowed", "the :z or :Z mount option"]),
+    (["no-new-privileges:true", "label:disable"],
+     ["'label:disable' is not allowed", "the :z or :Z mount option"]),
 ])
 def test_no_new_privileges_is_required(project, security_opt, reasons):
     config = service()
@@ -252,8 +254,8 @@ def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
     configured = ctx._replace(configured_user=(900, 900))
     assert policy.check_user("900:900", configured) == []
     assert policy.check_user("900:65534", configured) == []  # each id on its own, as for the nobody range
-    assert policy.check_user("901:900", configured) == ["user '901:900': uid 901 is not in the nobody range "
-                                                        "65530-65534, and there are host mounts"]
+    assert policy.check_user("901:900", configured) == [("user '901:900': uid 901 is not in the nobody range "
+                                                         "65530-65534, and there are host mounts")]
 
 
 def test_security_opts_from_the_config_file_are_allowed_too(project):
@@ -267,8 +269,8 @@ def test_a_mount_outside_says_how_the_config_file_can_allow_it(project):
     config_file = "/home/me/.config/dockscreen/config.toml"
     ctx = policy.Context(str(project), rules(allow_me=True), config_file=config_file)
     assert policy._check_mounts([bind("/srv/data")], ctx) == [
-        f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
-        f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml']
+        (f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
+         f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml')]
 
 
 def test_bind_mount_outside_project_is_refused(project):

@@ -43,8 +43,8 @@ def test_audit_without_mounts_creates_the_container_as_run_would_and_never_start
     assert report(capsys.readouterr().out) == [
         f"{GOOD} image img: runs as uid 100000 (no local user), gid 100001 (no local group); accepted",
         "  docker run would create it again with --user=100000:100001, as numbers",
-        "  docker run also adds --cap-drop=ALL --security-opt=no-new-privileges:true; "
-        "later options override them",
+        ("  docker run also adds --cap-drop=ALL --security-opt=no-new-privileges:true; "
+         "later options override them"),
     ]
     assert docker.names() == ["create", "inspect", "remove"]  # nothing is started
     assert docker.calls[0][1] == [*DEFAULTS, "img"]           # pulled if missing, as run would
@@ -114,13 +114,13 @@ def test_audit_points_out_what_a_project_could_not_ask_for(monkeypatch, tmp_path
 
     findings = [line for line in report(capsys.readouterr().out) if "command line:" in line]
     assert findings == [
-        f"{WARN} command line: security_opt 'label=disable' is not allowed; "
-        "if bind mounts fail on SELinux, add the :z or :Z mount option instead",
+        (f"{WARN} command line: security_opt 'label=disable' is not allowed; "
+         "if bind mounts fail on SELinux, add the :z or :Z mount option instead"),
         f"{WARN} command line: privileged is not allowed",
         f"{WARN} command line: cap_add is not allowed",
         f"{WARN} command line: pid: host shares a namespace outside the project",
-        f"{WARN} command line: bind mount '/etc' is outside {tmp_path}; to allow it, add a directory that "
-        f'contains it to mount_dirs under [projects."{tmp_path}"] in {make_runtime().config_file}',
+        (f"{WARN} command line: bind mount '/etc' is outside {tmp_path}; to allow it, add a directory that "
+         f'contains it to mount_dirs under [projects."{tmp_path}"] in {make_runtime().config_file}'),
     ]  # the mount inside the current directory and the named volume are fine
 
 
@@ -151,8 +151,8 @@ def test_audit_without_docker_fails(capsys):
 @pytest.mark.parametrize("args, out, code", [
     (["--brief", "img"], "\u2714 audit passed\n", 0),
     (["-v", "/p:/p", "--brief", "img"],
-     "\u2296 denied by audit: the image's uid 100000 is not in the nobody range 65530-65534, "
-     "and there are host mounts (+1 more)\n", 1),
+     ("\u2296 denied by audit: the image's uid 100000 is not in the nobody range 65530-65534, "
+      "and there are host mounts (+1 more)\n"), 1),
 ])
 def test_brief_prints_only_the_verdict(args, out, code, capsys):
     docker = FakeDocker(image_user="app", info_extra=BIND if "-v" in args else None)

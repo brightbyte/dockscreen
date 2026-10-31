@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 from dockscreen import hostusers, ids, messages, policy
 from dockscreen.policy import CAP_DROP, SECURITY_OPT
 
+
 class Addition(NamedTuple):
     service: str
     key: str
