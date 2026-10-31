@@ -117,7 +117,7 @@ def test_run_with_a_user_on_the_command_line_skips_deciding_that_services_image(
 
 def test_run_as_a_local_user_reaches_compose_as_numeric_ids(monkeypatch, tmp_path, capsys):
     inspect_as(monkeypatch, tmp_path, no_user())
-    monkeypatch.setattr(hostusers, "resolve_account",
+    monkeypatch.setattr(hostusers, "_resolve_account",
                         lambda name, _: ("1000:1000", [f"Resolving user {name} to uid 1000, gid 1000"]))
     image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "web"}))  # uid 1000: would be refused
 

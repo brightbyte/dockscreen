@@ -73,7 +73,7 @@ def project(tmp_path, monkeypatch):
     docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
     (fake_dir / "passwd.tar").write_bytes(tar_of("passwd", PASSWD))
     set_image_user(fake_dir, "")
-    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: str(docker))
+    monkeypatch.setattr(runtime, "_real_docker", lambda settings, env: str(docker))
     # the real Docker: real subprocesses against the fake script
     image_ctx = composerun.imagedecision.Context(
         Docker(str(docker)), fakes.rules(), fakes.runtime(me=(1000, 1000)))

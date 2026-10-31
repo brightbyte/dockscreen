@@ -48,7 +48,7 @@ def _dispatch(argv):
     runtime = load_runtime()  # a config file that cannot be trusted stops everything, before any docker runs
     if skipped:
         flags.banner()
-        return passthrough(argv, runtime)
+        return _passthrough(argv, runtime)
     return DockerCommand.parse(argv, runtime).dispatch()
 
 
@@ -85,7 +85,7 @@ class DockerCommand:
         if sub is None:
             if not argv or "--help" in argv or "-h" in argv:
                 helptext.show(helptext.docker_overview)
-            return passthrough(argv, self.runtime)
+            return _passthrough(argv, self.runtime)
         if sub == "help":
             return self.show_help()
 
@@ -102,13 +102,13 @@ class DockerCommand:
             sub, end = argv[end + 1], end + 1
         if _wants_command_help(sub, argv[end + 1:]):
             return self._show_command_help(sub, argv)
-        if (bake_args := self.bake_arguments()) is not None and bake.wants_screening(bake_args):
+        if (bake_args := self._bake_arguments()) is not None and bake.wants_screening(bake_args):
             return self._screened_bake(bake_args)
         if sub not in GATED:
-            return passthrough(argv, self.runtime)
+            return _passthrough(argv, self.runtime)
         return self._gated(sub, end)
 
-    def bake_arguments(self):
+    def _bake_arguments(self):
         """Returns the arguments of `buildx bake`, or None if the command is not that."""
         if self.sub != "buildx":
             return None
@@ -124,7 +124,7 @@ class DockerCommand:
         reasons, failed = bake.screen(self.runtime.docker, args)
         if not verdict.screened(reasons, failed):
             return 1
-        return passthrough(self.argv, self.runtime)
+        return _passthrough(self.argv, self.runtime)
 
     def _gated(self, sub, end):
         """Runs the GATED command sub (argv[end]) through the gate and returns the exit status, unless it
@@ -137,17 +137,17 @@ class DockerCommand:
             messages.notice("Run 'dockscreen audit --help' for more.")
             return 2
         if sub in ("run", "create") and not args:
-            return passthrough(argv, runtime)  # docker says what is missing
+            return _passthrough(argv, runtime)  # docker says what is missing
         if sub == "create":
             try:
                 resolved = gate.create_args(args, runtime)
             except hostusers.UserError as e:
                 return messages.refuse([str(e)])
             messages.notice(gate.defaults_notice())
-            return passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
+            return _passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
         if sub == "exec":
             resolved = compose_cli.rewrite_exec("docker exec", args, runtime)
-            return 1 if resolved is None else passthrough([*lead, *resolved], runtime)
+            return 1 if resolved is None else _passthrough([*lead, *resolved], runtime)
 
         docker = runtime.docker
         if screen.is_remote(argv[:self.idx], runtime.env, docker):
@@ -160,14 +160,14 @@ class DockerCommand:
             return gate.audit(ctx, args, self.strict)
         if not verdict.screened(gate.check_existing(ctx, args)):
             return 1
-        return passthrough(argv, runtime)
+        return _passthrough(argv, runtime)
 
     def show_help(self):
         """Prints dockscreen's help for `help` or `help COMMAND`, then passes on to docker for its own."""
         rest = self.argv[self.idx + 1:]
         if not rest:
             helptext.show(helptext.docker_overview)
-            return passthrough(self.argv, self.runtime)
+            return _passthrough(self.argv, self.runtime)
         if rest[0] == "compose":
             return compose_cli.main(["help", *rest[1:]], self.runtime)
         return self._show_command_help(rest[0], [rest[0], "--help"])
@@ -182,7 +182,7 @@ class DockerCommand:
             helptext.show(lambda width: helptext.topic(topic, "Docker's own", width))
             if not topic.docker_help:
                 return 0
-        return passthrough(argv, self.runtime)
+        return _passthrough(argv, self.runtime)
 
 
 def _wants_command_help(sub, args):
@@ -190,7 +190,7 @@ def _wants_command_help(sub, args):
     return args[:1] == ["--help"] or (args[:1] == ["-h"] and sub not in ("run", "create"))
 
 
-def passthrough(argv, runtime):
+def _passthrough(argv, runtime):
     """Replaces this process with the real docker, run with argv."""
     runtime.docker.exec(argv)
 

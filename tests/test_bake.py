@@ -17,7 +17,7 @@ def project(tmp_path):
 
 
 def check(project, **target):
-    return bake.check_definition({"group": {"default": {"targets": ["app"]}}, "target": {"app": target}},
+    return bake._check_definition({"group": {"default": {"targets": ["app"]}}, "target": {"app": target}},
                                  str(project))
 
 
@@ -56,7 +56,7 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 
 
 def test_a_top_level_key_that_is_not_known_is_refused(project):
-    assert bake.check_definition({"target": {}, "variable": {}}, str(project)) == [
+    assert bake._check_definition({"target": {}, "variable": {}}, str(project)) == [
         "key 'variable' is not on the allow list"]
 
 
@@ -86,7 +86,7 @@ class Docker:
 def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
     docker = Docker(out=json.dumps({"target": {}}))
 
-    assert bake.definition(docker, ["-f", "b.hcl", "app"]) == {"target": {}}
+    assert bake._definition(docker, ["-f", "b.hcl", "app"]) == {"target": {}}
     assert docker.commands == [["docker", "buildx", "bake", "--print", "-f", "b.hcl", "app"]]
 
 
@@ -97,7 +97,7 @@ def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
 ])
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError, match=message):
-        bake.definition(docker, [])
+        bake._definition(docker, [])
     reasons, failed = bake.screen(docker, [])
     assert failed and message in reasons[0]
 
@@ -118,13 +118,13 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     (["run", "bake"], None),
 ])
 def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
-    assert docker_cli.DockerCommand(argv, runtime=None).bake_arguments() == args
+    assert docker_cli.DockerCommand(argv, runtime=None)._bake_arguments() == args
 
 
 @pytest.mark.parametrize("reasons, failed, passed", [([], False, True), (["no"], False, False), (["x"], True, False)])
 def test_bake_runs_only_when_screening_passes(monkeypatch, reasons, failed, passed):
     calls = []
-    monkeypatch.setattr(docker_cli, "passthrough", lambda argv, runtime: calls.append(argv) or 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, runtime: calls.append(argv) or 0)
     monkeypatch.setattr(docker_cli.bake, "screen", lambda docker, args: (reasons, failed))
 
     code = docker_cli.main(["buildx", "bake", "app"])
@@ -135,7 +135,7 @@ def test_bake_runs_only_when_screening_passes(monkeypatch, reasons, failed, pass
 
 def test_bake_print_is_not_screened(monkeypatch):
     calls = []
-    monkeypatch.setattr(docker_cli, "passthrough", lambda argv, runtime: calls.append(argv) or 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, runtime: calls.append(argv) or 0)
     monkeypatch.setattr(docker_cli.bake, "screen", lambda *a: 1 / 0)
 
     docker_cli.main(["buildx", "bake", "--print"])

@@ -8,7 +8,7 @@ OPTIONS = (helptext.Option("--long-option", "Some text that is long enough to ne
 
 
 def test_tables_wrap_descriptions_under_their_own_column():
-    lines = helptext.table([(o.left(), o.text) for o in OPTIONS], 60)
+    lines = helptext._table([(o._left(), o.text) for o in OPTIONS], 60)
     column = len("  -u, --user string") + 3  # three spaces after the widest option, as docker does
     assert lines[0].startswith("      --long-option".ljust(column) + "Some text that is long enough")
     assert lines[1].startswith(" " * column) and lines[1][column] != " "
@@ -17,12 +17,12 @@ def test_tables_wrap_descriptions_under_their_own_column():
 
 
 def test_without_a_width_nothing_is_wrapped():
-    assert helptext.table([(o.left(), o.text) for o in OPTIONS], None)[0].endswith("at a narrow width")
-    assert helptext.paragraph("a " * 100, None) == ["a " * 100]
+    assert helptext._table([(o._left(), o.text) for o in OPTIONS], None)[0].endswith("at a narrow width")
+    assert helptext._paragraph("a " * 100, None) == ["a " * 100]
 
 
 def test_list_items_continue_under_their_text():
-    lines = helptext.item("- " + "word " * 30, 40)
+    lines = helptext._item("- " + "word " * 30, 40)
     assert lines[0].startswith("  - word") and all(line.startswith("    word") for line in lines[1:])
 
 

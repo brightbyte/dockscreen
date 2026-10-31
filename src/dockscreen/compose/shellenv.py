@@ -9,7 +9,7 @@ another name. The variables dockscreen passes to compose (ids.EXPORTED) are left
 from dockscreen import ids, messages
 
 
-def copied(config, env):
+def _copied(config, env):
     """Returns {service: [variable names]} for the environment values of services that are the shell's own."""
     found = {}
     for name, service in sorted((config.get("services") or {}).items()):
@@ -31,5 +31,5 @@ def describe(config, env):
         messages.Marked(
             messages.WARN, f"service {name}: environment variables taken from your shell: {', '.join(names)}",
             "unset them in your shell, or give the project literal values, to keep them out")
-        for name, names in copied(config, env).items()
+        for name, names in _copied(config, env).items()
     ]

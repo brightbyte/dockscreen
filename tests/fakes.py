@@ -51,11 +51,11 @@ class Accounts:
         return {0: "root", 1000: "daniel", 999: "docker"}.get(gid)
 
 
-REAL_RESOLVE = hostusers.resolve_account  # tests that replace it by host_account must not recurse
+REAL_RESOLVE = hostusers._resolve_account  # tests that replace it by host_account must not recurse
 
 
 def host_account(name, accounts=None):
-    """hostusers.resolve_account against the host of Accounts, whatever accounts are given."""
+    """hostusers._resolve_account against the host of Accounts, whatever accounts are given."""
     return REAL_RESOLVE(name, Accounts())
 
 
@@ -247,7 +247,7 @@ def read_raw(cmd):
 
 
 def install_image_ctx(monkeypatch, image_ctx):
-    """Make composerun.image_context return image_ctx, with --allow-me applied as the real one does."""
+    """Make composerun._image_context return image_ctx, with --allow-me applied as the real one does."""
     from dockscreen.compose import composerun
-    monkeypatch.setattr(composerun, "image_context",
+    monkeypatch.setattr(composerun, "_image_context",
                         lambda runtime, allow_me=False: image_ctx.allowing_me(allow_me))

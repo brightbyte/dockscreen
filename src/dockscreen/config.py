@@ -106,15 +106,15 @@ def user_file(env, home):
 def load_current(env, home, uid):
     """Loads the configuration of the caller with this environment, home directory and uid.
 
-    Creates the user's file if it is missing, with a notice. Raises ConfigError as load does.
+    Creates the user's file if it is missing, with a notice. Raises ConfigError as _load does.
     """
     path = user_file(env, home)
-    if create_user_file(path):
+    if _create_user_file(path):
         messages.notice(f"created {path}, which shows the defaults")
-    return load([SYSTEM_FILE, path], uid)
+    return _load([SYSTEM_FILE, path], uid)
 
 
-def create_user_file(path):
+def _create_user_file(path):
     """Writes the template to path, with its directories, if nothing is there; returns whether it did.
 
     Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
@@ -131,13 +131,13 @@ def create_user_file(path):
     return True
 
 
-def load(paths, uid, check=None):
+def _load(paths, uid, check=None):
     """Reads the files in paths and merges them over the defaults, later ones winning; skips missing ones.
 
-    check(path, uid) raises ConfigError for a file that cannot be trusted (strict_modes by default).
+    check(path, uid) raises ConfigError for a file that cannot be trusted (_strict_modes by default).
     Raises ConfigError too for a file that cannot be read or parsed, or that sets something invalid.
     """
-    check = check or strict_modes
+    check = check or _strict_modes
     config = Config()
     for path in paths:
         data = _read(path, uid, check)
@@ -231,7 +231,7 @@ def _read(path, uid, check):
         raise ConfigError(f"{path}: {e.strerror}") from None
 
 
-def strict_modes(path, uid, stat_path=os.stat):
+def _strict_modes(path, uid, stat_path=os.stat):
     """Checks, like ssh's StrictModes, that path and every directory above it are owned by uid or root
     and writable by nobody else; raises ConfigError if not.
 

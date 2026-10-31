@@ -148,7 +148,7 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
     """
     try:
         _verify_round_trip(command, config, ctx)
-        to_run = services_to_run(command, config, args, ctx)
+        to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
         return Prepared(config, ctx, frozenset(), {}, [str(e)], failed=True)
@@ -210,30 +210,30 @@ def _verify_round_trip(command, config, ctx):
         resolved = None
     if resolved is None:
         raise ImageError("docker compose could not read back the config that was checked")
-    where = first_difference(config, resolved)
+    where = _first_difference(config, resolved)
     if where:
         raise ImageError(f"docker compose reads the checked config differently at {where}; not running it")
 
 
-def first_difference(expected, actual, path="config"):
+def _first_difference(expected, actual, path="config"):
     """Returns the path at which two JSON values first differ, or None if they are equal."""
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in sorted(set(expected) | set(actual), key=str):
             if key not in expected or key not in actual:
                 return f"{path}.{key}"
-            if where := first_difference(expected[key], actual[key], f"{path}.{key}"):
+            if where := _first_difference(expected[key], actual[key], f"{path}.{key}"):
                 return where
         return None
     if isinstance(expected, list) and isinstance(actual, list) and len(expected) == len(actual):
         for i, (e, a) in enumerate(zip(expected, actual)):
-            if where := first_difference(e, a, f"{path}[{i}]"):
+            if where := _first_difference(e, a, f"{path}[{i}]"):
                 return where
         return None
     # True == 1 and 1 == 1.0 in Python, but not to compose
     return None if expected == actual and type(expected) is type(actual) else path
 
 
-def services_to_run(command, config, args, ctx):
+def _services_to_run(command, config, args, ctx):
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
     Raises ImageError if compose cannot list them.

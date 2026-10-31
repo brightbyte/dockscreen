@@ -19,7 +19,7 @@ def trusting(path, uid):
 
 
 def load(*paths):
-    return config.load(list(paths), os.getuid(), check=trusting)
+    return config._load(list(paths), os.getuid(), check=trusting)
 
 
 def test_no_files_means_the_defaults(tmp_path):
@@ -155,7 +155,7 @@ MINE = {"/home/me": (1000, 0o755), "/home/me/.config": (1000, 0o700),
 
 
 def test_strict_modes_accept_a_file_that_only_its_owner_or_root_can_write():
-    config.strict_modes(PATH, 1000, fake_stat(MINE))
+    config._strict_modes(PATH, 1000, fake_stat(MINE))
 
 
 @pytest.mark.parametrize("change, message", [
@@ -168,7 +168,7 @@ def test_strict_modes_accept_a_file_that_only_its_owner_or_root_can_write():
 ])
 def test_strict_modes_refuse_what_someone_else_could_have_written(change, message):
     with pytest.raises(config.ConfigError, match=message):
-        config.strict_modes(PATH, 1000, fake_stat({**MINE, **change}))
+        config._strict_modes(PATH, 1000, fake_stat({**MINE, **change}))
 
 
 def test_a_file_that_fails_strict_modes_is_an_error(tmp_path):
@@ -178,7 +178,7 @@ def test_a_file_that_fails_strict_modes_is_an_error(tmp_path):
         raise config.ConfigError(f"{path_}: nope")
 
     with pytest.raises(config.ConfigError, match="nope"):
-        config.load([path], os.getuid(), check=refuse)
+        config._load([path], os.getuid(), check=refuse)
 
 
 def test_the_user_file_follows_xdg(tmp_path):
@@ -190,7 +190,7 @@ def test_the_user_file_follows_xdg(tmp_path):
 
 def test_a_missing_user_file_is_created_with_every_setting_commented_out(tmp_path):
     path = tmp_path / "xdg" / "dockscreen" / "config.toml"
-    assert config.create_user_file(str(path))
+    assert config._create_user_file(str(path))
     assert stat_module.S_IMODE(path.stat().st_mode) == 0o600
     assert stat_module.S_IMODE(path.parent.stat().st_mode) == 0o700
     assert load(str(path)) == config.Config()  # the defaults, and nothing that overrides /etc
@@ -198,7 +198,7 @@ def test_a_missing_user_file_is_created_with_every_setting_commented_out(tmp_pat
 
 def test_the_template_examples_are_valid_settings(tmp_path):
     path = tmp_path / "config.toml"
-    config.create_user_file(str(path))
+    config._create_user_file(str(path))
     text = path.read_text()
     for empty in ("#mount_dirs = []\n", "#security_opts = []\n"):
         text = text.replace(empty, "")
@@ -214,7 +214,7 @@ def test_the_template_examples_are_valid_settings(tmp_path):
 def test_an_existing_user_file_is_left_alone(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text("mine")
-    assert not config.create_user_file(str(path)) and path.read_text() == "mine"
+    assert not config._create_user_file(str(path)) and path.read_text() == "mine"
     (tmp_path / "link.toml").symlink_to(tmp_path / "elsewhere.toml")
-    assert not config.create_user_file(str(tmp_path / "link.toml"))
+    assert not config._create_user_file(str(tmp_path / "link.toml"))
     assert not (tmp_path / "elsewhere.toml").exists()

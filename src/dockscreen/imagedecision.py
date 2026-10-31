@@ -94,7 +94,7 @@ class Assessment(NamedTuple):
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK)
 
 
-def has_host_mounts(info):
+def _has_host_mounts(info):
     """Tells whether the container, as inspected, reaches host files or devices.
 
     Bind mounts, devices and volumes taken from another container all do. Named volumes live in
@@ -144,7 +144,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
         return Assessment(Kind.FALLBACK, [], identity, user=settings.default_user, home=settings.default_home,
                           **found)
     if mounts is None:
-        mounts = has_host_mounts(info)
+        mounts = _has_host_mounts(info)
     problems = rules.problems(identity.uid, identity.gid, identity.supplementary, mounts=mounts)
     if problems:
         return Assessment(Kind.REFUSED, [f"the image's {p}" for p in problems], identity, **found)

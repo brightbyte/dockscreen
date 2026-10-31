@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A `docker` for the front of your PATH; the real docker is found further down (see runtime.real_docker)."""
+"""A `docker` for the front of your PATH; the real docker is found further down (see runtime._real_docker)."""
 
 import os
 import sys

@@ -12,7 +12,7 @@ def test_exported_names_the_ids():
 
 def test_main_passes_the_real_ids_to_compose_without_changing_its_own_environment(monkeypatch):
     seen = []
-    monkeypatch.setattr(compose_cli, "forward", lambda argv, runtime: seen.append(runtime.docker.env))
+    monkeypatch.setattr(compose_cli, "_forward", lambda argv, runtime: seen.append(runtime.docker.env))
     monkeypatch.setenv("UID", "7")
 
     compose_cli.main(["ps"])

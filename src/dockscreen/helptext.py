@@ -21,7 +21,7 @@ class Option(NamedTuple):
     short: str = ""
     value: str = ""  # what the option takes, as docker names it: string, list, ...
 
-    def left(self):
+    def _left(self):
         """Returns the option's left column in the help: its short and long name and its value."""
         short = f"-{self.short}, " if self.short else "    "
         return f"  {short}{self.long}" + (f" {self.value}" if self.value else "")
@@ -167,13 +167,13 @@ def topic(topic_, follows_name, width):
 
     follows_name: whose help follows ours, announced at the end if the topic says it does.
     """
-    lines = [f"Usage:  {topic_.usage}", "", *paragraph(topic_.summary, width)]
+    lines = [f"Usage:  {topic_.usage}", "", *_paragraph(topic_.summary, width)]
     if topic_.aliases:
-        lines += ["", "Aliases:", *paragraph(", ".join(topic_.aliases), width, "  ")]
+        lines += ["", "Aliases:", *_paragraph(", ".join(topic_.aliases), width, "  ")]
     if topic_.notes:
         lines += _notes(topic_.notes, width)
     if topic_.options:
-        lines += ["", "Options:", *table([(o.left(), o.text) for o in topic_.options], width)]
+        lines += ["", "Options:", *_table([(o._left(), o.text) for o in topic_.options], width)]
     return lines + _follows(topic_.docker_help, follows_name)
 
 
@@ -181,11 +181,11 @@ def _overview(usage, summary, options, sections, more, follows_name, width):
     """Returns the help for dockscreen or compose as lines: options, then each (title, {name: Topic})
     section, then more and the announcement of follows_name's help.
     """
-    lines = [f"Usage:  {usage}", "", *paragraph(summary, width), "", "Options:",
-             *table([(o.left(), o.text) for o in options], width)]
+    lines = [f"Usage:  {usage}", "", *_paragraph(summary, width), "", "Options:",
+             *_table([(o._left(), o.text) for o in options], width)]
     for title, topics in sections:
-        lines += ["", title, *table([(f"  {n}", t.summary) for n, t in sorted(topics.items())], width)]
-    return lines + ["", *paragraph(more, width)] + _follows(True, follows_name)
+        lines += ["", title, *_table([(f"  {n}", t.summary) for n, t in sorted(topics.items())], width)]
+    return lines + ["", *_paragraph(more, width)] + _follows(True, follows_name)
 
 
 def _notes(texts, width):
@@ -193,13 +193,13 @@ def _notes(texts, width):
     lines = []
     for text in texts:
         if text.startswith("- "):
-            lines += item(text, width)
+            lines += _item(text, width)
         else:
-            lines += ["", *paragraph(text, width)]
+            lines += ["", *_paragraph(text, width)]
     return lines
 
 
-def table(rows, width):
+def _table(rows, width):
     """Returns (left, right) rows as lines, the right column after the widest left one and wrapped under
     itself; not wrapped if width is None or leaves it under 20 columns.
     """
@@ -215,7 +215,7 @@ def table(rows, width):
     return lines
 
 
-def paragraph(text, width, indent=""):
+def _paragraph(text, width, indent=""):
     """Returns text as lines wrapped to width, each indented; one line if width is None."""
     if width is None:
         return [indent + text]
@@ -223,7 +223,7 @@ def paragraph(text, width, indent=""):
                          break_long_words=False, break_on_hyphens=False)
 
 
-def item(text, width):
+def _item(text, width):
     """Returns a list item (text starting with `- `) as lines: `  - text`, continued under the text."""
     if width is None:
         return [f"  {text}"]

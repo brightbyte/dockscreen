@@ -46,7 +46,7 @@ def split_reference(reference):
     return f"{domain}/{path}", tag, digest
 
 
-def repository(reference):
+def _repository(reference):
     """Returns the normalised repository of a reference, or None if it is not one."""
     try:
         return split_reference(reference)[0]
@@ -61,17 +61,17 @@ def section_for(config, reference, repo_digests, built):
     repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
     built: the service builds the image from a Dockerfile.
     """
-    name = repository(reference)
+    name = _repository(reference)
     if name not in config.images:
         return Match(None, None)
     if built:
         return Match(None, f"the config has a section for {name}, but the service builds its image")
-    if not any(repository(d) == name for d in repo_digests or []):
+    if not any(_repository(d) == name for d in repo_digests or []):
         return Match(None, f"the config has a section for {name}, but this image was not pulled from there")
     return Match(name, None)
 
 
-def shown(repository):
+def _shown(repository):
     """Returns a normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
     for prefix in (f"{DEFAULT_DOMAIN}/library/", f"{DEFAULT_DOMAIN}/"):
         if repository.startswith(prefix):
@@ -83,15 +83,15 @@ def section_hint(reference, config_file, built=False):
     """Returns how config_file could give this image a user, or None for a built image or a reference
     that is not one.
     """
-    name = repository(reference)
+    name = _repository(reference)
     if built or not name:
         return None
-    return f"set user under [images.\"{shown(name)}\"] in {config_file}"
+    return f"set user under [images.\"{_shown(name)}\"] in {config_file}"
 
 
 def name_matches(config, reference, built):
     """Returns the repository of the image section the name alone points to, or None if there is none or
     the image is built. The name proves nothing: this is for before the image is there.
     """
-    name = repository(reference)
+    name = _repository(reference)
     return name if name in config.images and not built else None

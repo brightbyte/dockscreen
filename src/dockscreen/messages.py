@@ -41,7 +41,7 @@ class Marked(str):
         return line
 
     @property
-    def shown(self):
+    def _shown(self):
         """Returns the text, followed by the help if there is one and helpful mode is on."""
         return f"{self.text} - {self.help}" if self.help and _helpful else self.text
 
@@ -99,7 +99,7 @@ def notable_change(text, help=None):
 
 def notice(text):
     """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted."""
-    print(f"{PREFIX} {paint(text, sys.stderr)}", file=sys.stderr)
+    print(f"{PREFIX} {_paint(text, sys.stderr)}", file=sys.stderr)
 
 
 def out(text, indent=True):
@@ -110,9 +110,9 @@ def out(text, indent=True):
     as it is, for output that is all one line (--brief).
     """
     if not indent:
-        print(paint(text, sys.stdout))
+        print(_paint(text, sys.stdout))
         return
-    for line in wrapped(text, report_width(), _wants_colour(sys.stdout)):
+    for line in _wrapped(text, report_width(), _wants_colour(sys.stdout)):
         print(f"\t{line}")
 
 
@@ -126,14 +126,14 @@ def report_width(fallback=0):
     return None if columns < MIN_WIDTH else min(columns, MAX_WIDTH)
 
 
-def wrapped(text, width, colour):
+def _wrapped(text, width, colour):
     """Splits text into escaped lines that fit width columns after a tab, never breaking a word.
 
     Continued lines line up under the text after the mark. width: None for one line; colour: whether
     to colour the mark.
     """
     lead = f"{text.mark} " if isinstance(text, Marked) else ""
-    body = printable(text.shown if lead else text)
+    body = printable(text._shown if lead else text)
     if width is None:
         lines = [lead + body]
     else:
@@ -144,12 +144,12 @@ def wrapped(text, width, colour):
     return lines
 
 
-def paint(line, stream):
+def _paint(line, stream):
     """Returns line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
     if not isinstance(line, Marked):
         return printable(line)
     mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
-    return f"{mark} {printable(line.shown)}"
+    return f"{mark} {printable(line._shown)}"
 
 
 def _coloured(mark):

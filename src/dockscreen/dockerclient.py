@@ -23,7 +23,7 @@ class DockerNotFound(DockerError):
 
 class Docker:
     def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen, env=None):
-        """Wraps binary, the real docker (runtime.real_docker); run, call and popen launch it.
+        """Wraps binary, the real docker (runtime._real_docker); run, call and popen launch it.
 
         env: the environment of everything it runs; None for this process's own.
         """
@@ -91,7 +91,9 @@ class Docker:
             raise DockerError(f"{path} in the image is larger than {MAX_FILE_BYTES} bytes")
         if process.wait() != 0:
             return None
-        return first_file_of_tar(data)
+
+        # `docker cp` returns a tar archive of one file
+        return _first_file_of_tar(data)
 
     def start(self, container, attach, interactive, detach_keys):
         """Runs `docker start` on container with the given attach options and returns its exit status."""
@@ -161,7 +163,7 @@ class Docker:
 
 
 def _found(launch, env):
-    """Wraps launch (subprocess.run, call or Popen) to run with env, unless that is None, and to raise
+    """Wraps launch (subprocess.run, call or Popen) to run with env (if not None), and to raise
     DockerNotFound if the binary does not exist.
     """
     def launch_found(cmd, **kwargs):
@@ -174,13 +176,13 @@ def _found(launch, env):
     return launch_found
 
 
-def first_file_of_tar(data):
+def _first_file_of_tar(data):
     """Returns the text of the first entry of a tar archive, or None if that is not a regular file or
     the archive cannot be read.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            member = archive.next()  # `docker cp` of one file archives just that file
+            member = archive.next()
             if member is None or not member.isreg():
                 return None
             return archive.extractfile(member).read().decode("utf-8", errors="replace")

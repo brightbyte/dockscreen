@@ -5,7 +5,7 @@ import pytest
 from dockscreen import config, docker_cli, runtime
 from dockscreen.dockerclient import DockerNotFound
 
-REAL_DOCKER = runtime.real_docker  # conftest replaces it for every test
+REAL_DOCKER = runtime._real_docker  # conftest replaces it for every test
 
 
 def make_docker(directory):
@@ -24,7 +24,7 @@ def test_skips_our_own_wrapper_even_through_a_symlink(tmp_path):
     real = make_docker(tmp_path / "real")
     env = {"PATH": os.pathsep.join([str(link_dir), str(tmp_path / "wrapper"), str(tmp_path / "real")])}
 
-    assert runtime.find_docker(env, {os.path.realpath(wrapper)}) == str(real)
+    assert runtime._find_docker(env, {os.path.realpath(wrapper)}) == str(real)
 
 
 def test_the_configured_path_wins(tmp_path):
@@ -39,8 +39,8 @@ def test_the_configured_path_wins(tmp_path):
 def test_empty_and_relative_entries_are_never_searched(tmp_path, monkeypatch):
     make_docker(tmp_path / "bin")
     monkeypatch.chdir(tmp_path)
-    assert runtime.find_docker({"PATH": os.pathsep.join(["", ".", "bin", "./bin"])}, set()) is None
-    assert runtime.find_docker({"PATH": os.pathsep.join(["bin", str(tmp_path / "bin")])}, set()) == \
+    assert runtime._find_docker({"PATH": os.pathsep.join(["", ".", "bin", "./bin"])}, set()) is None
+    assert runtime._find_docker({"PATH": os.pathsep.join(["bin", str(tmp_path / "bin")])}, set()) == \
         str(tmp_path / "bin" / "docker")
 
 
@@ -58,11 +58,11 @@ def test_empty_or_relative_path_entries_are_warned_about(monkeypatch, capsys, pa
 
 
 def test_nothing_found(tmp_path):
-    assert runtime.find_docker({"PATH": str(tmp_path)}, set()) is None
+    assert runtime._find_docker({"PATH": str(tmp_path)}, set()) is None
 
 
 def test_without_a_real_docker_dockscreen_stops_instead_of_running_itself(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(runtime, "real_docker", REAL_DOCKER)
+    monkeypatch.setattr(runtime, "_real_docker", REAL_DOCKER)
     monkeypatch.setenv("PATH", str(tmp_path))
     assert docker_cli.main(["ps"]) == 1
     assert capsys.readouterr().err == "[dockscreen] 'docker' not found in PATH\n"

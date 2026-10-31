@@ -35,7 +35,7 @@ def test_exporting_adds_variables_to_the_environment_of_what_it_runs(monkeypatch
 
 
 def test_the_docker_wrapper_reports_a_missing_binary_without_a_traceback(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: str(tmp_path / "no-docker"))
+    monkeypatch.setattr(runtime, "_real_docker", lambda settings, env: str(tmp_path / "no-docker"))
 
     assert docker_cli.main(["run", "img"]) == 1
     assert capsys.readouterr().err == "[dockscreen] 'docker' not found in PATH\n"

@@ -51,7 +51,7 @@ def test_dockscreen_flag_also_skips_the_extra_subcommands(forwarded):
 ])
 def test_docker_with_the_flag_is_plain_docker_with_a_warning(monkeypatch, capsys, argv, expected):
     calls = []
-    monkeypatch.setattr(docker_cli, "passthrough", lambda a, _: calls.append(a) or 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda a, _: calls.append(a) or 0)
     monkeypatch.setattr(docker_cli.compose_cli, "main", lambda *a: 1 / 0)
 
     docker_cli.main(argv)
@@ -62,7 +62,7 @@ def test_docker_with_the_flag_is_plain_docker_with_a_warning(monkeypatch, capsys
 
 def test_docker_without_a_global_flag_gets_no_exemption(monkeypatch):
     calls = []
-    monkeypatch.setattr(docker_cli, "passthrough", lambda a, _: calls.append(a) or 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda a, _: calls.append(a) or 0)
     docker_cli.main(["create", "img", FLAG])  # belongs to the command
     assert calls == [["create", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "img", FLAG]]
 
@@ -81,7 +81,7 @@ def test_verbose_after_the_subcommand_is_dockers_own():
     (["--helpful", "ps"], True), (["--verbose", "ps"], True), (["ps"], False), (["audit", "img"], True)])
 def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful, monkeypatch):
     from dockscreen import messages
-    monkeypatch.setattr(docker_cli, "passthrough", lambda argv, runtime: 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, runtime: 0)
     monkeypatch.setattr(docker_cli.gate, "audit", lambda *a, **k: 0)
     monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: types.SimpleNamespace(context=lambda: "default"))
 

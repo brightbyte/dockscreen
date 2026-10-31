@@ -33,7 +33,7 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 })
 
 
-def forward(argv, runtime):
+def _forward(argv, runtime):
     """Replaces this process with `docker compose argv`, keeping tty, signals and exit code."""
     runtime.docker.exec(["compose", *argv])
 
@@ -47,7 +47,7 @@ def main(argv, runtime=None):
     skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
     if skipped:
         flags.banner()
-        return forward(argv, runtime or load_runtime())  # the config file names the real docker
+        return _forward(argv, runtime or load_runtime())  # the config file names the real docker
 
     allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
     helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
@@ -91,14 +91,14 @@ class ComposeCommand:
         """
         argv, sub, runtime = self.argv, self.sub, self.runtime
         messages.set_helpful(self.helpful or sub == "audit")
-        target = self.help_request()
+        target = self._help_request()
         if target is not None:
             return self.show_help(target)
         if sub in COMMANDS:
             return COMMANDS[sub](global_args=self.global_args, args=self.args, runtime=runtime,
                                  allow_me=self.allow_me)
 
-        if self.is_screened():
+        if self._is_screened():
             if sub not in BUILD_SUBCOMMANDS:
                 return composerun.run(argv, self.idx, runtime, allow_me=self.allow_me)
             if not screen.passes(self.global_args, runtime, policy.check_build_config):
@@ -112,7 +112,7 @@ class ComposeCommand:
                 return 1
             argv = [*argv[:self.idx + 1], *args]
 
-        forward(argv, runtime)
+        _forward(argv, runtime)
 
     def _name_is_free(self):
         """Tells whether the project's name is free: chosen on the command line, or not used by containers
@@ -132,11 +132,11 @@ class ComposeCommand:
         reasons = screen.name_conflicts(config["name"], directory, runtime.docker)
         return not reasons or verdict.screened(reasons)
 
-    def is_screened(self):
+    def _is_screened(self):
         """Tells whether the subcommand is one that is screened (SCREENED_SUBCOMMANDS)."""
         return self.sub in SCREENED_SUBCOMMANDS
 
-    def help_request(self):
+    def _help_request(self):
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.
 
         `help`, `help COMMAND`, or --help or -h as the first argument after the command. Only a leading one
@@ -154,7 +154,7 @@ class ComposeCommand:
         argv = self.argv
         if target == "":
             helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
-            return forward(argv, self.runtime)
+            return _forward(argv, self.runtime)
         if target in COMMANDS:
             topic = _own_commands()[ALIASES.get(target, target)]
             helptext.show(lambda width: helptext.topic(topic, "", width))
@@ -164,7 +164,7 @@ class ComposeCommand:
             helptext.show(lambda width: helptext.topic(topic, "Docker Compose's own", width))
         if self.sub == "help":
             argv = [*self.global_args, target, "--help"]
-        return forward(argv, self.runtime)
+        return _forward(argv, self.runtime)
 
 
 def rewrite_exec(kind, args, runtime):

@@ -110,7 +110,7 @@ def test_commands_that_remove_or_stop_are_refused_for_a_name_that_is_not_the_pro
     images = FakeImages()
     images.project_dirs = ["/victim"]
     forwarded = []
-    monkeypatch.setattr(compose_cli, "forward", lambda argv, rt: forwarded.append(argv))
+    monkeypatch.setattr(compose_cli, "_forward", lambda argv, rt: forwarded.append(argv))
 
     code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime(docker=images))
 
@@ -123,7 +123,7 @@ def test_down_goes_on_for_the_projects_own_name_with_p_and_for_a_project_that_ca
     images = FakeImages()
     images.project_dirs = ["/victim"]
     forwarded = []
-    monkeypatch.setattr(compose_cli, "forward", lambda argv, rt: forwarded.append(argv))
+    monkeypatch.setattr(compose_cli, "_forward", lambda argv, rt: forwarded.append(argv))
     monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
 
     compose_cli.main(["-p", "mine", "down"], runtime(docker=images))

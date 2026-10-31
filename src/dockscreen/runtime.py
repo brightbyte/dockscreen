@@ -49,7 +49,7 @@ def load_runtime():
     settings = config.load_current(env, home, me[0])
     return Runtime(
         settings=settings,
-        docker=Docker(real_docker(settings, env)),
+        docker=Docker(_real_docker(settings, env)),
         accounts=hostusers.HostAccounts(),
         subordinate=idrules.Subordinate(),
         me=me,
@@ -59,7 +59,7 @@ def load_runtime():
     )
 
 
-def real_docker(settings, env, wrappers=None):
+def _real_docker(settings, env, wrappers=None):
     """Returns the docker to run: the one settings names, else the first one on PATH that is not a
     wrapper. Raises DockerNotFound if there is none.
 
@@ -68,13 +68,13 @@ def real_docker(settings, env, wrappers=None):
     if wrappers is None:
         wrappers = {os.path.realpath(sys.argv[0])}
     # not plain "docker" as a fallback: exec would search PATH for it and find the wrapper or ./docker
-    docker = settings.docker or find_docker(env, wrappers)
+    docker = settings.docker or _find_docker(env, wrappers)
     if not docker:
         raise DockerNotFound(messages.DOCKER_NOT_FOUND)
     return docker
 
 
-def find_docker(env, wrappers):
+def _find_docker(env, wrappers):
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
     Empty and relative PATH entries (an empty one means the current directory) are skipped: a

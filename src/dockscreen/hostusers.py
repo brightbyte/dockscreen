@@ -21,7 +21,7 @@ class UnknownUser(UserError):
 DOCKER_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yourself"
 
 
-def require_numeric(spec, alternatives=DOCKER_ALTERNATIVES):
+def _require_numeric(spec, alternatives=DOCKER_ALTERNATIVES):
     """Returns spec as typed if it is numeric `uid:gid`; raises UserError saying what to use otherwise.
 
     A uid alone would leave the group to the image: docker takes it, and the supplementary groups,
@@ -33,7 +33,7 @@ def require_numeric(spec, alternatives=DOCKER_ALTERNATIVES):
     raise UserError(f"--user takes numeric ids as uid:gid, not {spec!r}{hint}{alternatives}")
 
 
-def resolve_account(name, accounts):
+def _resolve_account(name, accounts):
     """Resolves name to the account of that name on this host; returns (`uid:gid`, notices).
 
     The gid is the account's primary group. accounts: where to look the name up (HostAccounts).
@@ -66,15 +66,15 @@ class UserOptions:
     def numeric(self, spec):
         """Returns `--user=` for spec (--user or -u); raises UserError unless it is numeric `uid:gid`."""
         self.user_given = True
-        return f"--user={require_numeric(spec)}"
+        return f"--user={_require_numeric(spec)}"
 
     def account(self, name):
         """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice.
 
-        Raises UserError if there is no such account (resolve_account).
+        Raises UserError if there is no such account (_resolve_account).
         """
         self.user_given = True
-        resolved, messages = resolve_account(name, self.accounts)
+        resolved, messages = _resolve_account(name, self.accounts)
         self.notices += messages
         return f"--user={resolved}"
 

@@ -54,8 +54,8 @@ class Terminal:
 def test_marks_are_coloured_on_a_terminal(monkeypatch, mark, painted):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm")
-    assert messages.paint(messages.Marked(mark, "x"), Terminal()) == painted
-    assert messages.paint("\u2714 x", Terminal()) == "\u2714 x"  # a plain string is not a marked line
+    assert messages._paint(messages.Marked(mark, "x"), Terminal()) == painted
+    assert messages._paint("\u2714 x", Terminal()) == "\u2714 x"  # a plain string is not a marked line
 
 
 def test_no_colour_when_piped_or_asked_not_to(monkeypatch, capsys):
@@ -65,10 +65,10 @@ def test_no_colour_when_piped_or_asked_not_to(monkeypatch, capsys):
     assert capsys.readouterr().err == "[dockscreen] ✔ audit passed\n"  # not a terminal
 
     monkeypatch.setenv("NO_COLOR", "1")
-    assert messages.paint("✔ x", Terminal()) == "✔ x"
+    assert messages._paint("✔ x", Terminal()) == "✔ x"
     monkeypatch.delenv("NO_COLOR")
     monkeypatch.setenv("TERM", "dumb")
-    assert messages.paint("✔ x", Terminal()) == "✔ x"
+    assert messages._paint("✔ x", Terminal()) == "✔ x"
 
 
 def test_report_lines_are_escaped_before_they_are_painted(capsys):
@@ -80,7 +80,7 @@ def test_untrusted_text_is_escaped_in_coloured_lines_too(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm")
     line = messages.Marked(messages.BAD, "evil\x1b[2J")
-    assert messages.paint(line, Terminal()) == "\x1b[1;31m\u25cf\x1b[0m evil\\x1b[2J"
+    assert messages._paint(line, Terminal()) == "\x1b[1;31m\u25cf\x1b[0m evil\\x1b[2J"
 
 
 def test_a_line_that_is_all_of_the_output_has_no_tab(capsys):
@@ -117,7 +117,7 @@ def test_without_a_terminal_reports_are_not_wrapped(monkeypatch):
 
 
 def test_wrapped_lines_keep_the_colour_on_the_mark_only():
-    lines = messages.wrapped(LONG, 60, colour=True)
+    lines = messages._wrapped(LONG, 60, colour=True)
     assert lines[0].startswith("\x1b[1;31m●\x1b[0m refusing:")
     assert not any("\x1b" in line for line in lines[1:])
 

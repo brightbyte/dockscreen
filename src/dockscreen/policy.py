@@ -329,7 +329,7 @@ def _check_volumes_from(value, ctx):
     ]
 
 
-def check_mounts(value, ctx):
+def _check_mounts(value, ctx):
     """Checks a service's volumes; returns their unknown keys and types, and bind mounts outside the
     mount roots of ctx.
     """
@@ -460,7 +460,7 @@ SERVICE_CHECKS = {
     **{key: _forbidden(key) for key in FORBIDDEN_KEYS},
     "runtime": _check_runtime,
     **{key: _check_namespace(key) for key in NAMESPACE_KEYS},
-    "volumes": check_mounts,
+    "volumes": _check_mounts,
     "volumes_from": _check_volumes_from,
     "build": _check_build,
     "env_file": _check_host_files("env_file"),

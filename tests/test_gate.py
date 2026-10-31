@@ -4,7 +4,7 @@ import pytest
 from fakes import FakeDocker, host_account, rules, runtime
 
 from dockscreen import argscan, config, docker_cli, hostusers, imagedecision
-from dockscreen.dockerclient import DockerError, DockerNotFound, first_file_of_tar
+from dockscreen.dockerclient import DockerError, DockerNotFound, _first_file_of_tar
 from dockscreen.messages import BAD, GOOD, WARN
 from dockscreen.run import gate
 
@@ -82,7 +82,7 @@ BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
     {"HostConfig": {"VolumesFrom": ["other"]}},
 ])
 def test_has_host_mounts(extra):
-    assert imagedecision.has_host_mounts({"Config": {}, **extra})
+    assert imagedecision._has_host_mounts({"Config": {}, **extra})
 
 
 @pytest.mark.parametrize("extra", [
@@ -91,7 +91,7 @@ def test_has_host_mounts(extra):
     {"HostConfig": {"Binds": ["data:/var/lib/data"], "Devices": [], "VolumesFrom": None}},
 ])
 def test_named_volumes_and_tmpfs_are_not_host_mounts(extra):
-    assert not imagedecision.has_host_mounts({"Config": {}, **extra})
+    assert not imagedecision._has_host_mounts({"Config": {}, **extra})
 
 
 def test_with_a_bind_mount_an_image_user_outside_the_nobody_range_is_refused(capsys):
@@ -392,7 +392,7 @@ def test_existing_containers_are_checked_by_the_same_rule():
 @pytest.fixture
 def routed(monkeypatch):
     calls = []
-    monkeypatch.setattr(docker_cli, "passthrough", lambda argv, _: calls.append(("exec", argv)) or 0)
+    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, _: calls.append(("exec", argv)) or 0)
     monkeypatch.setattr(docker_cli.compose_cli, "main", lambda argv, _: calls.append(("compose", argv)) or 0)
     monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: FakeDocker(image_user="app"))
     return calls
@@ -470,7 +470,7 @@ def test_exec_takes_numeric_users_only(routed, argv, capsys):
 
 
 def test_exec_as_a_local_user_reaches_docker_as_numeric_ids(routed, monkeypatch):
-    monkeypatch.setattr(hostusers, "resolve_account", lambda name, accounts: ("1001:1002", []))
+    monkeypatch.setattr(hostusers, "_resolve_account", lambda name, accounts: ("1001:1002", []))
     docker_cli.main(["-l", "debug", "container", "exec", "--as=alice", "c", "sh"])
     assert routed == [("exec", ["-l", "debug", "container", "exec", "--user=1001:1002", "c", "sh"])]
 
@@ -550,8 +550,8 @@ def test_first_file_of_tar():
         link.type = tarfile.SYMTYPE
         link.linkname = "/etc/shadow"
         archive.addfile(link)
-    assert first_file_of_tar(buffer.getvalue()) == "root:x:0:0\n"
-    assert first_file_of_tar(b"not a tar") is None
+    assert _first_file_of_tar(buffer.getvalue()) == "root:x:0:0\n"
+    assert _first_file_of_tar(b"not a tar") is None
 
 
 # --- docker audit ---------------------------------------------------------
@@ -805,7 +805,7 @@ def test_audit_takes_as_and_refuses_names_for_user(capsys):
 
 
 def test_create_resolves_as_and_keeps_everything_else(routed, monkeypatch, capsys):
-    monkeypatch.setattr(docker_cli.gate.hostusers, "resolve_account", host_account)
+    monkeypatch.setattr(docker_cli.gate.hostusers, "_resolve_account", host_account)
 
     docker_cli.main(["create", "-it", "--as", "alice", "--name", "x", "img", "sh", "-c", "id"])
 
@@ -816,7 +816,7 @@ def test_create_resolves_as_and_keeps_everything_else(routed, monkeypatch, capsy
 
 @pytest.mark.parametrize("flags", [["--as", "ghost"], ["--user", "alice"]])
 def test_create_with_a_user_that_cannot_be_used_is_refused(routed, monkeypatch, flags):
-    monkeypatch.setattr(docker_cli.gate.hostusers, "resolve_account", host_account)
+    monkeypatch.setattr(docker_cli.gate.hostusers, "_resolve_account", host_account)
     assert docker_cli.main(["create", *flags, "img"]) == 1
     assert routed == []
 

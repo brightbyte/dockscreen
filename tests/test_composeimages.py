@@ -45,7 +45,7 @@ def subcommands(recorder):
 def test_services_to_run_are_the_active_ones_plus_those_named():
     config = project(web={}, db={}, debug={})
     image_ctx, recorder = make_image_ctx(active=("web", "db"))
-    assert composeimages.services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
+    assert composeimages._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
         "web", "db", "debug"}
     assert recorder.captured == [[*COMMAND, "config", "--services"]]
 
@@ -155,7 +155,7 @@ def test_a_config_that_cannot_be_read_back_is_refused():
     ({"a": [1, "x"]}, {"a": [1, "x"]}, None),
 ])
 def test_first_difference_names_the_path(expected, actual, where):
-    assert composeimages.first_difference(expected, actual) == where
+    assert composeimages._first_difference(expected, actual) == where
 
 
 # --- deciding about the images ---------------------------------------------------

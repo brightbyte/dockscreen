@@ -7,7 +7,7 @@ from dockscreen.hostusers import HostAccounts  # bound before conftest swaps in 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])
 def test_user_takes_numeric_ids_and_leaves_them_as_typed(spec):
-    assert hostusers.require_numeric(spec) == spec
+    assert hostusers._require_numeric(spec) == spec
 
 
 @pytest.mark.parametrize("spec", [
@@ -15,7 +15,7 @@ def test_user_takes_numeric_ids_and_leaves_them_as_typed(spec):
 ])
 def test_user_refuses_everything_else_and_points_at_the_alternatives(spec):
     with pytest.raises(hostusers.UserError) as error:
-        hostusers.require_numeric(spec)
+        hostusers._require_numeric(spec)
     assert "--user takes numeric ids as uid:gid" in str(error.value)
     assert "--as NAME runs as a local user, --as-me as yourself" in str(error.value)
 
@@ -38,7 +38,7 @@ def test_as_takes_a_name_not_an_id_or_a_group(name):
 
 def test_a_uid_without_a_gid_says_to_give_the_group():
     with pytest.raises(hostusers.UserError, match="not '1000'; give the group too, as uid:gid"):
-        hostusers.require_numeric("1000")
+        hostusers._require_numeric("1000")
 
 
 def test_host_accounts_use_nss():
@@ -50,5 +50,5 @@ def test_host_accounts_use_nss():
 
 
 def test_as_resolves_with_the_hosts_accounts():
-    assert hostusers.resolve_account("root", HostAccounts()) == (
+    assert hostusers._resolve_account("root", HostAccounts()) == (
         "0:0", ["Resolving user root to uid 0, gid 0"])

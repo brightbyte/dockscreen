@@ -17,7 +17,7 @@ from dockscreen.verdict import Verdict
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 
 
-def audit(global_args, args, runtime, allow_me=False):
+def _audit(global_args, args, runtime, allow_me=False):
     """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
@@ -66,7 +66,7 @@ def _audit_images(project, brief):
     return outcome, problems, prepared.describe()
 
 
-def harden(global_args, args, runtime, allow_me=False):
+def _harden(global_args, args, runtime, allow_me=False):
     """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
@@ -128,5 +128,5 @@ def _fix_image_users(project, fixed, resolved, notes):
     return remaining, notes
 
 
-COMMANDS = {"audit": audit, "harden": harden, "fix": harden}
+COMMANDS = {"audit": _audit, "harden": _harden, "fix": _harden}
 ALIASES = {"fix": "harden"}  # alias -> command it stands for

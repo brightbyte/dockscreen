@@ -146,7 +146,7 @@ def test_unscreened_subcommand_is_not_inspected(forwarded, monkeypatch):
     ([], ""),
 ])
 def test_help_request(argv, help_for):
-    assert compose_cli.ComposeCommand(argv, runtime=None).help_request() == help_for
+    assert compose_cli.ComposeCommand(argv, runtime=None)._help_request() == help_for
 
 
 @pytest.mark.parametrize("argv, screened", [
@@ -156,7 +156,7 @@ def test_help_request(argv, help_for):
     ([], False),
 ])
 def test_is_screened(argv, screened):
-    assert compose_cli.ComposeCommand(argv, runtime=None).is_screened() == screened
+    assert compose_cli.ComposeCommand(argv, runtime=None)._is_screened() == screened
 
 
 # --- dockscreen's own options and the config file ------------------------------------
@@ -189,7 +189,7 @@ def test_exec_takes_numeric_users_only(forwarded, capsys, argv, code):
 
 
 def test_exec_as_a_local_user_reaches_compose_as_numeric_ids(forwarded, monkeypatch, capsys):
-    monkeypatch.setattr(hostusers, "resolve_account",
+    monkeypatch.setattr(hostusers, "_resolve_account",
                         lambda name, _: ("1001:1002", [f"Resolving user {name} to uid 1001, gid 1002"]))
     assert compose_cli.main(["exec", "--as", "alice", "web", "sh"]) is None
     assert forwarded == [["exec", "--user=1001:1002", "web", "sh"]]

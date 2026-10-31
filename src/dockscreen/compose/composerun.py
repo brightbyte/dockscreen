@@ -70,11 +70,11 @@ def load_project(global_args, runtime, allow_me, image_ctx=None):
 
     Raises screen.ScreenError or ValueError if it cannot be inspected.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
-    image_ctx: what to pull, build, decide and run with; image_context() if not given.
+    image_ctx: what to pull, build, decide and run with; _image_context() if not given.
     """
     config, directory = screen.inspect(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
-    image_ctx = (image_ctx or image_context(runtime, allow_me))._replace(project_dir=directory)
+    image_ctx = (image_ctx or _image_context(runtime, allow_me))._replace(project_dir=directory)
     remote = screen.is_remote(global_args, runtime.env, image_ctx.docker)
     ctx = screen.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
@@ -160,6 +160,6 @@ def _generated(global_args, project_dir, docker_binary):
         yield command
 
 
-def image_context(runtime, allow_me=False):
+def _image_context(runtime, allow_me=False):
     """Returns the imagedecision.Context to pull, build, decide and run with."""
     return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)

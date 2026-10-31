@@ -29,7 +29,7 @@ def local_daemon(monkeypatch):
 def forwarded(monkeypatch):
     """The argv lists compose_cli.main would have handed to docker compose."""
     calls = []
-    monkeypatch.setattr(compose_cli, "forward", lambda argv, runtime: calls.append(argv))
+    monkeypatch.setattr(compose_cli, "_forward", lambda argv, runtime: calls.append(argv))
     return calls
 
 
@@ -37,7 +37,7 @@ def forwarded(monkeypatch):
 def fixed_docker_binary(monkeypatch):
     """Commands are asserted against plain "docker", wherever the real binary lives."""
     from dockscreen import runtime
-    monkeypatch.setattr(runtime, "real_docker", lambda settings, env: "docker")
+    monkeypatch.setattr(runtime, "_real_docker", lambda settings, env: "docker")
 
 
 @pytest.fixture(autouse=True)

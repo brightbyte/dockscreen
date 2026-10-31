@@ -33,7 +33,7 @@ def wants_screening(args):
     return not NOT_SCREENED & set(args)
 
 
-def definition(docker, args):
+def _definition(docker, args):
     """Returns the bake definition for the arguments, as `--print` gives it, without building anything.
 
     Raises DockerError, saying why, if docker cannot give one or it is not a JSON object.
@@ -50,7 +50,7 @@ def definition(docker, args):
     return found
 
 
-def check_definition(found, project_dir):
+def _check_definition(found, project_dir):
     """Returns the problems that forbid building the definition, with sources judged against project_dir."""
     problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
     for name, target in (found.get("target") or {}).items():
@@ -134,8 +134,8 @@ def screen(docker, args):
     Returns (reasons, failed): why it may not run, and whether that is a failure to get the definition.
     """
     try:
-        found = definition(docker, args)
+        found = _definition(docker, args)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
         return [messages.Reason(str(e), hint)], True
-    return check_definition(found, os.getcwd()), False
+    return _check_definition(found, os.getcwd()), False

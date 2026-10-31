@@ -28,12 +28,12 @@ def inspect(global_args, runtime):
     Raises ScreenError if the project directory is, or contains, a sensitive path ($HOME, /etc, ...), since
     everything in it can be bind-mounted; InspectError if compose cannot give the config.
     """
-    project_dir = project_directory(global_args, runtime.cwd, runtime)
-    found = sensitive_inside(project_dir, runtime)
+    project_dir = _project_directory(global_args, runtime.cwd, runtime)
+    found = _sensitive_inside(project_dir, runtime)
     if found:
         raise ScreenError(f"the project directory {project_dir} contains {found[0]}; "
                          "move the compose file into a directory of its own")
-    return load_config(global_args, runtime.docker), project_dir
+    return _load_config(global_args, runtime.docker), project_dir
 
 
 
@@ -67,7 +67,7 @@ def _sensitive_paths(runtime):
     return [*SENSITIVE_DIRS, runtime.home, config.SYSTEM_FILE, runtime.config_file, DOCKER_SOCKET]
 
 
-def sensitive_inside(directory, runtime):
+def _sensitive_inside(directory, runtime):
     """Returns the sensitive paths that directory equals or contains, with symlinks resolved."""
     root = os.path.realpath(directory)
     return [path for path in _sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
@@ -81,7 +81,7 @@ def mount_dir_warnings(runtime):
             f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
             "narrow mount_dirs in the config file")
         for directory in config.all_mount_dirs(runtime.settings)
-        if (found := sensitive_inside(directory, runtime))
+        if (found := _sensitive_inside(directory, runtime))
     ]
 
 
@@ -96,7 +96,7 @@ def passes(global_args, runtime, rules=policy.check_config):
     return verdict.screened(rules(config, context(project_dir, runtime)))
 
 
-def load_config(global_args, docker):
+def _load_config(global_args, docker):
     """Returns the config compose resolves for global_args, with every profile active and env files
     not inlined.
 
@@ -165,10 +165,10 @@ def is_remote(global_args, env, docker):
     return docker.context() != "default"  # the current context can also come from docker's config file
 
 
-def project_directory(global_args, cwd, runtime):
+def _project_directory(global_args, cwd, runtime):
     """Determines the project directory as docker compose would from global_args and cwd.
 
-    Raises ScreenError if that cannot be checked (a compose file from stdin, or as find_compose_dir says).
+    Raises ScreenError if that cannot be checked (a compose file from stdin, or as _find_compose_dir says).
     """
     env = runtime.env
     explicit = argscan.option_values(global_args, "--project-directory", None)
@@ -184,10 +184,10 @@ def project_directory(global_args, cwd, runtime):
         return os.path.realpath(os.path.dirname(os.path.join(cwd, files[0])))
 
     env_files = argscan.option_values(global_args, "--env-file", None)
-    return find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
+    return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 
-def find_compose_dir(start, env_files, home, uid):
+def _find_compose_dir(start, env_files, home, uid):
     """Finds the directory of the nearest compose file, walking up from start as compose does.
 
     The walk stops at home and at the first directory not owned by uid: a compose file found there was not

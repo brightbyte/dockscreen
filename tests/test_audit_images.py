@@ -47,7 +47,7 @@ def test_audit_pulls_and_says_what_happens_to_each_service_without_a_user(monkey
     images = FakeImages(users={"web:1": "", "db:1": "app", "cache:1": ""}, local={"db:1"})
     recorder = setup(monkeypatch, tmp_path, config, images, active=("web", "db", "cache"))
 
-    assert commands.audit([], [], runtime()) == 0
+    assert commands._audit([], [], runtime()) == 0
 
     captured = capsys.readouterr()
     assert "audit passed" in captured.err
@@ -67,7 +67,7 @@ def test_audit_refuses_an_image_that_chose_a_low_user(monkeypatch, capsys, tmp_p
     config = project(web={})
     setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": "web"}))
 
-    assert commands.audit([], [], runtime()) == 1
+    assert commands._audit([], [], runtime()) == 1
 
     assert "service web: image web:1: the image's uid 1000 exists on this host" in capsys.readouterr().err
 
@@ -76,7 +76,7 @@ def test_audit_does_not_pull_or_build_a_project_that_fails_the_static_checks(mon
     config = project(web={"privileged": True})
     recorder = setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": ""}))
 
-    assert commands.audit([], [], runtime()) == 1
+    assert commands._audit([], [], runtime()) == 1
 
     captured = capsys.readouterr()
     assert "privileged is not allowed" in captured.err
@@ -87,7 +87,7 @@ def test_audit_does_not_pull_or_build_a_project_that_fails_the_static_checks(mon
 def test_a_failed_pull_fails_the_audit_rather_than_refusing(monkeypatch, capsys, tmp_path):
     config = project(web={})
     setup(monkeypatch, tmp_path, config, FakeImages(users={}, local=set()), codes={"pull": 1})
-    assert commands.audit([], [], runtime()) == 3
+    assert commands._audit([], [], runtime()) == 3
     assert capsys.readouterr().err.splitlines()[-2:] == [
         f"[dockscreen] {BAD} docker compose pull web failed", "[dockscreen] \u2718 audit failed"]
 
@@ -96,7 +96,7 @@ def test_a_config_compose_cannot_read_fails_the_audit(monkeypatch, capsys):
     def unreadable(global_args, runtime):
         raise screen.InspectError("docker compose config failed:\nbad yaml")
     monkeypatch.setattr(screen, "inspect", unreadable)
-    assert commands.audit([], ["--brief"], runtime()) == 3
+    assert commands._audit([], ["--brief"], runtime()) == 3
     assert capsys.readouterr().out == "\u2718 audit failed: docker compose config failed:\\x0abad yaml\n"
 
 
@@ -104,7 +104,7 @@ def test_a_project_refused_before_inspection_is_refused_not_failed(monkeypatch, 
     def sensitive(global_args, runtime):
         raise screen.ScreenError("the project directory /home/me contains /home/me")
     monkeypatch.setattr(screen, "inspect", sensitive)
-    assert commands.audit([], [], runtime()) == 1
+    assert commands._audit([], [], runtime()) == 1
     assert f"[dockscreen] {BAD} refusing: the project directory /home/me" in capsys.readouterr().err
 
 
@@ -112,7 +112,7 @@ def test_brief_prints_only_the_verdict(monkeypatch, capsys, tmp_path):
     config = project(web={}, db={})
     setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": "app", "db:1": "web"}),
           active=("web", "db"))
-    assert commands.audit([], ["--brief"], runtime()) == 1
+    assert commands._audit([], ["--brief"], runtime()) == 1
     captured = capsys.readouterr()
     assert captured.out == ("\u2296 denied by audit: service db: image db:1: the image's uid 1000 exists "
                             "on this host (local user daniel); the image's gid 1000 exists on this host "
@@ -122,12 +122,12 @@ def test_brief_prints_only_the_verdict(monkeypatch, capsys, tmp_path):
 
 def test_brief_says_passed(monkeypatch, capsys, tmp_path):
     setup(monkeypatch, tmp_path, project(web={}), FakeImages(users={"web:1": "app"}))
-    assert commands.audit([], ["--brief"], runtime()) == 0
+    assert commands._audit([], ["--brief"], runtime()) == 0
     assert capsys.readouterr().out == "\u2714 audit passed\n"
 
 
 def test_audit_takes_only_brief(capsys):
-    assert commands.audit([], ["--remote"], runtime()) == 2
+    assert commands._audit([], ["--remote"], runtime()) == 2
     assert "usage: dockscreen compose [compose options] audit [--brief]" in capsys.readouterr().err
 
 
@@ -138,7 +138,7 @@ def test_harden_writes_nothing_for_a_root_image_and_never_the_pull_pin(monkeypat
     images = FakeImages(users={"web:1": "", "db:1": "app"})
     recorder = setup(monkeypatch, tmp_path, config, images, active=("web", "db"))
 
-    assert commands.harden([], [], runtime()) == 0
+    assert commands._harden([], [], runtime()) == 0
 
     out = capsys.readouterr().out
     assert out.splitlines()[-1] == "services: {}"       # nothing is needed: dockscreen does it all
@@ -154,7 +154,7 @@ def test_harden_sets_a_user_where_the_image_chose_one_that_is_not_acceptable(mon
     images = FakeImages(users={"web:1": "web", "db:1": "app"})
     setup(monkeypatch, tmp_path, config, images, active=("web", "db"))
 
-    assert commands.harden([], [], runtime()) == 0
+    assert commands._harden([], [], runtime()) == 0
 
     out = capsys.readouterr().out
     assert ("# note: service web: image web:1 chose a user that is not acceptable, "
@@ -179,7 +179,7 @@ def test_harden_looks_at_the_images_with_the_users_it_writes_resolved(monkeypatc
     setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": "app", "db:1": "app"}),
           active=("web", "db"), reads=interpolating)
 
-    assert commands.harden([], [], runtime()) == 0
+    assert commands._harden([], [], runtime()) == 0
     captured = capsys.readouterr()
     assert '    user: "${UID}:${GID}"' in captured.out
     assert "reads the checked config differently" not in captured.out + captured.err
@@ -197,7 +197,7 @@ def test_harden_leaves_a_user_the_config_file_sets_for_the_image(monkeypatch, ca
     setup(monkeypatch, tmp_path, config, images, active=("db",),
           ctx=imagedecision.Context(images, rules(), runtime(settings=settings)))
 
-    assert commands.harden([], [], runtime(settings=settings)) == 0
+    assert commands._harden([], [], runtime(settings=settings)) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "services: {}"  # nothing to fix
 
 
@@ -205,7 +205,7 @@ def test_harden_does_not_pull_or_build_while_other_problems_remain(monkeypatch, 
     config = project(web={"build": {"context": "/"}})  # a build context outside the project: no safe fix
     recorder = setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": ""}))
 
-    assert commands.harden([], [], runtime()) == 1
+    assert commands._harden([], [], runtime()) == 1
 
     captured = capsys.readouterr()
     assert "nothing was pulled or built" in captured.err
@@ -215,13 +215,13 @@ def test_harden_does_not_pull_or_build_while_other_problems_remain(monkeypatch, 
 
 def test_harden_reports_a_failed_pull_as_a_problem_it_cannot_fix(monkeypatch, capsys, tmp_path):
     setup(monkeypatch, tmp_path, project(web={}), FakeImages(users={}, local=set()), codes={"pull": 1})
-    assert commands.harden([], [], runtime()) == 1
+    assert commands._harden([], [], runtime()) == 1
     assert "cannot fix automatically: docker compose pull web failed" in capsys.readouterr().err
 
 
 def test_audit_does_not_announce_pulling_when_the_static_checks_fail(monkeypatch, capsys, tmp_path):
     setup(monkeypatch, tmp_path, project(web={"privileged": True}), FakeImages())
-    commands.audit([], [], runtime())
+    commands._audit([], [], runtime())
     assert "pulling or building" not in capsys.readouterr().err
 
 
@@ -230,7 +230,7 @@ def test_audit_lists_the_variables_taken_from_the_shell(monkeypatch, capsys, tmp
     config = project(web={"user": f"{UID}:{GID}", "environment": {"FROMSHELL": "secret"}})
     setup(monkeypatch, tmp_path, config, FakeImages(users={"web:1": ""}))
 
-    commands.audit([], [], runtime())
+    commands._audit([], [], runtime())
 
     out = capsys.readouterr().out
     assert "service web: environment variables taken from your shell: FROMSHELL" in out
@@ -241,8 +241,8 @@ def test_a_remote_daemon_is_refused_before_anything_is_pulled(monkeypatch, capsy
     monkeypatch.setenv("DOCKER_HOST", "tcp://build-box:2375")
     recorder = setup(monkeypatch, tmp_path, project(web={}), FakeImages(users={"web:1": ""}))
 
-    assert commands.audit([], [], runtime()) == 1
-    assert commands.harden([], [], runtime()) == 1
+    assert commands._audit([], [], runtime()) == 1
+    assert commands._harden([], [], runtime()) == 1
 
     assert "the daemon is not the default local one" in capsys.readouterr().err
     assert recorder.children == []

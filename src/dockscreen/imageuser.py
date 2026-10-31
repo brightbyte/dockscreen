@@ -20,7 +20,7 @@ INT64_MAX = 2**63 - 1
 INT64_MIN = -(2**63)
 
 
-def lines(text):
+def _lines(text):
     """Returns the non-empty lines of a passwd or group file as moby reads them: split on newlines only,
     each stripped of surrounding whitespace as Go defines it.
     """
@@ -28,7 +28,7 @@ def lines(text):
     return [line for line in stripped if line]
 
 
-def atoi(text):
+def _atoi(text):
     """Reads text as moby does with Go's strconv.Atoi: an optional sign and ASCII digits, else 0;
     a number out of the int64 range becomes the nearest limit.
     """
@@ -44,21 +44,21 @@ def _fields(line, count):
     return parts + [""] * (count - len(parts))
 
 
-def parse_passwd(text):
+def _parse_passwd(text):
     """Parses a passwd file into [(name, uid, gid)] like moby: a missing or malformed number is 0."""
     entries = []
-    for line in lines(text):
+    for line in _lines(text):
         name, _, uid, gid, *_ = _fields(line, 7)
-        entries.append((name, atoi(uid), atoi(gid)))
+        entries.append((name, _atoi(uid), _atoi(gid)))
     return entries
 
 
-def parse_group(text):
+def _parse_group(text):
     """Parses a group file into [(name, gid, members)] like moby: a missing or malformed gid is 0."""
     entries = []
-    for line in lines(text):
+    for line in _lines(text):
         name, _, gid, members = _fields(line, 4)
-        entries.append((name, atoi(gid), members.split(",") if members else []))
+        entries.append((name, _atoi(gid), members.split(",") if members else []))
     return entries
 
 
@@ -69,8 +69,8 @@ def resolve(spec, passwd_text, group_text):
     uid without a passwd entry gets gid 0. Raises ValueError for a name the image does not define,
     which docker would refuse to start too, and for a negative id.
     """
-    passwd = parse_passwd(passwd_text)
-    groups = parse_group(group_text)
+    passwd = _parse_passwd(passwd_text)
+    groups = _parse_group(group_text)
     user_part, _, group_part = (spec or "0").partition(":")
     user_part = user_part or "0"  # moby: no user means the default, uid 0
 

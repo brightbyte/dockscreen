@@ -12,7 +12,7 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_
     shell = {"TOKEN": "s3cret", "HOME": "/home/me", "UID": "1000"}
     cfg = config(web={"TOKEN": "s3cret", "OWN": "x", "UID": "1000"}, db={"HOME": "/home/me"}, job={"A": "b"})
 
-    assert shellenv.copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
+    assert shellenv._copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
     lines = shellenv.describe(cfg, shell)
     assert lines == [
         messages.Marked(messages.WARN, "service db: environment variables taken from your shell: HOME"),
@@ -29,8 +29,8 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_
     ({"UID": "1000"}, {"UID": "1000"}),   # dockscreen's own export
 ])
 def test_nothing_is_reported_for_these(environment, shell):
-    assert shellenv.copied(config(web=environment), shell) == {}
+    assert shellenv._copied(config(web=environment), shell) == {}
 
 
 def test_services_without_an_environment_are_fine():
-    assert shellenv.copied({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}
+    assert shellenv._copied({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}

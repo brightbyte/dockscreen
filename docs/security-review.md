@@ -68,7 +68,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 14. Config trust
 
-`config.strict_modes` walks the realpath chain only, not the directory that holds a symlinked path. Project sections match by cwd prefix (documented). `/etc/subuid` is read directly, so NSS subid sources are not covered.
+`config._strict_modes` walks the realpath chain only, not the directory that holds a symlinked path. Project sections match by cwd prefix (documented). `/etc/subuid` is read directly, so NSS subid sources are not covered.
 
 ### 15. Uncaught exceptions end in a traceback
 

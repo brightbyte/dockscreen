@@ -51,7 +51,7 @@ def test_audit_info_lines_are_escaped(monkeypatch, capsys, tmp_path):
     image_ctx, _ = make_image_ctx(FakeImages(users={image: "app"}))
     install_image_ctx(monkeypatch, image_ctx)
 
-    commands.audit([], [], runtime())
+    commands._audit([], [], runtime())
 
     out = capsys.readouterr().out
     assert "service web: no user set; image x\\x1b[31m:1 runs as" in out

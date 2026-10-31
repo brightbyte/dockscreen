@@ -266,7 +266,7 @@ def test_security_opts_from_the_config_file_are_allowed_too(project):
 def test_a_mount_outside_says_how_the_config_file_can_allow_it(project):
     config_file = "/home/me/.config/dockscreen/config.toml"
     ctx = policy.Context(str(project), rules(allow_me=True), config_file=config_file)
-    assert policy.check_mounts([bind("/srv/data")], ctx) == [
+    assert policy._check_mounts([bind("/srv/data")], ctx) == [
         f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
         f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml']
 
