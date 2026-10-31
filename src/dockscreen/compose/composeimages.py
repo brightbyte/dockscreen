@@ -1,6 +1,6 @@
 """The images of services that set no `user`: get them as compose would, then decide as `docker run` does.
 
-A project file is hostile, so a service without `user:` cannot just be assumed to run as root or as
+A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
 whatever its image says. The image is acquired first, following the project's own pull policy so that
 automatic updates keep happening (pull, or build if it is built from a Dockerfile), and then the same
 rule as `docker run` is applied to the identity it would run as (imagedecision.assess):

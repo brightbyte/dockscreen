@@ -2,7 +2,7 @@
 
 Audience: whoever fixes the findings below. Fixed findings are not listed. Findings are ordered by priority; there are no high ones open.
 
-Threat model: the compose project and the image are hostile. The command line is trusted not to be malicious, but the person typing it is protected from mistakes and from being tricked by the project. Running as root must be rare and opt-in; running as the calling user must not be selectable by a project or image.
+Threat model: the compose project and the image are untrusted. Usually neither is hostile, but either may be. The command line is trusted not to be malicious, but the person typing it is protected from mistakes and from being tricked by the project. Running as root must be rare and opt-in; running as the calling user must not be selectable by a project or image.
 
 Method: reading the source. "Code confirmed" means the dockscreen side was re-read. The behaviour of docker, moby, runc, the kernel, compose and buildx comes from reading or memory and is marked "unverified" where a finding depends on it. A test that runs `docker compose config` and `docker buildx bake --print` on real projects would settle most of those.
 

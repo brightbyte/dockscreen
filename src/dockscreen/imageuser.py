@@ -1,7 +1,7 @@
 """Which uid and gids a container would run as, read from the image as docker reads it.
 
-The image is hostile, so its own /etc/passwd and /etc/group decide the identity docker would use;
-idrules decides whether the image may have it. Whatever is accepted runs pinned as numbers, so a
+The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is
+untrusted, so idrules decides whether the image may have it. Whatever is accepted runs pinned as numbers, so a
 difference between this reading and docker's can at worst refuse a good image.
 """
 

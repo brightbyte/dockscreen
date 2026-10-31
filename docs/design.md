@@ -31,7 +31,7 @@ Out of scope:
 1. Let docker parse its own input. dockscreen never parses compose files or mirrors `docker run`'s option handling to decide safety. It asks the real tool what it would do (`docker compose config`, `docker create` then `docker inspect`) and checks the result.
 2. Check exactly what will run. For compose, the checked config is written to a file and handed to compose as its only input. For `docker run`, the created container is checked before it is started.
 3. Allowlist, fail closed. A compose key that is not listed is refused, so a new Compose feature stays denied until someone reviews it. Any error while inspecting counts as a refusal.
-4. Decide users by ids, never by names. Docker resolves names in the image's own `/etc/passwd`, which a hostile image controls; dockscreen resolves names on the host and hands docker numbers.
+4. Decide users by ids, never by names. Docker resolves names in the image's own `/etc/passwd`, which the image controls; dockscreen resolves names on the host and hands docker numbers.
 5. Fix what has a safe fix, refuse the rest. Missing hardening is added, an image that would run as root is run as the default user, and everything else is refused with a message that says how to proceed.
 6. Whatever the config file says is trusted, so the file is only read when nobody but its owner or root can have written it.
 

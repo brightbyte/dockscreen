@@ -1,6 +1,6 @@
 """Deciding the user a container runs as when the command line or the service does not choose one.
 
-The image is hostile: its own /etc/passwd and /etc/group decide the identity docker would use (see
+The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in
 this order:
 - the config file names a user for the image's repository, and the image was pulled from there:

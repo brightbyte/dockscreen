@@ -1,6 +1,6 @@
 """The accounts on this host, and users given on the command line: ids as typed, or a local account.
 
-Docker resolves a user name in the container's own /etc/passwd, where a hostile image can map it
+Docker resolves a user name in the container's own /etc/passwd, where an image can map it
 to root. So `--user` takes only numbers, which mean the same everywhere, and `--as NAME` takes the
 name of an account on this host and turns it into ids before docker sees it.
 """

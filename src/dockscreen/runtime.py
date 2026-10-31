@@ -77,7 +77,7 @@ def real_docker(settings, env, wrappers=None):
 def find_docker(env, wrappers):
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
-    Empty and relative PATH entries (an empty one means the current directory) are skipped: a hostile
+    Empty and relative PATH entries (an empty one means the current directory) are skipped: a
     project must not be able to supply the binary we run.
     """
     for directory in env.get("PATH", "").split(os.pathsep):

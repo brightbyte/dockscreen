@@ -9,7 +9,7 @@ import tarfile
 
 from dockscreen import messages
 
-MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from a hostile image
+MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from an untrusted image
 FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
@@ -80,7 +80,7 @@ class Docker:
 
         Raises DockerError if the file is larger than MAX_FILE_BYTES.
         """
-        # `docker cp SRC -` streams a tar archive to stdout, so nothing from the hostile image is written
+        # `docker cp SRC -` streams a tar archive to stdout, so nothing from the image is written
         # to the host; -L reads through a symlink, as docker does when it resolves the user
         process = self.popen([self.binary, "cp", "-L", f"{container}:{path}", "-"],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
