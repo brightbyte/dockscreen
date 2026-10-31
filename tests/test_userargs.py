@@ -1,9 +1,16 @@
 import pytest
 
-from dockscreen import hostusers
+from dockscreen import hostusers, userargs
 from dockscreen.compose import composeargs
+from dockscreen.run import runargs
 
 ME = (1000, 1001)  # what --as-me stands for
+# the options of each command that take a value
+VALUE_FLAGS = {**composeargs.VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE_FLAGS}
+
+
+def parse(command, args):
+    return userargs.parse(args, VALUE_FLAGS[command], ME, ACCOUNTS)
 
 
 @pytest.mark.parametrize("args, service, user_given", [
@@ -19,7 +26,7 @@ ME = (1000, 1001)  # what --as-me stands for
     ([], None, False),
 ])
 def test_run_arguments(args, service, user_given):
-    parsed = composeargs.parse("run", args, ME, ACCOUNTS)
+    parsed = parse("run", args)
     assert (parsed.service, parsed.user_given, parsed.args) == (service, user_given, args)
 
 
@@ -29,16 +36,15 @@ def test_run_arguments(args, service, user_given):
 ])
 def test_users_must_be_numeric_uid_gid(args):
     with pytest.raises(hostusers.UserError, match="--user takes numeric ids as uid:gid"):
-        composeargs.parse("run", args, ME, ACCOUNTS)
+        parse("run", args)
 
 
 def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
-    assert composeargs.parse("exec", exec_args, ME, ACCOUNTS)[:2] == ("web", True)
-    docker_exec_args = ["--detach-keys", "x", "-it", "c", "sh"]
-    assert composeargs.parse("docker exec", docker_exec_args, ME, ACCOUNTS)[:2] == ("c", False)
+    assert parse("exec", exec_args)[:2] == ("web", True)
+    assert parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])[:2] == ("c", False)
     with pytest.raises(hostusers.UserError):
-        composeargs.parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"], ME, ACCOUNTS)
+        parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"])
 
 
 class Accounts:
@@ -60,7 +66,7 @@ ACCOUNTS = Accounts()
     ("run", ["web", "tool", "--as", "bob"], ["web", "tool", "--as", "bob"]),
 ])
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
-    parsed = composeargs.parse(subcommand, args, ME, ACCOUNTS)
+    parsed = parse(subcommand, args)
     assert parsed.args == rewritten
     assert parsed.user_given == ("--as" not in rewritten)
     assert parsed.notices == ([] if "--as" in rewritten else ["Resolving user alice to uid 1001, gid 1002"])
@@ -68,15 +74,15 @@ def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, arg
 
 def test_as_with_an_unknown_name_is_an_error():
     with pytest.raises(hostusers.UnknownUser):
-        composeargs.parse("exec", ["--as", "bob", "web", "sh"], ME, ACCOUNTS)
+        parse("exec", ["--as", "bob", "web", "sh"])
 
 
 def test_a_name_given_to_user_points_to_as():
     with pytest.raises(hostusers.UserError, match="--as NAME runs as a local user"):
-        composeargs.parse("exec", ["-u", "postgres", "web", "sh"], ME, ACCOUNTS)
+        parse("exec", ["-u", "postgres", "web", "sh"])
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
-    parsed = composeargs.parse(subcommand, ["-it", "--as-me", "c", "sh"], ME, ACCOUNTS)
+    parsed = parse(subcommand, ["-it", "--as-me", "c", "sh"])
     assert parsed.args == ["-it", "--user=1000:1001", "c", "sh"] and parsed.user_given

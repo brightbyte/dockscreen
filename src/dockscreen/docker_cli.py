@@ -6,10 +6,22 @@ go through the gate, everything else is exec'd to the real docker unchanged.
 
 import sys
 
-from dockscreen import argscan, bake, config, flags, helptext, hostusers, imagedecision, messages, verdict
-from dockscreen.compose import compose_cli, screen
+from dockscreen import (
+    argscan,
+    bake,
+    config,
+    daemon,
+    flags,
+    helptext,
+    hostusers,
+    imagedecision,
+    messages,
+    userargs,
+    verdict,
+)
+from dockscreen.compose import compose_cli
 from dockscreen.dockerclient import DockerNotFound
-from dockscreen.run import gate
+from dockscreen.run import gate, runargs
 from dockscreen.runtime import load_runtime
 from dockscreen.verdict import Verdict
 
@@ -149,12 +161,12 @@ class DockerCommand:
             messages.notice(gate.defaults_notice())
             return _passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
         if sub == "exec":
-            resolved = compose_cli.rewrite_exec("docker exec", args, runtime)
+            resolved = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
             return 1 if resolved is None else _passthrough([*lead, *resolved], runtime)
 
         docker = runtime.docker
-        if screen.is_remote(argv[:self.idx], runtime.env, docker):
-            return verdict.report(Verdict.REFUSED, [screen.REMOTE_MESSAGE])
+        if daemon.is_remote(argv[:self.idx], runtime.env, docker):
+            return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE])
 
         ctx = imagedecision.Context(docker, runtime.rules(self.allow_me), runtime)
         if sub == "run":

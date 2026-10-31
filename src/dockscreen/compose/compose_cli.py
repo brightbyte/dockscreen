@@ -5,7 +5,7 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
-from dockscreen import argscan, flags, helptext, hostusers, ids, messages, policy, verdict
+from dockscreen import argscan, flags, helptext, ids, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composerun, screen
 from dockscreen.compose.commands import ALIASES, COMMANDS
 
@@ -109,7 +109,7 @@ class ComposeCommand:
             if not self._name_is_free():
                 return 1
         elif sub == "exec":
-            args = rewrite_exec("exec", self.args, runtime)
+            args = userargs.resolved(self.args, composeargs.VALUE_FLAGS["exec"], runtime)
             if args is None:
                 return 1
             argv = [*argv[:self.idx + 1], *args]
@@ -167,21 +167,6 @@ class ComposeCommand:
         if self.sub == "help":
             argv = [*self.global_args, target, "--help"]
         return _passthrough(argv, self.runtime)
-
-
-def rewrite_exec(kind, args, runtime):
-    """Returns the arguments of `exec` (kind: "exec" or "docker exec") with --as and --as-me replaced by ids.
-
-    Prints the notices of resolving names. Returns None, and reports why, if the user cannot be used.
-    """
-    try:
-        parsed = composeargs.parse(kind, args, runtime.me, runtime.accounts)
-    except hostusers.UserError as e:
-        messages.report([str(e)])
-        return None
-    for notice in parsed.notices:
-        messages.notice(notice)
-    return parsed.args
 
 
 def _own_commands():

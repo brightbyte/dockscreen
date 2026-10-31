@@ -15,7 +15,7 @@ Before the subcommand (strip() takes them out):
 
 After `audit`, for compose and docker alike: --brief prints only the verdict, in one line.
 
-After `run` or `exec` (composeargs and runargs replace them by `--user=uid:gid`):
+After `run` or `exec` (userargs and runargs replace them by `--user=uid:gid`):
 - --as NAME: a local user by name, resolved on this host.
 - --as-me: the caller's own ids; with `docker run` it implies --allow-me.
 """

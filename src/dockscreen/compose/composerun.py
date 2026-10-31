@@ -18,7 +18,7 @@ import os
 import tempfile
 from typing import NamedTuple
 
-from dockscreen import argscan, hostusers, imagedecision, messages, policy, verdict
+from dockscreen import argscan, daemon, hostusers, imagedecision, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 
@@ -47,7 +47,7 @@ class Project(NamedTuple):
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
         if self.remote:
-            problems.append(screen.REMOTE_MESSAGE)
+            problems.append(daemon.REMOTE_MESSAGE)
         elif not problems and not screen.names_project(self.global_args, self.runtime.env):
             problems += screen.name_conflicts(self.hardened["name"], self.directory,
                                               self.image_ctx.docker)
@@ -74,7 +74,7 @@ def load_project(global_args, runtime, allow_me):
     config, directory = screen.inspect(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
     image_ctx = _image_context(runtime, allow_me)._replace(project_dir=directory)
-    remote = screen.is_remote(global_args, runtime.env, image_ctx.docker)
+    remote = daemon.is_remote(global_args, runtime.env, image_ctx.docker)
     ctx = screen.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
@@ -129,7 +129,7 @@ def _command_line(subcommand, args, runtime):
     Raises hostusers.UserError for a user that is not numeric `uid:gid`, or an unknown --as name.
     """
     if subcommand != "run":
-        return composeargs.Parsed(None, False, args, [])
+        return userargs.Parsed(None, False, args, [])
     return composeargs.parse("run", args, runtime.me, runtime.accounts)
 
 

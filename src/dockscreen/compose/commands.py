@@ -9,7 +9,7 @@ A name in COMMANDS shadows the docker compose subcommand of the same name.
 
 import sys
 
-from dockscreen import flags, messages, policy, verdict
+from dockscreen import daemon, flags, messages, policy, verdict
 from dockscreen.compose import autofix, composeimages, composerun, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.verdict import Verdict
@@ -85,7 +85,7 @@ def _harden(global_args, args, runtime, allow_me=False):
         messages.notice(e)
         return 1
     if project.remote:
-        messages.notice(screen.REMOTE_MESSAGE)
+        messages.notice(daemon.REMOTE_MESSAGE)
         return 1
 
     base, static = project.hardened, project.static_ctx()
