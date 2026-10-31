@@ -12,9 +12,11 @@ line could have done with plain compose anyway, and a service that is missed has
 if no user had been chosen.
 """
 
+from collections.abc import Collection, Sequence
 from typing import NamedTuple
 
 from dockscreen import commandline, hostusers, messages
+from dockscreen.runtime import Runtime
 
 
 class Parsed(NamedTuple):
@@ -24,7 +26,8 @@ class Parsed(NamedTuple):
     notices: list     # what resolving user names on this host did, for the caller to print
 
 
-def parse(args, value_flags, me, accounts):
+def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
+          accounts: hostusers.HostAccounts) -> Parsed:
     """Parses args far enough to find the service or container, and whether a user is given.
 
     Returns a Parsed, with --as and --as-me replaced by ids. Raises hostusers.UserError for a user that is
@@ -34,7 +37,7 @@ def parse(args, value_flags, me, accounts):
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     """
     users = hostusers.UserOptions(me, accounts)
-    kept = []
+    kept: list[str] = []
     i = 0
     while i < len(args):
         token = args[i]
@@ -54,7 +57,7 @@ def parse(args, value_flags, me, accounts):
 
 
 
-def resolved(args, value_flags, runtime):
+def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime) -> list[str] | None:
     """Returns args with --as and --as-me replaced by ids, and prints the notices of resolving names.
 
     Returns None, and reports why, if the user cannot be used. value_flags: as parse takes them.
@@ -68,7 +71,8 @@ def resolved(args, value_flags, runtime):
         messages.notice(notice)
     return parsed.args
 
-def _parse_long(args, i, value_flags, users, kept):
+def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: hostusers.UserOptions,
+                kept: list[str]) -> int:
     """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
     end = i
@@ -84,7 +88,8 @@ def _parse_long(args, i, value_flags, users, kept):
     return end + 1
 
 
-def _parse_short(args, i, value_flags, users, kept):
+def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: hostusers.UserOptions,
+                 kept: list[str]) -> int:
     """Reads the cluster at args[i] (such as -it or -u0:0) into kept, and returns the index after it."""
     token = args[i]
     short_values = {flag[1] for flag in value_flags if len(flag) == 2}

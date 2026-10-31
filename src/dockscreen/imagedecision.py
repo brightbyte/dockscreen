@@ -17,9 +17,10 @@ Used by `docker run` (gate) and by compose (composeimages) alike.
 """
 
 import enum
-from typing import NamedTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple
 
-from dockscreen import config, idrules, ids, images, imageuser, messages
+from dockscreen import config, hostusers, idrules, ids, images, imageuser, messages
 from dockscreen.dockerclient import Docker
 from dockscreen.runtime import Runtime
 
@@ -31,26 +32,26 @@ class Context(NamedTuple):
     project_dir: str | None = None  # the compose project's; for docker run, the current directory
 
     @property
-    def local(self):
+    def local(self) -> hostusers.HostAccounts:
         """Returns the host accounts of the id rules, for naming the users an image runs as."""
         return self.ids.local
 
     @property
-    def directory(self):
+    def directory(self) -> str:
         """Returns the directory a bind mount is judged against: the project's, else the current one."""
         return self.project_dir or self.runtime.cwd
 
     @property
-    def settings(self):
+    def settings(self) -> config.Config:
         """Returns the config file's settings for this directory's project, without any image section."""
         return config.effective(self.runtime.settings, None, self.directory)
 
-    def for_image(self, repository):
+    def for_image(self, repository: str | None) -> tuple[config.Config, idrules.Rules]:
         """Returns (settings, id rules) with the image section for repository applied (None: none applies)."""
         settings = config.effective(self.runtime.settings, repository, self.directory)
         return settings, self.ids.with_settings(settings)
 
-    def with_allow_me(self, allow_me):
+    def with_allow_me(self, allow_me: bool) -> "Context":
         """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
         return self._replace(ids=self.ids._replace(allow_me=True)) if allow_me else self
 
@@ -74,27 +75,27 @@ class Assessment(NamedTuple):
     home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
 
     @property
-    def refused(self):
+    def refused(self) -> bool:
         """Tells whether the container must not run: refused, or not assessed at all."""
         return self.kind in (Kind.REFUSED, Kind.FAILED)
 
     @property
-    def failed(self):
+    def failed(self) -> bool:
         """Tells whether the image could not be assessed at all."""
         return self.kind is Kind.FAILED
 
     @property
-    def pins_user(self):
+    def pins_user(self) -> bool:
         """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
         return self.kind in (Kind.CONFIGURED, Kind.OK, Kind.FALLBACK)
 
     @property
-    def replaces_image_user(self):
+    def replaces_image_user(self) -> bool:
         """Tells whether the user dockscreen decided differs from the one the image chose."""
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK)
 
 
-def _has_host_mounts(info):
+def _has_host_mounts(info: dict[str, Any]) -> bool:
     """Tells whether the container, as inspected, reaches host files or devices.
 
     Bind mounts, devices and volumes taken from another container all do. Named volumes live in
@@ -108,7 +109,8 @@ def _has_host_mounts(info):
     return bool(binds_or_devices or host.get("Devices") or host.get("VolumesFrom"))
 
 
-def assess(ctx, container, info, explicit=None, mounts=None, reference=None, built=False):
+def assess(ctx: Context, container: str, info: dict[str, Any], explicit: bool | None = None,
+           mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
     """Decides which user the container's image may run as, by the rules in this module's docstring.
 
     Returns an Assessment. Raises DockerError if the image cannot be inspected or its passwd or group
@@ -121,7 +123,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
     image = ctx.docker.inspect_image(info["Image"])
     match = images.section_for(ctx.runtime.settings, reference or info["Config"].get("Image") or "",
                                image.get("RepoDigests"), built)
-    found = {"note": match.problem, "section": match.repository}
+    found: dict[str, Any] = {"note": match.problem, "section": match.repository}
     spec = info["Config"].get("User") or ""
     if explicit is None:  # the container's user differs from the image's only if the command line set one
         explicit = spec != (image["Config"].get("User") or "")
@@ -152,7 +154,7 @@ def assess(ctx, container, info, explicit=None, mounts=None, reference=None, bui
 
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
-def default_home(user, home):
+def default_home(user: tuple[int, int], home: str) -> str:
     """Returns the HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
 
     home: the configured default_home. Root keeps its own.
@@ -160,7 +162,7 @@ def default_home(user, home):
     return "" if 0 in user else home
 
 
-def env_value(env, name):
+def env_value(env: Sequence[str] | None, name: str) -> str | None:
     """Returns the value the last `name=` entry of an `Env` list of `NAME=value` strings sets, or None."""
     for entry in reversed(env or []):
         key, equals, value = entry.partition("=")
@@ -169,19 +171,19 @@ def env_value(env, name):
     return None
 
 
-def runs_as(assessment, local):
+def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
     """Describes what an accepted image (Kind.OK or Kind.CONFIGURED) runs as; local: HostAccounts."""
     if assessment.kind is Kind.CONFIGURED:
         return f"runs as {ids.format_user(assessment.user)}, the user the config file sets for it"
     return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
 
 
-def instead_of_root(assessment):
+def instead_of_root(assessment: Assessment) -> str:
     """Describes what a Kind.FALLBACK assessment does instead of running as root."""
     return f"running as {ids.format_user(assessment.user)} instead of root"
 
 
-def root_default_notice(ctx):
+def root_default_notice(ctx: Context) -> messages.Marked | None:
     """Returns the warning to give on every run if the configured default user is root, else None."""
     if 0 in ctx.settings.default_user:
         default = ids.format_user(ctx.settings.default_user)

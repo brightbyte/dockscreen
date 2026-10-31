@@ -16,11 +16,13 @@ import itertools
 import json
 import os
 import tempfile
-from typing import NamedTuple
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any, NamedTuple
 
 from dockscreen import commandline, daemon, hostusers, imagedecision, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
+from dockscreen.runtime import Runtime
 
 # Options that select the files and the project; ours replace them.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
@@ -36,14 +38,14 @@ class Project(NamedTuple):
     image_ctx: imagedecision.Context  # to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
     docker_binary: str         # the real docker, to run `docker compose` with
-    runtime: object = None     # runtime.Runtime it was loaded with
+    runtime: Runtime           # the Runtime it was loaded with
     allow_me: bool = False
 
-    def static_ctx(self):
+    def static_ctx(self) -> policy.Context:
         """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
         return self.ctx._replace(vetted=composeimages.unset_user_services(self.hardened))
 
-    def problems(self):
+    def problems(self) -> list[str]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
         if self.remote:
@@ -53,19 +55,19 @@ class Project(NamedTuple):
                                               self.image_ctx.docker)
         return problems
 
-    def final_ctx(self, prepared, vetted):
+    def final_ctx(self, prepared: composeimages.Prepared, vetted: frozenset[str]) -> policy.Context:
         """Returns ctx for the config that will run, with vetted as the services pinned to an accepted
         image, and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
         return screen.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
 
-    def generated(self):
+    def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
         return _generated(self.global_args, self.directory, self.docker_binary)
 
 
-def load_project(global_args, runtime, allow_me):
+def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Project:
     """Loads the project global_args select, hardened.
 
     Raises screen.ScreenError or ValueError if it cannot be inspected.
@@ -80,7 +82,7 @@ def load_project(global_args, runtime, allow_me):
                    runtime, allow_me)
 
 
-def run(global_args, sub, args, runtime, allow_me=False):
+def run(global_args: list[str], sub: str, args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
     """Runs `docker compose global_args sub args`, sub a subcommand that starts containers, on the project
     global_args select if it passes the checks.
 
@@ -123,7 +125,7 @@ def run(global_args, sub, args, runtime, allow_me=False):
         return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
 
 
-def _command_line(subcommand, args, runtime):
+def _command_line(subcommand: str, args: list[str], runtime: Runtime) -> userargs.Parsed:
     """Parses args for `run` as composeargs does, with --as resolved; other subcommands keep them as
     they are.
 
@@ -134,13 +136,14 @@ def _command_line(subcommand, args, runtime):
     return composeargs.parse("run", args, runtime.me, runtime.accounts)
 
 
-def _chosen(parsed):
+def _chosen(parsed: userargs.Parsed) -> frozenset[str]:
     """Returns the services whose user the command line chooses: `run -u uid:gid` or `run --as NAME`."""
     return frozenset({parsed.service}) if parsed.user_given and parsed.service else frozenset()
 
 
 @contextlib.contextmanager
-def _generated(global_args, project_dir, docker_binary):
+def _generated(global_args: Sequence[str], project_dir: str,
+               docker_binary: str) -> Iterator[Callable[[dict[str, Any]], list[str]]]:
     """Provides a private temporary directory for generated configs, and yields command(config).
 
     command writes config there and returns the `docker compose` command line on it alone, with the project
@@ -148,7 +151,7 @@ def _generated(global_args, project_dir, docker_binary):
     """
     counter = itertools.count()
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:
-        def command(config):
+        def command(config: dict[str, Any]) -> list[str]:
             path = os.path.join(directory, f"compose-{next(counter)}.yaml")
             # 0600: the config can hold secrets; O_EXCL: never write through a file or link already there
             with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
@@ -160,6 +163,6 @@ def _generated(global_args, project_dir, docker_binary):
         yield command
 
 
-def _image_context(runtime, allow_me=False):
+def _image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
     """Returns the imagedecision.Context to pull, build, decide and run with."""
     return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)

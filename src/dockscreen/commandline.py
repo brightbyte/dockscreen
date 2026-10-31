@@ -24,6 +24,8 @@ The helpers are not full parsers: each knows which options take a value only fro
 and the callers are written so that a misreading refuses or changes nothing.
 """
 
+from collections.abc import Collection, Sequence
+
 from dockscreen import messages
 
 SKIP_SCREENING = "--skip-screening"
@@ -47,14 +49,16 @@ class CommandLine:
     argv: the command line as docker or compose gets it; idx: the index of the command in it, or None.
     """
 
-    def __init__(self, argv, value_opts, own, given=()):
+    def __init__(self, argv: Sequence[str], value_opts: Collection[str], own: Collection[str],
+                 given: Collection[str] = ()) -> None:
         """Reads argv. value_opts: the options that take the next token as their value, which is then not the
         command; own: the options of ours to take out; given: options of ours given before, on the docker
         command line that this one follows.
         """
         self.value_opts = value_opts
         self.given = frozenset(given)
-        kept, i = [], 0
+        kept: list[str] = []
+        i = 0
         while i < len(argv):
             token = argv[i]
             if token == "--":
@@ -73,58 +77,58 @@ class CommandLine:
         self.argv = [*kept, *argv[i:]]
         self.idx = find_subcommand(self.argv, value_opts)
 
-    def has(self, option):
+    def has(self, option: str) -> bool:
         """Tells whether option, one of ours, was given."""
         return option in self.given
 
     @property
-    def skip_screening(self):
+    def skip_screening(self) -> bool:
         """Tells whether --skip-screening was given."""
         return self.has(SKIP_SCREENING)
 
     @property
-    def allow_me(self):
+    def allow_me(self) -> bool:
         """Tells whether --allow-me was given."""
         return self.has(ALLOW_ME)
 
     @property
-    def as_me(self):
+    def as_me(self) -> bool:
         """Tells whether --as-me was given before the command, where it does not belong."""
         return self.has(AS_ME)
 
     @property
-    def strict(self):
+    def strict(self) -> bool:
         """Tells whether --strict-screen was given."""
         return self.has(STRICT_SCREEN)
 
     @property
-    def helpful(self):
+    def helpful(self) -> bool:
         """Tells whether --helpful or --verbose was given."""
         return self.has(HELPFUL) or self.has(VERBOSE)
 
     @property
-    def sub(self):
+    def sub(self) -> str | None:
         """Returns the command (the first argument that is not an option or an option's value), or None."""
         return None if self.idx is None else self.argv[self.idx]
 
     @property
-    def global_args(self):
+    def global_args(self) -> list[str]:
         """Returns the options before the command."""
         return self.argv if self.idx is None else self.argv[:self.idx]
 
     @property
-    def args(self):
+    def args(self) -> list[str]:
         """Returns the arguments after the command."""
         return [] if self.idx is None else self.argv[self.idx + 1:]
 
 
-def banner():
+def banner() -> None:
     """Warns on stderr that screening is turned off for this command."""
     messages.warning(f"{SKIP_SCREENING} given: screening is disabled.")
     messages.warning("nothing in this command is checked, and no defaults are added.")
 
 
-def find_subcommand(argv, value_opts):
+def find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | None:
     """Returns the index of the first argument that is not an option or an option's value, or None if
     there is none before `--`.
 
@@ -144,7 +148,7 @@ def find_subcommand(argv, value_opts):
     return None
 
 
-def option_values(args, long_name, short_name):
+def option_values(args: Sequence[str], long_name: str, short_name: str | None) -> list[str]:
     """Returns every value given for the option, in order, in `--opt v`, `--opt=v`, `-o v`, `-ov` and `-o=v`
     forms, read as compose's flag parser reads them. short_name may be None.
     """
@@ -163,7 +167,7 @@ def option_values(args, long_name, short_name):
     return values
 
 
-def option_value(args, name):
+def option_value(args: Sequence[str], name: str) -> str | None:
     """Returns the value of the first `--name value` or `--name=value` before any `--`, or None."""
     for i, arg in enumerate(args):
         if arg == "--":
@@ -175,7 +179,7 @@ def option_value(args, name):
     return None
 
 
-def strip_options(args, names):
+def strip_options(args: Sequence[str], names: Collection[str]) -> list[str]:
     """Returns args without the given options and their values, in `--opt v`, `--opt=v` and `-ov` forms.
 
     names: options that take a value, long and short.
@@ -196,13 +200,14 @@ def strip_options(args, names):
     return kept
 
 
-def positionals(args, long_values, short_values):
+def positionals(args: Sequence[str], long_values: Collection[str],
+                short_values: Collection[str]) -> list[str]:
     """Returns the arguments that are not options or option values, and everything after `--`.
 
     long_values: long options that take a value; short_values: letters of short options that do, which
     take the next argument when they end a cluster.
     """
-    found = []
+    found: list[str] = []
     i = 0
     while i < len(args):
         token = args[i]

@@ -1,6 +1,8 @@
 """The options of `docker compose run` and `exec`, as userargs reads them."""
 
-from dockscreen import userargs
+from collections.abc import Sequence
+
+from dockscreen import hostusers, userargs
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.
 VALUE_FLAGS = {
@@ -12,6 +14,7 @@ VALUE_FLAGS = {
 }
 
 
-def parse(subcommand, args, me, accounts):
+def parse(subcommand: str, args: Sequence[str], me: tuple[int, int],
+          accounts: hostusers.HostAccounts) -> userargs.Parsed:
     """Returns userargs.parse of the arguments of `run` or `exec` (subcommand)."""
     return userargs.parse(args, VALUE_FLAGS[subcommand], me, accounts)

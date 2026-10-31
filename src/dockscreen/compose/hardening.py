@@ -10,9 +10,9 @@ additions are reported by `audit` and written out by `harden`.
 
 import copy
 import json
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
-from dockscreen import ids, messages, policy
+from dockscreen import hostusers, ids, messages, policy
 from dockscreen.policy import CAP_DROP, SECURITY_OPT
 
 class Addition(NamedTuple):
@@ -23,7 +23,7 @@ class Addition(NamedTuple):
     help: str | None = None  # what the project can do about it
 
 
-def apply(config, accounts):
+def apply(config: dict[str, Any], accounts: hostusers.HostAccounts) -> tuple[dict[str, Any], list[Addition]]:
     """Adds dockscreen's defaults to every service of config and resolves user names to ids.
 
     Returns (a hardened copy of config, the list of additions).
@@ -51,7 +51,8 @@ def apply(config, accounts):
     return hardened, additions
 
 
-def _resolve_user_names(name, service, accounts):
+def _resolve_user_names(name: str, service: dict[str, Any],
+                        accounts: hostusers.HostAccounts) -> list[Addition]:
     """Replaces names in the service's user and hook users by their ids, and returns the additions."""
     additions = []
     if service.get("user"):
@@ -71,7 +72,7 @@ def _resolve_user_names(name, service, accounts):
     return additions
 
 
-def _resolve_spec(spec, accounts):
+def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
     """Resolves a user spec: `name` becomes that account's `uid:gid`, a group name its gid.
 
     Numbers and unknown names stay. A uid alone stays alone: the policy refuses it rather than guess a group.
@@ -88,7 +89,7 @@ def _resolve_spec(spec, accounts):
     return f"{uid}:{gid}"
 
 
-def _resolve_group(group, accounts):
+def _resolve_group(group: str, accounts: hostusers.HostAccounts) -> str:
     """Returns group as a gid if accounts knows its name; ids and unknown names are unchanged."""
     if ids.parse_id(group) is not None:
         return group
@@ -96,7 +97,7 @@ def _resolve_group(group, accounts):
     return group if gid is None else str(gid)
 
 
-def _resolved_message(what, before, after):
+def _resolved_message(what: str, before: object, after: str) -> str:
     """Returns the notice that what was resolved from before to after on this host."""
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 
@@ -108,7 +109,7 @@ DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, a
 RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
-def describe(additions):
+def describe(additions: list[Addition]) -> list[messages.Marked]:
     """Describes the additions as marked lines for an audit or a run, by how much each deserves a look.
 
     A default added where the project set nothing is routine, and one line names the services, since it is
@@ -128,7 +129,7 @@ def describe(additions):
     return lines
 
 
-def defaults_note():
+def defaults_note() -> str:
     """Returns one general sentence about the defaults for generated files, instead of a line per service."""
     return (f'dockscreen also adds cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] to every '
             "service that lacks them, resolves user and group names to ids on this host, and runs a "

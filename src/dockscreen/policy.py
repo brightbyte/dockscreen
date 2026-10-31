@@ -23,8 +23,10 @@ realpath resolution.
 """
 
 import os
-from typing import NamedTuple
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from typing import Any, NamedTuple
 
+from dockscreen import config as configuration
 from dockscreen import idrules, ids
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
@@ -117,19 +119,24 @@ class Context(NamedTuple):
     configured_user: tuple | None = None
     # (name, service) -> this context for that service, with the settings of its image section if one
     # applies; None if every service gets this one.
-    scope: object = None
+    scope: Callable[[str, dict[str, Any]], "Context"] | None = None
 
     @property
-    def mount_roots(self):
+    def mount_roots(self) -> tuple[str, ...]:
         """Returns where bind mounts may come from: the project directory, then the configured mount_dirs."""
         return (self.project_dir, *self.extra_dirs)
 
-    def for_service(self, name, service):
+    def for_service(self, name: str, service: dict[str, Any]) -> "Context":
         """Returns the context to check the service called name with: scope's for it, else this one."""
         return self.scope(name, service) if self.scope else self
 
 
-def context_for(settings, project_dir, rules, config_file=None):
+# A check of one service key: takes its value and the Context, returns the problems.
+Check = Callable[[Any, Context], list[str]]
+
+
+def context_for(settings: configuration.Config, project_dir: str, rules: idrules.Rules,
+                config_file: str | None = None) -> Context:
     """Builds the Context for a project in project_dir with these settings (config.effective).
 
     rules: the id rules with the caller's allow_me; the settings give them their nobody range and default
@@ -139,7 +146,7 @@ def context_for(settings, project_dir, rules, config_file=None):
                    security_opts=settings.security_opts, configured_user=settings.user)
 
 
-def check_config(config, ctx):
+def check_config(config: dict[str, Any], ctx: Context) -> list[str]:
     """Checks a resolved compose config against the policy; returns the problems, each saying where.
 
     Empty if the config passes. Each service is checked with its own context (ctx.for_service).
@@ -159,13 +166,13 @@ def check_config(config, ctx):
     return problems + _check_file_sources(config, ctx)
 
 
-def _check_service_names(config):
+def _check_service_names(config: dict[str, Any]) -> list[str]:
     """Returns a problem for each service name that starts with `-`, which compose would read as an option."""
     return [f"service name {name!r} starts with '-', which compose would read as an option"
             for name in config.get("services") or {} if str(name).startswith("-")]
 
 
-def check_build_config(config, ctx):
+def check_build_config(config: dict[str, Any], ctx: Context) -> list[str]:
     """Checks config against the part of the policy that applies to `build`; returns the problems.
 
     That part is what building can reach on the host: names, build sections, secrets and configs.
@@ -179,7 +186,8 @@ def check_build_config(config, ctx):
     return problems + _check_file_sources(config, ctx)  # build secrets refer to these
 
 
-def unknown_keys(mapping, allowed, what, extensions=True):
+def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str,
+                 extensions: bool = True) -> list[str]:
     """Returns a problem for each key of mapping not in allowed; `x-` keys pass unless extensions is False.
 
     what: names the kind of key in the problems.
@@ -191,7 +199,8 @@ def unknown_keys(mapping, allowed, what, extensions=True):
     ]
 
 
-def check_service(service, ctx, vetted=False, volumes=None):
+def check_service(service: dict[str, Any], ctx: Context, vetted: bool = False,
+                  volumes: dict[str, Any] | None = None) -> list[str]:
     """Checks one service against the policy; returns the problems, empty if there are none.
 
     vetted: its user was pinned from a checked image and is not checked again.
@@ -209,7 +218,7 @@ def check_service(service, ctx, vetted=False, volumes=None):
 
 # --- users and privileges -------------------------------------------------
 
-def has_host_mounts(service, volumes=None):
+def has_host_mounts(service: dict[str, Any], volumes: dict[str, Any] | None = None) -> bool:
     """Tells whether the service reaches host files: bind mounts, secrets and configs (bind-mounted
     files), devices, or the volumes of another container.
 
@@ -222,7 +231,7 @@ def has_host_mounts(service, volumes=None):
     return binds or any(service.get(key) for key in others)
 
 
-def _reaches_host(mount, volumes):
+def _reaches_host(mount: dict[str, Any], volumes: Mapping[Any, Any]) -> bool:
     """Tells whether mount is of a named volume in volumes whose driver_opts mount a device or options.
 
     A plain tmpfs does not count.
@@ -235,7 +244,7 @@ def _reaches_host(mount, volumes):
     return bool(opts.get("device") or opts.get("o")) and not plain_tmpfs
 
 
-def _not_a_name(kind, value):
+def _not_a_name(kind: str, value: str) -> str:
     """Returns the problem with a user or group (kind) value that is still a name after hardening.
 
     Hardening resolves every name that exists on this host, so this one does not.
@@ -244,7 +253,7 @@ def _not_a_name(kind, value):
             "never in the image)")
 
 
-def check_user(value, ctx):
+def check_user(value: Any, ctx: Context) -> list[str]:
     """Checks a `user:` as hardening left it; returns the problems, empty for an acceptable `uid:gid`.
 
     Refused are a missing user, a name (hardening resolved those that exist), a missing group, and ids
@@ -268,17 +277,17 @@ def check_user(value, ctx):
 SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option instead"
 
 
-def _is_selinux_label(option):
+def _is_selinux_label(option: str) -> bool:
     """Tells whether a security_opt option sets an SELinux label."""
     return option.startswith(("label=", "label:"))
 
 
-def _configured_ids(ctx):
+def _configured_ids(ctx: Context) -> tuple[tuple[int, int], ...]:
     """Returns the configured user of ctx as further allowed (uid, gid) pairs for the id rules."""
     return (ctx.configured_user,) if ctx.configured_user else ()
 
 
-def check_security_opt(value, ctx):
+def check_security_opt(value: Any, ctx: Context) -> list[str]:
     """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
 
     Allowed are no-new-privileges and the security_opts of ctx.
@@ -292,26 +301,26 @@ def check_security_opt(value, ctx):
     return problems
 
 
-def has_no_new_privileges(options):
+def has_no_new_privileges(options: Iterable[Any] | None) -> bool:
     """Tells whether security_opt options turn on no-new-privileges."""
     return any(str(o) in NO_NEW_PRIVILEGES for o in options or [])
 
 
-def check_cap_drop(value, ctx):
+def check_cap_drop(value: Any, ctx: Context) -> list[str]:
     """Checks cap_drop; returns a problem unless it drops ALL."""
     if CAP_DROP not in {str(c).upper() for c in value or []}:  # docker reads capability names in any case
         return [f"cap_drop must include {CAP_DROP}"]
     return []
 
 
-def _forbidden(key):
+def _forbidden(key: str) -> Check:
     """Returns a check that refuses key whenever it carries a value."""
     return lambda value, ctx: [f"{key} is not allowed"] if value else []
 
 
-def _check_namespace(key):
+def _check_namespace(key: str) -> Check:
     """Returns a check for the namespace key that refuses the host's namespace and other containers'."""
-    def check(value, ctx):
+    def check(value: Any, ctx: Context) -> list[str]:
         text = str(value)
         if text == "host" or text.startswith("container:"):
             return [f"{key}: {text} shares a namespace outside the project"]
@@ -319,14 +328,14 @@ def _check_namespace(key):
     return check
 
 
-def _check_runtime(value, ctx):
+def _check_runtime(value: Any, ctx: Context) -> list[str]:
     """Checks runtime; returns a problem unless it is runc or unset."""
     return [] if value in (None, "", "runc") else [f"runtime {value!r} is not allowed"]
 
 
 # --- mounts and files -----------------------------------------------------
 
-def _check_volumes_from(value, ctx):
+def _check_volumes_from(value: Any, ctx: Context) -> list[str]:
     """Checks volumes_from; returns a problem for each source that is a container, not a service."""
     return [
         f"volumes_from {source!r} reaches a container outside the project"
@@ -335,7 +344,7 @@ def _check_volumes_from(value, ctx):
     ]
 
 
-def _check_mounts(value, ctx):
+def _check_mounts(value: Any, ctx: Context) -> list[str]:
     """Checks a service's volumes; returns their unknown keys and types, and bind mounts outside the
     mount roots of ctx.
     """
@@ -353,7 +362,7 @@ def _check_mounts(value, ctx):
     return problems
 
 
-def _check_build(value, ctx):
+def _check_build(value: Any, ctx: Context) -> list[str]:
     """Checks a service's build; returns unknown keys, sources outside the project, and escapes from it."""
     build = {"context": value} if isinstance(value, str) else value or {}
     # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
@@ -370,7 +379,8 @@ def _check_build(value, ctx):
     return problems
 
 
-def check_build_sources(build, project_dir, keys, prefix=""):
+def check_build_sources(build: Mapping[str, Any], project_dir: str, keys: tuple[str, str, str],
+                        prefix: str = "") -> list[str]:
     """Returns a problem for the context, Dockerfile and each named context of build outside project_dir.
 
     Only sources that are paths on this host are checked, not URLs or services.
@@ -394,18 +404,18 @@ def check_build_sources(build, project_dir, keys, prefix=""):
     return problems
 
 
-def _is_host_path(source):
+def _is_host_path(source: Any) -> bool:
     """Tells whether a build source is a path on this host, not a URL (`git://`, ...) or a service."""
     text = str(source)
     return "://" not in text and not text.startswith("service:")
 
 
-def _check_host_files(key):
+def _check_host_files(key: str) -> Check:
     """Returns a check for key (env_file or label_file) that refuses files outside the project directory.
 
     These keys only show up in the config when it is loaded without env resolution.
     """
-    def check(value, ctx):
+    def check(value: Any, ctx: Context) -> list[str]:
         problems = []
         for entry in [value] if isinstance(value, (str, dict)) else value or []:
             path = entry.get("path") if isinstance(entry, dict) else entry
@@ -417,7 +427,7 @@ def _check_host_files(key):
 
 # --- other structured keys ------------------------------------------------
 
-def _check_develop(value, ctx):
+def _check_develop(value: Any, ctx: Context) -> list[str]:
     """Checks develop; returns unknown keys, and watch rules with bad actions or paths outside the project."""
     value = value or {}
     problems = unknown_keys(value, DEVELOP_KEYS, "develop key")
@@ -430,7 +440,7 @@ def _check_develop(value, ctx):
     return problems
 
 
-def _check_deploy(value, ctx):
+def _check_deploy(value: Any, ctx: Context) -> list[str]:
     """Checks deploy; returns unknown keys, and reservations of host devices."""
     value = value or {}
     problems = unknown_keys(value, DEPLOY_KEYS, "deploy key")
@@ -442,12 +452,12 @@ def _check_deploy(value, ctx):
     return problems
 
 
-def _check_hooks(key):
+def _check_hooks(key: str) -> Check:
     """Returns a check for the hook key (post_start or pre_stop) that refuses hooks that escalate.
 
     Those are hooks with unknown keys, privileged ones, and ones whose user check_user refuses.
     """
-    def check(value, ctx):
+    def check(value: Any, ctx: Context) -> list[str]:
         problems = []
         for hook in value or []:
             problems += unknown_keys(hook, HOOK_KEYS, f"{key} key")
@@ -480,7 +490,7 @@ SERVICE_CHECKS = {
 
 # --- top-level volumes, networks, secrets ---------------------------------
 
-def _check_scope(key, item, project):
+def _check_scope(key: str, item: dict[str, Any], project: str | None) -> list[str]:
     """Returns a problem unless the volume or network item called key belongs to project, by its name.
 
     External ones are refused. Without a project name there is nothing to compare; check_config refuses that.
@@ -496,7 +506,7 @@ def _check_scope(key, item, project):
     return []
 
 
-def _check_volume(key, volume, project, ctx):
+def _check_volume(key: str, volume: dict[str, Any] | None, project: str | None, ctx: Context) -> list[str]:
     """Checks the top-level volume called key; returns problems with its keys, scope, driver, driver_opts."""
     volume = volume or {}
     problems = [*unknown_keys(volume, VOLUME_KEYS, "key"), *_check_scope(key, volume, project)]
@@ -506,12 +516,12 @@ def _check_volume(key, volume, project, ctx):
     return [*problems, *_check_driver_opts(volume.get("driver_opts") or {}, ctx)]
 
 
-def _mount_flags(opts):
+def _mount_flags(opts: Mapping[str, Any]) -> set[str]:
     """Returns the comma-separated mount options in the `o` of opts, lower case."""
     return {flag.strip().lower() for flag in str(opts.get("o", "")).split(",")}
 
 
-def _check_driver_opts(opts, ctx):
+def _check_driver_opts(opts: dict[str, Any], ctx: Context) -> list[str]:
     """Checks a local volume's driver_opts; returns the problems with mounts from the host or the network.
 
     A device must be an absolute path inside the mount roots of ctx.
@@ -537,7 +547,7 @@ def _check_driver_opts(opts, ctx):
     return problems
 
 
-def _check_network(key, network, project, ctx):
+def _check_network(key: str, network: dict[str, Any] | None, project: str | None, ctx: Context) -> list[str]:
     """Checks the top-level network called key; returns problems with its keys, scope, drivers and options."""
     network = network or {}
     problems = [*unknown_keys(network, NETWORK_KEYS, "key"), *_check_scope(key, network, project)]
@@ -551,7 +561,7 @@ def _check_network(key, network, project, ctx):
     return problems
 
 
-def _check_file_sources(config, ctx):
+def _check_file_sources(config: dict[str, Any], ctx: Context) -> list[str]:
     """Checks the top-level secrets and configs, whose files building and running read from the host."""
     problems = []
     for kind in ("secrets", "configs"):
@@ -560,7 +570,7 @@ def _check_file_sources(config, ctx):
     return problems
 
 
-def _check_file_source(item, ctx):
+def _check_file_source(item: dict[str, Any] | None, ctx: Context) -> list[str]:
     """Checks one secret or config; returns its unknown keys, and a problem if it is external, copies a
     variable, or names a file outside the project.
     """
@@ -579,7 +589,7 @@ def _check_file_source(item, ctx):
 
 # --- paths ----------------------------------------------------------------
 
-def _outside(subject, ctx):
+def _outside(subject: str, ctx: Context) -> str:
     """Returns the problem that subject is outside the mount roots, with how the config file can allow it."""
     text = f"{subject} is outside {_roots_text(ctx.mount_roots)}"
     if ctx.config_file:
@@ -588,18 +598,18 @@ def _outside(subject, ctx):
     return text
 
 
-def _roots_text(mount_roots):
+def _roots_text(mount_roots: Sequence[str]) -> str:
     """Names mount_roots for a message."""
     project_dir, *extra = mount_roots
     return f"{project_dir}" + (" and the configured mount_dirs" if extra else "")
 
 
-def is_inside_any(path, roots):
+def is_inside_any(path: str, roots: Iterable[str]) -> bool:
     """Tells whether path is inside one of roots (is_inside)."""
     return any(is_inside(path, root) for root in roots)
 
 
-def is_inside(path, root):
+def is_inside(path: str, root: str) -> bool:
     """Tells whether path, resolved relative to root and through symlinks, is root or below it."""
     real_root = os.path.realpath(root)
     real = os.path.realpath(os.path.join(real_root, path))

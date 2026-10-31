@@ -24,10 +24,11 @@ chose (`run -u`), which the command line then overrides.
 
 import copy
 import json
-from typing import NamedTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple
 
 from dockscreen import commandline, ids, imagedecision, images, messages, policy, verdict
-from dockscreen.dockerclient import DockerError
+from dockscreen.dockerclient import Docker, DockerError
 
 
 class ImageError(Exception):
@@ -51,7 +52,7 @@ class Prepared(NamedTuple):
     failed: bool = False  # some problems are failures to get or look at an image, not refusals
     verified: dict | None = None  # service -> the repository whose image section its image proved
 
-    def finalize(self):
+    def finalize(self) -> tuple[dict[str, Any], frozenset[str]]:
         """Builds the config to run from config and the decisions, leaving config alone.
 
         Returns (config to run, services whose user was pinned from an image that was accepted). Services that
@@ -84,7 +85,7 @@ class Prepared(NamedTuple):
                 service["image"] = decision.image_id  # ... even if the name is moved to another image
         return final, frozenset(vetted)
 
-    def describe(self):
+    def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
         lines = []
         for name in sorted(unset_user_services(self.config)):
@@ -107,7 +108,7 @@ class Prepared(NamedTuple):
                 lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
         return [*lines, *self._pin_notices()]
 
-    def notices(self):
+    def notices(self) -> list[messages.Marked]:
         """Lists, as marked lines, what a run does that the project did not ask for."""
         return [
             messages.notable_change(
@@ -115,7 +116,7 @@ class Prepared(NamedTuple):
             for name, d in self.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
         ] + self._pin_notices()
 
-    def _pin_notices(self):
+    def _pin_notices(self) -> list[messages.Marked]:
         """Returns one line naming the services whose checked user and image are pinned, if any."""
         names = [name for name, d in self.decisions.items() if d.assessment.pins_user]
         if not names:
@@ -125,17 +126,18 @@ class Prepared(NamedTuple):
             "in the generated file only")]
 
 
-def unset_user_services(config):
+def unset_user_services(config: dict[str, Any]) -> frozenset[str]:
     """Returns the names of the services in config that set no user."""
     return frozenset(n for n, s in (config.get("services") or {}).items() if not (s or {}).get("user"))
 
 
-def _image_name(config, name, service):
+def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
     """Returns the image compose uses for a service: its own, or <project>-<service> if it is built."""
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
-def prepare(command, config, args, ctx, chosen=frozenset()):
+def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str], ctx: imagedecision.Context,
+            chosen: frozenset[str] = frozenset()) -> Prepared:
     """Acquires the images of the services that start, and decides on those that set no user.
 
     Pulls and builds as `up` would. Returns a Prepared; its problems are empty if every image was acquired
@@ -164,7 +166,7 @@ def prepare(command, config, args, ctx, chosen=frozenset()):
     return Prepared(config, ctx, to_run, decisions, problems, failed=failed, verified=verified)
 
 
-def _verify_sections(config, ctx):
+def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict[str, str]:
     """Determines which services' images were proven pulled from the repository of their image section.
 
     Returns {service: repository}. The checks before the images were there trusted the name alone.
@@ -184,7 +186,7 @@ def _verify_sections(config, ctx):
     return verified
 
 
-def decision_problem(name, decision, config_file=None):
+def decision_problem(name: str, decision: Decision, config_file: str | None = None) -> str:
     """Returns why the service must not run, for a decision that refused or failed.
 
     config_file: named in the hint for an image that is pulled, whose repository can be given a user.
@@ -196,7 +198,7 @@ def decision_problem(name, decision, config_file=None):
     return messages.Reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
-def _verify_round_trip(command, config, ctx):
+def _verify_round_trip(command: Sequence[str], config: dict[str, Any], ctx: imagedecision.Context) -> None:
     """Checks that compose reads the generated file back as exactly config.
 
     Raises ImageError if it cannot read it or reads any value differently: that value would run differently
@@ -215,7 +217,7 @@ def _verify_round_trip(command, config, ctx):
         raise ImageError(f"docker compose reads the checked config differently at {where}; not running it")
 
 
-def _first_difference(expected, actual, path="config"):
+def _first_difference(expected: Any, actual: Any, path: str = "config") -> str | None:
     """Returns the path at which two JSON values first differ, or None if they are equal."""
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in sorted(set(expected) | set(actual), key=str):
@@ -233,7 +235,8 @@ def _first_difference(expected, actual, path="config"):
     return None if expected == actual and type(expected) is type(actual) else path
 
 
-def _services_to_run(command, config, args, ctx):
+def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
+                     ctx: imagedecision.Context) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
     Raises ImageError if compose cannot list them.
@@ -245,7 +248,8 @@ def _services_to_run(command, config, args, ctx):
     return frozenset(set(result.stdout.split()) | {a for a in args if a in services})
 
 
-def _acquire(command, config, to_run, args, ctx):
+def _acquire(command: Sequence[str], config: dict[str, Any], to_run: frozenset[str], args: Sequence[str],
+             ctx: imagedecision.Context) -> list[str]:
     """Pulls and builds the images of to_run that `up` would, by each service's pull policy and args.
 
     Returns the failures, empty if everything was acquired.
@@ -275,7 +279,7 @@ def _acquire(command, config, to_run, args, ctx):
     return []
 
 
-def _image_exists(docker, image):
+def _image_exists(docker: Docker, image: str) -> bool:
     """Tells whether docker has image locally."""
     try:
         docker.inspect_image(image)
@@ -284,7 +288,8 @@ def _image_exists(docker, image):
     return True
 
 
-def _decide(config, to_run, ctx):
+def _decide(config: dict[str, Any], to_run: frozenset[str],
+            ctx: imagedecision.Context) -> dict[str, Decision]:
     """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
 
     Returns {service: Decision}. An image that cannot be looked at gets a failed assessment.
@@ -316,7 +321,7 @@ def _decide(config, to_run, ctx):
     return decisions
 
 
-def _give_default_home(service, user, home):
+def _give_default_home(service: dict[str, Any], user: tuple[int, int], home: str) -> None:
     """Sets HOME in service for the default user that replaces root, unless the service sets HOME."""
     if home := imagedecision.default_home(user, home):
         service["environment"] = {"HOME": home, **(service.get("environment") or {})}

@@ -20,6 +20,7 @@ Allowed ids: the nobody range and the default user from the config file, ids the
 check (a configured image user), and the caller's own ids when --allow-me was given.
 """
 
+from collections.abc import Collection, Iterable
 from typing import NamedTuple
 
 from dockscreen import config as configuration
@@ -35,20 +36,20 @@ MAX_ID = 2**31 - 1
 class Subordinate:
     """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._read(SUBUID_FILE, SUBGID_FILE)
 
     @classmethod
-    def new_for_testing(cls, uid_file, gid_file):
+    def new_for_testing(cls, uid_file: str, gid_file: str) -> "Subordinate":
         """Returns a Subordinate read from the given files instead of this host's."""
         subordinate = cls.__new__(cls)
         subordinate._read(uid_file, gid_file)
         return subordinate
 
-    def _read(self, uid_file, gid_file):
+    def _read(self, uid_file: str, gid_file: str) -> None:
         self.ranges = {"uid": _read_ranges(uid_file), "gid": _read_ranges(gid_file)}
 
-    def contains(self, kind, value):
+    def contains(self, kind: str, value: int) -> bool:
         """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
         return any(start <= value < start + count for start, count in self.ranges[kind])
 
@@ -61,11 +62,11 @@ class Rules(NamedTuple):
     local: hostusers.HostAccounts          # the accounts on this host
     subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
-    def with_settings(self, settings):
+    def with_settings(self, settings: configuration.Config) -> "Rules":
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 
-    def _allowed(self, kind, value, extra=()):
+    def _allowed(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
         """Tells whether value is an allowed id of kind ("uid" or "gid").
 
         Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
@@ -76,7 +77,8 @@ class Rules(NamedTuple):
         pairs = [self.default_user, *extra, *([self.me] if self.allow_me else [])]
         return low <= value <= high or any(pair[index] == value for pair in pairs)
 
-    def problem(self, kind, value, mounts, extra=()):
+    def problem(self, kind: str, value: int, mounts: bool,
+                extra: Iterable[tuple[int, int]] = ()) -> str | None:
         """Returns why value may not be used as an id of kind, or None if it may.
 
         kind: "uid", "gid" or "supplementary gid". mounts: the container has host mounts, which leaves
@@ -106,7 +108,8 @@ class Rules(NamedTuple):
             return f"{kind} {value} is not in the nobody range {low}-{high}, and there are host mounts"
         return None
 
-    def problems(self, uid, gid, supplementary=(), mounts=False, extra=()):
+    def problems(self, uid: int | None, gid: int | None, supplementary: Iterable[int] = (),
+                 mounts: bool = False, extra: Collection[tuple[int, int]] = ()) -> list[str]:
         """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
 
         An id that is None is not checked. mounts and extra are as for problem().
@@ -116,7 +119,7 @@ class Rules(NamedTuple):
         return [p for p in found if p]
 
 
-def _read_ranges(path):
+def _read_ranges(path: str) -> list[tuple[int, int]]:
     """Reads the (start, count) ranges of a subuid or subgid file; none if it cannot be read."""
     try:
         with open(path) as f:

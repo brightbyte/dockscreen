@@ -7,6 +7,7 @@ under their own column, as docker does.
 """
 
 import textwrap
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import NamedTuple
 
 from dockscreen import commandline, messages
@@ -21,7 +22,7 @@ class Option(NamedTuple):
     short: str = ""
     value: str = ""  # what the option takes, as docker names it: string, list, ...
 
-    def _left(self):
+    def _left(self) -> str:
         """Returns the option's left column in the help: its short and long name and its value."""
         short = f"-{self.short}, " if self.short else "    "
         return f"  {short}{self.long}" + (f" {self.value}" if self.value else "")
@@ -150,7 +151,7 @@ COMPOSE = {
 COMMAND_OPTIONS = {"audit": (Option(commandline.BRIEF, "Print only the verdict, in one line"),)}
 
 
-def command_topic(name, fn, aliases=()):
+def command_topic(name: str, fn: Callable[..., object], aliases: Sequence[str] = ()) -> Topic:
     """Builds the Topic of one of dockscreen's own compose commands from fn's docstring.
 
     The first line becomes the summary and each further paragraph a note. aliases: other names of the
@@ -164,7 +165,7 @@ def command_topic(name, fn, aliases=()):
                  docker_help=False)
 
 
-def topic(topic_, follows_name, width):
+def topic(topic_: Topic, follows_name: str, width: int | None) -> list[str]:
     """Returns the help for one command as lines wrapped to width.
 
     follows_name: whose help follows ours, announced at the end if the topic says it does.
@@ -179,7 +180,9 @@ def topic(topic_, follows_name, width):
     return lines + _follows(topic_.docker_help, follows_name)
 
 
-def _overview(usage, summary, options, sections, more, follows_name, width):
+def _overview(usage: str, summary: str, options: Iterable[Option],
+              sections: Iterable[tuple[str, Mapping[str, Topic]]], more: str, follows_name: str,
+              width: int | None) -> list[str]:
     """Returns the help for dockscreen or compose as lines: options, then each (title, {name: Topic})
     section, then more and the announcement of follows_name's help.
     """
@@ -190,9 +193,9 @@ def _overview(usage, summary, options, sections, more, follows_name, width):
     return lines + ["", *_paragraph(more, width)] + _follows(True, follows_name)
 
 
-def _notes(texts, width):
+def _notes(texts: Iterable[str], width: int | None) -> list[str]:
     """Returns texts as lines: a paragraph after a blank line, or a list item (`- `) right after it."""
-    lines = []
+    lines: list[str] = []
     for text in texts:
         if text.startswith("- "):
             lines += _item(text, width)
@@ -201,12 +204,12 @@ def _notes(texts, width):
     return lines
 
 
-def _table(rows, width):
+def _table(rows: Sequence[tuple[str, str]], width: int | None) -> list[str]:
     """Returns (left, right) rows as lines, the right column after the widest left one and wrapped under
     itself; not wrapped if width is None or leaves it under 20 columns.
     """
     column = max(len(left) for left, _ in rows) + 3
-    lines = []
+    lines: list[str] = []
     for left, right in rows:
         if width is None or width - column < 20:
             lines.append(f"{left:<{column}}{right}")
@@ -217,7 +220,7 @@ def _table(rows, width):
     return lines
 
 
-def _paragraph(text, width, indent=""):
+def _paragraph(text: str, width: int | None, indent: str = "") -> list[str]:
     """Returns text as lines wrapped to width, each indented; one line if width is None."""
     if width is None:
         return [indent + text]
@@ -225,7 +228,7 @@ def _paragraph(text, width, indent=""):
                          break_long_words=False, break_on_hyphens=False)
 
 
-def _item(text, width):
+def _item(text: str, width: int | None) -> list[str]:
     """Returns a list item (text starting with `- `) as lines: `  - text`, continued under the text."""
     if width is None:
         return [f"  {text}"]
@@ -233,12 +236,12 @@ def _item(text, width):
                          break_long_words=False, break_on_hyphens=False)
 
 
-def _follows(docker_help, name):
+def _follows(docker_help: bool, name: str) -> list[str]:
     """Returns the lines that announce name's own help after ours, if docker_help says it follows."""
     return ["", f"{name} help follows:", ""] if docker_help and name else []
 
 
-def docker_overview(width):
+def docker_overview(width: int | None) -> list[str]:
     """Returns the help for dockscreen itself, as lines wrapped to width."""
     return _overview(
         "dockscreen [OPTIONS] COMMAND",
@@ -250,7 +253,7 @@ def docker_overview(width):
         "Docker's own", width)
 
 
-def compose_overview(commands, width):
+def compose_overview(commands: Mapping[str, Topic], width: int | None) -> list[str]:
     """Returns the help for `dockscreen compose`, as lines wrapped to width.
 
     commands: {name: Topic} of dockscreen's own compose commands.
@@ -265,7 +268,7 @@ def compose_overview(commands, width):
         "Docker Compose's own", width)
 
 
-def show(build):
+def show(build: Callable[[int | None], list[str]]) -> None:
     """Prints the lines build(width) returns, with the width of the audit report, or 80 columns without
     a terminal, as docker does: help is read in less more than grepped.
     """

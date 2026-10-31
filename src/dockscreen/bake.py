@@ -12,9 +12,11 @@ refused, because a new one may be a new way out.
 import csv
 import json
 import os
+from collections.abc import Collection, Sequence
+from typing import Any
 
 from dockscreen import messages, policy
-from dockscreen.dockerclient import DockerError
+from dockscreen.dockerclient import Docker, DockerError
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
 TARGET_KEYS = frozenset({
@@ -28,12 +30,12 @@ CACHE_TO_TYPES = frozenset({"inline", "registry"})
 NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
 
 
-def wants_screening(args):
+def wants_screening(args: Collection[str]) -> bool:
     """Tells whether `bake` with these arguments builds, and so needs screening."""
     return not NOT_SCREENED & set(args)
 
 
-def _definition(docker, args):
+def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
     """Returns the bake definition for the arguments, as `--print` gives it, without building anything.
 
     Raises DockerError, saying why, if docker cannot give one or it is not a JSON object.
@@ -50,7 +52,7 @@ def _definition(docker, args):
     return found
 
 
-def _check_definition(found, project_dir):
+def _check_definition(found: dict[str, Any], project_dir: str) -> list[str]:
     """Returns the problems that forbid building the definition, with sources judged against project_dir."""
     problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
     for name, target in (found.get("target") or {}).items():
@@ -58,7 +60,7 @@ def _check_definition(found, project_dir):
     return problems
 
 
-def _check_target(target, project_dir):
+def _check_target(target: dict[str, Any], project_dir: str) -> list[str]:
     """Returns the problems with a target: unknown keys, sources outside project_dir, host access."""
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
     problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
@@ -74,7 +76,7 @@ def _check_target(target, project_dir):
     return problems
 
 
-def _fields(entry):
+def _fields(entry: Any) -> dict[str, str] | None:
     """Returns the {key: value} of a `key=value,key=value` entry, or None if it is not one.
 
     A bare word has no keys.
@@ -88,7 +90,7 @@ def _fields(entry):
     return {key.strip(): value for key, equals, value in pairs if equals}
 
 
-def _check_outputs(outputs, cache_to):
+def _check_outputs(outputs: Sequence[Any], cache_to: Sequence[Any]) -> list[str]:
     """Returns the problems with a target's output and cache-to entries: any that write to the host."""
     problems = []
     for entry in outputs:
@@ -103,7 +105,7 @@ def _check_outputs(outputs, cache_to):
     return problems
 
 
-def _check_cache_from(entries, project_dir):
+def _check_cache_from(entries: Sequence[Any], project_dir: str) -> list[str]:
     """Returns the problems with cache-from entries: unreadable ones, and local caches outside project_dir."""
     problems = []
     for entry in entries:
@@ -115,7 +117,7 @@ def _check_cache_from(entries, project_dir):
     return problems
 
 
-def _check_secrets(secrets, project_dir):
+def _check_secrets(secrets: Sequence[Any], project_dir: str) -> list[str]:
     """Returns the problems with secret entries: variables instead of files, and files outside project_dir."""
     problems = []
     for entry in secrets:
@@ -128,7 +130,7 @@ def _check_secrets(secrets, project_dir):
     return problems
 
 
-def screen(docker, args):
+def screen(docker: Docker, args: Sequence[str]) -> tuple[list[str], bool]:
     """Screens `bake` with these arguments against the current directory as the project directory.
 
     Returns (reasons, failed): why it may not run, and whether that is a failure to get the definition.

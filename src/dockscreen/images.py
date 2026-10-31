@@ -7,7 +7,11 @@ is built from a Dockerfile.
 """
 
 import re
-from typing import NamedTuple
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:  # config imports this module
+    from dockscreen.config import Config
 
 DEFAULT_DOMAIN = "docker.io"
 LEGACY_DOMAINS = frozenset({"index.docker.io", "registry-1.docker.io"})
@@ -20,7 +24,7 @@ class Match(NamedTuple):
     problem: str | None     # why a section for the image's repository does not apply, for audit
 
 
-def split_reference(reference):
+def split_reference(reference: str) -> tuple[str, str, str]:
     """Splits an image reference into (normalised repository, tag, digest) as docker reads it:
     `mariadb` is docker.io/library/mariadb. Tag and digest are empty if not given.
 
@@ -46,7 +50,7 @@ def split_reference(reference):
     return f"{domain}/{path}", tag, digest
 
 
-def repository(reference):
+def repository(reference: str) -> str | None:
     """Returns the normalised repository of a reference, or None if it is not one."""
     try:
         return split_reference(reference)[0]
@@ -54,7 +58,7 @@ def repository(reference):
         return None
 
 
-def section_for(config, reference, repo_digests, built):
+def section_for(config: "Config", reference: str, repo_digests: Iterable[str] | None, built: bool) -> Match:
     """Determines which image section of the config file applies to this image, as a Match.
 
     reference: the image name the service or command line uses.
@@ -71,7 +75,7 @@ def section_for(config, reference, repo_digests, built):
     return Match(name, None)
 
 
-def _shown(repository):
+def _shown(repository: str) -> str:
     """Returns a normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
     for prefix in (f"{DEFAULT_DOMAIN}/library/", f"{DEFAULT_DOMAIN}/"):
         if repository.startswith(prefix):
@@ -79,7 +83,7 @@ def _shown(repository):
     return repository
 
 
-def section_hint(reference, config_file, built=False):
+def section_hint(reference: str, config_file: str, built: bool = False) -> str | None:
     """Returns how config_file could give this image a user, or None for a built image or a reference
     that is not one.
     """
@@ -89,7 +93,7 @@ def section_hint(reference, config_file, built=False):
     return f"set user under [images.\"{_shown(name)}\"] in {config_file}"
 
 
-def name_matches(config, reference, built):
+def name_matches(config: "Config", reference: str, built: bool) -> str | None:
     """Returns the repository of the image section the name alone points to, or None if there is none or
     the image is built. The name proves nothing: this is for before the image is there.
     """

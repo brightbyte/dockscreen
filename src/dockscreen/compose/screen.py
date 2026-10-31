@@ -3,9 +3,12 @@
 import json
 import os
 import re
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 from dockscreen import commandline, config, images, messages, policy, verdict
-from dockscreen.dockerclient import DockerError, DockerNotFound
+from dockscreen.dockerclient import Docker, DockerError, DockerNotFound
+from dockscreen.runtime import Runtime
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
@@ -22,7 +25,7 @@ class InspectError(ScreenError):
     """The config could not be inspected: no compose file, or compose could not read it."""
 
 
-def inspect(global_args, runtime):
+def inspect(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
     """Returns (config, project directory) for the project global_args select.
 
     Raises ScreenError if the project directory is, or contains, a sensitive path ($HOME, /etc, ...), since
@@ -38,7 +41,8 @@ def inspect(global_args, runtime):
 
 
 
-def context(project_dir, runtime, allow_me=False, verified=None):
+def context(project_dir: str, runtime: Runtime, allow_me: bool = False,
+            verified: Mapping[str, str] | None = None) -> policy.Context:
     """Builds the policy context for project_dir from the config file.
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
@@ -46,10 +50,10 @@ def context(project_dir, runtime, allow_me=False, verified=None):
     there, that is the section the image name points to; verified, once they are, maps each service to the
     section its image was proven to have been pulled for (images.section_for).
     """
-    def settings_context(settings):
+    def settings_context(settings: config.Config) -> policy.Context:
         return policy.context_for(settings, project_dir, runtime.rules(allow_me), runtime.config_file)
 
-    def scope(name, service):
+    def scope(name: str, service: dict[str, Any]) -> policy.Context:
         if verified is None:
             repository = images.name_matches(runtime.settings, str(service.get("image") or ""),
                                              "build" in service)
@@ -60,20 +64,20 @@ def context(project_dir, runtime, allow_me=False, verified=None):
     return settings_context(config.effective(runtime.settings, None, project_dir))._replace(scope=scope)
 
 
-def _sensitive_paths(runtime):
+def _sensitive_paths(runtime: Runtime) -> list[str]:
     """Returns the paths whose directories must not be mountable: system directories, the home
     directory, the config files and the docker socket.
     """
     return [*SENSITIVE_DIRS, runtime.home, config.SYSTEM_FILE, runtime.config_file, DOCKER_SOCKET]
 
 
-def _sensitive_inside(directory, runtime):
+def _sensitive_inside(directory: str, runtime: Runtime) -> list[str]:
     """Returns the sensitive paths that directory equals or contains, with symlinks resolved."""
     root = os.path.realpath(directory)
     return [path for path in _sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
 
 
-def mount_dir_warnings(runtime):
+def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:
     """Returns one warning per configured mount dir that equals or contains a sensitive path."""
     return [
         messages.Marked(
@@ -85,7 +89,8 @@ def mount_dir_warnings(runtime):
     ]
 
 
-def passes(global_args, runtime, rules=policy.check_config):
+def passes(global_args: Sequence[str], runtime: Runtime,
+           rules: Callable[[dict[str, Any], policy.Context], list[str]] = policy.check_config) -> bool:
     """Tells whether rules(config, ctx) finds nothing in the selected project, printing the verdict."""
     try:
         config, project_dir = inspect(global_args, runtime)
@@ -96,7 +101,7 @@ def passes(global_args, runtime, rules=policy.check_config):
     return verdict.screened(rules(config, context(project_dir, runtime)))
 
 
-def _load_config(global_args, docker):
+def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
     """Returns the config compose resolves for global_args, with every profile active and env files
     not inlined.
 
@@ -125,7 +130,7 @@ PROJECT_LABEL = "com.docker.compose.project"
 WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
-def name_conflicts(name, directory, docker):
+def name_conflicts(name: str, directory: str, docker: Docker) -> list[str]:
     """Checks whether containers of a project called name exist that were made from another directory.
 
     Returns the problems, empty if there are none. The name is the project's own choice (`name:`, or
@@ -148,13 +153,13 @@ def name_conflicts(name, directory, docker):
         "pass -p NAME to choose the name yourself")]
 
 
-def names_project(global_args, env):
+def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:
     """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME in env."""
     chosen = commandline.option_values(global_args, "--project-name", "-p")
     return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 
 
-def _project_directory(global_args, cwd, runtime):
+def _project_directory(global_args: Sequence[str], cwd: str, runtime: Runtime) -> str:
     """Determines the project directory as docker compose would from global_args and cwd.
 
     Raises ScreenError if that cannot be checked (a compose file from stdin, or as _find_compose_dir says).
@@ -176,7 +181,7 @@ def _project_directory(global_args, cwd, runtime):
     return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 
-def _find_compose_dir(start, env_files, home, uid):
+def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> str:
     """Finds the directory of the nearest compose file, walking up from start as compose does.
 
     The walk stops at home and at the first directory not owned by uid: a compose file found there was not
@@ -204,7 +209,7 @@ def _find_compose_dir(start, env_files, home, uid):
         directory = parent
 
 
-def _refuse_compose_vars_in(path):
+def _refuse_compose_vars_in(path: str) -> None:
     """Raises ScreenError if the .env file at path sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR.
 
     dockscreen does not read .env files, so such a setting would send compose to a different project

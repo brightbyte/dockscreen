@@ -6,10 +6,13 @@ pass-through is recognised by the value being the shell's own under the same nam
 another name. The variables dockscreen passes to compose (ids.EXPORTED) are left out. Values are never shown.
 """
 
+from collections.abc import Mapping
+from typing import Any
+
 from dockscreen import ids, messages
 
 
-def _copied(config, env):
+def _copied(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
     """Returns {service: [variable names]} for the environment values of services that are the shell's own."""
     found = {}
     for name, service in sorted((config.get("services") or {}).items()):
@@ -25,7 +28,7 @@ def _copied(config, env):
     return found
 
 
-def describe(config, env):
+def describe(config: dict[str, Any], env: Mapping[str, str]) -> list[messages.Marked]:
     """Returns one warning per service that gets variables from the shell (env)."""
     return [
         messages.Marked(

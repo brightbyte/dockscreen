@@ -6,7 +6,7 @@ caller's ids, the environment or the host's accounts on its own.
 
 import os
 import sys
-from collections.abc import MutableMapping
+from collections.abc import Collection, Mapping, MutableMapping
 from typing import NamedTuple
 
 from dockscreen import config, hostusers, idrules, messages
@@ -23,18 +23,18 @@ class Runtime(NamedTuple):
     home: str                               # the caller's home directory
     cwd: str                                # the directory dockscreen was started in
 
-    def rules(self, allow_me=False):
+    def rules(self, allow_me: bool = False) -> idrules.Rules:
         """Returns the id rules for the config file's settings; allow_me: the caller's own ids are allowed."""
         return idrules.Rules(self.me, allow_me, self.settings.nobody_range, self.settings.default_user,
                              self.accounts, self.subordinate)
 
     @property
-    def config_file(self):
+    def config_file(self) -> str:
         """Returns the path of the caller's own config file, which hints point to (config.user_file)."""
         return config.user_file(self.env, self.home)
 
 
-def load_runtime():
+def load_runtime() -> Runtime:
     """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted,
     and DockerNotFound if there is no real docker.
 
@@ -56,7 +56,7 @@ def load_runtime():
     )
 
 
-def _warn_about_relative_path(env):
+def _warn_about_relative_path(env: Mapping[str, str]) -> None:
     """Warns if PATH in env has empty or relative entries."""
     # docker, compose and their plugins and credential helpers look up programs on PATH too
     if any(not os.path.isabs(directory) for directory in env.get("PATH", "").split(os.pathsep)):
@@ -64,7 +64,8 @@ def _warn_about_relative_path(env):
                          "that docker and compose run")
 
 
-def _real_docker(settings, env, wrappers=None):
+def _real_docker(settings: config.Config, env: Mapping[str, str],
+                 wrappers: Collection[str] | None = None) -> str:
     """Returns the docker to run: the one settings names, else the first one on PATH that is not a
     wrapper. Raises DockerNotFound if there is none.
 
@@ -79,7 +80,7 @@ def _real_docker(settings, env, wrappers=None):
     return docker
 
 
-def _find_docker(env, wrappers):
+def _find_docker(env: Mapping[str, str], wrappers: Collection[str]) -> str | None:
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
     Empty and relative PATH entries (an empty one means the current directory) are skipped: a

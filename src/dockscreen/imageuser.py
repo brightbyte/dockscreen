@@ -5,7 +5,10 @@ untrusted, so idrules decides whether the image may have it. Whatever is accepte
 difference between this reading and docker's can at worst refuse a good image.
 """
 
-from typing import NamedTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple
+
+from dockscreen import hostusers
 
 class Identity(NamedTuple):
     uid: int
@@ -20,7 +23,7 @@ INT64_MAX = 2**63 - 1
 INT64_MIN = -(2**63)
 
 
-def _lines(text):
+def _lines(text: str) -> list[str]:
     """Returns the non-empty lines of a passwd or group file as moby reads them: split on newlines only,
     each stripped of surrounding whitespace as Go defines it.
     """
@@ -28,7 +31,7 @@ def _lines(text):
     return [line for line in stripped if line]
 
 
-def _atoi(text):
+def _atoi(text: str) -> int:
     """Reads text as moby does with Go's strconv.Atoi: an optional sign and ASCII digits, else 0;
     a number out of the int64 range becomes the nearest limit.
     """
@@ -38,13 +41,13 @@ def _atoi(text):
     return max(INT64_MIN, min(INT64_MAX, int(text)))
 
 
-def _fields(line, count):
+def _fields(line: str, count: int) -> list[str]:
     """Returns the first count colon-separated fields of line, padding a short line with empty ones."""
     parts = line.split(":")[:count]
     return parts + [""] * (count - len(parts))
 
 
-def _parse_passwd(text):
+def _parse_passwd(text: str) -> list[tuple[str, int, int]]:
     """Parses a passwd file into [(name, uid, gid)] like moby: a missing or malformed number is 0."""
     entries = []
     for line in _lines(text):
@@ -53,7 +56,7 @@ def _parse_passwd(text):
     return entries
 
 
-def _parse_group(text):
+def _parse_group(text: str) -> list[tuple[str, int, list[str]]]:
     """Parses a group file into [(name, gid, members)] like moby: a missing or malformed gid is 0."""
     entries = []
     for line in _lines(text):
@@ -62,7 +65,7 @@ def _parse_group(text):
     return entries
 
 
-def resolve(spec, passwd_text, group_text):
+def resolve(spec: str | None, passwd_text: str, group_text: str) -> Identity:
     """Resolves a `user[:group]` spec to the Identity docker would run it as, using the image's files.
 
     A numeric user or group is an id, never a name (moby looks it up by number only). A numeric
@@ -99,7 +102,7 @@ def resolve(spec, passwd_text, group_text):
     return Identity(uid, gid, supplementary)
 
 
-def _find(entries, arg):
+def _find(entries: Sequence[tuple[Any, ...]], arg: str) -> tuple[Any, ...] | None:
     """Returns the first entry (name, id, ...) that arg names, by id if arg is a number, else by name;
     None if there is none.
     """
@@ -108,22 +111,22 @@ def _find(entries, arg):
     return next((e for e in entries if e[0] == arg), None)
 
 
-def _is_id(text):
+def _is_id(text: str) -> bool:
     """Tells whether Go's Atoi reads text as a number: an optional sign and ASCII digits."""
     digits = text[1:] if text[:1] in "+-" else text
     return bool(digits) and all(c in "0123456789" for c in digits)
 
 
-def involves_root(identity):
+def involves_root(identity: Identity) -> bool:
     """Tells whether identity has uid 0 or gid 0, also among its supplementary groups."""
     return 0 in (identity.uid, identity.gid, *identity.supplementary)
 
 
-def describe(identity, local=None):
+def describe(identity: Identity, local: hostusers.HostAccounts | None = None) -> str:
     """Describes the identity in words; with local (hostusers.HostAccounts), also which local accounts the
     ids are.
     """
-    def who(kind, value):
+    def who(kind: str, value: int) -> str:
         if local is None:
             return str(value)
         name = local.user_name(value) if kind == "user" else local.group_name(value)

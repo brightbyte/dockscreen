@@ -16,6 +16,9 @@ checked when it is started. `audit` (run/audit) creates the container as `run` d
 what `run` would do.
 """
 
+from collections.abc import Sequence
+from typing import Any
+
 from dockscreen import commandline, daemon, hostusers, ids, imagedecision, images, messages, verdict
 from dockscreen.dockerclient import DockerError
 from dockscreen.imagedecision import (
@@ -28,6 +31,7 @@ from dockscreen.imagedecision import (
     root_default_notice,
 )
 from dockscreen.run import runargs
+from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
 # Inserted before the user's own arguments, so the user can override both
@@ -41,7 +45,7 @@ VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--
 VALUE_SHORT = frozenset("st")
 
 
-def run(global_args, args, runtime, allow_me=False):
+def run(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
     """Runs `docker global_args run args` through the gate and returns the exit status.
 
     The container starts only if the user it would run as is accepted, given as numbers where the image
@@ -98,7 +102,7 @@ def run(global_args, args, runtime, allow_me=False):
     )
 
 
-def _home_args(ctx, info, assessment):
+def _home_args(ctx: imagedecision.Context, info: dict[str, Any], assessment: Assessment) -> list[str]:
     """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
 
     The container as created has the merged environment: a HOME that differs from the image's own
@@ -113,7 +117,7 @@ def _home_args(ctx, info, assessment):
     return ["-e", f"HOME={home}"]
 
 
-def defaults_notice():
+def defaults_notice() -> messages.Marked:
     """Returns the notice of the defaults `run` and `create` add to every container, as a marked line."""
     return messages.routine_change(
         f"added {' '.join(DEFAULTS)}",
@@ -121,7 +125,7 @@ def defaults_notice():
         "which override these")
 
 
-def _fallback_notice(assessment):
+def _fallback_notice(assessment: Assessment) -> messages.Marked:
     """Returns the notice that the default user replaces the image's root, and what to do about it."""
     home = default_home(assessment.user, assessment.home)
     return messages.notable_change(
@@ -130,7 +134,8 @@ def _fallback_notice(assessment):
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
-def _create_checked(ctx, parsed, extra):
+def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
+                    ) -> tuple[str, dict[str, Any], Assessment] | int:
     """Creates the container; returns (container, info, assessment), or the exit status if it may not start.
 
     A container that would be refused is removed and the refusal printed. Any other assessment is
@@ -147,7 +152,8 @@ def _create_checked(ctx, parsed, extra):
     return container, info, assessment
 
 
-def create_assessed(ctx, parsed, extra):
+def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
+                    ) -> tuple[int, str | None, dict[str, Any] | None, Assessment | None]:
     """Creates the container as `docker run` would and returns (exit status, container, info, assessment).
 
     extra: arguments that go before the command line's own. Without a container (docker could not
@@ -167,7 +173,7 @@ def create_assessed(ctx, parsed, extra):
     return code, container, info, assessment
 
 
-def create_args(args, runtime):
+def create_args(args: list[str], runtime: Runtime) -> list[str]:
     """Returns the arguments of `docker create` with --as and --as-me replaced by ids, and prints notices.
 
     Arguments that cannot be read are returned as they are: docker will report what is wrong with them.
@@ -182,7 +188,8 @@ def create_args(args, runtime):
     return parsed.create_args
 
 
-def check_existing(global_args, args, runtime, allow_me=False):
+def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Runtime,
+                   allow_me: bool = False) -> list[str]:
     """Returns the problems that forbid starting the containers named in `docker global_args start args`
     (or `restart`).
 
@@ -193,7 +200,7 @@ def check_existing(global_args, args, runtime, allow_me=False):
     if daemon.is_remote(global_args, runtime.env, runtime.docker):
         return [daemon.REMOTE_MESSAGE]
     ctx = image_context(runtime, allow_me)
-    problems = []
+    problems: list[str] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
@@ -212,12 +219,12 @@ def check_existing(global_args, args, runtime, allow_me=False):
     return problems
 
 
-def _runs_as_pinned_user(info, assessment):
+def _runs_as_pinned_user(info: dict[str, Any], assessment: Assessment) -> bool:
     """Tells whether the container was created with the numeric user dockscreen would have chosen."""
     return ids.parse_user(info["Config"].get("User") or "") == assessment.user
 
 
-def _verify_split(info, parsed):
+def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[messages.Reason]:
     """Checks that our reading of the command line matches the container the daemon created.
 
     Returns the problem if it does not, else an empty list.
@@ -232,18 +239,18 @@ def _verify_split(info, parsed):
     return []
 
 
-def explain(ctx, assessment, image):
+def explain(ctx: imagedecision.Context, assessment: Assessment, image: str) -> list[str]:
     """Returns the assessment's problems, with how to get past them if they come from the image's user."""
     if assessment.identity is None:
         return assessment.problems
     return [messages.Reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
 
 
-def config_hint(ctx, image):
+def config_hint(ctx: imagedecision.Context, image: str) -> str:
     """Returns the hint how the config file can give image a user, for an image pulled from a registry."""
     return f"or, for an image pulled from a registry, {images.section_hint(image, ctx.runtime.config_file)}"
 
 
-def image_context(runtime, allow_me=False):
+def image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
     """Returns the imagedecision.Context to create, decide and start with."""
     return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)

@@ -5,11 +5,24 @@ command line is trusted, so what it asks for that a project or an image may not 
 (runpolicy), and fails the audit only with --strict-screen.
 """
 
-from dockscreen import commandline, daemon, hostusers, ids, imageuser, messages, policy, verdict
+from collections.abc import Sequence
+
+from dockscreen import (
+    commandline,
+    daemon,
+    hostusers,
+    ids,
+    imagedecision,
+    imageuser,
+    messages,
+    policy,
+    verdict,
+)
 from dockscreen.dockerclient import DockerNotFound
-from dockscreen.imagedecision import Kind, runs_as
+from dockscreen.imagedecision import Assessment, Kind, runs_as
 from dockscreen.messages import printable
 from dockscreen.run import gate, runargs, runpolicy
+from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
 
@@ -17,7 +30,8 @@ AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief]
                "IMAGE [COMMAND]")
 
 
-def audit(global_args, args, runtime, allow_me=False, strict=False):
+def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False,
+          strict: bool = False) -> int:
     """Reports what `docker global_args run args` would do, without starting anything.
 
     The container is created as `run` would create it, pulling the image if `run` would, and removed.
@@ -68,7 +82,8 @@ def audit(global_args, args, runtime, allow_me=False, strict=False):
     return int(outcome)
 
 
-def _audit_verdict(ctx, assessment, found, strict, image):
+def _audit_verdict(ctx: imagedecision.Context, assessment: Assessment, found: list[str], strict: bool,
+                   image: str) -> tuple[Verdict, list[str]]:
     """Returns the (verdict, reasons) of an audit: the assessment's, then the findings if strict."""
     refused = gate.explain(ctx, assessment, image) if assessment.refused else []
     reasons = [*refused, *(found if strict else [])]
@@ -77,7 +92,7 @@ def _audit_verdict(ctx, assessment, found, strict, image):
     return (Verdict.REFUSED if reasons else Verdict.PASSED), reasons
 
 
-def _report_assessment(ctx, image, assessment):
+def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Assessment) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.kind is Kind.EXPLICIT:
@@ -98,7 +113,7 @@ def _report_assessment(ctx, image, assessment):
     messages.out("  docker run also adds " + " ".join(gate.DEFAULTS) + "; later options override them")
 
 
-def _report_findings(found, strict):
+def _report_findings(found: list[str], strict: bool) -> None:
     """Prints what the command line asks for that a project or an image may not; as failures if strict."""
     dot = messages.BAD if strict else messages.WARN
     for finding in found:
@@ -108,7 +123,7 @@ def _report_findings(found, strict):
                                                    "--strict-screen makes them fail the audit"))
 
 
-def _describe_outcome(ctx, assessment):
+def _describe_outcome(ctx: imagedecision.Context, assessment: Assessment) -> str:
     """Returns, as text, what the assessment means for running the image."""
     if assessment.kind in (Kind.OK, Kind.CONFIGURED):
         return runs_as(assessment, ctx.local)

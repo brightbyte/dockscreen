@@ -18,8 +18,9 @@ import importlib.resources
 import os
 import stat
 import tomllib
+from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from dockscreen import ids, images, messages
 
@@ -57,7 +58,7 @@ class Config(NamedTuple):
     projects: MappingProxyType = MappingProxyType({})  # absolute directory -> Section
 
 
-def effective(config, repository=None, directory=None):
+def effective(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
     """Returns the settings for an image pulled from repository, in a project in directory.
 
     They are the top level's, amended by the image's section, then by the sections of the projects that
@@ -76,7 +77,7 @@ def effective(config, repository=None, directory=None):
     return result
 
 
-def _amend(config, section):
+def _amend(config: Config, section: Section) -> Config:
     """Returns config with section applied: the values it sets replace, the lists it gives are added to."""
     changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
@@ -86,13 +87,13 @@ def _amend(config, section):
     return config._replace(**changes)
 
 
-def all_mount_dirs(config):
+def all_mount_dirs(config: Config) -> tuple[str, ...]:
     """Returns every mount dir the config names, the top level's and every section's, once each."""
     sections = [*config.images.values(), *config.projects.values()]
     return tuple(dict.fromkeys([*config.mount_dirs, *(d for s in sections for d in s.mount_dirs)]))
 
 
-def user_file(env, home):
+def user_file(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
     An XDG_CONFIG_HOME in env that is not absolute is ignored, as XDG says, in favour of home/.config.
@@ -103,7 +104,7 @@ def user_file(env, home):
     return os.path.join(base, "dockscreen", "config.toml")
 
 
-def load_current(env, home, uid):
+def load_current(env: Mapping[str, str], home: str, uid: int) -> Config:
     """Loads the configuration of the caller with this environment, home directory and uid.
 
     Creates the user's file if it is missing, with a notice. Raises ConfigError as _load does.
@@ -114,7 +115,7 @@ def load_current(env, home, uid):
     return _load([SYSTEM_FILE, path], uid)
 
 
-def _create_user_file(path):
+def _create_user_file(path: str) -> bool:
     """Writes the template to path, with its directories, if nothing is there; returns whether it did.
 
     Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
@@ -131,7 +132,7 @@ def _create_user_file(path):
     return True
 
 
-def _load(paths, uid, check=None):
+def _load(paths: Iterable[str], uid: int, check: Callable[[str, int], None] | None = None) -> Config:
     """Reads the files in paths and merges them over the defaults, later ones winning; skips missing ones.
 
     check(path, uid) raises ConfigError for a file that cannot be trusted (_strict_modes by default).
@@ -146,7 +147,7 @@ def _load(paths, uid, check=None):
     return config
 
 
-def _merge(config, path, data):
+def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
     """Returns config with data, read from path, over it: its keys replace, its sections replace by name.
 
     Raises ConfigError, naming path, for an unknown key or an invalid value.
@@ -168,14 +169,14 @@ def _merge(config, path, data):
                            projects=MappingProxyType({**config.projects, **projects}))
 
 
-def _table(path, key, value):
+def _table(path: str, key: str, value: object) -> dict[str, Any]:
     """Returns value if it is a table; raises ConfigError naming key in path otherwise."""
     if not isinstance(value, dict):
         raise ConfigError(f"{path}: {key} must be a table of sections")
     return value
 
 
-def _section(path, where, data):
+def _section(path: str, where: str, data: object) -> Section:
     """Returns the Section that data sets; raises ConfigError for an unknown key or an invalid value.
 
     where: names the section in errors ("" for the top level).
@@ -186,7 +187,7 @@ def _section(path, where, data):
     unknown = sorted(set(data) - SETTINGS)
     if unknown:
         raise ConfigError(f"{prefix}unknown key {unknown[0]!r}")
-    fields = {}
+    fields: dict[str, Any] = {}
     for key in ("user", "default_user"):
         if key in data:
             fields[key] = _user_value(path, f"{where} {key}".strip(), data[key])
@@ -210,7 +211,7 @@ def _section(path, where, data):
     return Section(**fields)
 
 
-def _read(path, uid, check):
+def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, Any] | None:
     """Returns the TOML in path, or None if there is no file; check(path, uid) must pass for the file read.
 
     Raises ConfigError if it does not, or the file cannot be read or parsed.
@@ -231,7 +232,7 @@ def _read(path, uid, check):
         raise ConfigError(f"{path}: {e.strerror}") from None
 
 
-def _strict_modes(path, uid, stat_path=os.stat):
+def _strict_modes(path: str, uid: int, stat_path: Callable[[str], os.stat_result] = os.stat) -> None:
     """Checks, like ssh's StrictModes, that path and every directory above it are owned by uid or root
     and writable by nobody else; raises ConfigError if not.
 
@@ -250,7 +251,7 @@ def _strict_modes(path, uid, stat_path=os.stat):
         current = parent
 
 
-def _user_value(path, key, value):
+def _user_value(path: str, key: str, value: object) -> tuple[int, int]:
     """Returns (uid, gid) for value "uid:gid"; raises ConfigError unless both are numeric ids."""
     user = ids.parse_user(value) if isinstance(value, str) else None
     if user is None:
@@ -258,7 +259,7 @@ def _user_value(path, key, value):
     return user
 
 
-def _id_range(path, value):
+def _id_range(path: str, value: Any) -> tuple[int, ...]:
     """Returns value as an inclusive (low, high); raises ConfigError unless it leaves out root and the ids
     that mean "no id".
     """
@@ -270,7 +271,7 @@ def _id_range(path, value):
     return tuple(value)
 
 
-def _repository_key(path, name):
+def _repository_key(path: str, name: str) -> str:
     """Returns the normalised repository an image section names; raises ConfigError for a tag or digest."""
     try:
         repository, tag, digest = images.split_reference(name)
@@ -281,7 +282,7 @@ def _repository_key(path, name):
     return repository
 
 
-def _project_key(path, name):
+def _project_key(path: str, name: str) -> str:
     """Returns the normalised directory a project section names; raises ConfigError unless it is absolute."""
     if not os.path.isabs(name):
         raise ConfigError(f"{path}: projects {name!r} must be an absolute directory")

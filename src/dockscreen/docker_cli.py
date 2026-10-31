@@ -5,12 +5,14 @@ go through the gate, everything else is exec'd to the real docker unchanged.
 """
 
 import sys
+from collections.abc import Sequence
+from typing import NoReturn
 
 from dockscreen import bake, commandline, config, helptext, hostusers, messages, userargs, verdict
 from dockscreen.compose import compose_cli
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.run import audit, gate, runargs
-from dockscreen.runtime import load_runtime
+from dockscreen.runtime import Runtime, load_runtime
 
 # Global `docker` options that consume the following token as their value.
 DOCKER_OPTS_WITH_VALUE = frozenset({
@@ -27,7 +29,7 @@ OWN_OPTIONS = frozenset({
 })
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     """Runs `dockscreen` with argv (default sys.argv[1:]) and returns the exit status, unless docker
     replaces this process.
 
@@ -44,7 +46,7 @@ def main(argv=None):
         return 1
 
 
-def _dispatch(argv, runtime):
+def _dispatch(argv: list[str], runtime: Runtime) -> int:
     """Runs the docker command line argv as dockscreen and returns the exit status, unless docker replaces
     this process. --skip-screening passes argv on unchecked.
 
@@ -60,11 +62,11 @@ def _dispatch(argv, runtime):
 class DockerCommand(commandline.CommandLine):
     """A docker command line, without dockscreen's own options, and what those asked for."""
 
-    def __init__(self, argv, runtime):
+    def __init__(self, argv: list[str], runtime: Runtime) -> None:
         super().__init__(argv, DOCKER_OPTS_WITH_VALUE, OWN_OPTIONS)
         self.runtime = runtime
 
-    def dispatch(self):
+    def dispatch(self) -> int:
         """Runs the command, screened, helped or passed on, and returns the exit status, unless docker
         replaces this process.
         """
@@ -92,7 +94,7 @@ class DockerCommand(commandline.CommandLine):
             return _passthrough(argv, self.runtime)
         return self._gated(sub, end)
 
-    def _command(self):
+    def _command(self) -> tuple[str, int]:
         """Returns (name, index) of the command: `docker container run` is `run`, at the index of `run`."""
         argv, end = self.argv, self.idx
         # audit is ours and has no such form
@@ -100,7 +102,7 @@ class DockerCommand(commandline.CommandLine):
             end += 1
         return argv[end], end
 
-    def _bake_arguments(self):
+    def _bake_arguments(self) -> list[str] | None:
         """Returns the arguments of `buildx bake`, or None if the command is not that."""
         if self.sub != "buildx":
             return None
@@ -108,7 +110,7 @@ class DockerCommand(commandline.CommandLine):
         at = commandline.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
         return rest[at + 1:] if at is not None and rest[at] == "bake" else None
 
-    def _screened_bake(self, args):
+    def _screened_bake(self, args: list[str]) -> int:
         """Runs `buildx bake` with args if the definition it would build passes the policy for builds.
 
         Returns 1 if it does not; otherwise docker replaces this process.
@@ -118,7 +120,7 @@ class DockerCommand(commandline.CommandLine):
             return 1
         return _passthrough(self.argv, self.runtime)
 
-    def _gated(self, sub, end):
+    def _gated(self, sub: str, end: int) -> int:
         """Runs the SCREENED command sub (argv[end]) through the gate and returns the exit status, unless it
         passes and docker replaces this process.
         """
@@ -148,7 +150,7 @@ class DockerCommand(commandline.CommandLine):
             return 1
         return _passthrough(argv, runtime)
 
-    def _help_request(self):
+    def _help_request(self) -> str | None:
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.
 
         `help`, `help COMMAND`, or --help or -h as the first argument after the command; for run and create,
@@ -164,7 +166,7 @@ class DockerCommand(commandline.CommandLine):
         sub, end = self._command()
         return sub if _wants_command_help(sub, argv[end + 1:]) else None
 
-    def show_help(self, target):
+    def show_help(self, target: str) -> int:
         """Prints dockscreen's help for target, then passes on to docker for its own if it has one."""
         if target == "":
             helptext.show(helptext.docker_overview)
@@ -182,12 +184,12 @@ class DockerCommand(commandline.CommandLine):
         return _passthrough(argv, self.runtime)
 
 
-def _wants_command_help(sub, args):
+def _wants_command_help(sub: str, args: list[str]) -> bool:
     """Tells whether args ask for help: --help, or -h, first. For run and create, -h is --hostname."""
     return args[:1] == ["--help"] or (args[:1] == ["-h"] and sub not in ("run", "create"))
 
 
-def _passthrough(argv, runtime):
+def _passthrough(argv: list[str], runtime: Runtime) -> NoReturn:
     """Replaces this process with the real docker, run with argv."""
     runtime.docker.exec(argv)
 

@@ -5,16 +5,19 @@ compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
 """
 
 import sys
+from collections.abc import Sequence
+from typing import Any
 
 from dockscreen import commandline, daemon, messages, policy, verdict
 from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
+from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 
 
-def audit(global_args, args, runtime, allow_me=False):
+def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
     """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
@@ -41,7 +44,7 @@ def audit(global_args, args, runtime, allow_me=False):
     return verdict.report(outcome, problems, brief)
 
 
-def _audit_images(project, brief):
+def _audit_images(project: gate.Project, brief: bool) -> tuple[Verdict, list[str], Sequence[str]]:
     """Checks the project, then its images if the checks pass.
 
     Returns (verdict, problems, report lines).
@@ -63,7 +66,7 @@ def _audit_images(project, brief):
     return outcome, problems, prepared.describe()
 
 
-def harden(global_args, args, runtime, allow_me=False):
+def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
     """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
@@ -104,7 +107,8 @@ def harden(global_args, args, runtime, allow_me=False):
     return 1 if remaining else 0
 
 
-def _fix_image_users(project, fixed, resolved, notes):
+def _fix_image_users(project: gate.Project, fixed: dict[str, Any], resolved: dict[str, Any],
+                     notes: list[str]) -> tuple[list[str], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
     Returns (problems left, notes). resolved: fixed as it will run, which is what the images are looked at

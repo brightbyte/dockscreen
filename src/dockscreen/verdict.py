@@ -7,9 +7,10 @@ Exit status 2 is left for usage errors.
 """
 
 import enum
+from collections.abc import Sequence
 
 from dockscreen import messages
-from dockscreen.imagedecision import Kind
+from dockscreen.imagedecision import Assessment, Kind
 from dockscreen.messages import printable
 
 
@@ -22,7 +23,7 @@ class Verdict(enum.IntEnum):
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
 
 
-def dot(assessment):
+def dot(assessment: Assessment) -> messages.Mark:
     """Returns the mark for an assessment of an image's user: BAD if refused, GOOD if accepted, else WARN."""
     if assessment.refused:
         return messages.BAD
@@ -33,12 +34,12 @@ def dot(assessment):
 LINES = {Verdict.PASSED: "audit passed", Verdict.REFUSED: "denied by audit", Verdict.FAILED: "audit failed"}
 
 
-def line(verdict):
+def line(verdict: Verdict) -> messages.Marked:
     """Builds the closing line of an audit, or of the check before a command runs: mark and verdict."""
     return messages.Marked(ICONS[verdict], LINES[verdict])
 
 
-def brief(verdict, reasons):
+def brief(verdict: Verdict, reasons: Sequence[str]) -> messages.Marked:
     """Builds the verdict as one line, for --brief: the closing line, then the first reason if it did not
     pass and how many more there are.
     """
@@ -49,7 +50,7 @@ def brief(verdict, reasons):
     return messages.Marked(ICONS[verdict], f"{LINES[verdict]}: {first}{more}")
 
 
-def report(verdict, reasons, brief_mode=False):
+def report(verdict: Verdict, reasons: Sequence[str], brief_mode: bool = False) -> int:
     """Prints the verdict and returns it as the exit status.
 
     brief_mode: print one line on stdout (brief); otherwise each reason and the closing line go to stderr.
@@ -64,7 +65,7 @@ def report(verdict, reasons, brief_mode=False):
     return int(verdict)
 
 
-def screened(reasons, failed=False):
+def screened(reasons: Sequence[str], failed: bool = False) -> bool:
     """Prints the verdict of screening a command and returns whether it may run: only if there are no
     reasons.
 

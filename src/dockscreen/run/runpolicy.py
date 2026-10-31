@@ -8,6 +8,8 @@ are judged against the current directory, where a project would have its own.
 A user the command line chooses is judged by the id rules too, as if a project had chosen it.
 """
 
+from typing import Any
+
 from dockscreen import policy
 
 # Inspected HostConfig fields that hold what the compose key of the same meaning holds.
@@ -31,7 +33,7 @@ FIELDS = {
 }
 
 
-def findings(info, explicit_user, ctx):
+def findings(info: dict[str, Any], explicit_user: bool, ctx: policy.Context) -> list[str]:
     """Returns what the policy would refuse in a project that asked for what this container has.
 
     info: the container as inspected; explicit_user: the command line chose the user;
@@ -40,7 +42,7 @@ def findings(info, explicit_user, ctx):
     return policy.check_service(_service_of(info, explicit_user), ctx, vetted=not explicit_user)
 
 
-def _service_of(info, explicit_user):
+def _service_of(info: dict[str, Any], explicit_user: bool) -> dict[str, Any]:
     """Returns the compose service keys that the inspected container corresponds to; with its user if
     explicit_user, since only a user the command line chose is judged.
     """
@@ -57,7 +59,7 @@ def _service_of(info, explicit_user):
     return service
 
 
-def _mounts(info):
+def _mounts(info: dict[str, Any]) -> list[dict[str, str]]:
     """Returns the container's mounts as compose writes them (type, source, target), each one once.
 
     -v puts a bind mount in HostConfig.Binds, --mount in HostConfig.Mounts; inspect also lists them all
@@ -73,7 +75,7 @@ def _mounts(info):
         kind = str(mount.get("Type") or "").lower()
         target = mount.get("Target") or mount.get("Destination") or ""
         found.append({"type": kind, "source": mount.get("Source") or "", "target": target})
-    unique = {}
+    unique: dict[tuple[str, str], dict[str, str]] = {}
     for mount in found:
         unique.setdefault((mount["type"], mount["source"]), mount)
     return list(unique.values())

@@ -5,8 +5,12 @@ do not recognise must reach docker compose untouched, so the only thing we
 parse is the position of the subcommand.
 """
 
+from collections.abc import Collection, Sequence
+from typing import NoReturn
+
 from dockscreen import commandline, helptext, ids, messages, policy, userargs, verdict
 from dockscreen.compose import audit, composeargs, gate, screen
+from dockscreen.runtime import Runtime
 
 # Subcommands that create containers from the config. `alpha` is a group (older
 # compose has `alpha watch`); screening it is cheap and errs on the safe side.
@@ -42,12 +46,12 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 })
 
 
-def _passthrough(argv, runtime):
+def _passthrough(argv: Sequence[str], runtime: Runtime) -> NoReturn:
     """Replaces this process with `docker compose argv`, keeping tty, signals and exit code."""
     runtime.docker.exec(["compose", *argv])
 
 
-def main(argv, runtime, given):
+def main(argv: Sequence[str], runtime: Runtime, given: Collection[str]) -> int:
     """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
     runtime: the Runtime the `docker` wrapper loaded. given: dockscreen's own options that the docker
@@ -70,11 +74,11 @@ class ComposeCommand(commandline.CommandLine):
     global_args are the options before the subcommand, which select the project.
     """
 
-    def __init__(self, argv, runtime, given=()):
+    def __init__(self, argv: Sequence[str], runtime: Runtime, given: Collection[str] = ()) -> None:
         super().__init__(argv, GLOBAL_OPTS_WITH_VALUE, OWN_OPTIONS, given)
         self.runtime = runtime
 
-    def dispatch(self):
+    def dispatch(self) -> int:
         """Screens, helps with or forwards the command, and returns its exit status.
 
         Docker replaces this process if the command runs.
@@ -107,7 +111,7 @@ class ComposeCommand(commandline.CommandLine):
 
         _passthrough(argv, runtime)
 
-    def _name_is_free(self):
+    def _name_is_free(self) -> bool:
         """Tells whether the project's name is free: chosen on the command line, or not used by containers
         made from another directory.
 
@@ -125,11 +129,11 @@ class ComposeCommand(commandline.CommandLine):
         reasons = screen.name_conflicts(config["name"], directory, runtime.docker)
         return not reasons or verdict.screened(reasons)
 
-    def _is_screened(self):
+    def _is_screened(self) -> bool:
         """Tells whether the subcommand is one that is screened (SCREENED)."""
         return self.sub in SCREENED
 
-    def _help_request(self):
+    def _help_request(self) -> str | None:
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.
 
         `help`, `help COMMAND`, or --help or -h as the first argument after the command. Only a leading one
@@ -142,7 +146,7 @@ class ComposeCommand(commandline.CommandLine):
             return argv[idx + 1] if idx + 1 < len(argv) else ""
         return argv[idx] if argv[idx + 1:idx + 2] in (["--help"], ["-h"]) else None
 
-    def show_help(self, target):
+    def show_help(self, target: str) -> int:
         """Prints dockscreen's help for target, then forwards to compose's own help if it has one."""
         argv = self.argv
         if target == "":
@@ -160,7 +164,7 @@ class ComposeCommand(commandline.CommandLine):
         return _passthrough(argv, self.runtime)
 
 
-def _own_commands():
+def _own_commands() -> dict[str, helptext.Topic]:
     """Returns the Topics of dockscreen's own compose commands, by name, aliases folded in."""
     return {name: helptext.command_topic(name, fn, [a for a, p in ALIASES.items() if p == name])
             for name, fn in sorted(COMMANDS.items()) if name not in ALIASES}
