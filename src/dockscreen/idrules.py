@@ -25,33 +25,11 @@ from typing import NamedTuple, Self
 
 from dockscreen import config as configuration
 from dockscreen import hostusers
+from dockscreen.runtime import Runtime
 
-SUBUID_FILE = "/etc/subuid"
-SUBGID_FILE = "/etc/subgid"
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
 # caller's own uid, so they are refused here with or without host mounts.
 MAX_ID = 2**31 - 1
-
-
-class Subordinate:
-    """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
-
-    def __init__(self) -> None:
-        self._read(SUBUID_FILE, SUBGID_FILE)
-
-    @classmethod
-    def new_for_testing(cls, uid_file: str, gid_file: str) -> Self:
-        """Returns a Subordinate read from the given files instead of this host's."""
-        subordinate = cls.__new__(cls)
-        subordinate._read(uid_file, gid_file)
-        return subordinate
-
-    def _read(self, uid_file: str, gid_file: str) -> None:
-        self.ranges = {"uid": _read_ranges(uid_file), "gid": _read_ranges(gid_file)}
-
-    def contains(self, kind: str, value: int) -> bool:
-        """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
-        return any(start <= value < start + count for start, count in self.ranges[kind])
 
 
 class Rules(NamedTuple):
@@ -60,7 +38,13 @@ class Rules(NamedTuple):
     nobody_range: tuple                    # inclusive (low, high)
     default_user: tuple                    # (uid, gid) that replaces root
     local: hostusers.HostAccounts          # the accounts on this host
-    subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
+    subordinate: hostusers.Subordinate     # ranges in /etc/subuid and /etc/subgid
+
+    @classmethod
+    def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:
+        """Returns the id rules for the config file's settings; allow_me: the caller's own ids are allowed."""
+        return cls(runtime.me, allow_me, runtime.settings.nobody_range, runtime.settings.default_user,
+                   runtime.accounts, runtime.subordinate)
 
     def with_settings(self, settings: configuration.Config) -> Self:
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
@@ -117,18 +101,3 @@ class Rules(NamedTuple):
         checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
         found = [self.problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
         return [p for p in found if p]
-
-
-def _read_ranges(path: str) -> list[tuple[int, int]]:
-    """Reads the (start, count) ranges of a subuid or subgid file; none if it cannot be read."""
-    try:
-        with open(path) as f:
-            text = f.read()
-    except OSError:
-        return []
-    ranges = []
-    for line in text.splitlines():
-        fields = line.strip().split(":")
-        if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit():
-            ranges.append((int(fields[1]), int(fields[2])))
-    return ranges

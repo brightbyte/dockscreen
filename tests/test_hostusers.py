@@ -52,3 +52,8 @@ def test_host_accounts_use_nss():
 def test_as_resolves_with_the_hosts_accounts():
     assert hostusers._resolve_account("root", HostAccounts()) == (
         "0:0", ["Resolving user root to uid 0, gid 0"])
+
+
+def test_missing_subordinate_files_mean_no_ranges(tmp_path):
+    subordinate = hostusers.Subordinate.new_for_testing(str(tmp_path / "none"), str(tmp_path / "none"))
+    assert not subordinate.contains("uid", 100000)

@@ -19,7 +19,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, hostusers, imagedecision, messages, policy, userargs, verdict
+from dockscreen import commandline, hostusers, idrules, imagedecision, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
 from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.runtime import Runtime
@@ -165,4 +165,4 @@ def _generated(global_args: Sequence[str], project_dir: str,
 
 def _image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
     """Returns the imagedecision.Context to pull, build, decide and run with."""
-    return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)
+    return imagedecision.Context(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)

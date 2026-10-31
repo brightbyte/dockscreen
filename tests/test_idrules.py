@@ -1,7 +1,7 @@
 import pytest
 from fakes import rules
 
-from dockscreen import config, idrules
+from dockscreen import config, hostusers
 
 
 class Accounts:
@@ -86,7 +86,7 @@ def test_extra_ids_are_allowed_for_one_check():
 def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path):
     (tmp_path / "subuid").write_text("alice:100000:65536\nbob:200000:10\nbroken\n1001:300000:x\n")
     (tmp_path / "subgid").write_text("alice:100000:65536\n")
-    subordinate = idrules.Subordinate.new_for_testing(str(tmp_path / "subuid"), str(tmp_path / "subgid"))
+    subordinate = hostusers.Subordinate.new_for_testing(str(tmp_path / "subuid"), str(tmp_path / "subgid"))
 
     assert subordinate.contains("uid", 100000) and subordinate.contains("uid", 165535)
     assert not subordinate.contains("uid", 165536)
@@ -94,8 +94,3 @@ def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path):
     assert subordinate.contains("gid", 100000) and not subordinate.contains("gid", 200000)
     assert rules(local=Accounts(), subordinate=subordinate).problems(100000, 5000) == [
         "uid 100000 is in a subordinate id range of this host (rootless containers)"]
-
-
-def test_missing_subordinate_files_mean_no_ranges(tmp_path):
-    subordinate = idrules.Subordinate.new_for_testing(str(tmp_path / "none"), str(tmp_path / "none"))
-    assert not subordinate.contains("uid", 100000)

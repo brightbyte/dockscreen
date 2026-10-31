@@ -19,7 +19,7 @@ what `run` would do.
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, hostusers, ids, imagedecision, images, messages, verdict
+from dockscreen import commandline, hostusers, idrules, ids, imagedecision, images, messages, verdict
 from dockscreen.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
 from dockscreen.imagedecision import (
     Assessment,
@@ -259,4 +259,4 @@ def config_hint(ctx: imagedecision.Context, image: str) -> str:
 
 def image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
     """Returns the imagedecision.Context to create, decide and start with."""
-    return imagedecision.Context(runtime.docker, runtime.rules(allow_me), runtime)
+    return imagedecision.Context(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)

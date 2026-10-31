@@ -1,4 +1,5 @@
-"""The accounts on this host, and users given on the command line: ids as typed, or a local account.
+"""The accounts and subordinate id ranges of this host, and users given on the command line: ids as
+typed, or a local account.
 
 Docker resolves a user name in the container's own /etc/passwd, where an image can map it
 to root. So `--user` takes only numbers, which mean the same everywhere, and `--as NAME` takes the
@@ -7,8 +8,12 @@ name of an account on this host and turns it into ids before docker sees it.
 
 import grp
 import pwd
+from typing import Self
 
 from dockscreen import ids
+
+SUBUID_FILE = "/etc/subuid"
+SUBGID_FILE = "/etc/subgid"
 
 
 class HostAccounts:
@@ -116,3 +121,39 @@ class UserOptions:
         """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
         self.user_given = self.allow_me = True
         return f"--user={ids.format_user(self.callers_ids)}"
+
+
+class Subordinate:
+    """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
+
+    def __init__(self) -> None:
+        self._read(SUBUID_FILE, SUBGID_FILE)
+
+    @classmethod
+    def new_for_testing(cls, uid_file: str, gid_file: str) -> Self:
+        """Returns a Subordinate read from the given files instead of this host's."""
+        subordinate = cls.__new__(cls)
+        subordinate._read(uid_file, gid_file)
+        return subordinate
+
+    def _read(self, uid_file: str, gid_file: str) -> None:
+        self.ranges = {"uid": _read_ranges(uid_file), "gid": _read_ranges(gid_file)}
+
+    def contains(self, kind: str, value: int) -> bool:
+        """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
+        return any(start <= value < start + count for start, count in self.ranges[kind])
+
+
+def _read_ranges(path: str) -> list[tuple[int, int]]:
+    """Reads the (start, count) ranges of a subuid or subgid file; none if it cannot be read."""
+    try:
+        with open(path) as f:
+            text = f.read()
+    except OSError:
+        return []
+    ranges = []
+    for line in text.splitlines():
+        fields = line.strip().split(":")
+        if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit():
+            ranges.append((int(fields[1]), int(fields[2])))
+    return ranges

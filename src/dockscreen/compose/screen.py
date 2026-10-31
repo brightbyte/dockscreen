@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
-from dockscreen import commandline, config, messages, policy, verdict
+from dockscreen import commandline, config, idrules, messages, policy, verdict
 from dockscreen.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.runtime import Runtime
 
@@ -51,7 +51,8 @@ def context(project_dir: str, runtime: Runtime, allow_me: bool = False,
     section its image was proven to have been pulled for (config.section_for).
     """
     def settings_context(settings: config.Config) -> policy.Context:
-        return policy.context_for(settings, project_dir, runtime.rules(allow_me), runtime.config_file)
+        rules = idrules.Rules.for_runtime(runtime, allow_me)
+        return policy.context_for(settings, project_dir, rules, runtime.config_file)
 
     def scope(name: str, service: dict[str, Any]) -> policy.Context:
         if verified is None:

@@ -9,7 +9,7 @@ import sys
 from collections.abc import Collection, Mapping, MutableMapping
 from typing import NamedTuple
 
-from dockscreen import config, hostusers, idrules, messages
+from dockscreen import config, hostusers, messages
 from dockscreen.dockerclient import Docker, DockerNotFound
 
 
@@ -17,16 +17,11 @@ class Runtime(NamedTuple):
     settings: config.Config
     docker: Docker                          # the real docker
     accounts: hostusers.HostAccounts
-    subordinate: idrules.Subordinate        # ranges in /etc/subuid and /etc/subgid
+    subordinate: hostusers.Subordinate      # ranges in /etc/subuid and /etc/subgid
     me: tuple                               # the caller's real (uid, gid)
     env: MutableMapping                     # the environment, which compose and docker inherit
     home: str                               # the caller's home directory
     cwd: str                                # the directory dockscreen was started in
-
-    def rules(self, allow_me: bool = False) -> idrules.Rules:
-        """Returns the id rules for the config file's settings; allow_me: the caller's own ids are allowed."""
-        return idrules.Rules(self.me, allow_me, self.settings.nobody_range, self.settings.default_user,
-                             self.accounts, self.subordinate)
 
     @property
     def config_file(self) -> str:
@@ -48,7 +43,7 @@ def load_runtime() -> Runtime:
         settings=settings,
         docker=Docker(_real_docker(settings, env)),
         accounts=hostusers.HostAccounts(),
-        subordinate=idrules.Subordinate(),
+        subordinate=hostusers.Subordinate(),
         me=me,
         env=env,
         home=home,
