@@ -1,23 +1,20 @@
-"""Custom subcommands.
+"""`audit` and `harden`, dockscreen's own compose subcommands: what `up` would do, and what to change.
 
-A command is a callable(global_args, args, runtime, allow_me) -> exit code. `global_args` are the
-compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), so
-a command can pass them on when it shells out to docker compose.
-
-A name in COMMANDS shadows the docker compose subcommand of the same name.
+Each takes (global_args, args, runtime, allow_me) and returns the exit status. `global_args` are the
+compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which select the project.
 """
 
 import sys
 
 from dockscreen import daemon, flags, messages, policy, verdict
-from dockscreen.compose import autofix, composeimages, composerun, hardening, screen, shellenv
+from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
 from dockscreen.dockerclient import DockerNotFound
 from dockscreen.verdict import Verdict
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 
 
-def _audit(global_args, args, runtime, allow_me=False):
+def audit(global_args, args, runtime, allow_me=False):
     """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
@@ -28,7 +25,7 @@ def _audit(global_args, args, runtime, allow_me=False):
         messages.notice(f"usage: dockscreen compose [compose options] audit [{flags.BRIEF}]")
         return 2
     try:
-        project = composerun.load_project(global_args, runtime, allow_me)
+        project = gate.load_project(global_args, runtime, allow_me)
     except (screen.InspectError, DockerNotFound) as e:
         return verdict.report(Verdict.FAILED, [str(e)], brief)
     except (screen.ScreenError, ValueError) as e:
@@ -66,7 +63,7 @@ def _audit_images(project, brief):
     return outcome, problems, prepared.describe()
 
 
-def _harden(global_args, args, runtime, allow_me=False):
+def harden(global_args, args, runtime, allow_me=False):
     """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
@@ -80,7 +77,7 @@ def _harden(global_args, args, runtime, allow_me=False):
     if --allow-me were given, and the patch says that it needs it.
     """
     try:
-        project = composerun.load_project(global_args, runtime, allow_me=True)
+        project = gate.load_project(global_args, runtime, allow_me=True)
     except (screen.ScreenError, ValueError) as e:
         messages.notice(e)
         return 1
@@ -127,6 +124,3 @@ def _fix_image_users(project, fixed, resolved, notes):
                          "so user is set explicitly")
     return remaining, notes
 
-
-COMMANDS = {"audit": _audit, "harden": _harden, "fix": _harden}
-ALIASES = {"fix": "harden"}  # alias -> command it stands for

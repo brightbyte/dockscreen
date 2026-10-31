@@ -3,7 +3,7 @@ import os
 from fakes import FakeImages, compose_project, rules
 
 from dockscreen import messages, policy
-from dockscreen.compose import autofix, commands
+from dockscreen.compose import audit, autofix
 from dockscreen.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
@@ -49,7 +49,7 @@ def test_audit_info_lines_are_escaped(capsys, tmp_path):
     cfg = {"name": "p", "services": {"web": {"image": image}}}
     runtime, _ = compose_project(tmp_path, cfg, FakeImages(users={image: "app"}))
 
-    commands._audit([], [], runtime)
+    audit.audit([], [], runtime)
 
     out = capsys.readouterr().out
     assert "service web: no user set; image x\\x1b[31m:1 runs as" in out

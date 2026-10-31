@@ -80,8 +80,9 @@ def load_project(global_args, runtime, allow_me):
                    runtime, allow_me)
 
 
-def run(argv, idx, runtime, allow_me=False):
-    """Runs argv[idx:], a subcommand that starts containers, on the project if it passes the checks.
+def run(global_args, sub, args, runtime, allow_me=False):
+    """Runs `docker compose global_args sub args`, sub a subcommand that starts containers, on the project
+    global_args select if it passes the checks.
 
     Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
     subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
@@ -89,8 +90,8 @@ def run(argv, idx, runtime, allow_me=False):
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     try:
-        parsed = _command_line(argv[idx], argv[idx + 1:], runtime)
-        project = load_project(argv[:idx], runtime, allow_me)
+        parsed = _command_line(sub, args, runtime)
+        project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
     except (screen.InspectError, DockerNotFound) as e:
         verdict.screened([str(e)], failed=True)
@@ -119,7 +120,7 @@ def run(argv, idx, runtime, allow_me=False):
             if line:
                 messages.notice(line)
         verdict.screened([])
-        return image_ctx.docker.run_child([*command(final), argv[idx], *parsed.args])
+        return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
 
 
 def _command_line(subcommand, args, runtime):

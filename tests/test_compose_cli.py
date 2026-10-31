@@ -96,7 +96,7 @@ def test_runtime_subcommands_run_from_the_checked_config(tmp_path, subcommand):
     compose_cli.main([subcommand, "-d"], runtime)
 
     assert "config" in recorder.captured[0]  # the project was inspected
-    assert runtime.docker.forwarded == []    # composerun runs compose itself, from the hardened config
+    assert runtime.docker.forwarded == []    # the gate runs compose itself, from the hardened config
 
 
 @pytest.mark.parametrize("subcommand", sorted(compose_cli.BUILD_SUBCOMMANDS))

@@ -6,8 +6,7 @@ parse is the position of the subcommand.
 """
 
 from dockscreen import argscan, flags, helptext, ids, messages, policy, userargs, verdict
-from dockscreen.compose import composeargs, composerun, screen
-from dockscreen.compose.commands import ALIASES, COMMANDS
+from dockscreen.compose import audit, composeargs, gate, screen
 
 # Subcommands that create containers from the config. `alpha` is a group (older
 # compose has `alpha watch`); screening it is cheap and errs on the safe side.
@@ -17,6 +16,11 @@ BUILD_SUBCOMMANDS = frozenset({"build", "bake"})
 SCREENED = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
 # Subcommands that stop, change or remove what the project's name stands for. Only the name is checked.
 NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", "start", "pause", "unpause"})
+
+# dockscreen's own subcommands, which shadow compose's of the same name; each is a callable(global_args,
+# args, runtime, allow_me) that returns the exit status
+COMMANDS = {"audit": audit.audit, "harden": audit.harden, "fix": audit.harden}
+ALIASES = {"fix": "harden"}  # alias -> command it stands for
 
 # Global `docker compose` options that consume the following token as their value.
 # Needed to tell `-f foo.yml up` (subcommand "up") from `-f up` (a value).
@@ -102,7 +106,7 @@ class ComposeCommand:
 
         if self._is_screened():
             if sub not in BUILD_SUBCOMMANDS:
-                return composerun.run(argv, self.idx, runtime, allow_me=self.allow_me)
+                return gate.run(self.global_args, sub, self.args, runtime, allow_me=self.allow_me)
             if not screen.passes(self.global_args, runtime, policy.check_build_config):
                 return 1
         elif sub in NAMED_PROJECT_SUBCOMMANDS:

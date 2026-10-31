@@ -2,7 +2,7 @@ import pytest
 from fakes import Accounts, compose_project, rules
 
 from dockscreen import messages, policy
-from dockscreen.compose import autofix, commands, hardening
+from dockscreen.compose import audit, autofix, compose_cli, hardening
 
 NOBODY = "65534:65534"
 
@@ -75,7 +75,7 @@ def test_a_config_without_the_keys_passes_the_policy_once_hardened():
 def test_audit_reports_the_additions_and_hints_at_harden(capsys, tmp_path):
     runtime, _ = compose_project(tmp_path, config())
 
-    assert commands._audit([], [], runtime) == 0
+    assert audit.audit([], [], runtime) == 0
 
     captured = capsys.readouterr()
     assert "audit passed" in captured.err
@@ -86,7 +86,7 @@ def test_audit_reports_the_additions_and_hints_at_harden(capsys, tmp_path):
 def test_audit_of_a_clean_project_has_no_hint(capsys, tmp_path):
     clean = config(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
     runtime, _ = compose_project(tmp_path, clean)
-    assert commands._audit([], [], runtime) == 0
+    assert audit.audit([], [], runtime) == 0
     assert "harden" not in capsys.readouterr().out
 
 
@@ -100,7 +100,7 @@ def two_services(**web):
 def test_harden_leaves_out_what_dockscreen_adds_and_says_so_once(capsys, tmp_path):
     runtime, _ = compose_project(tmp_path, two_services())
 
-    assert commands._harden([], [], runtime) == 0
+    assert audit.harden([], [], runtime) == 0
 
     out = capsys.readouterr().out
     assert "cap_drop:" not in out.replace("# note", "").split("services:")[-1]
@@ -117,7 +117,7 @@ def test_harden_writes_only_what_is_needed_on_top_of_the_defaults(capsys, tmp_pa
     config = two_services(user="0:0", security_opt=["seccomp=unconfined"], cap_drop=["NET_RAW"])
     runtime, _ = compose_project(tmp_path, config)
 
-    commands._harden([], [], runtime)
+    audit.harden([], [], runtime)
 
     body = capsys.readouterr().out.split("services:", 1)[1]
     assert '    user: "${UID}:${GID}"' in body
@@ -129,15 +129,15 @@ def test_harden_writes_only_what_is_needed_on_top_of_the_defaults(capsys, tmp_pa
 def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(capsys, tmp_path):
     runtime, _ = compose_project(tmp_path, two_services())
 
-    commands._audit([], [], runtime)
+    audit.audit([], [], runtime)
 
     lines = [line for line in capsys.readouterr().out.splitlines() if "cap_drop" in line]
     assert len(lines) == 1 and lines[0].endswith("where missing, in services web, db")
 
 
 def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():
-    assert commands.COMMANDS["fix"] is commands.COMMANDS["harden"]
-    assert commands.ALIASES == {"fix": "harden"}
+    assert compose_cli.COMMANDS["fix"] is compose_cli.COMMANDS["harden"]
+    assert compose_cli.ALIASES == {"fix": "harden"}
 
 
 def test_patch_header_names_the_command():
@@ -208,9 +208,9 @@ def test_hook_users_are_resolved_too():
 def test_the_audit_reports_the_resolution_and_harden_does_not_repeat_it(capsys, tmp_path):
     runtime, _ = compose_project(tmp_path, config(user="nobody"))
 
-    commands._audit([], [], runtime)
+    audit.audit([], [], runtime)
     audit_out = capsys.readouterr().out
-    commands._harden([], [], runtime)
+    audit.harden([], [], runtime)
     harden_out = capsys.readouterr().out
 
     assert 'service web: user "nobody" resolved to "65534:65534" on this host' in audit_out

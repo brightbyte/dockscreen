@@ -28,7 +28,7 @@ In a project, a named volume whose `driver_opts` bind a host path counts as a ho
 
 ### 4. `docker run` recreates the container by image name, not id
 
-`gate.py:96, 148`: `create` for the fallback uses the name, not the id, so a tag that moves between the two creates applies the pinned user of image A to image B. `composeimages.finalize` already pins the id. Needs a concurrent actor.
+`run.gate.run`: `create` for the fallback uses the name, not the id, so a tag that moves between the two creates applies the pinned user of image A to image B. `composeimages.finalize` already pins the id. Needs a concurrent actor.
 
 ### 5. `annotations` is allowed unchecked
 
@@ -72,7 +72,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 15. Uncaught exceptions end in a traceback
 
-`getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `gate.py:152-159` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
+`getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `run.gate.create_assessed` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
 
 ### 16. `messages.printable` does not escape `\`
 

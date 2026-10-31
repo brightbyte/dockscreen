@@ -6,24 +6,11 @@ go through the gate, everything else is exec'd to the real docker unchanged.
 
 import sys
 
-from dockscreen import (
-    argscan,
-    bake,
-    config,
-    daemon,
-    flags,
-    helptext,
-    hostusers,
-    imagedecision,
-    messages,
-    userargs,
-    verdict,
-)
+from dockscreen import argscan, bake, config, flags, helptext, hostusers, messages, userargs, verdict
 from dockscreen.compose import compose_cli
 from dockscreen.dockerclient import DockerNotFound
-from dockscreen.run import gate, runargs
+from dockscreen.run import audit, gate, runargs
 from dockscreen.runtime import load_runtime
-from dockscreen.verdict import Verdict
 
 # Global `docker` options that consume the following token as their value.
 DOCKER_OPTS_WITH_VALUE = frozenset({
@@ -146,9 +133,9 @@ class DockerCommand:
         passes and docker replaces this process.
         """
         argv, runtime = self.argv, self.runtime
-        lead, args = argv[:end + 1], argv[end + 1:]
+        global_args, lead, args = argv[:self.idx], argv[:end + 1], argv[end + 1:]
         if sub == "audit" and not args:
-            messages.notice(gate.AUDIT_USAGE)
+            messages.notice(audit.AUDIT_USAGE)
             messages.notice("Run 'dockscreen audit --help' for more.")
             return 2
         if sub in ("run", "create") and not args:
@@ -163,17 +150,11 @@ class DockerCommand:
         if sub == "exec":
             resolved = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
             return 1 if resolved is None else _passthrough([*lead, *resolved], runtime)
-
-        docker = runtime.docker
-        if daemon.is_remote(argv[:self.idx], runtime.env, docker):
-            return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE])
-
-        ctx = imagedecision.Context(docker, runtime.rules(self.allow_me), runtime)
         if sub == "run":
-            return gate.run(ctx, args)
+            return gate.run(global_args, args, runtime, self.allow_me)
         if sub == "audit":
-            return gate.audit(ctx, args, self.strict)
-        if not verdict.screened(gate.check_existing(ctx, args)):
+            return audit.audit(global_args, args, runtime, self.allow_me, self.strict)
+        if not verdict.screened(gate.check_existing(global_args, args, runtime, self.allow_me)):
             return 1
         return _passthrough(argv, runtime)
 

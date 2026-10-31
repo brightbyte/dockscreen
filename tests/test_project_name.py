@@ -1,7 +1,7 @@
 import pytest
 from fakes import FakeImages, compose_project
 
-from dockscreen.compose import compose_cli, composerun, screen
+from dockscreen.compose import compose_cli, gate, screen
 from dockscreen.dockerclient import DockerError
 
 
@@ -69,7 +69,7 @@ def test_up_refuses_a_name_that_other_containers_have_and_runs_nothing(tmp_path,
     images.project_dirs = ["/victim"]
     runtime, recorder = compose_project(tmp_path, PROJECT, images)
 
-    assert composerun.run(["up"], 0, runtime) == 1
+    assert gate.run([], "up", [], runtime) == 1
 
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
     assert recorder.children == []
@@ -81,7 +81,7 @@ def test_up_runs_in_the_directory_that_made_the_containers_or_when_p_names_the_p
     images.project_dirs = [str(tmp_path)] if argv == ["up"] else ["/victim"]
     runtime, recorder = compose_project(tmp_path, PROJECT, images)
 
-    composerun.run(argv, idx, runtime)
+    gate.run(argv[:idx], argv[idx], argv[idx + 1:], runtime)
 
     assert recorder.children  # compose ran
 

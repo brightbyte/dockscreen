@@ -146,7 +146,9 @@ A message has two parts: the facts, and an optional help part that says what to 
 
 ## Mechanisms
 
-### Compose (`compose_cli`, `screen`, `hardening`, `policy`, `composeimages`, `composerun`)
+The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`) takes out dockscreen's own options (`parse`), gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). Each front end's package, `run` or `compose`, has a `gate` that checks and then runs, an `audit` that checks and reports, and the parser of its command lines (`runargs`, `composeargs`). The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `daemon` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
+
+### Compose (`compose_cli`, `screen`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
@@ -165,7 +167,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
    - the policy runs again on the result.
 6. Before anything is pulled or built, compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
-7. `composerun` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
+7. `compose.gate` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
 `build` and `bake` get only `policy.check_build_config`, with no runtime checks:
 
@@ -173,7 +175,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `screen.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
+`audit` (`compose.audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `screen.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
 
 ### The policy (`policy.py`)
 
@@ -197,7 +199,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 `imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `images.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image.
 
-### The `docker` wrapper (`docker_cli`, `runargs`, `gate`, `hostusers`)
+### The `docker` wrapper (`docker_cli`, `runargs`, `run.gate`, `run.audit`, `hostusers`)
 
 - `run` becomes `create`, `inspect`, check, `start`:
   - The daemon parses the command line. `runargs` reads only far enough to find the image and the `run`-only flags.
@@ -207,11 +209,11 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `start` and `restart` check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` checks only the form of the user (see [Forms](#forms)).
 - `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `bake._check_definition` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
-- `audit` takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
+- `audit` (`run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.
-- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-screen-hardening-policy-composeimages-composerun)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
+- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-screen-hardening-policy-composeimages-composegate-composeaudit)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
 
 ### Configuration and options (`config`)
 
