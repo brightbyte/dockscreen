@@ -8,7 +8,6 @@ parse is the position of the subcommand.
 from dockscreen import argscan, flags, helptext, hostusers, ids, messages, policy, verdict
 from dockscreen.compose import composeargs, composerun, screen
 from dockscreen.compose.commands import ALIASES, COMMANDS
-from dockscreen.runtime import load_runtime
 
 # Subcommands that create containers from the config. `alpha` is a group (older
 # compose has `alpha watch`); screening it is cheap and errs on the safe side.
@@ -38,16 +37,16 @@ def _forward(argv, runtime):
     runtime.docker.exec(["compose", *argv])
 
 
-def main(argv, runtime=None):
+def main(argv, runtime):
     """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
-    runtime: the Runtime the `docker` wrapper already loaded; loaded here if not given.
+    runtime: the Runtime the `docker` wrapper loaded.
     Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
     """
     skipped, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE)
     if skipped:
         flags.banner()
-        return _forward(argv, runtime or load_runtime())  # the config file names the real docker
+        return _forward(argv, runtime)
 
     allow_me, argv = flags.strip(argv, GLOBAL_OPTS_WITH_VALUE, flags.ALLOW_ME)
     helpful, argv = flags.strip_helpful(argv, GLOBAL_OPTS_WITH_VALUE)
@@ -55,8 +54,6 @@ def main(argv, runtime=None):
     if as_me:
         messages.notice(flags.AS_ME_MESSAGE)
         return 2
-    # a config file that cannot be trusted stops everything, before any docker runs
-    runtime = runtime or load_runtime()
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process
     runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
     return ComposeCommand(argv, runtime, allow_me, helpful).dispatch()

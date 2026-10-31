@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from fakes import FakeImages, make_image_ctx, read_raw, runtime
+from fakes import FakeImages, install_image_ctx, make_image_ctx, read_raw, runtime
 
 from dockscreen import argscan, config, hostusers
 from dockscreen.compose import composerun, screen
@@ -18,8 +18,10 @@ def inspect_as(monkeypatch, tmp_path, config):
     monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (config, str(tmp_path)))
 
 
-def up(argv, idx, image_ctx, allow_me=False):
-    return composerun.run(argv, idx, runtime(), image_ctx, allow_me=allow_me)
+def up(argv, idx, image_ctx, allow_me=False, **runtime_fields):
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        install_image_ctx(monkeypatch, image_ctx)
+        return composerun.run(argv, idx, runtime(**runtime_fields), allow_me=allow_me)
 
 
 def last(recorder):
@@ -358,7 +360,7 @@ def test_an_image_section_allows_a_mount_once_the_image_proves_its_origin(monkey
     inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
     image_ctx, recorder = sectioned(X_DIRS, FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}))
 
-    assert composerun.run(["up"], 0, runtime(settings=X_DIRS), image_ctx) == 0
+    assert up(["up"], 0, image_ctx, settings=X_DIRS) == 0
     assert last(recorder)[1]["services"]["web"]["volumes"][0]["source"] == "/srv/x/data"
 
 
@@ -367,7 +369,7 @@ def test_an_image_section_that_its_image_does_not_prove_is_refused_before_anythi
     inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
     image_ctx, recorder = sectioned(X_DIRS, FakeImages(users={"x:1": "app"}))  # tagged x:1 locally, no digest
 
-    assert composerun.run(["up"], 0, runtime(settings=X_DIRS), image_ctx) == 1
+    assert up(["up"], 0, image_ctx, settings=X_DIRS) == 1
     # the name was enough to get past the first check; the image itself is not
     assert "service web: bind mount '/srv/x/data' is outside" in capsys.readouterr().err
     assert not any("up" in cmd for cmd in recorder.children)
@@ -377,11 +379,11 @@ def test_a_project_section_applies_to_its_directory(monkeypatch, tmp_path, capsy
     settings = config.Config(projects={str(tmp_path): config.Section(mount_dirs=("/srv/x",))})
     inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
     image_ctx, _ = sectioned(settings, FakeImages(users={"x:1": "app"}))
-    assert composerun.run(["up"], 0, runtime(settings=settings), image_ctx) == 0
+    assert up(["up"], 0, image_ctx, settings=settings) == 0
 
     elsewhere = config.Config(projects={"/elsewhere": config.Section(mount_dirs=("/srv/x",))})
     image_ctx, _ = sectioned(elsewhere, FakeImages(users={"x:1": "app"}))
-    assert composerun.run(["up"], 0, runtime(settings=elsewhere), image_ctx) == 1
+    assert up(["up"], 0, image_ctx, settings=elsewhere) == 1
 
 
 X_USER = config.Config(images={"docker.io/library/x": config.Section(user=(900, 900))})
@@ -392,7 +394,7 @@ def test_a_service_may_name_the_user_its_image_section_sets(monkeypatch, capsys)
     inspect_as(monkeypatch, "/p", project_config(user="900:900", **X_DATA))
     image_ctx, recorder = sectioned(X_USER, FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}))
 
-    assert composerun.run(["up"], 0, runtime(settings=X_USER), image_ctx) == 0
+    assert up(["up"], 0, image_ctx, settings=X_USER) == 0
     assert last(recorder)[1]["services"]["web"]["user"] == "900:900"
 
 
@@ -400,5 +402,5 @@ def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(monkeypatch,
     inspect_as(monkeypatch, "/p", project_config(user="900:900", **X_DATA))
     image_ctx, recorder = sectioned(X_USER, FakeImages(users={"x:1": "app"}))  # no digest: tagged locally
 
-    assert composerun.run(["up"], 0, runtime(settings=X_USER), image_ctx) == 1
+    assert up(["up"], 0, image_ctx, settings=X_USER) == 1
     assert "user '900:900': uid 900 is not in the nobody range" in capsys.readouterr().err

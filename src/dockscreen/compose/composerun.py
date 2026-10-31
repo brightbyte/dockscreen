@@ -65,23 +65,22 @@ class Project(NamedTuple):
         return _generated(self.global_args, self.directory, self.docker_binary)
 
 
-def load_project(global_args, runtime, allow_me, image_ctx=None):
+def load_project(global_args, runtime, allow_me):
     """Loads the project global_args select, hardened.
 
     Raises screen.ScreenError or ValueError if it cannot be inspected.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
-    image_ctx: what to pull, build, decide and run with; _image_context() if not given.
     """
     config, directory = screen.inspect(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
-    image_ctx = (image_ctx or _image_context(runtime, allow_me))._replace(project_dir=directory)
+    image_ctx = _image_context(runtime, allow_me)._replace(project_dir=directory)
     remote = screen.is_remote(global_args, runtime.env, image_ctx.docker)
     ctx = screen.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
 
 
-def run(argv, idx, runtime, image_ctx=None, allow_me=False):
+def run(argv, idx, runtime, allow_me=False):
     """Runs argv[idx:], a subcommand that starts containers, on the project if it passes the checks.
 
     Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
@@ -91,7 +90,7 @@ def run(argv, idx, runtime, image_ctx=None, allow_me=False):
     """
     try:
         parsed = _command_line(argv[idx], argv[idx + 1:], runtime)
-        project = load_project(argv[:idx], runtime, allow_me, image_ctx)
+        project = load_project(argv[:idx], runtime, allow_me)
         problems = project.problems()
     except (screen.InspectError, DockerNotFound) as e:
         verdict.screened([str(e)], failed=True)

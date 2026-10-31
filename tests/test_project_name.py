@@ -1,5 +1,5 @@
 import pytest
-from fakes import FakeDocker, FakeImages, make_image_ctx, runtime
+from fakes import FakeDocker, FakeImages, install_image_ctx, make_image_ctx, runtime
 
 from dockscreen.compose import compose_cli, composerun, screen
 from dockscreen.dockerclient import Docker, DockerError
@@ -87,8 +87,9 @@ def test_up_refuses_a_name_that_other_containers_have_and_runs_nothing(monkeypat
     images = FakeImages(users={"x:1": "app"})
     images.project_dirs = ["/victim"]
     image_ctx, recorder = make_image_ctx(images)
+    install_image_ctx(monkeypatch, image_ctx)
 
-    assert composerun.run(["up"], 0, runtime(), image_ctx) == 1
+    assert composerun.run(["up"], 0, runtime()) == 1
 
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
     assert recorder.children == []
@@ -101,8 +102,9 @@ def test_up_runs_in_the_directory_that_made_the_containers_or_when_p_names_the_p
     images = FakeImages(users={"x:1": "app"})
     images.project_dirs = [str(tmp_path)] if argv == ["up"] else ["/victim"]
     image_ctx, recorder = make_image_ctx(images)
+    install_image_ctx(monkeypatch, image_ctx)
 
-    composerun.run(argv, idx, runtime(), image_ctx)
+    composerun.run(argv, idx, runtime())
 
     assert recorder.children  # compose ran
 

@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from fakes import runtime
+
 from dockscreen import argscan, docker_cli, hostusers, policy
 from dockscreen.compose import compose_cli, composerun, screen
 from dockscreen.compose.commands import COMMANDS
@@ -23,7 +25,7 @@ def test_find_subcommand(argv, expected):
 
 def test_unknown_args_are_forwarded_verbatim(forwarded):
     argv = ["-f", "a.yml", "logs", "-f", "--no-such-flag", "svc"]
-    compose_cli.main(argv)
+    compose_cli.main(argv, runtime())
     assert forwarded == [argv]
 
 
@@ -36,20 +38,20 @@ def test_custom_command_gets_global_args_and_is_not_forwarded(forwarded, monkeyp
 
     monkeypatch.setitem(COMMANDS, "fake", fake)
 
-    assert compose_cli.main(["-f", "a.yml", "fake", "x", "--y"]) == 7
+    assert compose_cli.main(["-f", "a.yml", "fake", "x", "--y"], runtime()) == 7
     assert seen == {"global_args": ["-f", "a.yml"], "args": ["x", "--y"]}
     assert forwarded == []
 
 
 def test_custom_name_as_option_value_is_not_dispatched(forwarded, monkeypatch):
     monkeypatch.setitem(COMMANDS, "fake", lambda global_args, args: 1 / 0)
-    compose_cli.main(["-p", "fake", "ps"])
+    compose_cli.main(["-p", "fake", "ps"], runtime())
     assert forwarded == [["-p", "fake", "ps"]]
 
 
 @pytest.mark.parametrize("argv", [[], ["help"], ["--help"], ["-h"], ["-f", "a.yml", "help"]])
 def test_the_overview_precedes_composes_own_help(forwarded, capsys, argv):
-    compose_cli.main(argv)
+    compose_cli.main(argv, runtime())
     assert forwarded == [argv]
     out = capsys.readouterr().out
     assert out.startswith("Usage:  dockscreen compose [OPTIONS] COMMAND")
@@ -64,7 +66,7 @@ def test_the_overview_precedes_composes_own_help(forwarded, capsys, argv):
     (["-f", "a.yml", "help", "up"], ["-f", "a.yml", "up", "--help"]),
 ])
 def test_a_command_compose_has_gets_our_help_then_composes(forwarded, capsys, argv, forwarded_argv):
-    compose_cli.main(argv)
+    compose_cli.main(argv, runtime())
     assert forwarded == [forwarded_argv]
     out = capsys.readouterr().out
     assert out.startswith("Usage:  dockscreen compose up [OPTIONS]")
@@ -73,7 +75,7 @@ def test_a_command_compose_has_gets_our_help_then_composes(forwarded, capsys, ar
 
 @pytest.mark.parametrize("argv", [["help", "harden"], ["harden", "--help"], ["fix", "-h"], ["help", "fix"]])
 def test_our_own_commands_get_only_our_help(forwarded, capsys, argv):
-    assert compose_cli.main(argv) == 0
+    assert compose_cli.main(argv, runtime()) == 0
     assert forwarded == []  # compose does not know harden
     out = capsys.readouterr().out
     assert out.startswith("Usage:  dockscreen compose harden")
@@ -82,14 +84,14 @@ def test_our_own_commands_get_only_our_help(forwarded, capsys, argv):
 
 @pytest.mark.parametrize("argv", [["ps", "--help"], ["help", "ps"]])
 def test_commands_dockscreen_leaves_alone_get_composes_help(forwarded, capsys, argv):
-    compose_cli.main(argv)
+    compose_cli.main(argv, runtime())
     assert forwarded == [["ps", "--help"]]
     assert capsys.readouterr().out == ""
 
 
 def test_help_after_the_service_belongs_to_its_command(forwarded, monkeypatch):
     monkeypatch.setattr(composerun, "run", lambda argv, idx, runtime, allow_me: 0)
-    assert compose_cli.main(["run", "app", "grep", "--help"]) == 0  # screened and run, not help
+    assert compose_cli.main(["run", "app", "grep", "--help"], runtime()) == 0  # screened and run, not help
 
 
 @pytest.mark.parametrize("subcommand", sorted(compose_cli.RUNTIME_SUBCOMMANDS))
@@ -98,7 +100,7 @@ def test_runtime_subcommands_run_from_the_checked_config(forwarded, monkeypatch,
     monkeypatch.setattr(composerun, "run",
                         lambda argv, idx, runtime, allow_me: seen.append((argv, idx, allow_me)) or 3)
 
-    assert compose_cli.main(["-f", "a.yml", subcommand, "-d"]) == 3
+    assert compose_cli.main(["-f", "a.yml", subcommand, "-d"], runtime()) == 3
 
     assert seen == [(["-f", "a.yml", subcommand, "-d"], 2, False)]
     assert forwarded == []  # composerun runs compose itself, from the hardened config
@@ -110,7 +112,7 @@ def test_build_subcommands_get_the_build_rules_and_are_then_forwarded(forwarded,
     monkeypatch.setattr(screen, "passes",
                         lambda global_args, runtime, rules: seen.append((global_args, rules)) or True)
 
-    compose_cli.main(["-f", "a.yml", subcommand])
+    compose_cli.main(["-f", "a.yml", subcommand], runtime())
 
     assert seen == [(["-f", "a.yml"], policy.check_build_config)]
     assert forwarded == [["-f", "a.yml", subcommand]]
@@ -118,14 +120,14 @@ def test_build_subcommands_get_the_build_rules_and_are_then_forwarded(forwarded,
 
 def test_build_with_problems_is_not_forwarded(forwarded, monkeypatch):
     monkeypatch.setattr(screen, "passes", lambda global_args, runtime, rules: False)
-    assert compose_cli.main(["build"]) == 1
+    assert compose_cli.main(["build"], runtime()) == 1
     assert forwarded == []
 
 
 def test_unscreened_subcommand_is_not_inspected(forwarded, monkeypatch):
     monkeypatch.setattr(screen, "passes", lambda global_args, runtime, rules: 1 / 0)
     monkeypatch.setattr(composerun, "run", lambda argv, idx, runtime, allow_me: 1 / 0)
-    compose_cli.main(["ps"])
+    compose_cli.main(["ps"], runtime())
     assert forwarded == [["ps"]]
 
 
@@ -165,17 +167,17 @@ def test_allow_me_before_the_subcommand_reaches_the_checks_and_not_compose(forwa
     seen = []
     monkeypatch.setattr(composerun, "run",
                         lambda argv, idx, runtime, allow_me: seen.append((argv, allow_me)) or 0)
-    compose_cli.main(["--allow-me", "-f", "a.yml", "up"])
+    compose_cli.main(["--allow-me", "-f", "a.yml", "up"], runtime())
     assert seen == [(["-f", "a.yml", "up"], True)]
 
 
 def test_as_me_before_the_subcommand_is_refused(forwarded, capsys):
-    assert compose_cli.main(["--as-me", "up"]) == 2
+    assert compose_cli.main(["--as-me", "up"], runtime()) == 2
     assert "--as-me goes after run or exec" in capsys.readouterr().err and forwarded == []
 
 
 def test_exec_as_me_reaches_compose_as_the_callers_ids(forwarded):
-    assert compose_cli.main(["exec", "--as-me", "web", "sh"]) is None
+    assert compose_cli.main(["exec", "--as-me", "web", "sh"], runtime()) is None
     assert forwarded == [["exec", f"--user={os.getuid()}:{os.getgid()}", "web", "sh"]]
 
 
@@ -184,14 +186,14 @@ def test_exec_as_me_reaches_compose_as_the_callers_ids(forwarded):
     (["exec", "-u", "postgres", "web", "sh"], 1), (["exec", "--user=1000", "web", "sh"], 1),
 ])
 def test_exec_takes_numeric_users_only(forwarded, capsys, argv, code):
-    assert compose_cli.main(argv) == code
+    assert compose_cli.main(argv, runtime()) == code
     assert forwarded == ([] if code else [argv])
 
 
 def test_exec_as_a_local_user_reaches_compose_as_numeric_ids(forwarded, monkeypatch, capsys):
     monkeypatch.setattr(hostusers, "_resolve_account",
                         lambda name, _: ("1001:1002", [f"Resolving user {name} to uid 1001, gid 1002"]))
-    assert compose_cli.main(["exec", "--as", "alice", "web", "sh"]) is None
+    assert compose_cli.main(["exec", "--as", "alice", "web", "sh"], runtime()) is None
     assert forwarded == [["exec", "--user=1001:1002", "web", "sh"]]
     assert "Resolving user alice" in capsys.readouterr().err
 

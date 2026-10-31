@@ -2,6 +2,8 @@ import types
 
 import pytest
 
+from fakes import runtime
+
 from dockscreen import docker_cli, flags
 from dockscreen.compose import compose_cli
 
@@ -33,14 +35,14 @@ def test_dockscreen_with_the_flag_is_plain_compose_with_a_warning(forwarded, mon
     monkeypatch.setattr(compose_cli.composerun, "run", lambda *a, **k: 1 / 0)
     monkeypatch.setattr(compose_cli.screen, "passes", lambda *a: 1 / 0)
 
-    compose_cli.main([FLAG, "-f", "a.yml", "up", "-d"])
+    compose_cli.main([FLAG, "-f", "a.yml", "up", "-d"], runtime())
 
     assert forwarded == [["-f", "a.yml", "up", "-d"]]
     assert "screening is disabled" in capsys.readouterr().err
 
 
 def test_dockscreen_flag_also_skips_the_extra_subcommands(forwarded):
-    compose_cli.main([FLAG, "audit"])
+    compose_cli.main([FLAG, "audit"], runtime())
     assert forwarded == [["audit"]]  # compose gets it unchanged; nothing of ours runs
 
 
@@ -94,7 +96,7 @@ def test_compose_audit_is_helpful_and_compose_gets_the_flag(forwarded, monkeypat
     from dockscreen import messages
     monkeypatch.setitem(compose_cli.COMMANDS, "audit", lambda **kwargs: 0)
 
-    compose_cli.main(["audit"])
+    compose_cli.main(["audit"], runtime())
     assert messages._helpful is True
-    compose_cli.main(["--verbose", "ps"])
+    compose_cli.main(["--verbose", "ps"], runtime())
     assert messages._helpful is True and forwarded == [["ps"]]  # --verbose is not passed to compose

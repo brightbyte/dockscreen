@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from fakes import runtime
+
 from dockscreen import ids
 from dockscreen.compose import compose_cli
 
@@ -15,7 +17,7 @@ def test_main_passes_the_real_ids_to_compose_without_changing_its_own_environmen
     monkeypatch.setattr(compose_cli, "_forward", lambda argv, runtime: seen.append(runtime.docker.env))
     monkeypatch.setenv("UID", "7")
 
-    compose_cli.main(["ps"])
+    compose_cli.main(["ps"], runtime())
 
     # a pre-set UID is overridden: the shell cannot make ${UID} mean someone else
     assert seen[0]["UID"] == str(os.getuid()) and seen[0]["GID"] == str(os.getgid())

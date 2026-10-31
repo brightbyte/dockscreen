@@ -35,11 +35,8 @@ MAX_ID = 2**31 - 1
 class Subordinate:
     """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
 
-    def __init__(self, uid_file=None, gid_file=None):
-        self.ranges = {
-            "uid": _read_ranges(uid_file or SUBUID_FILE),
-            "gid": _read_ranges(gid_file or SUBGID_FILE),
-        }
+    def __init__(self):
+        self.ranges = {"uid": _read_ranges(SUBUID_FILE), "gid": _read_ranges(SUBGID_FILE)}
 
     def contains(self, kind, value):
         """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
