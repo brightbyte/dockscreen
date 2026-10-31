@@ -1,4 +1,10 @@
-"""Security policy over a resolved compose config (`docker compose config --format json`).
+"""Security policy over services, written as compose service keys, and over what they can reach.
+
+Services come from two places. A compose project's come from its resolved config (`docker compose
+config --format json`), which check_config judges as a whole: services, and the volumes, networks,
+secrets and configs they use. A container that `docker run` created is read back into the service keys
+of the same meaning (see runpolicy) and judged by check_service alone. Builds, from compose or bake,
+are judged by the build checks.
 
 The policy is an allowlist and fails closed: a key that is not listed below is
 refused, so a Compose feature added tomorrow is denied until someone has
