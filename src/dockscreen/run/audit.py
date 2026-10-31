@@ -58,12 +58,13 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     ctx = ctx.with_allow_me(parsed.allow_me)
 
     try:
-        _, container, info, assessment = gate.create_assessed(ctx, parsed, [])
+        _, created = gate.create_assessed(ctx, parsed, [])
     except DockerNotFound as e:
         return verdict.report(Verdict.FAILED, [str(e)], brief)
-    if container is None:
+    if created is None:
         reason = f"docker could not create a container for {parsed.image}"
         return verdict.report(Verdict.FAILED, [reason], brief)
+    container, info, assessment = created
     try:
         settings, _ = ctx.for_image(assessment.section)
         policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
@@ -107,7 +108,7 @@ def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Asses
             messages.out(messages.Marked(messages.HINT, gate.config_hint(ctx, image)))
         return
     if assessment.pins_user:
-        user = ids.format_user(assessment.user)
+        user = ids.format_user(assessment.pinned_user)
         messages.out(f"  docker run would create it again with --user={user}, as numbers")
     messages.out("  docker run also adds " + " ".join(gate.DEFAULTS) + "; later options override them")
 
@@ -129,7 +130,7 @@ def _describe_outcome(ctx: imagedecision.Context, assessment: Assessment) -> str
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
     if assessment.kind is Kind.FALLBACK:
         return (f"would run as {who}; docker run would run it as the default user "
-                f"({ids.format_user(assessment.user)}) instead")
+                f"({ids.format_user(assessment.pinned_user)}) instead")
     reasons = "; ".join(printable(p) for p in assessment.problems)
     if assessment.failed:
         return f"could not be assessed: {reasons}"

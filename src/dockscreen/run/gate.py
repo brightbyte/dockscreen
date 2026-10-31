@@ -17,7 +17,7 @@ what `run` would do.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 from dockscreen import commandline, daemon, hostusers, ids, imagedecision, images, messages, verdict
 from dockscreen.dockerclient import DockerError
@@ -79,7 +79,7 @@ def run(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         ctx.docker.remove(container)
-        user = ids.format_user(assessment.user)
+        user = ids.format_user(assessment.pinned_user)
         if assessment.kind is Kind.FALLBACK:
             messages.notice(_fallback_notice(assessment))
         else:
@@ -108,7 +108,7 @@ def _home_args(ctx: imagedecision.Context, info: dict[str, Any], assessment: Ass
     The container as created has the merged environment: a HOME that differs from the image's own
     was set by the person running it, and stays.
     """
-    home = default_home(assessment.user, assessment.home)
+    home = default_home(assessment.pinned_user, assessment.home)
     if not home:
         return []
     image_env = ctx.docker.inspect_image(info["Image"])["Config"].get("Env")
@@ -127,42 +127,48 @@ def defaults_notice() -> messages.Marked:
 
 def _fallback_notice(assessment: Assessment) -> messages.Marked:
     """Returns the notice that the default user replaces the image's root, and what to do about it."""
-    home = default_home(assessment.user, assessment.home)
+    home = default_home(assessment.pinned_user, assessment.home)
     return messages.notable_change(
         instead_of_root(assessment),
         f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
+class Created(NamedTuple):
+    container: str
+    info: dict[str, Any]     # as inspected; {} if it could not be
+    assessment: Assessment
+
+
 def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
-                    ) -> tuple[str, dict[str, Any], Assessment] | int:
+                    ) -> Created | int:
     """Creates the container; returns (container, info, assessment), or the exit status if it may not start.
 
     A container that would be refused is removed and the refusal printed. Any other assessment is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, container, info, assessment = create_assessed(ctx, parsed, extra)
-    if container is None:  # docker said why
+    code, created = create_assessed(ctx, parsed, extra)
+    if created is None:  # docker said why
         verdict.screened([f"docker could not create a container for {parsed.image}"], failed=True)
         return code
-    if assessment.refused:
-        ctx.docker.remove(container)
-        verdict.screened(explain(ctx, assessment, parsed.image), failed=assessment.failed)
+    if created.assessment.refused:
+        ctx.docker.remove(created.container)
+        verdict.screened(explain(ctx, created.assessment, parsed.image), failed=created.assessment.failed)
         return 1
-    return container, info, assessment
+    return created
 
 
 def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
-                    ) -> tuple[int, str | None, dict[str, Any] | None, Assessment | None]:
-    """Creates the container as `docker run` would and returns (exit status, container, info, assessment).
+                    ) -> tuple[int, Created | None]:
+    """Creates the container as `docker run` would and returns (exit status, Created or None).
 
-    extra: arguments that go before the command line's own. Without a container (docker could not
-    create one; it said why) the others are None. The container is left for the caller to remove.
+    extra: arguments that go before the command line's own. None if docker could not create a
+    container; it said why. The container is left for the caller to remove.
     """
     code, container = ctx.docker.create([*DEFAULTS, *extra, *parsed.create_args])
     if container is None:
-        return code, None, None, None
-    info = None
+        return code, None
+    info: dict[str, Any] = {}
     try:
         info = ctx.docker.inspect_container(container)
         problems = _verify_split(info, parsed)  # a misread command line may hide a --user: assess nothing
@@ -170,7 +176,7 @@ def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
             ctx, container, info, explicit=parsed.user_given or bool(extra), reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment(Kind.FAILED, [str(e)])
-    return code, container, info, assessment
+    return code, Created(container, info, assessment)
 
 
 def create_args(args: list[str], runtime: Runtime) -> list[str]:
@@ -206,7 +212,7 @@ def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Run
             info = ctx.docker.inspect_container(ref)
             assessment = assess(ctx, info["Id"], info)
             if assessment.replaces_image_user and not _runs_as_pinned_user(info, assessment):
-                user = ids.format_user(assessment.user)
+                user = ids.format_user(assessment.pinned_user)
                 problems.append(messages.Reason(
                     f"{ref}: cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", f"recreate it with --user {user}"))

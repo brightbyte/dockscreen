@@ -194,8 +194,7 @@ def _first_file_of_tar(data: bytes) -> str | None:
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
             member = archive.next()
-            if member is None or not member.isreg():
-                return None
-            return archive.extractfile(member).read().decode("utf-8", errors="replace")
+            file = archive.extractfile(member) if member is not None and member.isreg() else None
+            return None if file is None else file.read().decode("utf-8", errors="replace")
     except tarfile.TarError:
         return None

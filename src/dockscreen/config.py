@@ -43,22 +43,22 @@ class ConfigError(Exception):
 
 class Section(NamedTuple):
     """The settings an image or project section gives; None and () for those it leaves alone."""
-    user: tuple | None = None
-    default_user: tuple | None = None
+    user: tuple[int, int] | None = None
+    default_user: tuple[int, int] | None = None
     default_home: str | None = None
-    nobody_range: tuple | None = None
+    nobody_range: tuple[int, int] | None = None
     mount_dirs: tuple = ()
     security_opts: tuple = ()
 
 
 class Config(NamedTuple):
-    user: tuple | None = None                # (uid, gid) an image runs as when nothing chose a user
-    default_user: tuple = (65534, 65534)     # (uid, gid) that replaces an image's root user
-    default_home: str = "/tmp"               # HOME of the default user; "" leaves HOME alone
-    nobody_range: tuple = (65530, 65534)     # inclusive: ids any image or project may use
-    mount_dirs: tuple = ()                   # absolute directories bind mounts may come from
-    security_opts: tuple = ()                # security options allowed besides no-new-privileges
-    docker: str | None = None                # absolute path of the real docker
+    user: tuple[int, int] | None = None                # (uid, gid) an image runs as when nothing chose a user
+    default_user: tuple[int, int] = (65534, 65534)     # (uid, gid) that replaces an image's root user
+    default_home: str = "/tmp"                         # HOME of the default user; "" leaves HOME alone
+    nobody_range: tuple[int, int] = (65530, 65534)     # inclusive: ids any image or project may use
+    mount_dirs: tuple = ()                             # absolute directories bind mounts may come from
+    security_opts: tuple = ()                          # security options allowed besides no-new-privileges
+    docker: str | None = None                          # absolute path of the real docker
     images: MappingProxyType = MappingProxyType({})    # normalised repository -> Section
     projects: MappingProxyType = MappingProxyType({})  # absolute directory -> Section
 

@@ -76,9 +76,9 @@ class Prepared(NamedTuple):
                 continue
             # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
             # resolve the image's user to anything but what was checked
-            service["user"] = ids.format_user(decision.assessment.user)
+            service["user"] = ids.format_user(decision.assessment.pinned_user)
             if decision.assessment.kind is imagedecision.Kind.FALLBACK:
-                _give_default_home(service, decision.assessment.user, decision.assessment.home)
+                _give_default_home(service, decision.assessment.pinned_user, decision.assessment.home)
             else:
                 vetted.add(name)  # ... which needs no vetting
             service["pull_policy"] = "never"  # the image that was checked is the one that runs

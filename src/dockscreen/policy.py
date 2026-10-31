@@ -308,9 +308,12 @@ def has_no_new_privileges(options: Iterable[Any] | None) -> bool:
 
 def check_cap_drop(value: Any, ctx: Context) -> list[str]:
     """Checks cap_drop; returns a problem unless it drops ALL."""
-    if CAP_DROP not in {str(c).upper() for c in value or []}:  # docker reads capability names in any case
-        return [f"cap_drop must include {CAP_DROP}"]
-    return []
+    return [] if drops_all(value) else [f"cap_drop must include {CAP_DROP}"]
+
+
+def drops_all(cap_drop: Iterable[Any] | None) -> bool:
+    """Tells whether a cap_drop value drops ALL capabilities."""
+    return CAP_DROP in {str(c).upper() for c in cap_drop or []}  # docker reads capability names in any case
 
 
 def _forbidden(key: str) -> Check:

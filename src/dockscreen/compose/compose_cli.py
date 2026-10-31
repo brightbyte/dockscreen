@@ -91,6 +91,8 @@ class ComposeCommand(commandline.CommandLine):
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
+        if sub is None:
+            return _passthrough(argv, runtime)
         if sub in COMMANDS:
             return COMMANDS[sub](global_args=self.global_args, args=self.args, runtime=runtime,
                                  allow_me=self.allow_me)
@@ -107,7 +109,7 @@ class ComposeCommand(commandline.CommandLine):
             args = userargs.resolved(self.args, composeargs.VALUE_FLAGS["exec"], runtime)
             if args is None:
                 return 1
-            argv = [*argv[:self.idx + 1], *args]
+            argv = [*self.global_args, sub, *args]
 
         _passthrough(argv, runtime)
 

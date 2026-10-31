@@ -70,7 +70,7 @@ class Assessment(NamedTuple):
     problems: list
     identity: imageuser.Identity | None = None
     note: str | None = None        # a section for the repository that does not apply, and why
-    user: tuple | None = None      # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
+    user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
     section: str | None = None     # the repository whose image section applied, if one did
     home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
 
@@ -88,6 +88,12 @@ class Assessment(NamedTuple):
     def pins_user(self) -> bool:
         """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
         return self.kind in (Kind.CONFIGURED, Kind.OK, Kind.FALLBACK)
+
+    @property
+    def pinned_user(self) -> tuple[int, int]:
+        """Returns the (uid, gid) dockscreen decided; only for an assessment that pins_user."""
+        assert self.user is not None, f"a {self.kind} assessment pins no user"
+        return self.user
 
     @property
     def replaces_image_user(self) -> bool:
@@ -174,13 +180,14 @@ def env_value(env: Sequence[str] | None, name: str) -> str | None:
 def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
     """Describes what an accepted image (Kind.OK or Kind.CONFIGURED) runs as; local: HostAccounts."""
     if assessment.kind is Kind.CONFIGURED:
-        return f"runs as {ids.format_user(assessment.user)}, the user the config file sets for it"
+        return f"runs as {ids.format_user(assessment.pinned_user)}, the user the config file sets for it"
+    assert assessment.identity is not None, "an accepted image was looked at"
     return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
 
 
 def instead_of_root(assessment: Assessment) -> str:
     """Describes what a Kind.FALLBACK assessment does instead of running as root."""
-    return f"running as {ids.format_user(assessment.user)} instead of root"
+    return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
 
 
 def root_default_notice(ctx: Context) -> messages.Marked | None:

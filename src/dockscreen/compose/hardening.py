@@ -34,7 +34,7 @@ def apply(config: dict[str, Any], accounts: hostusers.HostAccounts) -> tuple[dic
     additions = []
     for name, service in (hardened.get("services") or {}).items():
         additions += _resolve_user_names(name, service, accounts)
-        if policy.check_cap_drop(service.get("cap_drop"), None):
+        if not policy.drops_all(service.get("cap_drop")):
             declared = service.get("cap_drop")
             reason = f"lacks {CAP_DROP}" if declared else "is not set"
             service["cap_drop"] = [*(declared or []), CAP_DROP]

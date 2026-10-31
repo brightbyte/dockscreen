@@ -78,7 +78,7 @@ class DockerCommand(commandline.CommandLine):
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
-        if sub is None:
+        if self.idx is None:
             return _passthrough(argv, self.runtime)
 
         if sub == "compose":
@@ -89,14 +89,16 @@ class DockerCommand(commandline.CommandLine):
 
         if (bake_args := self._bake_arguments()) is not None and bake.wants_screening(bake_args):
             return self._screened_bake(bake_args)
-        sub, end = self._command()
+        sub, end = self._command(self.idx)
         if sub not in SCREENED:
             return _passthrough(argv, self.runtime)
         return self._gated(sub, end)
 
-    def _command(self) -> tuple[str, int]:
-        """Returns (name, index) of the command: `docker container run` is `run`, at the index of `run`."""
-        argv, end = self.argv, self.idx
+    def _command(self, idx: int) -> tuple[str, int]:
+        """Returns (name, index) of the command at idx: `docker container run` is `run`, at the index of
+        `run`.
+        """
+        argv, end = self.argv, idx
         # audit is ours and has no such form
         if argv[end] == "container" and end + 1 < len(argv) and argv[end + 1] in SCREENED - {"audit"}:
             end += 1
@@ -106,7 +108,7 @@ class DockerCommand(commandline.CommandLine):
         """Returns the arguments of `buildx bake`, or None if the command is not that."""
         if self.sub != "buildx":
             return None
-        rest = self.argv[self.idx + 1:]
+        rest = self.args
         at = commandline.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
         return rest[at + 1:] if at is not None and rest[at] == "bake" else None
 
@@ -125,7 +127,7 @@ class DockerCommand(commandline.CommandLine):
         passes and docker replaces this process.
         """
         argv, runtime = self.argv, self.runtime
-        global_args, lead, args = argv[:self.idx], argv[:end + 1], argv[end + 1:]
+        global_args, lead, args = self.global_args, argv[:end + 1], argv[end + 1:]
         if sub == "audit" and not args:
             messages.notice(audit.AUDIT_USAGE)
             messages.notice("Run 'dockscreen audit --help' for more.")
@@ -140,8 +142,8 @@ class DockerCommand(commandline.CommandLine):
             messages.notice(gate.defaults_notice())
             return _passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
         if sub == "exec":
-            resolved = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
-            return 1 if resolved is None else _passthrough([*lead, *resolved], runtime)
+            exec_args = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
+            return 1 if exec_args is None else _passthrough([*lead, *exec_args], runtime)
         if sub == "run":
             return gate.run(global_args, args, runtime, self.allow_me)
         if sub == "audit":
@@ -163,7 +165,7 @@ class DockerCommand(commandline.CommandLine):
             return argv[idx + 1] if idx + 1 < len(argv) else ""
         if argv[idx] == "compose":
             return None
-        sub, end = self._command()
+        sub, end = self._command(idx)
         return sub if _wants_command_help(sub, argv[end + 1:]) else None
 
     def show_help(self, target: str) -> int:
@@ -172,10 +174,10 @@ class DockerCommand(commandline.CommandLine):
             helptext.show(helptext.docker_overview)
             return _passthrough(self.argv, self.runtime)
         if target == "compose":
-            return compose_cli.main(["help", *self.argv[self.idx + 2:]], self.runtime, self.given)
+            return compose_cli.main(["help", *self.args[1:]], self.runtime, self.given)  # after help compose
         argv = self.argv
         if self.sub == "help":
-            argv = [*argv[:self.idx], target, "--help"]
+            argv = [*self.global_args, target, "--help"]
         topic = helptext.DOCKER.get(target)
         if topic is not None:
             helptext.show(lambda width: helptext.topic(topic, "Docker's own", width))
