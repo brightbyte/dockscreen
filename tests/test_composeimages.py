@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_image_ctx, rules, runtime
+from fakes import FakeImages, make_image_ctx, make_runtime, rules
 
 from dockscreen import imagedecision, messages, policy
 from dockscreen import config as configuration
@@ -33,7 +33,7 @@ def prepare(config, images, args=(), active=("web",), codes=None, settings=None,
 
 def gate_context(images, settings=None):
     settings = settings or configuration.Config()
-    return imagedecision.Context(images, rules(settings=settings), runtime(settings=settings))
+    return imagedecision.Context(images, rules(settings=settings), make_runtime(settings=settings))
 
 
 def subcommands(recorder):
@@ -183,7 +183,7 @@ def test_refusals_say_what_to_do():
     assert "service web: image web:1: the image's uid 1000 exists on this host" in prepared.problems[0]
     assert "gid 1000" in prepared.problems[0]
     assert prepared.problems[0].help == (
-        f'set user: to choose one, or set user under [images."web"] in {runtime().config_file}')
+        f'set user: to choose one, or set user under [images."web"] in {make_runtime().config_file}')
 
 
 def test_a_built_image_is_not_pointed_at_an_image_section():

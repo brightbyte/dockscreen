@@ -1,8 +1,8 @@
 import pytest
-from fakes import Accounts, rules, runtime
+from fakes import Accounts, compose_project, rules
 
 from dockscreen import messages, policy
-from dockscreen.compose import autofix, commands, hardening, screen
+from dockscreen.compose import autofix, commands, hardening
 
 NOBODY = "65534:65534"
 
@@ -72,10 +72,10 @@ def test_a_config_without_the_keys_passes_the_policy_once_hardened():
     assert policy.check_config(config(), policy.Context("/p", rules()))  # but not as it stands
 
 
-def test_audit_reports_the_additions_and_hints_at_harden(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (config(), str(tmp_path)))
+def test_audit_reports_the_additions_and_hints_at_harden(capsys, tmp_path):
+    runtime, _ = compose_project(tmp_path, config())
 
-    assert commands._audit([], [], runtime()) == 0
+    assert commands._audit([], [], runtime) == 0
 
     captured = capsys.readouterr()
     assert "audit passed" in captured.err
@@ -83,10 +83,10 @@ def test_audit_reports_the_additions_and_hints_at_harden(monkeypatch, capsys, tm
     assert "the harden subcommand prints a compose override" in captured.out
 
 
-def test_audit_of_a_clean_project_has_no_hint(monkeypatch, capsys, tmp_path):
+def test_audit_of_a_clean_project_has_no_hint(capsys, tmp_path):
     clean = config(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (clean, str(tmp_path)))
-    assert commands._audit([], [], runtime()) == 0
+    runtime, _ = compose_project(tmp_path, clean)
+    assert commands._audit([], [], runtime) == 0
     assert "harden" not in capsys.readouterr().out
 
 
@@ -97,10 +97,10 @@ def two_services(**web):
     }}
 
 
-def test_harden_leaves_out_what_dockscreen_adds_and_says_so_once(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (two_services(), str(tmp_path)))
+def test_harden_leaves_out_what_dockscreen_adds_and_says_so_once(capsys, tmp_path):
+    runtime, _ = compose_project(tmp_path, two_services())
 
-    assert commands._harden([], [], runtime()) == 0
+    assert commands._harden([], [], runtime) == 0
 
     out = capsys.readouterr().out
     assert "cap_drop:" not in out.replace("# note", "").split("services:")[-1]
@@ -111,13 +111,13 @@ def test_harden_leaves_out_what_dockscreen_adds_and_says_so_once(monkeypatch, ca
     assert 'cap_drop: ["ALL"]' in notes[0] and 'security_opt: ["no-new-privileges:true"]' in notes[0]
 
 
-def test_harden_writes_only_what_is_needed_on_top_of_the_defaults(monkeypatch, capsys, tmp_path):
+def test_harden_writes_only_what_is_needed_on_top_of_the_defaults(capsys, tmp_path):
     # user and a disallowed security option cannot be fixed by the defaults: appending
     # no-new-privileges leaves seccomp=unconfined in place, so the list has to be replaced.
     config = two_services(user="0:0", security_opt=["seccomp=unconfined"], cap_drop=["NET_RAW"])
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (config, str(tmp_path)))
+    runtime, _ = compose_project(tmp_path, config)
 
-    commands._harden([], [], runtime())
+    commands._harden([], [], runtime)
 
     body = capsys.readouterr().out.split("services:", 1)[1]
     assert '    user: "${UID}:${GID}"' in body
@@ -126,10 +126,10 @@ def test_harden_writes_only_what_is_needed_on_top_of_the_defaults(monkeypatch, c
     assert '"db"' not in body       # a service with nothing to fix is not mentioned
 
 
-def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (two_services(), str(tmp_path)))
+def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(capsys, tmp_path):
+    runtime, _ = compose_project(tmp_path, two_services())
 
-    commands._audit([], [], runtime())
+    commands._audit([], [], runtime)
 
     lines = [line for line in capsys.readouterr().out.splitlines() if "cap_drop" in line]
     assert len(lines) == 1 and lines[0].endswith("where missing, in services web, db")
@@ -205,12 +205,12 @@ def test_hook_users_are_resolved_too():
     assert {a.key for a in additions} >= {"post_start"}
 
 
-def test_the_audit_reports_the_resolution_and_harden_does_not_repeat_it(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, _: (config(user="nobody"), str(tmp_path)))
+def test_the_audit_reports_the_resolution_and_harden_does_not_repeat_it(capsys, tmp_path):
+    runtime, _ = compose_project(tmp_path, config(user="nobody"))
 
-    commands._audit([], [], runtime())
+    commands._audit([], [], runtime)
     audit_out = capsys.readouterr().out
-    commands._harden([], [], runtime())
+    commands._harden([], [], runtime)
     harden_out = capsys.readouterr().out
 
     assert 'service web: user "nobody" resolved to "65534:65534" on this host' in audit_out

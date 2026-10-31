@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import pytest
 
@@ -112,7 +113,7 @@ def test_report_width(monkeypatch, columns, width):
 def test_without_a_terminal_reports_are_not_wrapped(monkeypatch):
     # piped into grep: whole lines; COLUMNS still asks for wrapping, e.g. for less
     monkeypatch.delenv("COLUMNS")
-    monkeypatch.setattr(messages.shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
     assert messages.report_width() is None
 
 

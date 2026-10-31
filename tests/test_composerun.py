@@ -1,27 +1,21 @@
 import os
 
 import pytest
-from fakes import FakeImages, install_image_ctx, make_image_ctx, read_raw, runtime
+from fakes import ME, FakeImages, compose_project, make_runtime, read_raw
 
-from dockscreen import argscan, config, hostusers
-from dockscreen.compose import composerun, screen
+from dockscreen import argscan, config
+from dockscreen.compose import composerun
 from dockscreen.dockerclient import Docker
 
-UID, GID = os.getuid(), os.getgid()
+UID, GID = ME
 
 
 def project_config(**service):
     return {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534", **service}}}
 
 
-def inspect_as(monkeypatch, tmp_path, config):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (config, str(tmp_path)))
-
-
-def up(argv, idx, image_ctx, allow_me=False, **runtime_fields):
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        install_image_ctx(monkeypatch, image_ctx)
-        return composerun.run(argv, idx, runtime(**runtime_fields), allow_me=allow_me)
+def up(argv, idx, runtime, allow_me=False):
+    return composerun.run(argv, idx, runtime, allow_me=allow_me)
 
 
 def last(recorder):
@@ -29,11 +23,11 @@ def last(recorder):
     return recorder.children[-1], recorder.configs[-1]
 
 
-def test_compose_runs_from_the_hardened_config_with_the_project_pinned(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}), codes={"up": 7})
+def test_compose_runs_from_the_hardened_config_with_the_project_pinned(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}),
+                                        codes={"up": 7})
 
-    code = up(["-f", "a.yml", "--profile", "x", "up", "-d", "web"], 4, image_ctx)
+    code = up(["-f", str(tmp_path / "compose.yaml"), "--profile", "x", "up", "-d", "web"], 4, runtime)
 
     assert code == 7  # compose's exit code
     cmd, config = last(recorder)
@@ -47,13 +41,13 @@ def test_compose_runs_from_the_hardened_config_with_the_project_pinned(monkeypat
             "missing, in services web") in capsys.readouterr().err
 
 
-def test_every_generated_file_is_private_and_removed_afterwards(monkeypatch, tmp_path):
-    inspect_as(monkeypatch, tmp_path, project_config())
+def test_every_generated_file_is_private_and_removed_afterwards(tmp_path):
     modes = []
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}), on_child=lambda cmd: modes.append(
-        os.stat(cmd[cmd.index("-f") + 1]).st_mode & 0o777))
+    runtime, recorder = compose_project(
+        tmp_path, project_config(), FakeImages(users={"x:1": "app"}),
+        on_child=lambda cmd: modes.append(os.stat(cmd[cmd.index("-f") + 1]).st_mode & 0o777))
 
-    up(["up"], 0, image_ctx)
+    up(["up"], 0, runtime)
 
     assert modes and set(modes) == {0o600}
     for cmd in recorder.children:
@@ -61,113 +55,103 @@ def test_every_generated_file_is_private_and_removed_afterwards(monkeypatch, tmp
         assert not os.path.exists(path) and not os.path.exists(os.path.dirname(path))
 
 
-def test_a_config_with_problems_never_reaches_compose_and_nothing_is_pulled(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config(privileged=True))
-    image_ctx, recorder = make_image_ctx(FakeImages())
+def test_a_config_with_problems_never_reaches_compose_and_nothing_is_pulled(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(privileged=True), FakeImages())
 
-    assert up(["up"], 0, image_ctx) == 1
+    assert up(["up"], 0, runtime) == 1
 
     assert "privileged is not allowed" in capsys.readouterr().err
-    assert recorder.children == [] and recorder.captured == []  # not even `config --services`
+    assert recorder.children == [] and not any("--services" in cmd for cmd in recorder.captured)
 
 
-def test_what_is_checked_is_what_runs(monkeypatch, tmp_path):
-    inspect_as(monkeypatch, tmp_path, project_config(ports=["80:80"], labels={"a": "b"}))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
-    up(["up"], 0, image_ctx)
+def test_what_is_checked_is_what_runs(tmp_path):
+    runtime, recorder = compose_project(tmp_path, project_config(ports=["80:80"], labels={"a": "b"}),
+                                        FakeImages(users={"x:1": "app"}))
+    up(["up"], 0, runtime)
     web = last(recorder)[1]["services"]["web"]
     assert web["ports"] == ["80:80"] and web["labels"] == {"a": "b"} and last(recorder)[1]["name"] == "proj"
 
 
-def test_inspection_failure_and_missing_project_name_are_refusals(monkeypatch, tmp_path, capsys):
-    def boom(global_args, runtime):
-        raise screen.ScreenError("no compose file found")
-    monkeypatch.setattr(screen, "inspect", boom)
-    image_ctx, recorder = make_image_ctx()
-    assert up(["up"], 0, image_ctx) == 1
-    assert "no compose file found" in capsys.readouterr().err
+def test_inspection_failure_and_missing_project_name_are_refusals(tmp_path, capsys):
+    (tmp_path / "empty").mkdir()
+    assert up(["up"], 0, make_runtime(cwd=str(tmp_path / "empty"), home=str(tmp_path))) == 1
+    assert "no compose file" in capsys.readouterr().err
 
     nameless = project_config()
     del nameless["name"]
-    inspect_as(monkeypatch, tmp_path, nameless)
-    assert up(["up"], 0, image_ctx) == 1
+    runtime, recorder = compose_project(tmp_path, nameless)
+    assert up(["up"], 0, runtime) == 1
     assert "config has no project name" in capsys.readouterr().err
     assert recorder.children == []
 
 
-def test_the_callers_own_ids_need_allow_me(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config(user=f"{UID}:{GID}"))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
+def test_the_callers_own_ids_need_allow_me(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(user=f"{UID}:{GID}"),
+                                        FakeImages(users={"x:1": "app"}))
 
-    assert up(["up"], 0, image_ctx) == 1
+    assert up(["up"], 0, runtime) == 1
     assert f"uid {UID} is yours; pass --allow-me to allow it" in capsys.readouterr().err
     assert recorder.children == []
 
-    assert up(["up"], 0, image_ctx, allow_me=True) == 0
+    assert up(["up"], 0, runtime, allow_me=True) == 0
     assert last(recorder)[1]["services"]["web"]["user"] == f"{UID}:{GID}"
 
 
 def test_run_with_a_user_on_the_command_line_skips_deciding_that_services_image(
-        monkeypatch, tmp_path, capsys):
+        tmp_path, capsys):
     config = no_user()
-    inspect_as(monkeypatch, tmp_path, config)
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "web"}))  # uid 1000: would be refused
+    runtime, recorder = compose_project(tmp_path, config,
+                                        FakeImages(users={"x:1": "web"}))  # uid 1000: refused
 
-    assert up(["run", "--rm", "-u", "1000:1000", "web", "sh"], 0, image_ctx) == 0
+    assert up(["run", "--rm", "-u", "1000:1000", "web", "sh"], 0, runtime) == 0
     assert last(recorder)[0][-6:] == ["run", "--rm", "-u", "1000:1000", "web", "sh"]
 
 
-def test_run_as_a_local_user_reaches_compose_as_numeric_ids(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    monkeypatch.setattr(hostusers, "_resolve_account",
-                        lambda name, _: ("1000:1000", [f"Resolving user {name} to uid 1000, gid 1000"]))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "web"}))  # uid 1000: would be refused
+def test_run_as_a_local_user_reaches_compose_as_numeric_ids(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, no_user(),
+                                        FakeImages(users={"x:1": "web"}))  # uid 1000: refused
 
-    assert up(["run", "--as", "alice", "web", "sh"], 0, image_ctx) == 0
-    assert last(recorder)[0][-4:] == ["run", "--user=1000:1000", "web", "sh"]
-    assert "Resolving user alice" in capsys.readouterr().err
+    assert up(["run", "--as", "alice", "web", "sh"], 0, runtime) == 0
+    assert last(recorder)[0][-4:] == ["run", "--user=4242:4343", "web", "sh"]
+    assert "Resolving user alice to uid 4242, gid 4343" in capsys.readouterr().err
 
 
-def test_run_as_me_reaches_compose_as_the_callers_ids(monkeypatch, tmp_path):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "web"}))
+def test_run_as_me_reaches_compose_as_the_callers_ids(tmp_path):
+    runtime, recorder = compose_project(tmp_path, no_user(), FakeImages(users={"x:1": "web"}))
 
-    assert up(["run", "--as-me", "web", "sh"], 0, image_ctx) == 0
-    assert last(recorder)[0][-4:] == ["run", f"--user={os.getuid()}:{os.getgid()}", "web", "sh"]
+    assert up(["run", "--as-me", "web", "sh"], 0, runtime) == 0
+    assert last(recorder)[0][-4:] == ["run", f"--user={UID}:{GID}", "web", "sh"]
 
 
 @pytest.mark.parametrize("args, message", [
     (["run", "-u", "postgres", "web"], "--user takes numeric ids as uid:gid, not 'postgres'"),
     (["run", "--user=1000", "web"], "give the group too"),
 ])
-def test_run_takes_numeric_users_only(monkeypatch, tmp_path, capsys, args, message):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
-    assert up(args, 0, image_ctx) == 1
+def test_run_takes_numeric_users_only(tmp_path, capsys, args, message):
+    runtime, recorder = compose_project(tmp_path, no_user(), FakeImages(users={"x:1": "app"}))
+    assert up(args, 0, runtime) == 1
     assert message in capsys.readouterr().err and recorder.children == []
 
 
-def test_no_defaults_notice_when_nothing_was_added(monkeypatch, tmp_path, capsys):
+def test_no_defaults_notice_when_nothing_was_added(tmp_path, capsys):
     hardened = project_config(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
-    inspect_as(monkeypatch, tmp_path, hardened)
-    image_ctx, _ = make_image_ctx(FakeImages(users={"x:1": "app"}))
-    up(["up"], 0, image_ctx)
+    runtime, _ = compose_project(tmp_path, hardened, FakeImages(users={"x:1": "app"}))
+    up(["up"], 0, runtime)
     assert capsys.readouterr().err == "[dockscreen] \u2714 audit passed\n"  # and nothing else
 
 
-def test_the_verdict_is_the_last_word_before_compose_runs(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config())
+def test_the_verdict_is_the_last_word_before_compose_runs(tmp_path, capsys):
     seen = []
-    image_ctx, _ = make_image_ctx(
-        FakeImages(users={"x:1": "app"}),
+    runtime, _ = compose_project(
+        tmp_path, project_config(), FakeImages(users={"x:1": "app"}),
         on_child=lambda cmd: seen.append(capsys.readouterr().err) if "up" in cmd else None)
-    up(["up"], 0, image_ctx)
+    up(["up"], 0, runtime)
     assert seen[-1].splitlines()[-1] == "[dockscreen] \u2714 audit passed"
 
 
-def test_a_refused_run_ends_with_the_verdict(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config(privileged=True))
-    assert up(["up"], 0, make_image_ctx()[0]) == 1
+def test_a_refused_run_ends_with_the_verdict(tmp_path, capsys):
+    runtime, _ = compose_project(tmp_path, project_config(privileged=True))
+    assert up(["up"], 0, runtime) == 1
     assert capsys.readouterr().err.splitlines()[-2:] == [
         "[dockscreen] \u25cf refusing: service web: privileged is not allowed",
         "[dockscreen] \u2296 denied by audit"]
@@ -182,11 +166,11 @@ def no_user(**fields):
 
 
 def test_a_root_image_runs_as_the_default_user_with_the_image_pinned_in_the_generated_file(
-        monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, no_user(pull_policy="always"))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": ""}), codes={"up": 3})
+        tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, no_user(pull_policy="always"),
+                                        FakeImages(users={"x:1": ""}), codes={"up": 3})
 
-    assert up(["up", "-d"], 0, image_ctx) == 3
+    assert up(["up", "-d"], 0, runtime) == 3
 
     web = last(recorder)[1]["services"]["web"]
     assert web["user"] == "65534:65534"
@@ -197,54 +181,51 @@ def test_a_root_image_runs_as_the_default_user_with_the_image_pinned_in_the_gene
     assert "service web: running as 65534:65534 instead of root" in capsys.readouterr().err
 
 
-def test_images_are_acquired_from_a_config_that_still_has_the_projects_pull_policy(monkeypatch, tmp_path):
+def test_images_are_acquired_from_a_config_that_still_has_the_projects_pull_policy(tmp_path):
     config = no_user(pull_policy="always")
-    inspect_as(monkeypatch, tmp_path, config)
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": ""}))
-    up(["up"], 0, image_ctx)
+    runtime, recorder = compose_project(tmp_path, config, FakeImages(users={"x:1": ""}))
+    up(["up"], 0, runtime)
     # the config the images were acquired from still has the project's own policy
     assert recorder.configs[0]["services"]["web"]["pull_policy"] == "always"
     assert "user" not in recorder.configs[0]["services"]["web"]
     assert config["services"]["web"]["pull_policy"] == "always"
 
 
-def test_an_acceptable_image_user_is_kept_but_pinned_as_numbers(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
+def test_an_acceptable_image_user_is_kept_but_pinned_as_numbers(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, no_user(), FakeImages(users={"x:1": "app"}))
 
-    assert up(["up"], 0, image_ctx) == 0
+    assert up(["up"], 0, runtime) == 0
 
     web = last(recorder)[1]["services"]["web"]
     assert web["user"] == "100000:100001" and web["pull_policy"] == "never"
     assert "default user" not in capsys.readouterr().err
 
 
-def test_an_image_that_chose_a_low_user_is_refused_before_anything_runs(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "web"}))
+def test_an_image_that_chose_a_low_user_is_refused_before_anything_runs(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, no_user(), FakeImages(users={"x:1": "web"}))
 
-    assert up(["up"], 0, image_ctx) == 1
+    assert up(["up"], 0, runtime) == 1
 
     assert "service web: image x:1: the image's uid 1000 exists on this host" in capsys.readouterr().err
     assert all("up" not in cmd for cmd in recorder.children)
 
 
-def test_failing_to_pull_stops_the_run(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, no_user())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}, local=set()), codes={"pull": 1})
-    assert up(["up"], 0, image_ctx) == 1
+def test_failing_to_pull_stops_the_run(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, no_user(),
+                                        FakeImages(users={"x:1": "app"}, local=set()), codes={"pull": 1})
+    assert up(["up"], 0, runtime) == 1
     assert "docker compose pull web failed" in capsys.readouterr().err
     assert [cmd[-3:] for cmd in recorder.children] == [["pull", "--", "web"]]
 
 
-def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(monkeypatch, tmp_path):
+def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(tmp_path):
     config = no_user()
     config["services"]["debug"] = {
         "image": "d:1", "cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"]}
-    inspect_as(monkeypatch, tmp_path, config)
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app", "d:1": ""}), active=("web",))
+    runtime, recorder = compose_project(tmp_path, config,
+                                        FakeImages(users={"x:1": "app", "d:1": ""}), active=("web",))
 
-    up(["up", "web"], 0, image_ctx)
+    up(["up", "web"], 0, runtime)
 
     services = last(recorder)[1]["services"]
     assert services["debug"]["user"] == "65534:65534" and "pull_policy" not in services["debug"]
@@ -281,25 +262,25 @@ def test_run_child_passes_termination_to_the_child_and_restores_handlers():
     assert signal.getsignal(signal.SIGTERM) == before
 
 
-def test_dollars_are_written_as_compose_printed_them(monkeypatch, tmp_path):
+def test_dollars_are_written_as_compose_printed_them(tmp_path):
     # `config` prints a literal $ as $$, and compose reads $$ back as a literal $: escaping again
     # would make `$$` into `$$$$` and the config would no longer be the one that was checked
-    inspect_as(monkeypatch, tmp_path, project_config(pid="$${P:-host}", labels={"a": "$$x"}))
     raw = []
-    image_ctx, _ = make_image_ctx(FakeImages(users={"x:1": "app"}),
-                                  on_child=lambda cmd: raw.append(read_raw(cmd)))
+    runtime, _ = compose_project(tmp_path, project_config(pid="$${P:-host}", labels={"a": "$$x"}),
+                                 FakeImages(users={"x:1": "app"}),
+                                 on_child=lambda cmd: raw.append(read_raw(cmd)))
 
-    assert up(["up"], 0, image_ctx) == 0
+    assert up(["up"], 0, runtime) == 0
 
     assert all('"$${P:-host}"' in text and '"$$x"' in text for text in raw)
 
 
-def test_a_config_compose_would_read_differently_is_refused_and_not_run(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config(pid="${P:-host}"))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}),
-                                         reads=lambda c: {**c, "name": "other"})
+def test_a_config_compose_would_read_differently_is_refused_and_not_run(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(pid="${P:-host}"),
+                                        FakeImages(users={"x:1": "app"}),
+                                        reads=lambda c: {**c, "name": "other"})
 
-    assert up(["up"], 0, image_ctx) == 1
+    assert up(["up"], 0, runtime) == 1
 
     assert "reads the checked config differently at config.name" in capsys.readouterr().err
     assert recorder.children == []
@@ -308,10 +289,10 @@ def test_a_config_compose_would_read_differently_is_refused_and_not_run(monkeypa
 def test_variables_taken_from_the_shell_are_announced_by_name_and_service_but_not_run_differently(
         monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("FROMSHELL", "secret")
-    inspect_as(monkeypatch, tmp_path, project_config(environment={"FROMSHELL": "secret", "OWN": "x"}))
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
+    shell_and_own = project_config(environment={"FROMSHELL": "secret", "OWN": "x"})
+    runtime, recorder = compose_project(tmp_path, shell_and_own, FakeImages(users={"x:1": "app"}))
 
-    assert up(["up"], 0, image_ctx) == 0
+    assert up(["up"], 0, runtime) == 0
 
     err = capsys.readouterr().err
     assert "service web: environment variables taken from your shell: FROMSHELL" in err
@@ -325,82 +306,80 @@ def test_a_remote_daemon_is_refused_because_paths_and_ids_mean_nothing_there(
         monkeypatch, tmp_path, capsys, env):
     for name, value in env.items():
         monkeypatch.setenv(name, value)
-    inspect_as(monkeypatch, tmp_path, project_config())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
+    runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}))
 
-    assert up(["up"], 0, image_ctx) == 1
+    assert up(["up"], 0, runtime) == 1
 
     assert "the daemon is not the default local one" in capsys.readouterr().err
-    assert recorder.children == [] and recorder.captured == []
+    assert recorder.children == [] and not any("--services" in cmd for cmd in recorder.captured)
 
 
-def test_a_context_option_is_refused_too(monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config())
-    image_ctx, recorder = make_image_ctx(FakeImages(users={"x:1": "app"}))
-    assert up(["--context", "prod", "up"], 2, image_ctx) == 1
+def test_a_context_option_is_refused_too(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}))
+    assert up(["--context", "prod", "up"], 2, runtime) == 1
     assert recorder.children == []
 
 
 # --- image and project sections of the config file ---------------------------------
 
-def sectioned(settings, images, **kwargs):
-    """An image context whose decisions use settings, as the run does."""
-    from fakes import rules
-
-    from dockscreen import imagedecision
-    return make_image_ctx(images, ctx=imagedecision.Context(images, rules(), runtime(settings=settings)),
-                          **kwargs)
-
-
 X_DIRS = config.Config(images={"docker.io/library/x": config.Section(mount_dirs=("/srv/x",))})
 X_MOUNT = {"volumes": [{"type": "bind", "source": "/srv/x/data", "target": "/data"}]}
 
 
-def test_an_image_section_allows_a_mount_once_the_image_proves_its_origin(monkeypatch, tmp_path):
-    inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
-    image_ctx, recorder = sectioned(X_DIRS, FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}))
+def test_an_image_section_allows_a_mount_once_the_image_proves_its_origin(tmp_path):
+    runtime, recorder = compose_project(tmp_path, project_config(**X_MOUNT),
+                                        FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}),
+                                        settings=X_DIRS)
 
-    assert up(["up"], 0, image_ctx, settings=X_DIRS) == 0
+    assert up(["up"], 0, runtime) == 0
     assert last(recorder)[1]["services"]["web"]["volumes"][0]["source"] == "/srv/x/data"
 
 
 def test_an_image_section_that_its_image_does_not_prove_is_refused_before_anything_runs(
-        monkeypatch, tmp_path, capsys):
-    inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
-    image_ctx, recorder = sectioned(X_DIRS, FakeImages(users={"x:1": "app"}))  # tagged x:1 locally, no digest
+        tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(**X_MOUNT),
+                                        FakeImages(users={"x:1": "app"}),  # tagged x:1 locally, no digest
+                                        settings=X_DIRS)
 
-    assert up(["up"], 0, image_ctx, settings=X_DIRS) == 1
+    assert up(["up"], 0, runtime) == 1
     # the name was enough to get past the first check; the image itself is not
     assert "service web: bind mount '/srv/x/data' is outside" in capsys.readouterr().err
     assert not any("up" in cmd for cmd in recorder.children)
 
 
-def test_a_project_section_applies_to_its_directory(monkeypatch, tmp_path, capsys):
+def test_a_project_section_applies_to_its_directory(tmp_path, capsys):
     settings = config.Config(projects={str(tmp_path): config.Section(mount_dirs=("/srv/x",))})
-    inspect_as(monkeypatch, tmp_path, project_config(**X_MOUNT))
-    image_ctx, _ = sectioned(settings, FakeImages(users={"x:1": "app"}))
-    assert up(["up"], 0, image_ctx, settings=settings) == 0
+    runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT),
+                                 FakeImages(users={"x:1": "app"}), settings=settings)
+    assert up(["up"], 0, runtime) == 0
 
     elsewhere = config.Config(projects={"/elsewhere": config.Section(mount_dirs=("/srv/x",))})
-    image_ctx, _ = sectioned(elsewhere, FakeImages(users={"x:1": "app"}))
-    assert up(["up"], 0, image_ctx, settings=elsewhere) == 1
+    runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT), FakeImages(users={"x:1": "app"}),
+                                 settings=elsewhere)
+    assert up(["up"], 0, runtime) == 1
 
 
 X_USER = config.Config(images={"docker.io/library/x": config.Section(user=(900, 900))})
-X_DATA = {"volumes": [{"type": "bind", "source": "/p/data", "target": "/data"}]}  # inside the project: /p
 
 
-def test_a_service_may_name_the_user_its_image_section_sets(monkeypatch, capsys):
-    inspect_as(monkeypatch, "/p", project_config(user="900:900", **X_DATA))
-    image_ctx, recorder = sectioned(X_USER, FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}))
+def inside(project):
+    """A bind mount of a directory inside the project."""
+    return {"volumes": [{"type": "bind", "source": str(project / "data"), "target": "/data"}]}
 
-    assert up(["up"], 0, image_ctx, settings=X_USER) == 0
+
+def test_a_service_may_name_the_user_its_image_section_sets(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(user="900:900", **inside(tmp_path)),
+                                        FakeImages(users={"x:1": "app"}, digests={"x:1": ["x@sha256:a"]}),
+                                        settings=X_USER)
+
+    assert up(["up"], 0, runtime) == 0
     assert last(recorder)[1]["services"]["web"]["user"] == "900:900"
 
 
-def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(monkeypatch, capsys):
-    inspect_as(monkeypatch, "/p", project_config(user="900:900", **X_DATA))
-    image_ctx, recorder = sectioned(X_USER, FakeImages(users={"x:1": "app"}))  # no digest: tagged locally
+def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(tmp_path, capsys):
+    runtime, recorder = compose_project(tmp_path, project_config(user="900:900", **inside(tmp_path)),
+                                        FakeImages(users={"x:1": "app"}),  # no digest: tagged locally
+                                        settings=X_USER)
 
-    assert up(["up"], 0, image_ctx, settings=X_USER) == 1
+    assert up(["up"], 0, runtime) == 1
     assert "user '900:900': uid 900 is not in the nobody range" in capsys.readouterr().err

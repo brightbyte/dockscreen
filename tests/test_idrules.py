@@ -83,12 +83,10 @@ def test_extra_ids_are_allowed_for_one_check():
     assert rules(local=Accounts()).problems(5000, 5001, mounts=True, extra=[(5000, 5001)]) == []
 
 
-def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path, monkeypatch):
+def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path):
     (tmp_path / "subuid").write_text("alice:100000:65536\nbob:200000:10\nbroken\n1001:300000:x\n")
     (tmp_path / "subgid").write_text("alice:100000:65536\n")
-    monkeypatch.setattr(idrules, "SUBUID_FILE", str(tmp_path / "subuid"))
-    monkeypatch.setattr(idrules, "SUBGID_FILE", str(tmp_path / "subgid"))
-    subordinate = idrules.Subordinate()
+    subordinate = idrules.Subordinate.new_for_testing(str(tmp_path / "subuid"), str(tmp_path / "subgid"))
 
     assert subordinate.contains("uid", 100000) and subordinate.contains("uid", 165535)
     assert not subordinate.contains("uid", 165536)
@@ -98,8 +96,6 @@ def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path, monkeypatc
         "uid 100000 is in a subordinate id range of this host (rootless containers)"]
 
 
-def test_missing_subordinate_files_mean_no_ranges(tmp_path, monkeypatch):
-    monkeypatch.setattr(idrules, "SUBUID_FILE", str(tmp_path / "none"))
-    monkeypatch.setattr(idrules, "SUBGID_FILE", str(tmp_path / "none"))
-    subordinate = idrules.Subordinate()
+def test_missing_subordinate_files_mean_no_ranges(tmp_path):
+    subordinate = idrules.Subordinate.new_for_testing(str(tmp_path / "none"), str(tmp_path / "none"))
     assert not subordinate.contains("uid", 100000)

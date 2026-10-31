@@ -1,9 +1,9 @@
 import os
 
 import pytest
-from fakes import FakeDocker, host_account, rules, runtime
+from fakes import FakeDocker, make_runtime, rules
 
-from dockscreen import argscan, config, docker_cli, hostusers, imagedecision
+from dockscreen import argscan, config, imagedecision
 from dockscreen.dockerclient import DockerError, DockerNotFound, _first_file_of_tar
 from dockscreen.messages import BAD, GOOD, WARN
 from dockscreen.run import gate
@@ -18,7 +18,7 @@ ME = (4242, 4343)
 def ctx(docker, settings=None, allow_me=False):
     settings = settings or config.Config()
     return imagedecision.Context(docker, rules(me=ME, allow_me=allow_me, settings=settings),
-                                 runtime(settings=settings, me=ME))
+                                 make_runtime(settings=settings, me=ME))
 
 
 def test_acceptable_image_user_runs_attached_with_hardening_defaults():
@@ -287,7 +287,7 @@ def test_an_image_that_would_run_as_root_is_run_as_nobody_instead(image_user, ca
 ])
 def test_a_user_on_the_command_line_prevents_the_fallback(flags, capsys):
     docker = FakeDocker(image_user="")  # root, which would fall back without the flag
-    context = imagedecision.Context(docker, rules(me=ME), runtime(me=ME))
+    context = imagedecision.Context(docker, rules(me=ME), make_runtime(me=ME))
 
     assert gate.run(context, [*flags, "img"]) == 42
 
@@ -297,7 +297,7 @@ def test_a_user_on_the_command_line_prevents_the_fallback(flags, capsys):
 
 def test_as_me_means_the_callers_ids():
     docker = FakeDocker(image_user="")
-    context = imagedecision.Context(docker, rules(me=ME), runtime(me=ME))
+    context = imagedecision.Context(docker, rules(me=ME), make_runtime(me=ME))
     gate.run(context, ["--as-me", "img"])
     assert docker.calls[0][1] == [*DEFAULTS, "--user=4242:4343", "img"]
 
@@ -387,156 +387,6 @@ def test_existing_containers_are_checked_by_the_same_rule():
     assert "no such" in gate.check_existing(ctx(bad), ["gone"])[0].lower()
 
 
-# --- docker_cli routing ---------------------------------------------------
-
-@pytest.fixture
-def routed(monkeypatch):
-    calls = []
-    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, _: calls.append(("exec", argv)) or 0)
-    monkeypatch.setattr(docker_cli.compose_cli, "main", lambda argv, _: calls.append(("compose", argv)) or 0)
-    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: FakeDocker(image_user="app"))
-    return calls
-
-
-def test_compose_is_routed_to_dockscreen(routed):
-    docker_cli.main(["compose", "-f", "a.yml", "up"])
-    assert routed == [("compose", ["-f", "a.yml", "up"])]
-
-
-@pytest.mark.parametrize("argv", [[], ["--help"], ["-h"], ["help"]])
-def test_the_overview_precedes_dockers_own_help(routed, capsys, argv):
-    docker_cli.main(argv)
-    assert routed == [("exec", argv)]
-    out = capsys.readouterr().out
-    assert out.startswith("Usage:  dockscreen [OPTIONS] COMMAND")
-    assert "--strict-screen" in out and "  run " in out and "  compose " in out
-    assert out.rstrip().endswith("Docker's own help follows:")
-
-
-@pytest.mark.parametrize("argv, routed_argv", [
-    (["run", "--help"], ["run", "--help"]),
-    (["help", "run"], ["run", "--help"]),
-    (["container", "start", "--help"], ["container", "start", "--help"]),
-    (["start", "-h"], ["start", "-h"]),
-])
-def test_a_command_dockscreen_audits_gets_our_help_then_dockers(routed, capsys, argv, routed_argv):
-    docker_cli.main(argv)
-    assert routed == [("exec", routed_argv)]
-    assert capsys.readouterr().out.startswith("Usage:  dockscreen ")
-
-
-def test_run_dash_h_is_the_hostname_as_in_docker(routed, capsys):
-    docker_cli.main(["run", "-h"])
-    assert capsys.readouterr().out == ""  # not help: run is attempted, and docker says what is missing
-
-
-@pytest.mark.parametrize("argv", [["audit", "--help"], ["help", "audit"], ["audit", "-h"]])
-def test_audit_gets_only_our_help(routed, capsys, argv):
-    assert docker_cli.main(argv) == 0
-    assert routed == []
-    out = capsys.readouterr().out
-    assert out.startswith("Usage:  dockscreen [--allow-me] [--strict-screen] audit") and "Exit status" in out
-
-
-@pytest.mark.parametrize("argv", [["help", "ps"], ["ps", "--help"]])
-def test_commands_dockscreen_leaves_alone_get_dockers_help(routed, capsys, argv):
-    docker_cli.main(argv)
-    assert routed == [("exec", ["ps", "--help"])] and capsys.readouterr().out == ""
-
-
-def test_help_compose_is_the_compose_help(routed, capsys):
-    docker_cli.main(["help", "compose", "up"])
-    assert routed == [("compose", ["help", "up"])]
-
-
-def test_docker_options_before_compose_are_refused(routed, capsys):
-    assert docker_cli.main(["--context", "x", "compose", "up"]) == 1
-    assert routed == []
-
-
-@pytest.mark.parametrize("argv", [["ps"], ["images", "-a"], ["--version"], [],
-                                  ["exec", "-u", "0:0", "c", "sh"],
-                                  ["run", "--help"], ["run"], ["start", "--help"], ["container", "ls"]])
-def test_other_commands_pass_through_unchanged(routed, argv):
-    docker_cli.main(argv)
-    assert routed == [("exec", argv)]
-
-
-@pytest.mark.parametrize("argv", [["exec", "-u", "root", "c", "sh"], ["exec", "-itu0", "c", "sh"],
-                                  ["container", "exec", "--user=www-data", "c", "sh"]])
-def test_exec_takes_numeric_users_only(routed, argv, capsys):
-    assert docker_cli.main(argv) == 1
-    assert routed == [] and "--user takes numeric ids as uid:gid" in capsys.readouterr().err
-
-
-def test_exec_as_a_local_user_reaches_docker_as_numeric_ids(routed, monkeypatch):
-    monkeypatch.setattr(hostusers, "_resolve_account", lambda name, accounts: ("1001:1002", []))
-    docker_cli.main(["-l", "debug", "container", "exec", "--as=alice", "c", "sh"])
-    assert routed == [("exec", ["-l", "debug", "container", "exec", "--user=1001:1002", "c", "sh"])]
-
-
-def test_exec_as_me_reaches_docker_as_the_callers_ids(routed):
-    docker_cli.main(["exec", "--as-me", "c", "sh"])
-    assert routed == [("exec", ["exec", f"--user={os.getuid()}:{os.getgid()}", "c", "sh"])]
-
-
-def test_allow_me_before_the_subcommand_reaches_the_gate_and_not_docker(routed, monkeypatch):
-    own = FakeDocker(image_user=f"{os.getuid()}:{os.getgid()}")
-    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: own)
-    assert docker_cli.main(["--allow-me", "run", "img"]) == 42
-    docker_cli.main(["--allow-me", "compose", "up"])
-    assert routed == [("compose", ["--allow-me", "up"])]
-
-
-@pytest.mark.parametrize("argv, expected", [
-    (["create", "-it", "img"], ["create", *DEFAULTS, "-it", "img"]),
-    (["container", "create", "img"], ["container", "create", *DEFAULTS, "img"]),
-    (["-l", "debug", "create", "img"], ["-l", "debug", "create", *DEFAULTS, "img"]),
-])
-def test_create_gets_the_hardening_defaults_and_nothing_else(routed, argv, expected):
-    docker_cli.main(argv)
-    assert routed == [("exec", expected)]
-
-
-def test_start_is_checked_then_passed_through(routed, monkeypatch):
-    docker_cli.main(["start", "-a", "c1"])
-    assert routed == [("exec", ["start", "-a", "c1"])]
-
-    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: FakeDocker(image_user=""))
-    routed.clear()
-    assert docker_cli.main(["container", "restart", "c1"]) == 1
-    assert routed == []
-
-
-def test_run_goes_through_the_gate(routed):
-    assert docker_cli.main(["container", "run", "--rm", "img"]) == 42
-    assert routed == []
-
-
-@pytest.mark.parametrize("env, argv", [
-    ({"DOCKER_HOST": "tcp://10.0.0.1:2375"}, ["run", "img"]),
-    ({"DOCKER_CONTEXT": "prod"}, ["run", "img"]),
-    ({}, ["-H", "ssh://x", "run", "img"]),
-    ({}, ["--context=prod", "start", "c"]),
-])
-def test_remote_daemons_are_refused(routed, monkeypatch, env, argv, capsys):
-    for key, value in env.items():
-        monkeypatch.setenv(key, value)
-    assert docker_cli.main(argv) == 1
-    assert "not the default local one" in capsys.readouterr().err
-
-
-def test_a_non_default_current_context_is_refused(routed, monkeypatch):
-    rootless = FakeDocker(image_user="app", context="rootless")
-    monkeypatch.setattr("dockscreen.runtime.Docker", lambda binary: rootless)
-    assert docker_cli.main(["run", "img"]) == 1
-
-
-def test_local_unix_socket_is_fine(routed, monkeypatch):
-    monkeypatch.setenv("DOCKER_HOST", "unix:///var/run/docker.sock")
-    assert docker_cli.main(["run", "img"]) == 42
-
-
 def test_first_file_of_tar():
     import io
     import tarfile
@@ -608,12 +458,12 @@ def test_audit_predicts_a_refusal_and_exits_one(capsys):
             "(local user daniel)") in out
     # how to get past it: on the command line, or once for the repository in the config file
     assert "\u24d8 pass --user UID:GID, --as NAME or --as-me to choose a user" in out
-    assert f'set user under [images."img"] in {runtime().config_file}' in out
+    assert f'set user under [images."img"] in {make_runtime().config_file}' in out
 
 
 def test_run_refusals_name_the_config_file_when_helpful(capsys, helpful):
     assert gate.run(ctx(FakeDocker(image_user="web")), ["img"]) == 1
-    assert f'[images."img"] in {runtime().config_file}' in capsys.readouterr().err
+    assert f'[images."img"] in {make_runtime().config_file}' in capsys.readouterr().err
 
 
 def test_audit_takes_allow_me(capsys):
@@ -654,7 +504,7 @@ def test_audit_points_out_what_a_project_could_not_ask_for(monkeypatch, tmp_path
         f"{WARN} command line: cap_add is not allowed",
         f"{WARN} command line: pid: host shares a namespace outside the project",
         f"{WARN} command line: bind mount '/etc' is outside {tmp_path}; to allow it, add a directory that "
-        f'contains it to mount_dirs under [projects."{tmp_path}"] in {runtime().config_file}',
+        f'contains it to mount_dirs under [projects."{tmp_path}"] in {make_runtime().config_file}',
     ]  # the mount inside the current directory and the named volume are fine
 
 
@@ -725,45 +575,6 @@ def test_run_refuses_what_audit_calls_failed(capsys):
         f"[dockscreen] {BAD} boom", "[dockscreen] \u2718 audit failed"]
 
 
-# --- docker audit routing ---------------------------------------------------
-
-def test_docker_audit_is_routed_to_the_audit(routed, capsys):
-    assert docker_cli.main(["audit", "img"]) == 0
-    assert "runs as uid 100000" in capsys.readouterr().out
-    assert routed == []
-
-
-def test_strict_screen_is_passed_to_the_audit(routed, monkeypatch, capsys):
-    seen = []
-    monkeypatch.setattr(docker_cli.gate, "audit", lambda ctx, args, strict: seen.append((args, strict)) or 0)
-    assert docker_cli.main(["--strict-screen", "audit", "img"]) == 0
-    assert seen == [(["img"], True)]
-
-
-@pytest.mark.parametrize("argv", [["--strict-screen", "run", "img"], ["--strict-screen", "compose", "up"],
-                                  ["--strict-screen", "ps"], ["--strict-screen"]])
-def test_strict_screen_is_refused_where_it_is_not_supported(routed, argv, capsys):
-    assert docker_cli.main(argv) == 1
-    assert routed == []
-    assert "--strict-screen is only supported for audit so far" in capsys.readouterr().err
-
-
-def test_docker_audit_without_an_image_prints_usage(routed, capsys):
-    assert docker_cli.main(["audit"]) == 2
-    assert "usage: dockscreen [--allow-me] [--strict-screen] audit" in capsys.readouterr().err
-
-
-def test_docker_audit_needs_a_local_daemon(routed, monkeypatch, capsys):
-    monkeypatch.setenv("DOCKER_HOST", "tcp://10.0.0.1:2375")
-    assert docker_cli.main(["audit", "img"]) == 1
-    assert "not the default local one" in capsys.readouterr().err
-
-
-def test_container_audit_is_not_a_thing(routed):
-    docker_cli.main(["container", "audit"])
-    assert routed == [("exec", ["container", "audit"])]
-
-
 # --- users on the command line ---------------------------------------------------
 
 def test_as_resolves_a_local_account_on_the_host_and_docker_gets_ids(capsys):
@@ -802,36 +613,6 @@ def test_audit_takes_as_and_refuses_names_for_user(capsys):
 
     assert audit(FakeDocker(), "--user", "alice", "img") == 1
     assert "--user takes numeric ids as uid:gid" in capsys.readouterr().err
-
-
-def test_create_resolves_as_and_keeps_everything_else(routed, monkeypatch, capsys):
-    monkeypatch.setattr(docker_cli.gate.hostusers, "_resolve_account", host_account)
-
-    docker_cli.main(["create", "-it", "--as", "alice", "--name", "x", "img", "sh", "-c", "id"])
-
-    assert routed == [("exec", ["create", *DEFAULTS, "-it", "--user=4242:4343", "--name", "x", "img",
-                                "sh", "-c", "id"])]
-    assert "Resolving user alice to uid 4242, gid 4343" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("flags", [["--as", "ghost"], ["--user", "alice"]])
-def test_create_with_a_user_that_cannot_be_used_is_refused(routed, monkeypatch, flags):
-    monkeypatch.setattr(docker_cli.gate.hostusers, "_resolve_account", host_account)
-    assert docker_cli.main(["create", *flags, "img"]) == 1
-    assert routed == []
-
-
-def test_create_with_an_unreadable_command_line_is_left_to_docker(routed):
-    docker_cli.main(["create", "--name"])
-    assert routed == [("exec", ["create", *DEFAULTS, "--name"])]
-
-
-def test_a_config_file_that_cannot_be_trusted_stops_the_docker_wrapper_too(routed, monkeypatch, capsys):
-    def broken(env, home, uid):
-        raise config.ConfigError("/etc/dockscreen/config.toml: unknown key 'typo'")
-    monkeypatch.setattr(config, "load_current", broken)
-    assert docker_cli.main(["ps"]) == 1
-    assert routed == [] and "unknown key 'typo'" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("kind, refused, pins_user, replaces_image_user", [
@@ -891,14 +672,3 @@ def test_audit_does_not_point_out_a_user_the_config_file_sets_for_the_image(caps
                         info_extra=BIND)  # with mounts, 900 is only allowed because the config says so
     assert audit_with(docker, settings, "--user", "900:900", "-v", "/p:/p", "img") == 0
     assert "command line: user" not in capsys.readouterr().out
-
-
-def test_start_ends_with_the_verdict_before_docker_runs(routed, capsys):
-    assert docker_cli.main(["start", "c1"]) == 0
-    assert routed == [("exec", ["start", "c1"])]
-    assert capsys.readouterr().err == "[dockscreen] \u2714 audit passed\n"
-
-
-def test_commands_that_are_not_screened_say_nothing(routed, capsys):
-    docker_cli.main(["ps"])
-    assert routed == [("exec", ["ps"])] and capsys.readouterr().err == ""

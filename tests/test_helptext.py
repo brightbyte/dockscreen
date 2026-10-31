@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from dockscreen import helptext, messages
 
@@ -36,7 +37,7 @@ def test_a_topic_has_docker_like_parts_and_says_whose_help_follows():
 
 def test_help_without_a_terminal_is_wrapped_at_80_unlike_reports(monkeypatch, capsys):
     monkeypatch.delenv("COLUMNS")
-    monkeypatch.setattr(messages.shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
     helptext.show(helptext.docker_overview)
     lines = capsys.readouterr().out.splitlines()
     assert max(len(line) for line in lines if not line.startswith("Usage:")) <= 80

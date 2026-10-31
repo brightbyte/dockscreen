@@ -42,10 +42,7 @@ def load_runtime():
     relative PATH entries.
     """
     env, home, me = os.environ, os.path.expanduser("~"), (os.getuid(), os.getgid())
-    # docker, compose and their plugins and credential helpers look up programs on PATH too
-    if any(not os.path.isabs(directory) for directory in env.get("PATH", "").split(os.pathsep)):
-        messages.warning("PATH has empty or relative entries: a project directory can supply the programs "
-                         "that docker and compose run")
+    _warn_about_relative_path(env)
     settings = config.load_current(env, home, me[0])
     return Runtime(
         settings=settings,
@@ -57,6 +54,14 @@ def load_runtime():
         home=home,
         cwd=os.getcwd(),
     )
+
+
+def _warn_about_relative_path(env):
+    """Warns if PATH in env has empty or relative entries."""
+    # docker, compose and their plugins and credential helpers look up programs on PATH too
+    if any(not os.path.isabs(directory) for directory in env.get("PATH", "").split(os.pathsep)):
+        messages.warning("PATH has empty or relative entries: a project directory can supply the programs "
+                         "that docker and compose run")
 
 
 def _real_docker(settings, env, wrappers=None):

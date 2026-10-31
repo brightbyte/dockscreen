@@ -2,7 +2,7 @@ import os
 import subprocess
 
 import pytest
-from fakes import runtime
+from fakes import make_runtime
 
 from dockscreen import config, messages
 from dockscreen.compose import screen
@@ -10,35 +10,37 @@ from dockscreen.dockerclient import Docker
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
-    result = screen._project_directory(["-f", "a/x.yml", "-f", "b/y.yml"], str(tmp_path), runtime(env={}))
+    runtime = make_runtime(env={})
+    result = screen._project_directory(["-f", "a/x.yml", "-f", "b/y.yml"], str(tmp_path), runtime)
     assert result == str(tmp_path / "a")
 
 
 def test_project_directory_option_wins_over_file(tmp_path):
     result = screen._project_directory(
-        ["-f", "a/x.yml", "--project-directory=b"], str(tmp_path), runtime(env={}))
+        ["-f", "a/x.yml", "--project-directory=b"], str(tmp_path), make_runtime(env={}))
     assert result == str(tmp_path / "b")
 
 
 def test_project_directory_from_compose_file_env(tmp_path):
     env = {"COMPOSE_FILE": "a/x.yml:b/y.yml"}
-    assert screen._project_directory([], str(tmp_path), runtime(env=env)) == str(tmp_path / "a")
+    assert screen._project_directory([], str(tmp_path), make_runtime(env=env)) == str(tmp_path / "a")
 
 
 def test_project_directory_searches_parents(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / "sub").mkdir()
-    assert screen._project_directory([], str(tmp_path / "sub"), runtime(env={})) == str(tmp_path)
+    mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))  # the directories walked must be the caller's
+    assert screen._project_directory([], str(tmp_path / "sub"), mine) == str(tmp_path)
 
 
 def test_stdin_compose_file_is_refused(tmp_path):
     with pytest.raises(screen.ScreenError):
-        screen._project_directory(["-f", "-"], str(tmp_path), runtime(env={}))
+        screen._project_directory(["-f", "-"], str(tmp_path), make_runtime(env={}))
 
 
 def test_missing_compose_file_is_refused(tmp_path):
     with pytest.raises(screen.ScreenError):
-        screen._project_directory([], str(tmp_path), runtime(env={}))
+        screen._project_directory([], str(tmp_path), make_runtime(env={}))
 
 
 def test_sensitive_paths_are_found_inside_a_directory_after_resolving_symlinks(tmp_path, monkeypatch):
@@ -47,9 +49,9 @@ def test_sensitive_paths_are_found_inside_a_directory_after_resolving_symlinks(t
     monkeypatch.setenv("HOME", str(home))
     os.symlink(home, tmp_path / "link-to-home")
 
-    assert screen._sensitive_inside(str(home / "code"), runtime(env={})) == []
-    assert str(home) in screen._sensitive_inside(str(tmp_path / "link-to-home"), runtime(env={}))
-    assert "/etc" in screen._sensitive_inside("/", runtime(env={}))
+    assert screen._sensitive_inside(str(home / "code"), make_runtime(env={})) == []
+    assert str(home) in screen._sensitive_inside(str(tmp_path / "link-to-home"), make_runtime(env={}))
+    assert "/etc" in screen._sensitive_inside("/", make_runtime(env={}))
 
 
 def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeypatch):
@@ -58,7 +60,7 @@ def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeyp
     monkeypatch.setenv("HOME", str(home))
     settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
-    assert screen.mount_dir_warnings(runtime(env={}, settings=settings)) == [
+    assert screen.mount_dir_warnings(make_runtime(env={}, settings=settings)) == [
         messages.Marked(messages.WARN, f"the configured mount dir {tmp_path} contains {home}, so containers "
                                        "can mount it")]
 
@@ -68,7 +70,7 @@ def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, 
     (tmp_path / "compose.yaml").write_text("")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(screen.ScreenError, match="contains"):
-        screen.inspect([], runtime())
+        screen.inspect([], make_runtime())
 
 
 def test_the_walk_up_stops_at_the_home_directory(tmp_path):
@@ -99,7 +101,7 @@ def test_compose_vars_in_dotenv_make_the_project_directory_unverifiable(tmp_path
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / ".env").write_text(f"OTHER=1\n{line}\n")
     with pytest.raises(screen.ScreenError):
-        screen._project_directory([], str(tmp_path), runtime(env={}))
+        screen._project_directory([], str(tmp_path), make_runtime(env={}))
 
 
 def test_dotenv_in_a_directory_on_the_way_up_is_scanned_too(tmp_path):
@@ -107,16 +109,17 @@ def test_dotenv_in_a_directory_on_the_way_up_is_scanned_too(tmp_path):
     (tmp_path / "sub").mkdir()
     (tmp_path / "sub" / ".env").write_text("COMPOSE_FILE=elsewhere.yml\n")
     with pytest.raises(screen.ScreenError):
-        screen._project_directory([], str(tmp_path / "sub"), runtime(env={}))
+        screen._project_directory([], str(tmp_path / "sub"), make_runtime(env={}))
 
 
 def test_unrelated_dotenv_variables_are_fine_and_explicit_files_skip_the_scan(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / ".env").write_text("MY_COMPOSE_FILE=x\nPASSWORD=y\n")
-    assert screen._project_directory([], str(tmp_path), runtime(env={})) == str(tmp_path)
+    assert screen._project_directory([], str(tmp_path), make_runtime(env={})) == str(tmp_path)
 
     (tmp_path / ".env").write_text("COMPOSE_FILE=elsewhere.yml\n")
-    assert screen._project_directory(["-f", "compose.yaml"], str(tmp_path), runtime(env={})) == str(tmp_path)
+    runtime = make_runtime(env={})
+    assert screen._project_directory(["-f", "compose.yaml"], str(tmp_path), runtime) == str(tmp_path)
 
 
 def test_config_is_loaded_without_env_resolution(monkeypatch):
@@ -126,7 +129,6 @@ def test_config_is_loaded_without_env_resolution(monkeypatch):
         seen.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, "{}", "")
 
-    docker = Docker("docker")
-    docker._run_proc = fake_run
+    docker = Docker.new_for_testing(fake_run)
     screen._load_config(["-f", "a.yml"], docker)
     assert "--no-env-resolution" in seen[0] and seen[0][:4] == ["docker", "compose", "-f", "a.yml"]

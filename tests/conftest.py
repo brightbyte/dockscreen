@@ -1,7 +1,5 @@
 import pytest
 
-from dockscreen.compose import compose_cli
-
 
 @pytest.fixture(autouse=True)
 def terse_messages():
@@ -26,46 +24,16 @@ def local_daemon(monkeypatch):
 
 
 @pytest.fixture
-def forwarded(monkeypatch):
-    """The argv lists compose_cli.main would have handed to docker compose."""
-    calls = []
-    monkeypatch.setattr(compose_cli, "_forward", lambda argv, runtime: calls.append(argv))
-    return calls
+def runtime():
+    """The Runtime of fakes.make_runtime: the defaults, and a docker with no images."""
+    from fakes import make_runtime
+    return make_runtime()
 
 
-@pytest.fixture(autouse=True)
-def fixed_docker_binary(monkeypatch):
-    """Commands are asserted against plain "docker", wherever the real binary lives."""
-    from dockscreen import runtime
-    monkeypatch.setattr(runtime, "_real_docker", lambda settings, env: "docker")
-
-
-@pytest.fixture(autouse=True)
-def fake_image_ctx(monkeypatch, fixed_docker_binary, default_config):  # its Runtime needs both
-    """`audit` and `harden` pull and build; tests get a docker with no images unless they say otherwise."""
-    from fakes import FakeImages, install_image_ctx, make_image_ctx
-
-    image_ctx, recorder = make_image_ctx(FakeImages())
-    install_image_ctx(monkeypatch, image_ctx)
-    return recorder
-
-
-@pytest.fixture(autouse=True)
-def fake_accounts(monkeypatch):
-    """Accounts are looked up in fakes.Accounts, not this host's."""
-    from fakes import Accounts
-
-    from dockscreen import hostusers
-    monkeypatch.setattr(hostusers, "HostAccounts", Accounts)
-
-
-@pytest.fixture(autouse=True)
-def default_config(monkeypatch):
-    """No config file and no subordinate ids: tests see the defaults, whatever this host has."""
-    from dockscreen import config, idrules
-    monkeypatch.setattr(config, "load_current", lambda env, home, uid: config.Config())
-    monkeypatch.setattr(idrules, "SUBUID_FILE", "/nonexistent/subuid")
-    monkeypatch.setattr(idrules, "SUBGID_FILE", "/nonexistent/subgid")
+@pytest.fixture
+def forwarded(runtime):
+    """The argv lists that runtime's docker handed to docker compose."""
+    return runtime.docker.forwarded
 
 
 @pytest.fixture(autouse=True)

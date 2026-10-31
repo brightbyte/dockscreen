@@ -1,9 +1,9 @@
 import os
 
-from fakes import rules, runtime
+from fakes import FakeImages, compose_project, rules
 
 from dockscreen import messages, policy
-from dockscreen.compose import autofix, commands, screen
+from dockscreen.compose import autofix, commands
 from dockscreen.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
@@ -42,16 +42,14 @@ def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):
     assert "\x1b" not in err.replace("\\x1b", "")
 
 
-def test_audit_info_lines_are_escaped(monkeypatch, capsys, tmp_path):
-    from fakes import FakeImages, install_image_ctx, make_image_ctx
+def test_audit_info_lines_are_escaped(capsys, tmp_path):
+    from fakes import FakeImages, compose_project
 
     image = "x\x1b[31m:1"
     cfg = {"name": "p", "services": {"web": {"image": image}}}
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (cfg, str(tmp_path)))
-    image_ctx, _ = make_image_ctx(FakeImages(users={image: "app"}))
-    install_image_ctx(monkeypatch, image_ctx)
+    runtime, _ = compose_project(tmp_path, cfg, FakeImages(users={image: "app"}))
 
-    commands._audit([], [], runtime())
+    commands._audit([], [], runtime)
 
     out = capsys.readouterr().out
     assert "service web: no user set; image x\\x1b[31m:1 runs as" in out

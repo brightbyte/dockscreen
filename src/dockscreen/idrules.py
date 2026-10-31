@@ -36,7 +36,17 @@ class Subordinate:
     """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
 
     def __init__(self):
-        self.ranges = {"uid": _read_ranges(SUBUID_FILE), "gid": _read_ranges(SUBGID_FILE)}
+        self._read(SUBUID_FILE, SUBGID_FILE)
+
+    @classmethod
+    def new_for_testing(cls, uid_file, gid_file):
+        """Returns a Subordinate read from the given files instead of this host's."""
+        subordinate = cls.__new__(cls)
+        subordinate._read(uid_file, gid_file)
+        return subordinate
+
+    def _read(self, uid_file, gid_file):
+        self.ranges = {"uid": _read_ranges(uid_file), "gid": _read_ranges(gid_file)}
 
     def contains(self, kind, value):
         """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""

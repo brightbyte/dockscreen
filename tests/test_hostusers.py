@@ -2,7 +2,7 @@ import pytest
 from fakes import host_account
 
 from dockscreen import hostusers
-from dockscreen.hostusers import HostAccounts  # bound before conftest swaps in the fake
+from dockscreen.hostusers import HostAccounts
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])

@@ -9,11 +9,8 @@ import fakes
 import pytest
 from fakes import PASSWD
 
-from dockscreen import runtime
-from dockscreen.compose import compose_cli, composerun
+from dockscreen.compose import compose_cli
 from dockscreen.dockerclient import Docker
-
-UID, GID = os.getuid(), os.getgid()
 
 # Canned answers come from files next to the script; every call is appended to `calls`.
 FAKE_DOCKER = """#!/bin/sh
@@ -73,11 +70,6 @@ def project(tmp_path, monkeypatch):
     docker.chmod(docker.stat().st_mode | stat.S_IXUSR)
     (fake_dir / "passwd.tar").write_bytes(tar_of("passwd", PASSWD))
     set_image_user(fake_dir, "")
-    monkeypatch.setattr(runtime, "_real_docker", lambda settings, env: str(docker))
-    # the real Docker: real subprocesses against the fake script
-    image_ctx = composerun.imagedecision.Context(
-        Docker(str(docker)), fakes.rules(), fakes.runtime(me=(1000, 1000)))
-    fakes.install_image_ctx(monkeypatch, image_ctx)
 
     work = tmp_path / "work"
     work.mkdir()
@@ -89,7 +81,8 @@ def project(tmp_path, monkeypatch):
         (fake_dir / "config.json").write_text(json.dumps(config))
 
     configure(user="65534:65534")
-    return fake_dir, work, configure
+    # the real Docker: real subprocesses against the fake script
+    return fake_dir, work, configure, fakes.make_runtime(docker=Docker(str(docker)), cwd=str(work))
 
 
 def calls(fake_dir):
@@ -107,9 +100,9 @@ def compose_calls(fake_dir):
 
 
 def test_up_pulls_then_runs_compose_from_the_hardened_file_and_returns_its_exit_code(project, capsys):
-    fake_dir, work, _ = project
+    fake_dir, work, _, runtime = project
 
-    assert compose_cli.main(["--profile", "dev", "up", "-d"], fakes.runtime()) == 5
+    assert compose_cli.main(["--profile", "dev", "up", "-d"], runtime) == 5
 
     config_call, verify_call, services_call, pull_call, up_call = compose_calls(fake_dir)
     assert config_call[:3] == ["compose", "--profile", "dev"] and "--no-env-resolution" in config_call
@@ -126,10 +119,10 @@ def test_up_pulls_then_runs_compose_from_the_hardened_file_and_returns_its_exit_
 
 
 def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(project, capsys):
-    fake_dir, _, configure = project
+    fake_dir, _, configure, runtime = project
     configure(pull_policy="always")  # no user: the image decides
 
-    assert compose_cli.main(["up"], fakes.runtime()) == 5
+    assert compose_cli.main(["up"], runtime) == 5
 
     calls_of_compose = compose_calls(fake_dir)[2:4]
     assert [calls_of_compose[0][-2:], calls_of_compose[1][-3:]] == [["config", "--services"], ["pull", "--", "web"]]
@@ -143,11 +136,11 @@ def test_a_root_image_is_run_as_the_default_user_from_a_pinned_generated_file(pr
 
 
 def test_an_image_that_chose_a_low_user_is_refused_and_nothing_starts(project, capsys):
-    fake_dir, _, configure = project
+    fake_dir, _, configure, runtime = project
     configure()
     set_image_user(fake_dir, "web")  # uid 1000 in the passwd above, and the fake host has it
 
-    assert compose_cli.main(["up"], fakes.runtime()) == 1
+    assert compose_cli.main(["up"], runtime) == 1
 
     assert not (fake_dir / "file-read").exists()  # compose never ran on the project
     err = capsys.readouterr().err
@@ -155,11 +148,11 @@ def test_an_image_that_chose_a_low_user_is_refused_and_nothing_starts(project, c
 
 
 def test_a_refused_project_never_starts_compose(project, capsys):
-    fake_dir, _, _ = project
+    fake_dir, _, _, runtime = project
     (fake_dir / "config.json").write_text(json.dumps(
         {"name": "proj", "services": {"web": {"image": "x", "user": "0:0", "privileged": True}}}))
 
-    assert compose_cli.main(["up"], fakes.runtime()) == 1
+    assert compose_cli.main(["up"], runtime) == 1
 
     # only the config call and the look at the daemon's context: nothing was pulled either
     assert [c[0] for c in calls(fake_dir)] == ["compose", "context"]

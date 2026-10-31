@@ -30,7 +30,8 @@ def main(argv=None):
     """
     argv = sys.argv[1:] if argv is None else list(argv)
     try:
-        return _dispatch(argv)
+        # a config file that cannot be trusted stops everything, before any docker runs
+        return _dispatch(argv, load_runtime())
     except config.ConfigError as e:
         return messages.refuse([f"config file {e}"])
     except DockerNotFound as e:
@@ -38,14 +39,13 @@ def main(argv=None):
         return 1
 
 
-def _dispatch(argv):
+def _dispatch(argv, runtime):
     """Runs the docker command line argv as dockscreen and returns the exit status, unless docker replaces
     this process. --skip-screening passes argv on unchecked.
 
-    Raises config.ConfigError and DockerNotFound for main to report.
+    Raises DockerNotFound for main to report.
     """
     skipped, argv = flags.strip(argv, DOCKER_OPTS_WITH_VALUE)
-    runtime = load_runtime()  # a config file that cannot be trusted stops everything, before any docker runs
     if skipped:
         flags.banner()
         return _passthrough(argv, runtime)

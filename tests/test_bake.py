@@ -3,6 +3,7 @@ import os
 import subprocess
 
 import pytest
+from fakes import make_runtime
 
 from dockscreen import bake, docker_cli
 from dockscreen.dockerclient import DockerError
@@ -72,15 +73,21 @@ def test_only_a_bake_that_builds_is_screened(args, screened):
 
 
 class Docker:
+    """A docker whose `buildx bake --print` gives out, err and code; it records what it would exec."""
+
     binary = "docker"
 
     def __init__(self, code=0, out="{}", err=""):
         self.result = subprocess.CompletedProcess([], code, out, err)
         self.commands = []
+        self.executed = []
 
     def capture(self, cmd):
         self.commands.append(cmd)
         return self.result
+
+    def exec(self, args):
+        self.executed.append(args)
 
 
 def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
@@ -121,23 +128,19 @@ def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
     assert docker_cli.DockerCommand(argv, runtime=None)._bake_arguments() == args
 
 
-@pytest.mark.parametrize("reasons, failed, passed", [([], False, True), (["no"], False, False), (["x"], True, False)])
-def test_bake_runs_only_when_screening_passes(monkeypatch, reasons, failed, passed):
-    calls = []
-    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, runtime: calls.append(argv) or 0)
-    monkeypatch.setattr(docker_cli.bake, "screen", lambda docker, args: (reasons, failed))
-
-    code = docker_cli.main(["buildx", "bake", "app"])
-
-    assert (calls == [["buildx", "bake", "app"]]) is passed
-    assert (code == 0) is passed
+@pytest.mark.parametrize("docker, code", [
+    (Docker(out=json.dumps({"target": {}})), None),                              # passes: docker runs it
+    (Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}})), 1),     # refused
+    (Docker(code=1, err="no bake file"), 1),                                    # cannot be screened
+])
+def test_bake_runs_only_when_screening_passes(docker, code):
+    assert docker_cli._dispatch(["buildx", "bake", "app"], make_runtime(docker=docker)) == code
+    assert docker.executed == ([["buildx", "bake", "app"]] if code is None else [])
 
 
-def test_bake_print_is_not_screened(monkeypatch):
-    calls = []
-    monkeypatch.setattr(docker_cli, "_passthrough", lambda argv, runtime: calls.append(argv) or 0)
-    monkeypatch.setattr(docker_cli.bake, "screen", lambda *a: 1 / 0)
+def test_bake_print_is_not_screened():
+    docker = Docker(code=1)  # screening would fail
 
-    docker_cli.main(["buildx", "bake", "--print"])
+    docker_cli._dispatch(["buildx", "bake", "--print"], make_runtime(docker=docker))
 
-    assert calls == [["buildx", "bake", "--print"]]
+    assert docker.commands == [] and docker.executed == [["buildx", "bake", "--print"]]

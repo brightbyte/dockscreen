@@ -1,5 +1,5 @@
 import pytest
-from fakes import FakeDocker, FakeImages, install_image_ctx, make_image_ctx, runtime
+from fakes import FakeImages, compose_project
 
 from dockscreen.compose import compose_cli, composerun, screen
 from dockscreen.dockerclient import Docker, DockerError
@@ -19,8 +19,7 @@ class Ps:
 
 def test_the_containers_of_a_project_are_found_by_its_label_whether_running_or_not():
     ps = Ps("/a\n\n/b\n")
-    docker = Docker("docker")
-    docker._run_proc = ps
+    docker = Docker.new_for_testing(ps)
 
     assert docker.project_directories("proj") == ["/a", "", "/b"]
     assert ps.commands == [["docker", "ps", "--all", "--filter", "label=com.docker.compose.project=proj",
@@ -28,8 +27,7 @@ def test_the_containers_of_a_project_are_found_by_its_label_whether_running_or_n
 
 
 def test_docker_failing_to_say_is_an_error():
-    docker = Docker("docker")
-    docker._run_proc = Ps(code=1, err="daemon down")
+    docker = Docker.new_for_testing(Ps(code=1, err="daemon down"))
     with pytest.raises(DockerError, match="daemon down"):
         docker.project_directories("proj")
 
@@ -78,69 +76,54 @@ def test_the_person_chooses_the_name_with_p_or_the_environment(args, env, chosen
     assert screen.names_project(args, env) is chosen
 
 
-def project(tmp_path, **config):
-    return {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}, **config}
+PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}
 
 
-def test_up_refuses_a_name_that_other_containers_have_and_runs_nothing(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
+def test_up_refuses_a_name_that_other_containers_have_and_runs_nothing(tmp_path, capsys):
     images = FakeImages(users={"x:1": "app"})
     images.project_dirs = ["/victim"]
-    image_ctx, recorder = make_image_ctx(images)
-    install_image_ctx(monkeypatch, image_ctx)
+    runtime, recorder = compose_project(tmp_path, PROJECT, images)
 
-    assert composerun.run(["up"], 0, runtime()) == 1
+    assert composerun.run(["up"], 0, runtime) == 1
 
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
     assert recorder.children == []
 
 
 @pytest.mark.parametrize("argv, idx", [(["up"], 0), (["-p", "proj", "up"], 2)])
-def test_up_runs_in_the_directory_that_made_the_containers_or_when_p_names_the_project(
-        monkeypatch, tmp_path, argv, idx):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
+def test_up_runs_in_the_directory_that_made_the_containers_or_when_p_names_the_project(tmp_path, argv, idx):
     images = FakeImages(users={"x:1": "app"})
     images.project_dirs = [str(tmp_path)] if argv == ["up"] else ["/victim"]
-    image_ctx, recorder = make_image_ctx(images)
-    install_image_ctx(monkeypatch, image_ctx)
+    runtime, recorder = compose_project(tmp_path, PROJECT, images)
 
-    composerun.run(argv, idx, runtime())
+    composerun.run(argv, idx, runtime)
 
     assert recorder.children  # compose ran
 
 
 @pytest.mark.parametrize("sub", ["down", "rm", "stop", "kill", "restart", "start", "pause", "unpause"])
-def test_commands_that_remove_or_stop_are_refused_for_a_name_that_is_not_the_projects(
-        monkeypatch, tmp_path, capsys, sub):
-    monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
+def test_commands_that_remove_or_stop_are_refused_for_a_name_that_is_not_the_projects(tmp_path, capsys, sub):
     images = FakeImages()
     images.project_dirs = ["/victim"]
-    forwarded = []
-    monkeypatch.setattr(compose_cli, "_forward", lambda argv, rt: forwarded.append(argv))
+    runtime, _ = compose_project(tmp_path, PROJECT, images)
 
-    code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime(docker=images))
+    code = compose_cli.main([sub, "-v"] if sub == "down" else [sub], runtime)
 
-    assert code == 1 and forwarded == []
+    assert code == 1 and images.forwarded == []
     assert "project name 'proj' is used by containers made from '/victim'" in capsys.readouterr().err
 
 
-def test_down_goes_on_for_the_projects_own_name_with_p_and_for_a_project_that_cannot_be_read(
-        monkeypatch, tmp_path):
+def test_down_goes_on_for_the_projects_own_name_with_p_and_for_a_project_that_cannot_be_read(tmp_path):
     images = FakeImages()
     images.project_dirs = ["/victim"]
-    forwarded = []
-    monkeypatch.setattr(compose_cli, "_forward", lambda argv, rt: forwarded.append(argv))
-    monkeypatch.setattr(screen, "inspect", lambda global_args, rt: (project(tmp_path), str(tmp_path)))
+    runtime, _ = compose_project(tmp_path, PROJECT, images)
 
-    compose_cli.main(["-p", "mine", "down"], runtime(docker=images))
+    compose_cli.main(["-p", "mine", "down"], runtime)
     images.project_dirs = [str(tmp_path)]
-    compose_cli.main(["down"], runtime(docker=images))
+    compose_cli.main(["down"], runtime)
 
-    def unreadable(global_args, rt):
-        raise screen.InspectError("no compose file")
-
-    monkeypatch.setattr(screen, "inspect", unreadable)
+    (tmp_path / "compose.yaml").write_text("services: [")  # compose cannot read it
     images.project_dirs = ["/victim"]
-    compose_cli.main(["down"], runtime(docker=images))
+    compose_cli.main(["down"], runtime)
 
-    assert forwarded == [["-p", "mine", "down"], ["down"], ["down"]]
+    assert images.forwarded == [["-p", "mine", "down"], ["down"], ["down"]]

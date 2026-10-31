@@ -1,9 +1,9 @@
 import os
 
-from fakes import rules, runtime
+from fakes import compose_project, rules
 
 from dockscreen import policy
-from dockscreen.compose import autofix, commands, screen
+from dockscreen.compose import autofix, commands
 
 UID = os.getuid()
 GID = os.getgid()
@@ -42,11 +42,11 @@ def test_unfixed_problems_are_listed_as_comments():
     assert "# not fixed: bind mount /etc" in autofix.render(original, original, ["bind mount /etc"])
 
 
-def test_fix_command_prints_patch_and_fails_when_problems_remain(monkeypatch, capsys, tmp_path):
+def test_fix_command_prints_patch_and_fails_when_problems_remain(capsys, tmp_path):
     original = config(user="0:0", build={"context": "/"})
-    monkeypatch.setattr(screen, "inspect", lambda global_args, runtime: (original, str(tmp_path)))
+    runtime, _ = compose_project(tmp_path, original)
 
-    assert commands._harden([], [], runtime()) == 1
+    assert commands._harden([], [], runtime) == 1
 
     captured = capsys.readouterr()
     assert "services:" in captured.out and "user:" in captured.out

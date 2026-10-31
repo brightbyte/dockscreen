@@ -19,10 +19,15 @@ class NoSubordinate:
         return False
 
 
-def rules(me=(4242, 4343), allow_me=False, local=None, settings=None, subordinate=None):
+# The caller: alice in Accounts, so that 1000 is someone else (daniel, a local account), whatever this
+# process runs as.
+ME = (4242, 4343)
+
+
+def rules(me=ME, allow_me=False, local=None, settings=None, subordinate=None):
     """idrules.Rules for the host of Accounts, with the default config unless settings says otherwise.
 
-    The caller is 4242:4343 (alice in Accounts), so that 1000 is someone else: daniel, a local account.
+    The caller is ME.
     """
     settings = settings or config.Config()
     return idrules.Rules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
@@ -59,16 +64,40 @@ def host_account(name, accounts=None):
     return REAL_RESOLVE(name, Accounts())
 
 
-def runtime(**fields):
-    """The Runtime load_runtime() gives with the conftest fixtures in place, with fields replaced."""
-    from dockscreen.runtime import load_runtime
-    return load_runtime()._replace(**fields)
+def make_runtime(**fields):
+    """A Runtime with the default config, the accounts of Accounts, no subordinate ids and ME as the
+    caller, whatever this host has, and a FakeImages with no images as its docker; fields replace any of
+    that. The environment, home and directory are this process's own.
+    """
+    from dockscreen.runtime import Runtime
+    if "docker" not in fields:
+        fields["docker"] = FakeImages()
+        fake_compose(fields["docker"])
+    defaults = dict(settings=config.Config(), accounts=Accounts(), subordinate=NoSubordinate(),
+                    me=ME, env=os.environ, home=os.path.expanduser("~"),
+                    cwd=os.getcwd())
+    return Runtime(**{**defaults, **fields})
 
 
-class FakeImages:
+class Executing:
+    """What a fake docker records of exec: every argv it was replaced with, and the compose ones."""
+
+    binary = "docker"
+
+    def exec(self, args):
+        self.executed.append(list(args))
+        if args[:1] == ["compose"]:
+            self.forwarded.append(list(args[1:]))
+
+    def with_env(self, variables):
+        return self
+
+
+class FakeImages(Executing):
     """A docker that knows images by name: the user each sets, and which are present locally."""
 
     def __init__(self, users=None, local=None, digests=None):
+        self.executed, self.forwarded = [], []
         self.users = users or {}
         self.digests = digests or {}  # image name -> RepoDigests: where it was pulled from
         self.local = set(self.users if local is None else local)
@@ -79,9 +108,6 @@ class FakeImages:
 
     def context(self):
         return "default"
-
-    def with_env(self, variables):
-        return self
 
     def project_directories(self, name):
         return self.project_dirs
@@ -120,7 +146,7 @@ class FakeImages:
         self._containers.pop(container, None)
 
 
-class FakeDocker:
+class FakeDocker(Executing):
     """Records calls. `image_user` is the image's USER; `container_user` is what the container reports."""
 
     def __init__(self, image_user="", container_user=None, image="img", command=None, passwd=PASSWD,
@@ -138,6 +164,7 @@ class FakeDocker:
         self.env_file = env_file or []          # what an --env-file of the command line would add
         self.env = [*self.image_env, *self.env_file]
         self.calls = []
+        self.executed, self.forwarded = [], []
 
     def create(self, args):
         self.calls.append(("create", args))
@@ -197,15 +224,27 @@ class Recorder:
         self.captured = []
 
 
-def make_image_ctx(images=None, active=("web",), codes=None, on_child=None, reads=None, ctx=None):
-    """(imagedecision.Context, recorder), with images as its docker, which also runs the compose commands.
+def make_image_ctx(images=None, ctx=None, **compose):
+    """(imagedecision.Context, recorder), with images as its docker, which also runs the compose commands
+    (fake_compose takes compose).
+    """
+    images = images if images is not None else FakeImages()
+    recorder = fake_compose(images, **compose)
+    ctx = ctx or imagedecision.Context(images, rules(), make_runtime(me=(1000, 1000), docker=images))
+    return ctx, recorder
+
+
+def fake_compose(images, active=("web",), codes=None, on_child=None, reads=None, project=None):
+    """Makes images run the compose commands, and returns the Recorder of what they were.
 
     codes: exit code by compose subcommand, default 0; the last child is `up` etc.
 
     reads: changes the config `docker compose config` reports for a generated file (a compose that
     reads it differently from what was written).
+
+    project: the compose file of the project, which `docker compose config` reads when the command names
+    no file with -f.
     """
-    images = images if images is not None else FakeImages()
     recorder = Recorder()
     codes = codes or {}
 
@@ -222,20 +261,47 @@ def make_image_ctx(images=None, active=("web",), codes=None, on_child=None, read
 
     def capture(cmd):
         recorder.captured.append(cmd)
-        if "--format" in cmd:  # config --format json: what compose makes of the generated file
-            config = read_config(cmd)
-            return subprocess.CompletedProcess(cmd, 0, json.dumps(reads(config) if reads else config), "")
+        if "--format" in cmd:  # config --format json: what compose makes of the project or the generated file
+            path = cmd[cmd.index("-f") + 1] if "-f" in cmd else project
+            try:
+                config = _read_json(path)
+            except ValueError:
+                return subprocess.CompletedProcess(cmd, 1, "", "bad yaml")
+            if reads and path != project:
+                config = reads(config)
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(config), "")
         return subprocess.CompletedProcess(cmd, 0, "\n".join(active) + "\n", "")
 
     images.run_child, images.capture = run_child, capture
-    ctx = ctx or imagedecision.Context(images, rules(), runtime(me=(1000, 1000)))
-    return ctx, recorder
+    return recorder
+
+
+def compose_project(directory, project, images=None, settings=None, **compose):
+    """(runtime, recorder) for a compose project in directory, whose compose.yaml holds the config project.
+
+    The runtime runs from directory with settings (default: the defaults), and images (default: none) as
+    its docker, which runs compose (fake_compose takes compose).
+    """
+    path = os.path.join(directory, "compose.yaml")
+    with open(path, "w") as f:
+        json.dump(project, f)
+    images = images if images is not None else FakeImages()
+    recorder = fake_compose(images, project=path, **compose)
+    runtime = make_runtime(docker=images, cwd=str(directory), settings=settings or config.Config())
+    return runtime, recorder
 
 
 def read_config(cmd):
     """The config compose would make of the file behind -f."""
     raw = read_raw(cmd)
     return None if raw is None else json.loads(raw)
+
+
+def _read_json(path):
+    if path is None or not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
 
 
 def read_raw(cmd):
@@ -245,9 +311,3 @@ def read_raw(cmd):
     with open(cmd[cmd.index("-f") + 1]) as f:
         return f.read()
 
-
-def install_image_ctx(monkeypatch, image_ctx):
-    """Make composerun._image_context return image_ctx, with --allow-me applied as the real one does."""
-    from dockscreen.compose import composerun
-    monkeypatch.setattr(composerun, "_image_context",
-                        lambda runtime, allow_me=False: image_ctx.with_allow_me(allow_me))

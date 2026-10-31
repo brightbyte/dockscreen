@@ -28,7 +28,14 @@ class Docker:
         env: the environment of everything it runs; None for this process's own.
         """
         self.binary, self.env = binary, env
-        self._run_proc = subprocess.run  # tests replace it
+        self._run_proc = subprocess.run
+
+    @classmethod
+    def new_for_testing(cls, run_proc, binary="docker"):
+        """Returns a Docker that runs binary with run_proc, a stand-in for subprocess.run."""
+        docker = cls(binary)
+        docker._run_proc = run_proc
+        return docker
 
     def with_env(self, variables):
         """Returns a Docker like this one that also passes variables in the environment of what it runs."""
