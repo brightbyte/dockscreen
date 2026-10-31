@@ -31,7 +31,7 @@ class Docker:
         self._launchers = (run, call, popen)
         self.run, self.call, self.popen = (_found(launch, env) for launch in self._launchers)
 
-    def exporting(self, variables):
+    def with_env(self, variables):
         """Returns a Docker like this one that also passes variables in the environment of what it runs."""
         env = {**(os.environ if self.env is None else self.env), **variables}
         return Docker(self.binary, *self._launchers, env=env)

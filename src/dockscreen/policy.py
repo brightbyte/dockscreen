@@ -129,7 +129,7 @@ def context_for(settings, project_dir, rules, config_file=None):
     rules: the id rules with the caller's allow_me; the settings give them their nobody range and default
     user. config_file: named in hints, as in Context.
     """
-    return Context(project_dir, rules.under(settings), settings.mount_dirs, config_file=config_file,
+    return Context(project_dir, rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
                    security_opts=settings.security_opts, configured_user=settings.user)
 
 

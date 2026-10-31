@@ -58,7 +58,7 @@ def main(argv, runtime=None):
     # a config file that cannot be trusted stops everything, before any docker runs
     runtime = runtime or load_runtime()
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process
-    runtime = runtime._replace(docker=runtime.docker.exporting(ids.exported(runtime.me)))
+    runtime = runtime._replace(docker=runtime.docker.with_env(ids.exported(runtime.me)))
     return ComposeCommand(argv, runtime, allow_me, helpful).dispatch()
 
 

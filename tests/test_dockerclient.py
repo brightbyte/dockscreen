@@ -17,7 +17,7 @@ def test_a_missing_binary_is_docker_not_found(tmp_path):
         docker.start("c1", attach=True, interactive=False, detach_keys=None)
 
 
-def test_exporting_adds_variables_to_the_environment_of_what_it_runs(monkeypatch):
+def test_with_env_adds_variables_to_the_environment_of_what_it_runs(monkeypatch):
     seen = []
     def run(cmd, **kwargs):
         seen.append(kwargs.get("env"))
@@ -27,7 +27,7 @@ def test_exporting_adds_variables_to_the_environment_of_what_it_runs(monkeypatch
     monkeypatch.setenv("KEPT", "1")
 
     plain.context()
-    plain.exporting({"UID": "7"}).context()
+    plain.with_env({"UID": "7"}).context()
 
     assert seen[0] is None  # this process's own environment
     assert seen[1]["UID"] == "7" and seen[1]["KEPT"] == "1"

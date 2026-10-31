@@ -54,7 +54,7 @@ class Rules(NamedTuple):
     local: hostusers.HostAccounts          # the accounts on this host
     subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
-    def under(self, settings):
+    def with_settings(self, settings):
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 

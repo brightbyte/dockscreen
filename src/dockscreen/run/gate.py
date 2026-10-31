@@ -63,7 +63,7 @@ def run(ctx, args):
     for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
         if message:
             messages.notice(message)
-    ctx = ctx.allowing_me(parsed.allow_me)
+    ctx = ctx.with_allow_me(parsed.allow_me)
 
     created = _create_checked(ctx, parsed, [])
     if isinstance(created, int):
@@ -190,7 +190,7 @@ def audit(ctx, args, strict=False):
     if not brief:
         for message in parsed.notices:
             messages.notice(message)
-    ctx = ctx.allowing_me(parsed.allow_me)
+    ctx = ctx.with_allow_me(parsed.allow_me)
 
     try:
         _, container, info, assessment = _create_assessed(ctx, parsed, [])

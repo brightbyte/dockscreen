@@ -80,7 +80,7 @@ class FakeImages:
     def context(self):
         return "default"
 
-    def exporting(self, variables):
+    def with_env(self, variables):
         return self
 
     def project_directories(self, name):
@@ -250,4 +250,4 @@ def install_image_ctx(monkeypatch, image_ctx):
     """Make composerun._image_context return image_ctx, with --allow-me applied as the real one does."""
     from dockscreen.compose import composerun
     monkeypatch.setattr(composerun, "_image_context",
-                        lambda runtime, allow_me=False: image_ctx.allowing_me(allow_me))
+                        lambda runtime, allow_me=False: image_ctx.with_allow_me(allow_me))
