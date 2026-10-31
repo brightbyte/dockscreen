@@ -9,7 +9,7 @@ import tarfile
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, NoReturn, Self
 
-from dockscreen import messages
+from dockscreen import commandline, messages
 
 MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from an untrusted image
 FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
@@ -39,9 +39,14 @@ class Docker:
         docker._run_proc = run_proc
         return docker
 
+    @property
+    def environment(self) -> Mapping[str, str]:
+        """Returns the environment of what it runs."""
+        return os.environ if self.env is None else self.env
+
     def with_env(self, variables: Mapping[str, str]) -> Self:
         """Returns a Docker like this one that also passes variables in the environment of what it runs."""
-        docker = type(self)(self.binary, {**(os.environ if self.env is None else self.env), **variables})
+        docker = type(self)(self.binary, {**self.environment, **variables})
         docker._run_proc = self._run_proc
         return docker
 
@@ -198,3 +203,23 @@ def _first_file_of_tar(data: bytes) -> str | None:
             return None if file is None else file.read().decode("utf-8", errors="replace")
     except tarfile.TarError:
         return None
+
+
+REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot be checked"
+
+
+def is_remote(global_args: Sequence[str], docker: Docker) -> bool:
+    """Tells whether the daemon docker talks to, given global_args, might not be this host's own, where
+    the checks, which compare ids and paths with this host's, mean nothing.
+    """
+    env = docker.environment
+    if commandline.option_values(global_args, "--host", "-H"):
+        return True
+    if commandline.option_values(global_args, "--context", "-c"):
+        return True
+    host = env.get("DOCKER_HOST", "")
+    if host and not host.startswith("unix://"):
+        return True
+    if env.get("DOCKER_CONTEXT") not in (None, "", "default"):
+        return True
+    return docker.context() != "default"  # the current context can also come from docker's config file

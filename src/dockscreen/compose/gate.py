@@ -19,9 +19,9 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, daemon, hostusers, imagedecision, messages, policy, userargs, verdict
+from dockscreen import commandline, hostusers, imagedecision, messages, policy, userargs, verdict
 from dockscreen.compose import composeargs, composeimages, hardening, screen, shellenv
-from dockscreen.dockerclient import DockerNotFound
+from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.runtime import Runtime
 
 # Options that select the files and the project; ours replace them.
@@ -49,7 +49,7 @@ class Project(NamedTuple):
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
         if self.remote:
-            problems.append(daemon.REMOTE_MESSAGE)
+            problems.append(REMOTE_MESSAGE)
         elif not problems and not screen.names_project(self.global_args, self.runtime.env):
             problems += screen.name_conflicts(self.hardened["name"], self.directory,
                                               self.image_ctx.docker)
@@ -76,7 +76,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     config, directory = screen.inspect(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
     image_ctx = _image_context(runtime, allow_me)._replace(project_dir=directory)
-    remote = daemon.is_remote(global_args, runtime.env, image_ctx.docker)
+    remote = is_remote(global_args, image_ctx.docker)
     ctx = screen.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)

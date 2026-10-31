@@ -19,8 +19,8 @@ what `run` would do.
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, daemon, hostusers, ids, imagedecision, images, messages, verdict
-from dockscreen.dockerclient import DockerError
+from dockscreen import commandline, hostusers, ids, imagedecision, images, messages, verdict
+from dockscreen.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
 from dockscreen.imagedecision import (
     Assessment,
     Kind,
@@ -53,8 +53,8 @@ def run(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me:
     could not create the container.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    if daemon.is_remote(global_args, runtime.env, runtime.docker):
-        return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE])
+    if is_remote(global_args, runtime.docker):
+        return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE])
     ctx = image_context(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
@@ -203,8 +203,8 @@ def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Run
     default user or a configured one) is refused like one whose user is not accepted, unless it
     already runs as that user.
     """
-    if daemon.is_remote(global_args, runtime.env, runtime.docker):
-        return [daemon.REMOTE_MESSAGE]
+    if is_remote(global_args, runtime.docker):
+        return [REMOTE_MESSAGE]
     ctx = image_context(runtime, allow_me)
     problems: list[str] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):

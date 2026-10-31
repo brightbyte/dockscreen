@@ -8,9 +8,9 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen import commandline, daemon, messages, policy, verdict
+from dockscreen import commandline, messages, policy, verdict
 from dockscreen.compose import autofix, composeimages, gate, hardening, screen, shellenv
-from dockscreen.dockerclient import DockerNotFound
+from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound
 from dockscreen.runtime import Runtime
 from dockscreen.verdict import Verdict
 
@@ -85,7 +85,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
         messages.notice(e)
         return 1
     if project.remote:
-        messages.notice(daemon.REMOTE_MESSAGE)
+        messages.notice(REMOTE_MESSAGE)
         return 1
 
     base, static = project.hardened, project.static_ctx()

@@ -9,7 +9,6 @@ from collections.abc import Sequence
 
 from dockscreen import (
     commandline,
-    daemon,
     hostusers,
     ids,
     imagedecision,
@@ -18,7 +17,7 @@ from dockscreen import (
     policy,
     verdict,
 )
-from dockscreen.dockerclient import DockerNotFound
+from dockscreen.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.imagedecision import Assessment, Kind, runs_as
 from dockscreen.messages import printable
 from dockscreen.run import gate, runargs, runpolicy
@@ -41,8 +40,8 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     """
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
-    if daemon.is_remote(global_args, runtime.env, runtime.docker):
-        return verdict.report(Verdict.REFUSED, [daemon.REMOTE_MESSAGE], brief)
+    if is_remote(global_args, runtime.docker):
+        return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE], brief)
     ctx = gate.image_context(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)

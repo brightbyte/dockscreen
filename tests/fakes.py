@@ -82,6 +82,7 @@ class Executing:
     """What a fake docker records of exec: every argv it was replaced with, and the compose ones."""
 
     binary = "docker"
+    environment = os.environ
 
     def exec(self, args):
         self.executed.append(list(args))
