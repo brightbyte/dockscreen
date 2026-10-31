@@ -123,14 +123,13 @@ class Docker:
         """Removes container, running or not, ignoring failures."""
         self.run(["rm", "--force", "--", container], capture_output=True)
 
-    def project_directories(self, name):
-        """Returns the working directory label of each container, running or not, of compose project `name`.
+    def label_values(self, label, value, wanted):
+        """Returns the value of the label wanted of each container, running or not, whose label is value.
 
-        Empty for one that has no such label. Raises DockerError if docker cannot say.
+        Empty for a container without wanted. Raises DockerError if docker cannot say.
         """
-        label = "com.docker.compose.project"
-        result = self.run(["ps", "--all", "--filter", f"label={label}={name}", "--format",
-                           f'{{{{.Label "{label}.working_dir"}}}}'], capture_output=True, text=True)
+        result = self.run(["ps", "--all", "--filter", f"label={label}={value}", "--format",
+                           f'{{{{.Label "{wanted}"}}}}'], capture_output=True, text=True)
         if result.returncode != 0:
             raise DockerError(result.stderr.strip() or "docker ps failed")
         return result.stdout.splitlines()

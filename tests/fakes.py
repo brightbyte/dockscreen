@@ -109,7 +109,7 @@ class FakeImages(Executing):
     def context(self):
         return "default"
 
-    def project_directories(self, name):
+    def label_values(self, label, value, wanted):
         return self.project_dirs
 
     @staticmethod
@@ -208,7 +208,7 @@ class FakeDocker(Executing):
     def context(self):
         return self.current_context
 
-    def project_directories(self, name):
+    def label_values(self, label, value, wanted):
         return []
 
     def names(self):

@@ -120,6 +120,11 @@ def _load_config(global_args, docker):
         raise InspectError(f"cannot parse docker compose config output: {e}")
 
 
+# compose labels each container with its project's name and the directory it was made from
+PROJECT_LABEL = "com.docker.compose.project"
+WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
+
+
 def name_conflicts(name, directory, docker):
     """Checks whether containers of a project called name exist that were made from another directory.
 
@@ -129,7 +134,7 @@ def name_conflicts(name, directory, docker):
     from, so only containers count.
     """
     try:
-        found = docker.project_directories(name)
+        found = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
     except DockerError as e:
         return [f"cannot tell whether another project is called {name!r}: {e}"]
     here = os.path.realpath(directory)

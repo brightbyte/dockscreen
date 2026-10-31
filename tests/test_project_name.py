@@ -2,34 +2,19 @@ import pytest
 from fakes import FakeImages, compose_project
 
 from dockscreen.compose import compose_cli, composerun, screen
-from dockscreen.dockerclient import Docker, DockerError
+from dockscreen.dockerclient import DockerError
 
 
-class Ps:
-    """subprocess.run for `docker ps`: its output, and the command."""
+def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():
+    asked = []
 
-    def __init__(self, out="", code=0, err=""):
-        self.out, self.code, self.err = out, code, err
-        self.commands = []
+    class Labels:
+        def label_values(self, label, value, wanted):
+            asked.append((label, value, wanted))
+            return []
 
-    def __call__(self, cmd, **kwargs):
-        self.commands.append(cmd)
-        return type("Result", (), {"returncode": self.code, "stdout": self.out, "stderr": self.err})()
-
-
-def test_the_containers_of_a_project_are_found_by_its_label_whether_running_or_not():
-    ps = Ps("/a\n\n/b\n")
-    docker = Docker.new_for_testing(ps)
-
-    assert docker.project_directories("proj") == ["/a", "", "/b"]
-    assert ps.commands == [["docker", "ps", "--all", "--filter", "label=com.docker.compose.project=proj",
-                            "--format", '{{.Label "com.docker.compose.project.working_dir"}}']]
-
-
-def test_docker_failing_to_say_is_an_error():
-    docker = Docker.new_for_testing(Ps(code=1, err="daemon down"))
-    with pytest.raises(DockerError, match="daemon down"):
-        docker.project_directories("proj")
+    screen.name_conflicts("proj", "/p", Labels())
+    assert asked == [("com.docker.compose.project", "proj", "com.docker.compose.project.working_dir")]
 
 
 def conflicts(found, directory="/p"):
@@ -57,7 +42,7 @@ def test_containers_without_a_directory_label_count_as_another_project():
 
 def test_not_being_able_to_ask_is_a_refusal():
     class Broken:
-        def project_directories(self, name):
+        def label_values(self, label, value, wanted):
             raise DockerError("daemon down")
 
     assert screen.name_conflicts("proj", "/p", Broken()) == [
