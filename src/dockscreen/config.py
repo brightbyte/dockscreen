@@ -12,6 +12,11 @@ shows the defaults without overriding the system file.
 The settings can also be given per image (`[images."REPOSITORY"]`) and per project
 (`[projects."DIRECTORY"]`). They apply in that order, after the top level (effective): a single value
 replaces the one before, a list is added to the ones before.
+
+An image section names a repository: it trusts the image's maintainer, not one image. A name alone
+proves nothing, because anything can be built or tagged locally under any name, so an image matches only
+if docker recorded that it was pulled from that repository (a repo digest), and never for a service that
+is built from a Dockerfile (section_for).
 """
 
 import importlib.resources
@@ -58,6 +63,11 @@ class Config(NamedTuple):
     projects: MappingProxyType = MappingProxyType({})  # absolute directory -> Section
 
 
+class Match(NamedTuple):
+    repository: str | None  # the image section that applies to the image, if one does
+    problem: str | None     # why a section for the image's repository does not apply, for audit
+
+
 def effective(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
     """Returns the settings for an image pulled from repository, in a project in directory.
 
@@ -91,6 +101,31 @@ def all_mount_dirs(config: Config) -> tuple[str, ...]:
     """Returns every mount dir the config names, the top level's and every section's, once each."""
     sections = [*config.images.values(), *config.projects.values()]
     return tuple(dict.fromkeys([*config.mount_dirs, *(d for s in sections for d in s.mount_dirs)]))
+
+
+def section_for(config: Config, reference: str, repo_digests: Iterable[str] | None, built: bool) -> Match:
+    """Determines which image section of the config file applies to this image, as a Match.
+
+    reference: the image name the service or command line uses.
+    repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
+    built: the service builds the image from a Dockerfile.
+    """
+    name = images.repository(reference)
+    if name not in config.images:
+        return Match(None, None)
+    if built:
+        return Match(None, f"the config has a section for {name}, but the service builds its image")
+    if not any(images.repository(d) == name for d in repo_digests or []):
+        return Match(None, f"the config has a section for {name}, but this image was not pulled from there")
+    return Match(name, None)
+
+
+def name_matches(config: Config, reference: str, built: bool) -> str | None:
+    """Returns the repository of the image section the name alone points to, or None if there is none or
+    the image is built. The name proves nothing: this is for before the image is there.
+    """
+    name = images.repository(reference)
+    return name if name in config.images and not built else None
 
 
 def user_file(env: Mapping[str, str], home: str) -> str:

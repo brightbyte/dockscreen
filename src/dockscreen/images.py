@@ -1,27 +1,11 @@
-"""Image references, and whether an image is one the config file has a section for.
-
-An image section names a repository: it trusts the image's maintainer, not one image. A name alone
-proves nothing, because anything can be built or tagged locally under any name, so an image matches only
-if docker recorded that it was pulled from that repository (a repo digest), and never for a service that
-is built from a Dockerfile.
-"""
+"""Image references, read and normalised as docker reads them."""
 
 import re
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, NamedTuple
-
-if TYPE_CHECKING:  # config imports this module
-    from dockscreen.config import Config
 
 DEFAULT_DOMAIN = "docker.io"
 LEGACY_DOMAINS = frozenset({"index.docker.io", "registry-1.docker.io"})
 # distribution/reference: a path component is lower-case alphanumerics and separators.
 COMPONENT = re.compile(r"^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$")
-
-
-class Match(NamedTuple):
-    repository: str | None  # the image section that applies to the image, if one does
-    problem: str | None     # why a section for the image's repository does not apply, for audit
 
 
 def split_reference(reference: str) -> tuple[str, str, str]:
@@ -58,23 +42,6 @@ def repository(reference: str) -> str | None:
         return None
 
 
-def section_for(config: "Config", reference: str, repo_digests: Iterable[str] | None, built: bool) -> Match:
-    """Determines which image section of the config file applies to this image, as a Match.
-
-    reference: the image name the service or command line uses.
-    repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
-    built: the service builds the image from a Dockerfile.
-    """
-    name = repository(reference)
-    if name not in config.images:
-        return Match(None, None)
-    if built:
-        return Match(None, f"the config has a section for {name}, but the service builds its image")
-    if not any(repository(d) == name for d in repo_digests or []):
-        return Match(None, f"the config has a section for {name}, but this image was not pulled from there")
-    return Match(name, None)
-
-
 def _shown(repository: str) -> str:
     """Returns a normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
     for prefix in (f"{DEFAULT_DOMAIN}/library/", f"{DEFAULT_DOMAIN}/"):
@@ -91,11 +58,3 @@ def section_hint(reference: str, config_file: str, built: bool = False) -> str |
     if built or not name:
         return None
     return f"set user under [images.\"{_shown(name)}\"] in {config_file}"
-
-
-def name_matches(config: "Config", reference: str, built: bool) -> str | None:
-    """Returns the repository of the image section the name alone points to, or None if there is none or
-    the image is built. The name proves nothing: this is for before the image is there.
-    """
-    name = repository(reference)
-    return name if name in config.images and not built else None

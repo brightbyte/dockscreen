@@ -7,7 +7,7 @@ import signal
 import subprocess
 import tarfile
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Self
 
 from dockscreen import messages
 
@@ -33,15 +33,15 @@ class Docker:
         self._run_proc = subprocess.run
 
     @classmethod
-    def new_for_testing(cls, run_proc: Callable[..., Any], binary: str = "docker") -> "Docker":
+    def new_for_testing(cls, run_proc: Callable[..., Any], binary: str = "docker") -> Self:
         """Returns a Docker that runs binary with run_proc, a stand-in for subprocess.run."""
         docker = cls(binary)
         docker._run_proc = run_proc
         return docker
 
-    def with_env(self, variables: Mapping[str, str]) -> "Docker":
+    def with_env(self, variables: Mapping[str, str]) -> Self:
         """Returns a Docker like this one that also passes variables in the environment of what it runs."""
-        docker = Docker(self.binary, {**(os.environ if self.env is None else self.env), **variables})
+        docker = type(self)(self.binary, {**(os.environ if self.env is None else self.env), **variables})
         docker._run_proc = self._run_proc
         return docker
 

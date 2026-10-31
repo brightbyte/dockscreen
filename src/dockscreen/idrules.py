@@ -21,7 +21,7 @@ check (a configured image user), and the caller's own ids when --allow-me was gi
 """
 
 from collections.abc import Collection, Iterable
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 from dockscreen import config as configuration
 from dockscreen import hostusers
@@ -40,7 +40,7 @@ class Subordinate:
         self._read(SUBUID_FILE, SUBGID_FILE)
 
     @classmethod
-    def new_for_testing(cls, uid_file: str, gid_file: str) -> "Subordinate":
+    def new_for_testing(cls, uid_file: str, gid_file: str) -> Self:
         """Returns a Subordinate read from the given files instead of this host's."""
         subordinate = cls.__new__(cls)
         subordinate._read(uid_file, gid_file)
@@ -62,7 +62,7 @@ class Rules(NamedTuple):
     local: hostusers.HostAccounts          # the accounts on this host
     subordinate: Subordinate               # ranges in /etc/subuid and /etc/subgid
 
-    def with_settings(self, settings: configuration.Config) -> "Rules":
+    def with_settings(self, settings: configuration.Config) -> Self:
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 

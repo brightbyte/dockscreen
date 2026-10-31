@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`images.name_matches`). Once the images are there, `composeimages._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `composeimages._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -197,7 +197,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 `idrules.Rules` implements [the id rules](#ids-the-project-and-the-image-may-not-choose). It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 
-`imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `images.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image.
+`imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image.
 
 ### The `docker` wrapper (`docker_cli`, `runargs`, `run.gate`, `run.audit`, `hostusers`)
 

@@ -4,7 +4,7 @@ The image is untrusted: its own /etc/passwd and /etc/group decide the identity d
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in
 this order:
 - the config file names a user for the image's repository, and the image was pulled from there:
-  that user, whatever it is (images.section_for, config.effective);
+  that user, whatever it is (config.section_for, config.effective);
 - the image would run as root (uid, gid or a supplementary gid of 0): the configured default user
   instead, nobody unless configured otherwise, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
@@ -18,9 +18,9 @@ Used by `docker run` (gate) and by compose (composeimages) alike.
 
 import enum
 from collections.abc import Sequence
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Self
 
-from dockscreen import config, hostusers, idrules, ids, images, imageuser, messages
+from dockscreen import config, hostusers, idrules, ids, imageuser, messages
 from dockscreen.dockerclient import Docker
 from dockscreen.runtime import Runtime
 
@@ -51,7 +51,7 @@ class Context(NamedTuple):
         settings = config.effective(self.runtime.settings, repository, self.directory)
         return settings, self.ids.with_settings(settings)
 
-    def with_allow_me(self, allow_me: bool) -> "Context":
+    def with_allow_me(self, allow_me: bool) -> Self:
         """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
         return self._replace(ids=self.ids._replace(allow_me=True)) if allow_me else self
 
@@ -121,7 +121,7 @@ def assess(ctx: Context, container: str, info: dict[str, Any], explicit: bool | 
     built: the image is built from a Dockerfile by the service; the config file never applies then.
     """
     image = ctx.docker.inspect_image(info["Image"])
-    match = images.section_for(ctx.runtime.settings, reference or info["Config"].get("Image") or "",
+    match = config.section_for(ctx.runtime.settings, reference or info["Config"].get("Image") or "",
                                image.get("RepoDigests"), built)
     found: dict[str, Any] = {"note": match.problem, "section": match.repository}
     spec = info["Config"].get("User") or ""

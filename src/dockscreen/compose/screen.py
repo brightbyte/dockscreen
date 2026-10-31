@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
-from dockscreen import commandline, config, images, messages, policy, verdict
+from dockscreen import commandline, config, messages, policy, verdict
 from dockscreen.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.runtime import Runtime
 
@@ -48,14 +48,14 @@ def context(project_dir: str, runtime: Runtime, allow_me: bool = False,
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     Each service is checked with the settings of its image section, if one applies. Before the images are
     there, that is the section the image name points to; verified, once they are, maps each service to the
-    section its image was proven to have been pulled for (images.section_for).
+    section its image was proven to have been pulled for (config.section_for).
     """
     def settings_context(settings: config.Config) -> policy.Context:
         return policy.context_for(settings, project_dir, runtime.rules(allow_me), runtime.config_file)
 
     def scope(name: str, service: dict[str, Any]) -> policy.Context:
         if verified is None:
-            repository = images.name_matches(runtime.settings, str(service.get("image") or ""),
+            repository = config.name_matches(runtime.settings, str(service.get("image") or ""),
                                              "build" in service)
         else:
             repository = verified.get(name)

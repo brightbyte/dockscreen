@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from typing import Any, NamedTuple
 
 from dockscreen import commandline, ids, imagedecision, images, messages, policy, verdict
+from dockscreen import config as configuration
 from dockscreen.dockerclient import Docker, DockerError
 
 
@@ -175,13 +176,13 @@ def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict
     verified = {}
     for name, service in (config.get("services") or {}).items():
         image, built = _image_name(config, name, service), "build" in service
-        if images.name_matches(settings, image, built) is None:
+        if configuration.name_matches(settings, image, built) is None:
             continue
         try:
             digests = ctx.docker.inspect_image(image).get("RepoDigests")
         except DockerError:
             continue  # not there: the section does not apply, and the final check says what that means
-        if repository := images.section_for(settings, image, digests, built).repository:
+        if repository := configuration.section_for(settings, image, digests, built).repository:
             verified[name] = repository
     return verified
 

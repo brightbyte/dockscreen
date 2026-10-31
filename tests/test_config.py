@@ -218,3 +218,34 @@ def test_an_existing_user_file_is_left_alone(tmp_path):
     (tmp_path / "link.toml").symlink_to(tmp_path / "elsewhere.toml")
     assert not config._create_user_file(str(tmp_path / "link.toml"))
     assert not (tmp_path / "elsewhere.toml").exists()
+
+
+IMAGE_SECTION = config.Config(images={"docker.io/library/mariadb": config.Section(user=(999, 999))})
+
+
+def test_an_image_pulled_from_the_sections_repository_gets_the_section():
+    match = config.section_for(IMAGE_SECTION, "mariadb:11", ["mariadb@sha256:abc"], built=False)
+    assert match == config.Match("docker.io/library/mariadb", None)
+    # the digest may be recorded under any spelling of the repository
+    match = config.section_for(IMAGE_SECTION, "docker.io/library/mariadb",
+                               ["docker.io/library/mariadb@sha256:a"], built=False)
+    assert match.repository == "docker.io/library/mariadb"
+
+
+@pytest.mark.parametrize("reference, digests, built, problem", [
+    ("mariadb:11", [], False, "this image was not pulled from there"),
+    ("mariadb:11", ["evil.example/mariadb@sha256:abc"], False, "this image was not pulled from there"),
+    ("mariadb:11", ["mariadb@sha256:abc"], True, "the service builds its image"),
+])
+def test_an_image_that_only_has_the_name_does_not_get_the_section(reference, digests, built, problem):
+    match = config.section_for(IMAGE_SECTION, reference, digests, built)
+    assert match.repository is None and match.problem.endswith(problem)
+    # before the image is there, the name alone points to the section, unless the service builds it
+    expected = None if built else "docker.io/library/mariadb"
+    assert config.name_matches(IMAGE_SECTION, reference, built) == expected
+
+
+@pytest.mark.parametrize("reference", ["redis", "evil.example/mariadb", "someone/mariadb", "sha256:abc"])
+def test_other_repositories_have_no_section(reference):
+    match = config.section_for(IMAGE_SECTION, reference, ["x@sha256:a"], built=False)
+    assert match == config.Match(None, None)
