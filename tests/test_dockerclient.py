@@ -23,7 +23,8 @@ def test_with_env_adds_variables_to_the_environment_of_what_it_runs(monkeypatch)
         seen.append(kwargs.get("env"))
         return subprocess.CompletedProcess(cmd, 0, "default\n", "")
 
-    plain = Docker("docker", run=run)
+    plain = Docker("docker")
+    plain._run_proc = run
     monkeypatch.setenv("KEPT", "1")
 
     plain.context()

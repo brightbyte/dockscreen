@@ -20,7 +20,7 @@ Ordered by how likely the problem is to matter, then by how cheap the fix is.
 
 ### 2. Ctrl-C and SIGTERM on `docker run` leave the container running
 
-`Docker.start` uses `subprocess.call`: Ctrl-C kills the `docker start --attach` client after 0.25 s and shows a traceback; SIGTERM orphans the child. `Docker.run_child` already forwards signals; reuse it.
+`Docker.start` waits with `subprocess.run`: Ctrl-C kills the `docker start --attach` client after 0.25 s and shows a traceback; SIGTERM orphans the child. `Docker.run_child` already forwards signals; reuse it.
 
 ### 3. `docker run` and `docker start` do not see a bind-backed named volume
 

@@ -22,19 +22,25 @@ class DockerNotFound(DockerError):
 
 
 class Docker:
-    def __init__(self, binary, run=subprocess.run, call=subprocess.call, popen=subprocess.Popen, env=None):
-        """Wraps binary, the real docker (runtime._real_docker); run, call and popen launch it.
+    def __init__(self, binary, env=None):
+        """Wraps binary, the real docker (runtime._real_docker).
 
         env: the environment of everything it runs; None for this process's own.
         """
         self.binary, self.env = binary, env
-        self._launchers = (run, call, popen)
-        self.run, self.call, self.popen = (_found(launch, env) for launch in self._launchers)
+        self._run_proc = subprocess.run  # tests replace it
 
     def with_env(self, variables):
         """Returns a Docker like this one that also passes variables in the environment of what it runs."""
-        env = {**(os.environ if self.env is None else self.env), **variables}
-        return Docker(self.binary, *self._launchers, env=env)
+        docker = Docker(self.binary, {**(os.environ if self.env is None else self.env), **variables})
+        docker._run_proc = self._run_proc
+        return docker
+
+    def run(self, args, **kwargs):
+        """Runs `docker args` to completion, with kwargs as subprocess.run takes them, and returns the
+        completed process. Raises DockerNotFound if the binary does not exist.
+        """
+        return self._launch(self._run_proc, [self.binary, *args], **kwargs)
 
     def exec(self, args):
         """Replaces this process with `docker args`, keeping tty, signals and exit code.
@@ -54,7 +60,7 @@ class Docker:
 
         stderr stays on the terminal, so pull progress shows.
         """
-        result = self.run([self.binary, "create", *args], stdout=subprocess.PIPE, text=True)
+        result = self.run(["create", *args], stdout=subprocess.PIPE, text=True)
         return result.returncode, (result.stdout.strip() if result.returncode == 0 else None)
 
     def inspect_container(self, ref):
@@ -70,7 +76,7 @@ class Docker:
 
     def _inspect(self, kind, ref):
         # `--`: a ref from the project or the command line must not be read as an option
-        result = self.run([self.binary, kind, "inspect", "--", ref], capture_output=True, text=True)
+        result = self.run([kind, "inspect", "--", ref], capture_output=True, text=True)
         if result.returncode != 0:
             raise DockerError(result.stderr.strip() or f"docker {kind} inspect failed")
         return json.loads(result.stdout)[0]
@@ -82,8 +88,8 @@ class Docker:
         """
         # `docker cp SRC -` streams a tar archive to stdout, so nothing from the image is written
         # to the host; -L reads through a symlink, as docker does when it resolves the user
-        process = self.popen([self.binary, "cp", "-L", f"{container}:{path}", "-"],
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        process = self._launch(subprocess.Popen, [self.binary, "cp", "-L", f"{container}:{path}", "-"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         data = process.stdout.read(MAX_FILE_BYTES + 1)
         if len(data) > MAX_FILE_BYTES:
             process.kill()
@@ -104,11 +110,11 @@ class Docker:
             args.append("--interactive")
         if detach_keys:
             args.append(f"--detach-keys={detach_keys}")
-        return self.call([self.binary, *args, "--", container])
+        return self.run([*args, "--", container]).returncode
 
     def remove(self, container):
         """Removes container, running or not, ignoring failures."""
-        self.run([self.binary, "rm", "--force", "--", container], capture_output=True)
+        self.run(["rm", "--force", "--", container], capture_output=True)
 
     def project_directories(self, name):
         """Returns the working directory label of each container, running or not, of compose project `name`.
@@ -116,7 +122,7 @@ class Docker:
         Empty for one that has no such label. Raises DockerError if docker cannot say.
         """
         label = "com.docker.compose.project"
-        result = self.run([self.binary, "ps", "--all", "--filter", f"label={label}={name}", "--format",
+        result = self.run(["ps", "--all", "--filter", f"label={label}={name}", "--format",
                            f'{{{{.Label "{label}.working_dir"}}}}'], capture_output=True, text=True)
         if result.returncode != 0:
             raise DockerError(result.stderr.strip() or "docker ps failed")
@@ -124,14 +130,14 @@ class Docker:
 
     def context(self):
         """Returns the name of the current docker context, or None if docker cannot tell."""
-        result = self.run([self.binary, "context", "show"], capture_output=True, text=True)
+        result = self.run(["context", "show"], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None
 
     def capture(self, cmd):
         """Runs cmd, a whole command line such as `docker compose ... config`, and returns the completed
         process with its output captured as text.
         """
-        return self.run(cmd, capture_output=True, text=True, check=False)
+        return self._launch(self._run_proc, cmd, capture_output=True, text=True, check=False)
 
     def run_child(self, cmd):
         """Runs cmd, a whole command line, on this terminal and returns its exit status, 128 + the signal
@@ -140,7 +146,7 @@ class Docker:
         Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
         """
         try:
-            process = self.popen(cmd)
+            process = self._launch(subprocess.Popen, cmd)
         except DockerNotFound:
             messages.notice(messages.DOCKER_NOT_FOUND)
             return 127
@@ -161,19 +167,16 @@ class Docker:
                 signal.signal(number, handler)
         return 128 - code if code < 0 else code
 
-
-def _found(launch, env):
-    """Wraps launch (subprocess.run, call or Popen) to run with env (if not None), and to raise
-    DockerNotFound if the binary does not exist.
-    """
-    def launch_found(cmd, **kwargs):
-        if env is not None:
-            kwargs["env"] = env
+    def _launch(self, launch, cmd, **kwargs):
+        """Returns what launch (_run_proc or subprocess.Popen) returns for cmd, run with env if that is
+        set. Raises DockerNotFound if the binary does not exist.
+        """
+        if self.env is not None:
+            kwargs["env"] = self.env
         try:
             return launch(cmd, **kwargs)
         except FileNotFoundError:
             raise DockerNotFound(messages.DOCKER_NOT_FOUND) from None
-    return launch_found
 
 
 def _first_file_of_tar(data):

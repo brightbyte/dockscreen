@@ -19,15 +19,19 @@ class Ps:
 
 def test_the_containers_of_a_project_are_found_by_its_label_whether_running_or_not():
     ps = Ps("/a\n\n/b\n")
+    docker = Docker("docker")
+    docker._run_proc = ps
 
-    assert Docker("docker", run=ps).project_directories("proj") == ["/a", "", "/b"]
+    assert docker.project_directories("proj") == ["/a", "", "/b"]
     assert ps.commands == [["docker", "ps", "--all", "--filter", "label=com.docker.compose.project=proj",
                             "--format", '{{.Label "com.docker.compose.project.working_dir"}}']]
 
 
 def test_docker_failing_to_say_is_an_error():
+    docker = Docker("docker")
+    docker._run_proc = Ps(code=1, err="daemon down")
     with pytest.raises(DockerError, match="daemon down"):
-        Docker("docker", run=Ps(code=1, err="daemon down")).project_directories("proj")
+        docker.project_directories("proj")
 
 
 def conflicts(found, directory="/p"):
