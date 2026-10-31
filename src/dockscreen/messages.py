@@ -41,7 +41,7 @@ class Marked(str):
         return line
 
     @property
-    def _shown(self):
+    def shown(self):
         """Returns the text, followed by the help if there is one and helpful mode is on."""
         return f"{self.text} - {self.help}" if self.help and _helpful else self.text
 
@@ -133,7 +133,7 @@ def _wrapped(text, width, colour):
     to colour the mark.
     """
     lead = f"{text.mark} " if isinstance(text, Marked) else ""
-    body = printable(text._shown if lead else text)
+    body = printable(text.shown if lead else text)
     if width is None:
         lines = [lead + body]
     else:
@@ -149,7 +149,7 @@ def _paint(line, stream):
     if not isinstance(line, Marked):
         return printable(line)
     mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
-    return f"{mark} {printable(line._shown)}"
+    return f"{mark} {printable(line.shown)}"
 
 
 def _coloured(mark):

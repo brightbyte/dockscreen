@@ -24,7 +24,7 @@ def test_references_are_normalised_as_docker_does(reference, split):
 def test_what_is_not_a_reference_is_an_error(reference):
     with pytest.raises(ValueError):
         images.split_reference(reference)
-    assert images._repository(reference) is None
+    assert images.repository(reference) is None
 
 
 SETTINGS = config.Config(images={"docker.io/library/mariadb": config.Section(user=(999, 999))})
