@@ -3,8 +3,7 @@
 The command line is trusted, and the service's container was checked when it was created.
 """
 
-from dockscreen.cli import userargs
-from dockscreen.compose import composeargs
+from dockscreen.cli import composeargs, userargs
 from dockscreen.host.runtime import Runtime
 
 

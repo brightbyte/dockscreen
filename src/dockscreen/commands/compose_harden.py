@@ -2,17 +2,36 @@
 
 `global_args` are the compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
 select the project.
+
+_fix_config removes or replaces only what has a safe automatic fix; checking the result with
+policy.check_config reports what is left.
+
+_render writes the difference between a config and its fixed copy as a compose override file. Compose
+merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset` tag
+and replaced lists use `!override`. Values are written as JSON, which is valid YAML.
 """
 
+import copy
+import json
+import os
+import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
-from dockscreen.compose import autofix, composeimages, composeproject, hardening, inspect
+from dockscreen.compose import composeimages, composeproject, inspect
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy
-from dockscreen.util import messages
+from dockscreen.screen import hardening, policy
+from dockscreen.util import ids, messages
+from dockscreen.util.messages import printable
+
+# What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
+# only with --allow-me. A literal would only fit the person who ran harden.
+_USER_TEMPLATE = "${UID}:${GID}"
+
+# Keys whose removal is a safe fix.
+_REMOVABLE_SERVICE_KEYS = (*policy.FORBIDDEN_KEYS, "runtime", *policy.NAMESPACE_KEYS)
 
 
 def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
@@ -38,10 +57,10 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
         return 1
 
     base, static = project.hardened, project.static_ctx()
-    fixed = autofix.fix_config(base, static)
+    fixed = _fix_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
-    resolved = autofix.as_compose_reads(fixed, static)
+    resolved = _as_compose_reads(fixed, static)
     remaining = policy.check_config(resolved, static)
     notes = [hardening.defaults_note()]
     if remaining:
@@ -50,7 +69,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     else:
         remaining, notes = _fix_image_users(project, fixed, resolved, notes)
 
-    sys.stdout.write(autofix.render(base, fixed, remaining, notes=notes))
+    sys.stdout.write(_render(base, fixed, remaining, notes=notes))
     for problem in remaining:
         messages.notice(f"cannot fix automatically: {problem}")
     return 1 if remaining else 0
@@ -72,8 +91,142 @@ def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], res
         if decision.assessment.failed:  # setting a user does not fix an image that could not be read
             remaining.append(composeimages.decision_problem(name, decision))
         elif decision.assessment.refused:
-            fixed["services"][name]["user"] = autofix.USER_TEMPLATE
+            fixed["services"][name]["user"] = _USER_TEMPLATE
             notes.append(f"service {name}: image {decision.image} chose a user that is not acceptable, "
                          "so user is set explicitly")
     return remaining, notes
 
+
+def _fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+    """Returns a copy of config with the problems that have a mechanical fix fixed.
+
+    Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
+    become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
+    and env files have no safe automatic fix; they stay and are reported by check_config on the result.
+    """
+    fixed = copy.deepcopy(config)
+    for name, service in fixed.get("services", {}).items():
+        service_ctx = ctx.for_service(name, service).with_mounts(
+            policy.has_host_mounts(service, config.get("volumes")))
+        vetted = name in ctx.vetted and not service.get("user")
+        if not vetted and policy.check_user(service.get("user"), service_ctx):
+            service["user"] = _USER_TEMPLATE
+        if policy.check_security_opt(service.get("security_opt"), service_ctx):
+            service["security_opt"] = [policy.SECURITY_OPT]
+        if policy.check_cap_drop(service.get("cap_drop"), ctx):
+            service["cap_drop"] = [policy.CAP_DROP]
+        for key in _REMOVABLE_SERVICE_KEYS:
+            service.pop(key, None)
+        if "volumes_from" in service:
+            service["volumes_from"] = [
+                v for v in service["volumes_from"] if not str(v).startswith("container:")]
+            if not service["volumes_from"]:
+                del service["volumes_from"]
+        if "volumes" in service:
+            service["volumes"] = [_fix_mount(m, service_ctx) for m in service["volumes"]]
+    return fixed
+
+
+def _as_compose_reads(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+    """Returns a copy of config as compose reads the patch, for checking it: _USER_TEMPLATE becomes the
+    caller's ids, and a relative placeholder mount source a path in the project directory.
+    """
+    resolved = copy.deepcopy(config)
+    for service in resolved.get("services", {}).values():
+        if service.get("user") == _USER_TEMPLATE:
+            service["user"] = ids.format_user(ctx.ids.me)
+        for mount in service.get("volumes", []):
+            if mount.get("type") == "bind" and not os.path.isabs(mount["source"]):
+                mount["source"] = os.path.join(ctx.project_dir, mount["source"].removeprefix("./"))
+    return resolved
+
+
+def _fix_mount(mount: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+    """Returns mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
+    if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
+        return mount
+    return {**mount, "source": _placeholder_source(mount["source"], ctx.project_dir)}
+
+
+def _placeholder_source(source: str, project_dir: str) -> str:
+    """Returns a relative, upper-case stand-in for a source outside the project: /etc becomes ./ETC.
+
+    The upper case keeps it from naming the same directory as a real lower-case one, and marks it as
+    something to edit.
+    """
+    relative = os.path.relpath(source, project_dir)
+    if relative.startswith(os.pardir):
+        relative = source.lstrip(os.sep)
+    return "./" + relative.replace(os.sep, "_").upper()
+
+
+_HEADER = "# Generated by `dockscreen harden`. Save as compose.override.yaml, or load it last with -f."
+_SAFE_YAML_KEY = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _render(original: dict[str, Any], fixed: dict[str, Any], unfixed: Iterable[str] = (),
+           notes: Iterable[str] = ()) -> str:
+    """Renders the compose override that turns original into fixed, as YAML text.
+
+    original: the config the patch is applied to, as it will be run (defaults included).
+    unfixed and notes become comments.
+    """
+    lines = [_HEADER]
+    lines += [f"# note: {printable(note)}" for note in notes]
+    lines += [f"# edit: {printable(note)}" for note in _mount_notes(original, fixed)]
+    lines += [f"# not fixed: {printable(problem)}" for problem in unfixed]
+
+    changes = _service_changes(original, fixed)
+    if any("user" in service for service in changes.values()):
+        lines.append("# note: user ${UID}:${GID} runs a service as you: dockscreen allows that only with "
+                     "--allow-me, and plain docker compose needs UID and GID exported.")
+    if not changes:
+        return "\n".join([*lines, "services: {}", ""])
+
+    lines.append("services:")
+    for name, service in changes.items():
+        lines.append(f"  {json.dumps(name)}:")
+        lines += [f"    {_yaml_key(key)}: {value}" for key, value in service.items()]
+    return "\n".join([*lines, ""])
+
+
+def _yaml_key(key: str) -> str:
+    """Returns key as a YAML mapping key, quoted unless it is plainly safe."""
+    return key if _SAFE_YAML_KEY.match(key) else json.dumps(key)
+
+
+def _mount_notes(original: dict[str, Any], fixed: dict[str, Any]) -> list[str]:
+    """Returns one note per mount whose source fixed replaced by a placeholder."""
+    notes = []
+    for name, before in original.get("services", {}).items():
+        after = fixed["services"][name]
+        for old, new in zip(before.get("volumes", []), after.get("volumes", [])):
+            if old.get("source") != new.get("source"):
+                notes.append(
+                    f"service {name}: mount source {old['source']} was replaced by the placeholder "
+                    f"{new['source']}, which compose creates empty; point it at a path inside the project")
+    return notes
+
+
+def _service_changes(original: dict[str, Any], fixed: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Returns {service: {key: rendered YAML value}} for the keys that fixed changes in original."""
+    changes = {}
+    for name, before in original.get("services", {}).items():
+        after = fixed["services"][name]
+        service = {
+            key: _render_value(after.get(key))
+            for key in sorted(set(before) | set(after))
+            if before.get(key) != after.get(key)
+        }
+        if service:
+            changes[name] = service
+    return changes
+
+
+def _render_value(value: Any) -> str:
+    """Renders value as YAML for the override file, tagged so that it replaces what the project set."""
+    if value is None:
+        return "!reset null"
+    if isinstance(value, list):
+        return "!override " + json.dumps(value)
+    return json.dumps(value)

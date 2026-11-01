@@ -56,7 +56,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 11. `harden` maps a mount source `/` to `./`
 
-`autofix._placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
+`compose_harden._placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
 
 ### 12. `docker.context()` ignores `--config`
 

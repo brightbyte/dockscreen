@@ -149,10 +149,10 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`.
-3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `verdict`.
-4. `cli`: reading the command line: `userargs`, `runargs`.
-5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), its images (`composeimages`), `inspect`, `hardening`, `autofix`, `shellenv`, `composeargs`.
+2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
+3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `verdict`.
+4. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
+5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), its images (`composeimages`), and `inspect`, which reads the config compose resolves.
 6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
 7. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
 
@@ -185,7 +185,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
+`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### The policy (`policy.py`)
 

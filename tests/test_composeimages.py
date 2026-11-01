@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, make_runtime, rules
 
-from dockscreen.compose import autofix, composeimages
+from dockscreen.compose import composeimages
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import imagedecision, policy
@@ -398,14 +398,6 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     problems = policy.check_config(config, policy.Context("/p", rules()))
     assert "service web: key 'vetted' is not on the allow list" in problems
     assert "service web: user is not set, the image default may be root" in problems
-
-
-def test_autofix_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
-    config = project(web={}, db={})
-    ctx = policy.Context("/p", rules(), vetted=frozenset({"web"}))
-    fixed = autofix.fix_config(config, ctx)
-    assert "user" not in fixed["services"]["web"]
-    assert fixed["services"]["db"]["user"] == autofix.USER_TEMPLATE
 
 
 def test_gate_assessment_is_what_decides():

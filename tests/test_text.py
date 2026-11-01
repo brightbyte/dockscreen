@@ -2,8 +2,7 @@ import os
 
 from fakes import FakeImages, compose_project, rules
 
-from dockscreen.commands import compose_audit
-from dockscreen.compose import autofix
+from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.screen import policy
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
@@ -22,9 +21,9 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
-    fixed = autofix.fix_config(original, policy.Context("/proj", rules(me=(UID, GID), allow_me=True)))
+    fixed = compose_harden._fix_config(original, policy.Context("/proj", rules(me=(UID, GID), allow_me=True)))
 
-    text = autofix.render(original, fixed, ["bind mount " + evil])
+    text = compose_harden._render(original, fixed, ["bind mount " + evil])
 
     assert all(line.startswith(("#", " ", "services:")) for line in text.splitlines())
     assert not any(line.startswith("services:") and "pwned" in line for line in text.splitlines())
@@ -34,7 +33,7 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
 def test_patch_quotes_unusual_keys():
     original = {"services": {"web": {"odd\nkey: x": 1}}}
     fixed = {"services": {"web": {}}}
-    assert '"odd\\nkey: x": !reset null' in autofix.render(original, fixed)
+    assert '"odd\\nkey: x": !reset null' in compose_harden._render(original, fixed)
 
 
 def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):

@@ -5,7 +5,7 @@ import pytest
 from fakes import make_runtime
 
 from dockscreen import compose_cli
-from dockscreen.compose import shellenv
+from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import Docker
 from dockscreen.util import messages
 

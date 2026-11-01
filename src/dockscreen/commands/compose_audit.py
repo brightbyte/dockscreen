@@ -6,10 +6,11 @@ select the project.
 
 from collections.abc import Sequence
 
-from dockscreen.compose import composeimages, composeproject, hardening, inspect, shellenv
+from dockscreen.compose import composeimages, composeproject, inspect
+from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy, verdict
+from dockscreen.screen import hardening, policy, verdict
 from dockscreen.screen.verdict import Verdict
 from dockscreen.util import commandline, messages
 

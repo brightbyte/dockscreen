@@ -3,8 +3,7 @@ from fakes import Accounts, compose_project, rules
 
 from dockscreen import compose_cli
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.compose import autofix, hardening
-from dockscreen.screen import policy
+from dockscreen.screen import hardening, policy
 from dockscreen.util import messages
 
 NOBODY = "65534:65534"
@@ -141,10 +140,6 @@ def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(capsys
 def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():
     assert compose_cli.COMMANDS["fix"] is compose_cli.COMMANDS["harden"]
     assert compose_cli.ALIASES == {"fix": "harden"}
-
-
-def test_patch_header_names_the_command():
-    assert "`dockscreen harden`" in autofix.HEADER
 
 
 # --- names in `user:`, hook users and group_add -------------------------------------

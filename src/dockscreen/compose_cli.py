@@ -19,7 +19,7 @@ from dockscreen.commands import (
     compose_run,
     compose_up,
 )
-from dockscreen.compose import shellenv
+from dockscreen.host import shellenv
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline, messages
 

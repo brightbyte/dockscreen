@@ -34,7 +34,7 @@ NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "n
 # What every service must have; hardening adds them where they are missing.
 CAP_DROP = "ALL"
 SECURITY_OPT = "no-new-privileges:true"
-# Service keys that are refused whenever they carry a value; autofix removes them. group_add is one
+# Service keys that are refused whenever they carry a value; harden removes them. group_add is one
 # because older docker daemons look a number up as a group name in the image's /etc/group first, and
 # dockscreen can neither pin the value nor read the group file for every service.
 FORBIDDEN_KEYS = (

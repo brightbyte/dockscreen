@@ -1,9 +1,13 @@
-"""`harden` pulls and builds as `up` would, then writes a user for the services whose image needs one."""
+"""`harden`: the fixes it makes, the patch it writes, and the users it sets once it has pulled and built as
+`up` would."""
 import json
+import os
 
-from fakes import ME, FakeImages, compose_project
+import pytest
+from fakes import ME, FakeImages, compose_project, rules
 
 from dockscreen.commands import compose_harden
+from dockscreen.screen import policy
 
 UID, GID = ME
 
@@ -105,3 +109,165 @@ def test_harden_reports_a_failed_pull_as_a_problem_it_cannot_fix(capsys, tmp_pat
     runtime, _ = setup(tmp_path, project(web={}), FakeImages(users={}, local=set()), codes={"pull": 1})
     assert compose_harden.harden([], [], runtime) == 1
     assert "cannot fix automatically: docker compose pull web failed" in capsys.readouterr().err
+
+
+# --- the fixes and the patch ------------------------------------------------
+
+@pytest.fixture
+def project_dir(tmp_path):
+    """A project directory with a data directory inside it, and an escape symlink to one outside."""
+    (tmp_path / "outside").mkdir()
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "data").mkdir()
+    os.symlink(tmp_path / "outside", root / "escape")
+    return root
+
+
+def service(**overrides):
+    """A service that satisfies every requirement; tests override one thing at a time."""
+    return {"user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
+            **overrides}
+
+
+def config(**fields):
+    return {"name": "proj", "services": {"web": fields}}
+
+
+def compliant(**fields):
+    return config(**service(**fields))
+
+
+def context(directory, extra_dirs=()):
+    return policy.Context(str(directory), rules(me=(UID, GID), allow_me=True),
+                          tuple(str(d) for d in extra_dirs))
+
+
+def check(directory, config):
+    return policy.check_config({"name": "proj", **config}, context(directory))
+
+
+def bind(source):
+    return {"type": "bind", "source": str(source), "target": "/x"}
+
+
+def test_patch_resets_removed_keys_and_overrides_changed_ones():
+    original = config(user="0:0", privileged=True, group_add=["0", str(GID)], image="x")
+    fixed = compose_harden._fix_config(original, context("/proj"))
+
+    lines = compose_harden._render(original, fixed).splitlines()
+
+    assert '    user: "${UID}:${GID}"' in lines
+    assert any("--allow-me" in line and line.startswith("# note") for line in lines)
+    assert "    privileged: !reset null" in lines
+    assert "    group_add: !reset null" in lines
+    # untouched keys are not repeated
+    assert not any("image" in line for line in lines)
+
+
+def test_patch_for_compliant_config_is_empty():
+    original = compliant()
+    fixed = compose_harden._fix_config(original, context("/proj"))
+    assert compose_harden._render(original, fixed).splitlines()[-1] == "services: {}"
+
+
+def test_unfixed_problems_are_listed_as_comments():
+    original = compliant()
+    assert "# not fixed: bind mount /etc" in compose_harden._render(original, original, ["bind mount /etc"])
+
+
+def test_fix_command_prints_patch_and_fails_when_problems_remain(capsys, tmp_path):
+    original = config(user="0:0", build={"context": "/"})
+    runtime, _ = compose_project(tmp_path, original)
+
+    assert compose_harden.harden([], [], runtime) == 1
+
+    captured = capsys.readouterr()
+    assert "services:" in captured.out and "user:" in captured.out
+    assert "cannot fix automatically" in captured.err
+
+
+def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path):
+    original = compliant(volumes=[{"type": "bind", "source": "/etc", "target": "/e"}])
+    fixed = compose_harden._fix_config(original, context(tmp_path))
+
+    text = compose_harden._render(original, fixed)
+
+    assert '    volumes: !override [{"type": "bind", "source": "./ETC", "target": "/e"}]' in text
+    assert "# edit: service web: mount source /etc was replaced by the placeholder ./ETC" in text
+
+
+def test_fix_config_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
+    config = project(web={}, db={})
+    ctx = policy.Context("/p", rules(), vetted=frozenset({"web"}))
+    fixed = compose_harden._fix_config(config, ctx)
+    assert "user" not in fixed["services"]["web"]
+    assert fixed["services"]["db"]["user"] == compose_harden._USER_TEMPLATE
+
+
+def test_patch_header_names_the_command():
+    assert "`dockscreen harden`" in compose_harden._HEADER
+
+
+def test_fix_config_leaves_nothing_fixable(project_dir):
+    config = {"services": {"web": {
+        "user": "0:0", "group_add": ["0", "nogroup"], "privileged": True, "cap_add": ["ALL"],
+        "devices": ["/dev/sda"], "security_opt": ["seccomp=unconfined"], "network_mode": "host",
+        "volumes_from": ["container:x", "db"], "runtime": "nvidia",
+    }}}
+    fixed = compose_harden._fix_config(config, context(project_dir))
+    assert fixed["services"]["web"] == {
+        "user": compose_harden._USER_TEMPLATE, "security_opt": ["no-new-privileges:true"],
+        "cap_drop": ["ALL"], "volumes_from": ["db"],
+    }
+    resolved = compose_harden._as_compose_reads(fixed, context(project_dir))
+    assert check(project_dir, resolved) == []
+
+
+def test_fix_config_does_not_touch_input_and_keeps_unfixable_problems(project_dir):
+    config = {"services": {"web": service(privileged=True, build={"context": "/"}, provider={"type": "x"})}}
+    fixed = compose_harden._fix_config(config, context(project_dir))
+    assert config["services"]["web"]["privileged"] is True
+    assert check(project_dir, fixed) == [
+        "service web: key 'provider' is not on the allow list",
+        f"service web: build context '/' is outside {project_dir}",
+    ]
+
+
+def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placeholders(project_dir):
+    mounts = [
+        {"type": "bind", "source": "/etc", "target": "/e", "read_only": True},
+        {"type": "bind", "source": "/var/run/docker.sock", "target": "/s"},
+        {"type": "bind", "source": str(project_dir / "escape"), "target": "/x"},  # symlink out
+        {"type": "bind", "source": str(project_dir / "data"), "target": "/d"},  # fine, kept as is
+        {"type": "volume", "source": "cache", "target": "/c"},
+    ]
+    config = {"services": {"web": service(volumes=mounts)}}
+
+    fixed = compose_harden._fix_config(config, context(project_dir))
+
+    web = fixed["services"]["web"]["volumes"]
+    assert [m["source"] for m in web] == [
+        "./ETC", "./VAR_RUN_DOCKER.SOCK", "./ESCAPE", str(project_dir / "data"), "cache"]
+    assert web[0]["read_only"] is True  # other mount attributes survive
+    assert check(project_dir, fixed) == []
+    assert config["services"]["web"]["volumes"] == mounts
+    # compose reads the placeholders relative to the project, and the result still passes
+    resolved = compose_harden._as_compose_reads(fixed, context(project_dir))
+    assert [m["source"] for m in resolved["services"]["web"]["volumes"]][:2] == [
+        str(project_dir / "ETC"), str(project_dir / "VAR_RUN_DOCKER.SOCK")]
+    assert check(project_dir, resolved) == []
+
+
+def test_fix_config_keeps_a_compliant_service(project_dir):
+    config = {"services": {"web": service()}}
+    assert compose_harden._fix_config(config, context(project_dir)) == config
+
+
+def test_fix_config_keeps_mounts_from_extra_dirs(project_dir):
+    outside = project_dir.parent / "outside"
+    config = {"services": {"web": service(volumes=[bind(outside), bind("/etc")])}}
+
+    fixed = compose_harden._fix_config(config, context(project_dir, [outside]))
+
+    assert [m["source"] for m in fixed["services"]["web"]["volumes"]] == [str(outside), "./ETC"]

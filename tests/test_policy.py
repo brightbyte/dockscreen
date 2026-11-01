@@ -3,7 +3,6 @@ import os
 import pytest
 from fakes import rules
 
-from dockscreen.compose import autofix
 from dockscreen.screen import policy
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
@@ -492,70 +491,6 @@ def test_lifecycle_hooks_cannot_escalate(project):
 
 
 # --- fix ------------------------------------------------------------------
-
-def test_fix_config_leaves_nothing_fixable(project):
-    config = {"services": {"web": {
-        "user": "0:0", "group_add": ["0", "nogroup"], "privileged": True, "cap_add": ["ALL"],
-        "devices": ["/dev/sda"], "security_opt": ["seccomp=unconfined"], "network_mode": "host",
-        "volumes_from": ["container:x", "db"], "runtime": "nvidia",
-    }}}
-    fixed = autofix.fix_config(config, context(project))
-    assert fixed["services"]["web"] == {
-        "user": autofix.USER_TEMPLATE, "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
-        "volumes_from": ["db"],
-    }
-    resolved = autofix.as_compose_reads(fixed, context(project))
-    assert check(project, resolved) == []
-
-
-def test_fix_config_does_not_touch_input_and_keeps_unfixable_problems(project):
-    config = {"services": {"web": service(privileged=True, build={"context": "/"}, provider={"type": "x"})}}
-    fixed = autofix.fix_config(config, context(project))
-    assert config["services"]["web"]["privileged"] is True
-    assert check(project, fixed) == [
-        "service web: key 'provider' is not on the allow list",
-        f"service web: build context '/' is outside {project}",
-    ]
-
-
-def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placeholders(project):
-    mounts = [
-        {"type": "bind", "source": "/etc", "target": "/e", "read_only": True},
-        {"type": "bind", "source": "/var/run/docker.sock", "target": "/s"},
-        {"type": "bind", "source": str(project / "escape"), "target": "/x"},  # symlink out
-        {"type": "bind", "source": str(project / "data"), "target": "/d"},  # fine, kept as is
-        {"type": "volume", "source": "cache", "target": "/c"},
-    ]
-    config = {"services": {"web": service(volumes=mounts)}}
-
-    fixed = autofix.fix_config(config, context(project))
-
-    web = fixed["services"]["web"]["volumes"]
-    assert [m["source"] for m in web] == [
-        "./ETC", "./VAR_RUN_DOCKER.SOCK", "./ESCAPE", str(project / "data"), "cache"]
-    assert web[0]["read_only"] is True  # other mount attributes survive
-    assert check(project, fixed) == []
-    assert config["services"]["web"]["volumes"] == mounts
-    # compose reads the placeholders relative to the project, and the result still passes
-    resolved = autofix.as_compose_reads(fixed, context(project))
-    assert [m["source"] for m in resolved["services"]["web"]["volumes"]][:2] == [
-        str(project / "ETC"), str(project / "VAR_RUN_DOCKER.SOCK")]
-    assert check(project, resolved) == []
-
-
-def test_fix_config_keeps_a_compliant_service(project):
-    config = {"services": {"web": service()}}
-    assert autofix.fix_config(config, context(project)) == config
-
-
-def test_fix_config_keeps_mounts_from_extra_dirs(project):
-    outside = project.parent / "outside"
-    config = {"services": {"web": service(volumes=[bind(outside), bind("/etc")])}}
-
-    fixed = autofix.fix_config(config, context(project, [outside]))
-
-    assert [m["source"] for m in fixed["services"]["web"]["volumes"]] == [str(outside), "./ETC"]
-
 
 def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project):
     config = {"services": {"--ssh": service(), "web": service()}}
