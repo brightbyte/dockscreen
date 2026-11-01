@@ -1,4 +1,4 @@
-"""What dockscreen takes from the process it runs in, gathered once by the entry point.
+"""This module defines what dockscreen takes from the process it runs in, gathered once by the entry point.
 
 Everything below the entry points gets these as a Runtime, so none of it reads the config file, the
 caller's ids, the environment or the host's accounts on its own.
@@ -15,6 +15,9 @@ from dockscreen.util import messages
 
 
 class Runtime(NamedTuple):
+    """Snapshot of what dockscreen takes from the process it runs in: the settings, the real docker, the
+    host's accounts, and the caller's ids, environment and directories.
+    """
     settings: config.Config
     docker: Docker                          # the real docker
     accounts: hostusers.HostAccounts

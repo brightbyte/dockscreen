@@ -1,4 +1,5 @@
-"""The images of services that set no `user`: get them as compose would, then decide as `docker run` does.
+"""This module provides the handling of the images of services that set no `user`: it gets them as compose
+would, then decides their user as `docker run` does.
 
 A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
 whatever its image says. The image is acquired first, following the project's own pull policy so that
@@ -38,6 +39,9 @@ class ImageError(Exception):
 
 
 class Decision(NamedTuple):
+    """Decision on the user of one service's image: the image, the assessment of its user, and what was
+    looked at.
+    """
     image: str
     assessment: imagedecision.Assessment
     image_id: str | None = None  # what the image name was when it was looked at
@@ -45,7 +49,9 @@ class Decision(NamedTuple):
 
 
 class Prepared(NamedTuple):
-    """What prepare found for config, and decided with ctx (an imagedecision.Context)."""
+    """Project config whose services' images have been fetched and their users decided (with ctx, an
+    imagedecision.Context), ready to become the config that runs.
+    """
     config: dict
     ctx: imagedecision.Context
     to_run: frozenset

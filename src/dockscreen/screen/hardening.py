@@ -1,4 +1,4 @@
-"""Defaults dockscreen adds to every service before running it.
+"""This module provides the defaults dockscreen adds to every service before running it.
 
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
 or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
@@ -19,6 +19,7 @@ from dockscreen.util import ids, messages
 
 
 class Addition(NamedTuple):
+    """Change that dockscreen's defaults make to one key of a service, with the message that reports it."""
     service: str
     key: str
     message: str  # what was missing or a name, and what dockscreen does about it

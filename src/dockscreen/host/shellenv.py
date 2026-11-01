@@ -1,4 +1,5 @@
-"""Which environment variables of the shell end up in which service, and the ids dockscreen adds.
+"""This module provides what dockscreen knows about the environment compose runs in: which variables of the
+shell end up in which service, and the ids dockscreen adds.
 
 dockscreen passes UID and GID, the real ids of the caller, in the environment of the compose commands
 it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); values already in the environment

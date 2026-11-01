@@ -1,4 +1,5 @@
-"""`docker buildx bake`: what the bake files of the project let the builds reach on this host.
+"""This module implements `docker buildx bake`, checking what the project's bake files let the builds reach
+on this host.
 
 Bake reads files the project controls (docker-bake.hcl, compose files with `x-bake`), as `compose build`
 does, so the same things are refused: build sources outside the project, host networking, the SSH

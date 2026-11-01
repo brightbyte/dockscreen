@@ -1,4 +1,4 @@
-"""`docker run`, and `dockscreen audit`, which says what `docker run` would do.
+"""This module implements `docker run`, and `dockscreen audit`, which says what `docker run` would do.
 
 `docker run` becomes create, inspect, check, start: the daemon parses the
 command line, and the policy looks at the container it produced, from an image
@@ -127,6 +127,9 @@ def _fallback_notice(assessment: Assessment) -> messages.Marked:
 
 
 class Created(NamedTuple):
+    """Container that `docker run` created to be checked, with what inspecting it showed and the assessment
+    of its user.
+    """
     container: str
     info: dict[str, Any]     # as inspected; {} if it could not be
     assessment: Assessment

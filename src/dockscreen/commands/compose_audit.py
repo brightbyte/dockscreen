@@ -1,4 +1,5 @@
-"""`docker compose audit`, dockscreen's own: what `up` would do, without starting anything.
+"""This module implements `docker compose audit`, dockscreen's own command, which reports what `up` would do
+without starting anything.
 
 `global_args` are the compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
 select the project.

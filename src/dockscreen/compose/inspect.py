@@ -1,4 +1,7 @@
-"""Inspect what docker compose is about to run, and apply the security policy."""
+"""This module provides a project's config as docker compose resolves it, and the screening that applies to
+the project before and around the policy: where it is, what it is called, and which configured mount
+directories are risky.
+"""
 
 import json
 import os
@@ -20,11 +23,11 @@ DOCKER_SOCKET = "/var/run/docker.sock"
 
 
 class ScreenError(Exception):
-    """The project is refused before its config is looked at, or the config could not be inspected."""
+    """Refusal of a project before its config is looked at, or failure to inspect the config."""
 
 
 class InspectError(ScreenError):
-    """The config could not be inspected: no compose file, or compose could not read it."""
+    """Failure to inspect a project's config: no compose file, or compose could not read it."""
 
 
 def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:

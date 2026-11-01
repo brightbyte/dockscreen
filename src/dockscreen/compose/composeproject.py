@@ -1,5 +1,5 @@
-"""A compose project as dockscreen checks it, and running docker compose from the config that was
-checked, not from the files it would find itself.
+"""This module provides a compose project as dockscreen checks it, and runs docker compose from the config
+that was checked, not from the files compose would find itself.
 
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
@@ -33,7 +33,9 @@ REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p
 
 
 class Project(NamedTuple):
-    """A compose project as dockscreen runs it: hardened, and what the policy needs to check it."""
+    """Compose project as dockscreen runs it: its resolved config with the defaults added, and what the
+    policy needs to check it.
+    """
     global_args: list          # the compose options that select it
     directory: str
     hardened: dict             # the resolved config with hardening applied

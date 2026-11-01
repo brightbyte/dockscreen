@@ -1,4 +1,4 @@
-"""The compose policy applied to a container that a `docker run` command line created.
+"""This module applies the compose policy to a container that a `docker run` command line created.
 
 The command line is trusted, so `docker run` does not refuse what it asks for. `audit` points it out
 anyway: the inspected container is read back into the compose service keys it corresponds to, and

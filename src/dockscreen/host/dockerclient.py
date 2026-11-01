@@ -1,4 +1,4 @@
-"""The docker operations dockscreen needs, as thin wrappers around the real binary."""
+"""This module provides the docker operations dockscreen needs, as thin wrappers around the real binary."""
 
 import io
 import json
@@ -20,10 +20,14 @@ class DockerError(Exception):
 
 
 class DockerNotFound(DockerError):
-    """The docker binary does not exist."""
+    """Failure to find the docker binary."""
 
 
 class Docker:
+    """Client of the real docker binary, which runs the docker commands dockscreen needs and reads what they
+    print.
+    """
+
     def __init__(self, binary: str, env: Mapping[str, str] | None = None) -> None:
         """Wraps binary, the real docker (runtime._real_docker).
 

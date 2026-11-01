@@ -1,5 +1,5 @@
-"""The arguments of a command that runs in a container (`docker compose run` and `exec`, `docker exec`),
-read just far enough to find the user and the service or container.
+"""This module provides the reading of command lines that run something in a container (`docker compose run`
+and `exec`, `docker exec`), just far enough to find the user and the service or container.
 
 The command line is trusted, so the user it gives is not checked against the id rules, only for its
 form: numeric `uid:gid`, which docker uses as it stands. A name would be resolved in the image (for
@@ -21,6 +21,9 @@ from dockscreen.util import commandline, messages
 
 
 class Parsed(NamedTuple):
+    """Reading of a command line that runs something in a container: the service or container it names,
+    whether it chooses a user, and its arguments with --as and --as-me replaced by ids.
+    """
     service: str | None
     user_given: bool  # --user, -u or --as before the service
     args: list        # args with --as NAME replaced by --user=uid:gid

@@ -1,4 +1,5 @@
-"""The outcome of an audit, which is also its exit status, and of the screening before a command runs.
+"""This module defines the outcome of an audit, which is also its exit status, and of the screening before a
+command runs, and how it is reported.
 
 Refused means the policy says no. Failed means the audit could not get far enough to judge: docker,
 the image or the compose config was not there, or pulling or building failed. A refusal is about the
@@ -15,6 +16,7 @@ from dockscreen.util.messages import printable
 
 
 class Verdict(enum.IntEnum):
+    """Outcome of an audit, or of the screening before a command runs, whose value is the exit status."""
     PASSED = 0
     REFUSED = 1
     FAILED = 3

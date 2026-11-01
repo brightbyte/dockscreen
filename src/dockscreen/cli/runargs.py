@@ -1,4 +1,5 @@
-"""Splitting `docker run` arguments, just far enough to run them as `docker create` + `docker start`.
+"""This module provides the reading of a `docker run` command line, just far enough to run it as
+`docker create` + `docker start`.
 
 We need the image position and the few flags that `run` has and `create` lacks
 (`-d`, `--sig-proxy`, `--detach-keys`, `-a`). Nothing security-relevant hangs
@@ -45,6 +46,9 @@ class ParseError(Exception):
 
 
 class ParsedRun(NamedTuple):
+    """Reading of a `docker run` command line: the arguments for `docker create`, the image and command, and
+    what only `run` does with them.
+    """
     create_args: list
     image: str
     command: list

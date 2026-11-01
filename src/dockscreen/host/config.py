@@ -1,4 +1,5 @@
-"""dockscreen's configuration: TOML files that only the user or root can write.
+"""This module defines dockscreen's configuration and reads it from TOML files that only the user or root
+can write.
 
 The files are trusted completely, so they are only read when nothing but their owner could have put
 their content there: the file and every directory above it must be owned by the user or root and not
@@ -38,11 +39,13 @@ NO_ID = frozenset({65535, 4294967295})
 
 
 class ConfigError(Exception):
-    """A config file cannot be trusted or read; dockscreen refuses to run."""
+    """Failure to trust or read a config file, which stops dockscreen from running."""
 
 
 class Section(NamedTuple):
-    """The settings an image or project section gives; None and () for those it leaves alone."""
+    """Set of settings for one image repository or project directory; None and () for those it leaves to the
+    levels above.
+    """
     user: tuple[int, int] | None = None
     default_user: tuple[int, int] | None = None
     default_home: str | None = None
@@ -52,6 +55,9 @@ class Section(NamedTuple):
 
 
 class Config(NamedTuple):
+    """Set of dockscreen's settings, as the config files give them, with their sections per image repository
+    and per project directory.
+    """
     user: tuple[int, int] | None = None                # (uid, gid) an image runs as when nothing chose a user
     default_user: tuple[int, int] = (65534, 65534)     # (uid, gid) that replaces an image's root user
     default_home: str = "/tmp"                         # HOME of the default user; "" leaves HOME alone
@@ -64,6 +70,7 @@ class Config(NamedTuple):
 
 
 class Match(NamedTuple):
+    """Finding of which image section applies to an image, or why the one for its repository does not."""
     repository: str | None  # the image section that applies to the image, if one does
     problem: str | None     # why a section for the image's repository does not apply, for audit
 

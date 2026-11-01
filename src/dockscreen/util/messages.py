@@ -1,4 +1,5 @@
-"""Messages to the person running dockscreen, on stderr.
+"""This module provides the messages to the person running dockscreen, on stderr, and the escaping that
+keeps the untrusted text they quote from passing for anything else.
 
 Every message is one line that starts with PREFIX, so it can be told apart from what docker and compose
 print. Text is escaped with printable(), because much of it quotes the untrusted project or image.
@@ -24,7 +25,7 @@ DOCKER_NOT_FOUND = "'docker' not found in PATH"
 
 
 class Mark(str):
-    """A symbol, and the ANSI colour a terminal shows it in, bold."""
+    """Symbol that starts a line, with the ANSI colour a terminal shows it in, bold."""
 
     colour: str
 
@@ -35,7 +36,7 @@ class Mark(str):
 
 
 class Marked(str):
-    """`MARK text`, keeping the mark for colouring.
+    """Line that starts with a mark (`MARK text`), keeping the mark for colouring.
 
     help: an optional second part that says what to do about it, shown only in helpful mode
     (set_helpful). The line itself only states the facts, and its string value is just that.
@@ -59,8 +60,8 @@ class Marked(str):
 
 
 class Reason(str):
-    """Why something is refused or failed, with an optional `help`: what to do about it, and `output`:
-    what docker printed about it, which may span lines.
+    """Explanation of why something is refused or failed, with an optional `help`: what to do about it,
+    and `output`: what docker printed about it, which may span lines.
     """
 
     help: str | None

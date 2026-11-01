@@ -1,5 +1,5 @@
-"""The accounts and subordinate id ranges of this host, and users given on the command line: ids as
-typed, or a local account.
+"""This module provides what dockscreen knows about the users of this host, and turns the users a command
+line gives into ids.
 
 Docker resolves a user name in the container's own /etc/passwd, where an image can map it
 to root. So `--user` takes only numbers, which mean the same everywhere, and `--as NAME` takes the
@@ -17,7 +17,9 @@ SUBGID_FILE = "/etc/subgid"
 
 
 class HostAccounts:
-    """Users and groups on this host, through NSS (so LDAP and sssd accounts count)."""
+    """Directory of the users and groups on this host, looked up through NSS (so LDAP and sssd accounts
+    count).
+    """
 
     def user(self, name: str) -> tuple[int, int] | None:
         """Returns (uid, primary gid) of the user called name, or None if there is none."""
@@ -50,7 +52,7 @@ class HostAccounts:
 
 
 class UserError(Exception):
-    """A user given on the command line cannot be used."""
+    """Rejection of a user given on the command line that cannot be used."""
 
 
 class UnknownUser(UserError):
@@ -88,7 +90,7 @@ def _resolve_account(name: str, accounts: HostAccounts) -> tuple[str, list[str]]
 
 
 class UserOptions:
-    """The ways a command line gives a user, each turned into `--user=uid:gid` for docker.
+    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker.
 
     Records whether a user was given, whether the caller's own ids are allowed (--as-me), and the
     notices that resolving names produced.
@@ -124,7 +126,9 @@ class UserOptions:
 
 
 class Subordinate:
-    """The subordinate id ranges of this host, read once: `name:start:count` lines, malformed ones skipped."""
+    """Table of the subordinate id ranges of this host, read once from `name:start:count` lines, malformed
+    ones skipped.
+    """
 
     def __init__(self) -> None:
         self._read(SUBUID_FILE, SUBGID_FILE)

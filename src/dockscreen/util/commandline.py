@@ -1,5 +1,5 @@
-"""Reading docker and compose command lines: dockscreen's own options, which docker and compose never
-see, and helpers that find one thing in a command line.
+"""This module provides what every reading of docker and compose command lines needs: dockscreen's own
+options, which docker and compose never see, and helpers that find one thing in a command line.
 
 Before the subcommand (CommandLine takes them out):
 - --skip-screening runs the real thing with no checks and no defaults. After the subcommand it is
@@ -43,7 +43,7 @@ AS_ME_MESSAGE = messages.Marked(
 
 
 class CommandLine:
-    """A docker or docker compose command line with dockscreen's own options before the command taken out,
+    """Docker or docker compose command line with dockscreen's own options before the command taken out,
     what those asked for, and where the command is.
 
     argv: the command line as docker or compose gets it; idx: the index of the command in it, or None.

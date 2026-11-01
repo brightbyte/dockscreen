@@ -1,4 +1,5 @@
-"""Entry point: `dockscreen`, a wrapper for `docker`, which can also be installed as `docker`.
+"""This module is the entry point of `dockscreen`, a wrapper for `docker`, which can also be installed as
+`docker`: it gates or adds the commands dockscreen knows and hands everything else to the real docker.
 
 `compose` goes to compose_cli, commands that start containers from images
 go through the gate, everything else is exec'd to the real docker unchanged.
@@ -61,7 +62,7 @@ def _dispatch(argv: list[str], runtime: Runtime) -> int:
 
 
 class DockerCommand(commandline.CommandLine):
-    """A docker command line, without dockscreen's own options, and what those asked for."""
+    """Docker command line with dockscreen's own options taken out, and what those asked for."""
 
     def __init__(self, argv: list[str], runtime: Runtime) -> None:
         super().__init__(argv, DOCKER_OPTS_WITH_VALUE, OWN_OPTIONS)

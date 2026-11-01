@@ -1,4 +1,5 @@
-"""`docker compose run`: the checks of `up`, with the user the command line may choose for the service.
+"""This module implements `docker compose run`, with the checks of `up` and the user the command line may
+choose for the service.
 
 The command line is trusted: a user it gives is taken as numeric `uid:gid`, or `--as NAME` and
 `--as-me` are resolved to ids on this host (composeargs, userargs); that service's user is then not

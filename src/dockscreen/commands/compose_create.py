@@ -1,4 +1,5 @@
-"""`docker compose create`: the checks of `up`, for containers that are created and not started.
+"""This module implements `docker compose create`, with the checks of `up`, for containers that are created
+and not started.
 
 The project is checked, its images are looked at, and compose runs the config that was checked
 (composeproject.check_and_run).

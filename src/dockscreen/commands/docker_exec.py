@@ -1,4 +1,5 @@
-"""`docker exec`: the users of --as and --as-me replaced by ids, nothing checked.
+"""This module implements `docker exec`, which replaces the users of --as and --as-me by ids and checks
+nothing.
 
 The command line is trusted, and the container was checked when it started (docker_run, docker_start).
 """

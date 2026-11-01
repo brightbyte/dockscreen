@@ -1,4 +1,5 @@
-"""`docker compose` through dockscreen: dispatch custom subcommands, forward everything else.
+"""This module implements `docker compose` through dockscreen: it gates or adds the subcommands dockscreen
+knows and forwards everything else.
 
 We deliberately do not use argparse for the docker compose surface. Anything we
 do not recognise must reach docker compose untouched, so the only thing we
@@ -80,7 +81,7 @@ def main(argv: Sequence[str], runtime: Runtime, given: Collection[str]) -> int:
 
 
 class ComposeCommand(commandline.CommandLine):
-    """A docker compose command line, without dockscreen's own options, and what those asked for.
+    """Docker compose command line with dockscreen's own options taken out, and what those asked for.
 
     global_args are the options before the subcommand, which select the project.
     """

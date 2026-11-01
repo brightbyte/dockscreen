@@ -1,4 +1,6 @@
-"""The options of `docker compose run` and `exec`, as userargs reads them."""
+"""This module provides the reading of `docker compose run` and `exec` command lines that finds the service
+and the user, as userargs does for every command that runs something in a container.
+"""
 
 from collections.abc import Sequence
 

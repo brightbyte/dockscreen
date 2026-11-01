@@ -1,4 +1,5 @@
-"""Security policy over services, written as compose service keys, and over what they can reach.
+"""This module defines the security policy for services, written as compose service keys, and for what they
+can reach.
 
 Services come from two places. A compose project's come from its resolved config (`docker compose
 config --format json`), which check_config judges as a whole: services, and the volumes, networks,
@@ -103,7 +104,9 @@ HOOK_KEYS = frozenset({"command", "user", "privileged", "working_dir", "environm
 
 
 class Context(NamedTuple):
-    """What the policy allows: the project, the ids the project may choose, extra mount sources."""
+    """Context for checking a project against the policy: the project directory, the ids it may choose, and
+    what else decides what a service may reach.
+    """
     project_dir: str
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file

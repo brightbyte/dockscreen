@@ -1,4 +1,5 @@
-"""`docker compose exec`: the users of --as and --as-me replaced by ids, nothing checked.
+"""This module implements `docker compose exec`, which replaces the users of --as and --as-me by ids and
+checks nothing.
 
 The command line is trusted, and the service's container was checked when it was created.
 """

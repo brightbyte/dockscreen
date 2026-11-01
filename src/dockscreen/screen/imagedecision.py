@@ -1,4 +1,5 @@
-"""Deciding the user a container runs as when the command line or the service does not choose one.
+"""This module decides the user a container runs as when neither the command line nor the service chooses
+one.
 
 The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in
@@ -30,6 +31,9 @@ CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 
 
 class Context(NamedTuple):
+    """Context for deciding the user of an image: the docker that gets and inspects it, the id rules, the
+    runtime, and the directory mounts are judged against.
+    """
     docker: Docker
     ids: idrules.Rules
     runtime: Runtime               # the config file, the caller's ids, the host's accounts
@@ -72,6 +76,7 @@ class Context(NamedTuple):
 
 
 class Kind(enum.StrEnum):
+    """Category of decision about the user a container runs as."""
     EXPLICIT = "explicit"      # the command line chose the user: trusted, not checked
     CONFIGURED = "configured"  # the config file names the user, for this image, project or every one
     OK = "ok"                  # the image's own user, which the id rules accept
@@ -81,6 +86,9 @@ class Kind(enum.StrEnum):
 
 
 class Assessment(NamedTuple):
+    """Judgement of the user a container would run as: the kind of decision, the problems found, the
+    identity read from the image, and the user dockscreen pins.
+    """
     kind: Kind
     problems: list
     identity: imageuser.Identity | None = None

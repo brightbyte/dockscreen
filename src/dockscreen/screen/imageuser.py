@@ -1,4 +1,5 @@
-"""Which uid and gids a container would run as, read from the image as docker reads it.
+"""This module provides the reading of the uid and gids a container would run as from the image, as docker
+reads them.
 
 The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is
 untrusted, so idrules decides whether the image may have it. Whatever is accepted runs pinned as numbers, so a
@@ -12,6 +13,7 @@ from dockscreen.host import hostusers
 
 
 class Identity(NamedTuple):
+    """Set of ids a process runs as: a uid, a primary gid and the supplementary gids."""
     uid: int
     gid: int
     supplementary: tuple

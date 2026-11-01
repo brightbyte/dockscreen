@@ -1,4 +1,4 @@
-"""Image references, read and normalised as docker reads them."""
+"""This module provides the reading of image references, normalised as docker reads them."""
 
 import re
 

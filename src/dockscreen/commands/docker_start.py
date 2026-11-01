@@ -1,4 +1,5 @@
-"""`docker start` and `docker restart`: the same check as `run`, on containers that already exist.
+"""This module implements `docker start` and `docker restart`, with the same check as `run`, on containers
+that already exist.
 
 An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default
 user or a configured one) is refused like one whose user is not accepted, unless it already runs as

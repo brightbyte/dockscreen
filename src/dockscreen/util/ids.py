@@ -1,4 +1,5 @@
-"""Numeric uids and gids, as the command line, the config file and projects give them.
+"""This module provides the reading and writing of numeric uids and gids, as the command line, the config
+file and projects give them.
 
 Ids given by the command line, the config file or the project are ASCII digits only. How docker reads
 ids out of an image's passwd and group files is different, and lives in imageuser.

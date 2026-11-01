@@ -1,4 +1,5 @@
-"""`docker create`: the hardening defaults and the users of --as and --as-me, nothing checked.
+"""This module implements `docker create`, which adds the hardening defaults, replaces the users of --as and
+--as-me by ids, and checks nothing.
 
 The container is checked when it is started (docker_start).
 """

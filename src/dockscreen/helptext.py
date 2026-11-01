@@ -1,4 +1,5 @@
-"""Help for dockscreen and the commands it audits or adds, laid out like docker's own.
+"""This module provides the help for dockscreen and the commands it audits or adds, laid out like docker's
+own.
 
 An overview lists dockscreen's options and the commands it audits or adds; a topic covers one command.
 Docker's (or compose's) own help for the same thing follows ours, except for commands only dockscreen
@@ -16,6 +17,7 @@ HELP_FALLBACK_WIDTH = 80
 
 
 class Option(NamedTuple):
+    """Option that dockscreen adds to a command, as the help lists it."""
     long: str
     text: str
     short: str = ""
@@ -28,6 +30,9 @@ class Option(NamedTuple):
 
 
 class Topic(NamedTuple):
+    """Help page for one command: its usage and summary, what dockscreen does with it, and dockscreen's own
+    options for it.
+    """
     usage: str
     summary: str               # one line, also in the overview
     notes: tuple = ()          # what dockscreen does: paragraphs, and list items starting with "- "

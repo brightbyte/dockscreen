@@ -1,4 +1,5 @@
-"""`docker compose harden` (and `fix`), dockscreen's own: a compose override that fixes what can be fixed.
+"""This module implements `docker compose harden` (and `fix`), dockscreen's own command, which prints a
+compose override that fixes what can be fixed.
 
 `global_args` are the compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
 select the project.

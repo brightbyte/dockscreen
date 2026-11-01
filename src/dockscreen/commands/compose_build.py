@@ -1,4 +1,5 @@
-"""`docker compose build` and `bake`: the checks for builds only, before compose builds the project.
+"""This module implements `docker compose build` and `bake`, checking only what a build can reach before
+compose builds the project.
 
 Builds start no containers of the project, so only what a build can reach is checked
 (policy.check_build_config): build sources inside the project, no host network, no `x-` keys that

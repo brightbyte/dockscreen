@@ -1,4 +1,4 @@
-"""Which uids and gids a project or an image may choose for a container.
+"""This module defines which uids and gids a project or an image may choose for a container.
 
 Applies to every id that comes from an untrusted source: `user:` and hook users in a compose
 file, and the user an image runs as. Ids from the command line and the config file are trusted and are
@@ -33,6 +33,9 @@ MAX_ID = 2**31 - 1
 
 
 class Rules(NamedTuple):
+    """Set of rules that decide which uids and gids a project or an image may choose, with the host's and
+    the caller's ids they depend on.
+    """
     me: tuple                              # (uid, gid) of the caller
     allow_me: bool                         # --allow-me (or --as-me on docker run)
     nobody_range: tuple                    # inclusive (low, high)

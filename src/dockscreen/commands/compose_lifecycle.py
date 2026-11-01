@@ -1,5 +1,5 @@
-"""`docker compose down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause`: only the
-project's name is checked.
+"""This module implements the compose commands that act on the containers a project already has (`down`,
+`rm`, `stop`, `kill`, `restart`, `start`, `pause`, `unpause`), for which only the project's name is checked.
 
 These stop, change or remove what the name stands for, so a name that containers made from another
 directory already have is refused (inspect.name_conflicts). A name chosen on the command line or in the
