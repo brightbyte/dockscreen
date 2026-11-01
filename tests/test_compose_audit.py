@@ -2,10 +2,10 @@
 
 from fakes import ME, FakeImages, compose_project, make_runtime
 
-from dockscreen import messages
 from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.compose.composeimages import USER_HELP
-from dockscreen.messages import BAD, GOOD
+from dockscreen.util import messages
+from dockscreen.util.messages import BAD, GOOD
 
 UID, GID = ME
 

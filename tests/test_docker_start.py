@@ -1,9 +1,9 @@
 import pytest
 from fakes import FakeDocker, make_runtime
 
-from dockscreen import commandline
 from dockscreen.commands import docker_start
 from dockscreen.host import config
+from dockscreen.util import commandline
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
 IMG_USERS = config.Config(images={"docker.io/library/img": config.Section(user=(999, 999))})

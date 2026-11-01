@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from dockscreen import userargs
+from dockscreen.cli import userargs
 from dockscreen.host import hostusers
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.

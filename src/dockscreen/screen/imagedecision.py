@@ -20,11 +20,11 @@ import enum
 from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen import ids, images, messages
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import idrules, imageuser
+from dockscreen.util import ids, images, messages
 
 CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 

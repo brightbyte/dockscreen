@@ -3,11 +3,11 @@ import os
 import pytest
 from fakes import ME, FakeImages, compose_project, make_runtime, read_raw
 
-from dockscreen import commandline
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import composeproject
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
+from dockscreen.util import commandline
 
 UID, GID = ME
 

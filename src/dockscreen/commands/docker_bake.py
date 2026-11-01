@@ -15,10 +15,10 @@ import os
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from dockscreen import messages, verdict
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy
+from dockscreen.screen import policy, verdict
+from dockscreen.util import messages
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
 TARGET_KEYS = frozenset({

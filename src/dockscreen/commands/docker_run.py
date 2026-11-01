@@ -19,13 +19,12 @@ that a project or an image may not is pointed out (runpolicy), and fails the aud
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, ids, messages, runargs, verdict
+from dockscreen.cli import runargs
+from dockscreen.cli.runargs import DEFAULTS, defaults_notice
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.messages import printable
-from dockscreen.runargs import DEFAULTS, defaults_notice
-from dockscreen.screen import imagedecision, imageuser, policy, runpolicy
+from dockscreen.screen import imagedecision, imageuser, policy, runpolicy, verdict
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
     Assessment,
@@ -38,7 +37,9 @@ from dockscreen.screen.imagedecision import (
     root_default_notice,
     runs_as,
 )
-from dockscreen.verdict import Verdict
+from dockscreen.screen.verdict import Verdict
+from dockscreen.util import commandline, ids, messages
+from dockscreen.util.messages import printable
 
 AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief] [docker run options] "
                "IMAGE [COMMAND]")

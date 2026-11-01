@@ -8,8 +8,8 @@ and docker_run checks that our reading of the command line matched the daemon's.
 
 from typing import NamedTuple
 
-from dockscreen import commandline, messages
 from dockscreen.host import hostusers
+from dockscreen.util import commandline, messages
 
 # Long options of `docker run`/`create` that take a value in the next argument.
 LONG_VALUE_FLAGS = frozenset({

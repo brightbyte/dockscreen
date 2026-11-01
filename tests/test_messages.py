@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 
-from dockscreen import messages
+from dockscreen.util import messages
 
 
 def test_notice_is_one_prefixed_escaped_line(capsys):
@@ -165,7 +165,7 @@ def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
 
 
 def test_a_reasons_help_follows_it_on_the_refusal_line(capsys):
-    from dockscreen import verdict
+    from dockscreen.screen import verdict
     reason = messages.Reason("it is wrong", "make it right")
 
     verdict.report(verdict.Verdict.REFUSED, [reason])

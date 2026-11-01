@@ -4,13 +4,13 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, make_runtime, rules
 
-from dockscreen import messages
 from dockscreen.compose import autofix, composeimages
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
-from dockscreen.messages import GOOD, WARN
 from dockscreen.screen import imagedecision, policy
 from dockscreen.screen.imagedecision import Kind
+from dockscreen.util import messages
+from dockscreen.util.messages import GOOD, WARN
 
 NOBODY = "65534:65534"
 

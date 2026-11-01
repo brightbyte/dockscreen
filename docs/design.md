@@ -146,15 +146,15 @@ A message has two parts: the facts, and an optional help part that says what to 
 
 ## Mechanisms
 
-The code is in layers, each of which imports only its own and the ones before it (`tests/test_layering.py` checks this):
+The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
-1. Shared vocabulary at the top of the package: `messages`, `ids`, `images`, `commandline`.
+1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`.
-3. `screen`: the checks: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`.
-4. The command line's own modules at the top of the package: `userargs`, `runargs`, `helptext`, `verdict`.
+3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `verdict`.
+4. `cli`: reading the command line: `userargs`, `runargs`.
 5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), its images (`composeimages`), `inspect`, `hardening`, `autofix`, `shellenv`, `composeargs`.
 6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
-7. The dispatchers, `docker_cli` (the entry point) and `compose_cli`.
+7. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
 
 The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `composeargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 

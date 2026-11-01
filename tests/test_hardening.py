@@ -1,10 +1,11 @@
 import pytest
 from fakes import Accounts, compose_project, rules
 
-from dockscreen import compose_cli, messages
+from dockscreen import compose_cli
 from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.compose import autofix, hardening
 from dockscreen.screen import policy
+from dockscreen.util import messages
 
 NOBODY = "65534:65534"
 

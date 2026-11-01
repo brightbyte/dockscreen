@@ -8,11 +8,11 @@ that user.
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen import commandline, ids, messages, verdict
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import imagedecision
+from dockscreen.screen import imagedecision, verdict
 from dockscreen.screen.imagedecision import Assessment, assess, explain
+from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
 VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--signal", "--time"})

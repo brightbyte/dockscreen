@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import ids
+from dockscreen.util import ids
 
 
 @pytest.mark.parametrize("spec, expected", [

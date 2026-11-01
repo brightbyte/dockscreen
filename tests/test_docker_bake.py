@@ -5,9 +5,10 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen import docker_cli, messages
+from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.util import messages
 
 
 @pytest.fixture

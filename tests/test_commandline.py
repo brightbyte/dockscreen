@@ -1,7 +1,8 @@
 import pytest
 from fakes import FakeDocker, compose_project, make_runtime
 
-from dockscreen import commandline, compose_cli, docker_cli
+from dockscreen import compose_cli, docker_cli
+from dockscreen.util import commandline
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}
 
@@ -88,7 +89,7 @@ def test_verbose_after_the_subcommand_is_dockers_own():
 @pytest.mark.parametrize("argv, helpful", [
     (["--helpful", "ps"], True), (["--verbose", "ps"], True), (["ps"], False), (["audit", "img"], True)])
 def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful):
-    from dockscreen import messages
+    from dockscreen.util import messages
 
     docker_cli._dispatch(argv, make_runtime(docker=FakeDocker(image_user="app")))
 
@@ -96,7 +97,7 @@ def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful)
 
 
 def test_compose_audit_is_helpful(tmp_path):
-    from dockscreen import messages
+    from dockscreen.util import messages
     runtime, _ = compose_project(tmp_path, PROJECT)
 
     compose_cli.main(["audit"], runtime, ())

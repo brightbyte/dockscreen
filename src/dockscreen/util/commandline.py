@@ -26,7 +26,7 @@ and the callers are written so that a misreading refuses or changes nothing.
 
 from collections.abc import Collection, Sequence
 
-from dockscreen import messages
+from dockscreen.util import messages
 
 SKIP_SCREENING = "--skip-screening"
 ALLOW_ME = "--allow-me"

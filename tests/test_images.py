@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import images
+from dockscreen.util import images
 
 
 @pytest.mark.parametrize("reference, split", [

@@ -12,10 +12,10 @@ import copy
 import json
 from typing import Any, NamedTuple
 
-from dockscreen import ids, messages
 from dockscreen.host import hostusers
 from dockscreen.screen import policy
 from dockscreen.screen.policy import CAP_DROP, SECURITY_OPT
+from dockscreen.util import ids, messages
 
 
 class Addition(NamedTuple):

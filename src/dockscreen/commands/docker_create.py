@@ -3,9 +3,10 @@
 The container is checked when it is started (docker_start).
 """
 
-from dockscreen import messages, runargs
+from dockscreen.cli import runargs
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
+from dockscreen.util import messages
 
 
 def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:

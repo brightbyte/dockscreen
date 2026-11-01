@@ -6,12 +6,12 @@ select the project.
 
 from collections.abc import Sequence
 
-from dockscreen import commandline, messages, verdict
 from dockscreen.compose import composeimages, composeproject, hardening, inspect, shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy
-from dockscreen.verdict import Verdict
+from dockscreen.screen import policy, verdict
+from dockscreen.screen.verdict import Verdict
+from dockscreen.util import commandline, messages
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 

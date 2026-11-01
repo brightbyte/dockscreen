@@ -8,11 +8,11 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen import messages
 from dockscreen.compose import autofix, composeimages, composeproject, hardening, inspect
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
+from dockscreen.util import messages
 
 
 def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:

@@ -8,9 +8,9 @@ environment is the person's choice and is not checked.
 
 from collections.abc import Sequence
 
-from dockscreen import verdict
 from dockscreen.compose import inspect
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
 
 
 def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:

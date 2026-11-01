@@ -9,9 +9,9 @@ Exit status 2 is left for usage errors.
 import enum
 from collections.abc import Sequence
 
-from dockscreen import messages
-from dockscreen.messages import printable
 from dockscreen.screen.imagedecision import Assessment, Kind
+from dockscreen.util import messages
+from dockscreen.util.messages import printable
 
 
 class Verdict(enum.IntEnum):

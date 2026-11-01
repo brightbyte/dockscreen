@@ -4,7 +4,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def terse_messages():
     """Messages show the facts only, unless a test asks for the helpful part with helpful()."""
-    from dockscreen import messages
+    from dockscreen.util import messages
     messages.set_helpful(False)
     yield
     messages.set_helpful(False)
@@ -12,7 +12,7 @@ def terse_messages():
 
 @pytest.fixture
 def helpful():
-    from dockscreen import messages
+    from dockscreen.util import messages
     messages.set_helpful(True)
 
 

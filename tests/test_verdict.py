@@ -1,7 +1,8 @@
 import pytest
 
-from dockscreen import messages, verdict
-from dockscreen.verdict import Verdict
+from dockscreen.screen import verdict
+from dockscreen.screen.verdict import Verdict
+from dockscreen.util import messages
 
 
 def test_exit_statuses_leave_two_for_usage_errors():

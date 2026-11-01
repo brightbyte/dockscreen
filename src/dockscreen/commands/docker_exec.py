@@ -3,7 +3,7 @@
 The command line is trusted, and the container was checked when it started (docker_run, docker_start).
 """
 
-from dockscreen import runargs, userargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.host.runtime import Runtime
 
 

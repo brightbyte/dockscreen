@@ -1,7 +1,8 @@
 import os
 import shutil
 
-from dockscreen import helptext, messages
+from dockscreen import helptext
+from dockscreen.util import messages
 
 OPTIONS = (helptext.Option("--long-option", "Some text that is long enough to need wrapping at a narrow "
                                            "width"),

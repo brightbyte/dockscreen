@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen import runargs, userargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.compose import composeargs
 from dockscreen.host import hostusers
 

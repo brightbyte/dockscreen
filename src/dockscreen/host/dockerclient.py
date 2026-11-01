@@ -9,7 +9,7 @@ import tarfile
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, NoReturn, Self
 
-from dockscreen import commandline, messages
+from dockscreen.util import commandline, messages
 
 MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from an untrusted image
 FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)

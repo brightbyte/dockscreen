@@ -4,7 +4,7 @@ The project is checked, its images are looked at, and compose runs the config th
 (composeproject.check_and_run).
 """
 
-from dockscreen import userargs
+from dockscreen.cli import userargs
 from dockscreen.compose import composeproject
 from dockscreen.host.runtime import Runtime
 

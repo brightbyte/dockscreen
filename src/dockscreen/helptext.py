@@ -10,7 +10,7 @@ import textwrap
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import NamedTuple
 
-from dockscreen import commandline, messages
+from dockscreen.util import commandline, messages
 
 HELP_FALLBACK_WIDTH = 80
 

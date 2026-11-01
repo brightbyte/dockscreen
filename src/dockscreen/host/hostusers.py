@@ -10,7 +10,7 @@ import grp
 import pwd
 from typing import Self
 
-from dockscreen import ids
+from dockscreen.util import ids
 
 SUBUID_FILE = "/etc/subuid"
 SUBGID_FILE = "/etc/subgid"

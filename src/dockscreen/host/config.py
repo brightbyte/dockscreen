@@ -27,7 +27,7 @@ from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
-from dockscreen import ids, images, messages
+from dockscreen.util import ids, images, messages
 
 SYSTEM_FILE = "/etc/dockscreen/config.toml"
 # What the top level, an image section and a project section may set.

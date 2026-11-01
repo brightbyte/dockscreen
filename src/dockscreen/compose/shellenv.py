@@ -14,7 +14,7 @@ another name. The variables dockscreen passes to compose (EXPORTED) are left out
 from collections.abc import Mapping
 from typing import Any
 
-from dockscreen import messages
+from dockscreen.util import messages
 
 EXPORTED = ("UID", "GID")
 

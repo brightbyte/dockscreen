@@ -5,10 +5,10 @@ The command line is trusted: a user it gives is taken as numeric `uid:gid`, or `
 checked against the image.
 """
 
-from dockscreen import verdict
 from dockscreen.compose import composeargs, composeproject
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
 
 
 def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
