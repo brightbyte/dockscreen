@@ -19,28 +19,24 @@ what `run` would do.
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from dockscreen import commandline, ids, images, messages, verdict
+from dockscreen import commandline, ids, messages, runargs, verdict
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.run import runargs
-from dockscreen.screen import idrules, imagedecision
+from dockscreen.runargs import DEFAULTS, defaults_notice
+from dockscreen.screen import imagedecision
 from dockscreen.screen.imagedecision import (
+    CHOOSE_HINT,
     Assessment,
     Kind,
     assess,
     default_home,
     env_value,
+    explain,
     instead_of_root,
     root_default_notice,
 )
 from dockscreen.verdict import Verdict
-
-# Inserted before the user's own arguments, so the user can override both
-# (for example `--cap-add NET_BIND_SERVICE`).
-DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
-CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
-
 
 # Options of `docker start` and `restart` that take a value.
 VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--signal", "--time"})
@@ -57,7 +53,7 @@ def run(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me:
     """
     if is_remote(global_args, runtime.docker):
         return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE])
-    ctx = image_context(runtime, allow_me)
+    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
@@ -117,14 +113,6 @@ def _home_args(ctx: imagedecision.Context, info: dict[str, Any], assessment: Ass
     if env_value(info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
         return []
     return ["-e", f"HOME={home}"]
-
-
-def defaults_notice() -> messages.Marked:
-    """Returns the notice of the defaults `run` and `create` add to every container, as a marked line."""
-    return messages.routine_change(
-        f"added {' '.join(DEFAULTS)}",
-        "a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
-        "which override these")
 
 
 def _fallback_notice(assessment: Assessment) -> messages.Marked:
@@ -207,7 +195,7 @@ def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Run
     """
     if is_remote(global_args, runtime.docker):
         return [REMOTE_MESSAGE]
-    ctx = image_context(runtime, allow_me)
+    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     problems: list[str] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
@@ -246,19 +234,3 @@ def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[messa
                                 "use the real docker for this one")]
     return []
 
-
-def explain(ctx: imagedecision.Context, assessment: Assessment, image: str) -> list[str]:
-    """Returns the assessment's problems, with how to get past them if they come from the image's user."""
-    if assessment.identity is None:
-        return assessment.problems
-    return [messages.Reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
-
-
-def config_hint(ctx: imagedecision.Context, image: str) -> str:
-    """Returns the hint how the config file can give image a user, for an image pulled from a registry."""
-    return f"or, for an image pulled from a registry, {images.section_hint(image, ctx.runtime.config_file)}"
-
-
-def image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
-    """Returns the imagedecision.Context to create, decide and start with."""
-    return imagedecision.Context(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)

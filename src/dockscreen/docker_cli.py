@@ -8,12 +8,12 @@ import sys
 from collections.abc import Sequence
 from typing import NoReturn
 
-from dockscreen import bake, commandline, helptext, messages, userargs, verdict
+from dockscreen import bake, commandline, helptext, messages, runargs, userargs, verdict
 from dockscreen.compose import compose_cli
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime, load_runtime
-from dockscreen.run import audit, gate, runargs
+from dockscreen.run import audit, gate
 
 # Global `docker` options that consume the following token as their value.
 DOCKER_OPTS_WITH_VALUE = frozenset({
@@ -140,8 +140,8 @@ class DockerCommand(commandline.CommandLine):
                 resolved = gate.create_args(args, runtime)
             except hostusers.UserError as e:
                 return messages.refuse([str(e)])
-            messages.notice(gate.defaults_notice())
-            return _passthrough([*lead, *gate.DEFAULTS, *resolved], runtime)
+            messages.notice(runargs.defaults_notice())
+            return _passthrough([*lead, *runargs.DEFAULTS, *resolved], runtime)
         if sub == "exec":
             exec_args = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
             return 1 if exec_args is None else _passthrough([*lead, *exec_args], runtime)

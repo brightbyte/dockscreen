@@ -24,7 +24,7 @@ from dockscreen.compose import composeargs, composeimages, hardening, inspect, s
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import idrules, imagedecision, policy
+from dockscreen.screen import imagedecision, policy
 
 # Options that select the files and the project; ours replace them.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
@@ -77,7 +77,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     """
     config, directory = inspect.project(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
-    image_ctx = _image_context(runtime, allow_me).with_project_dir(directory)
+    image_ctx = imagedecision.Context.for_runtime(runtime, allow_me).with_project_dir(directory)
     remote = is_remote(global_args, image_ctx.docker)
     ctx = inspect.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
@@ -164,7 +164,3 @@ def _generated(global_args: Sequence[str], project_dir: str,
             ]
         yield command
 
-
-def _image_context(runtime: Runtime, allow_me: bool = False) -> imagedecision.Context:
-    """Returns the imagedecision.Context to pull, build, decide and run with."""
-    return imagedecision.Context(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)

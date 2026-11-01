@@ -1,8 +1,8 @@
 import fakes
 import pytest
 
+from dockscreen import runargs
 from dockscreen.host import hostusers
-from dockscreen.run import runargs
 
 ME = (4242, 4343)
 

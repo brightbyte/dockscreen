@@ -7,13 +7,13 @@ command line is trusted, so what it asks for that a project or an image may not 
 
 from collections.abc import Sequence
 
-from dockscreen import commandline, ids, messages, verdict
+from dockscreen import commandline, ids, messages, runargs, verdict
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.messages import printable
-from dockscreen.run import gate, runargs, runpolicy
-from dockscreen.screen import imagedecision, imageuser, policy
+from dockscreen.run import gate
+from dockscreen.screen import imagedecision, imageuser, policy, runpolicy
 from dockscreen.screen.imagedecision import Assessment, Kind, runs_as
 from dockscreen.verdict import Verdict
 
@@ -35,7 +35,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     brief, args = line.has(commandline.BRIEF), line.argv
     if is_remote(global_args, runtime.docker):
         return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE], brief)
-    ctx = gate.image_context(runtime, allow_me)
+    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
@@ -77,7 +77,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
 def _audit_verdict(ctx: imagedecision.Context, assessment: Assessment, found: list[str], strict: bool,
                    image: str) -> tuple[Verdict, list[str]]:
     """Returns the (verdict, reasons) of an audit: the assessment's, then the findings if strict."""
-    refused = gate.explain(ctx, assessment, image) if assessment.refused else []
+    refused = imagedecision.explain(ctx, assessment, image) if assessment.refused else []
     reasons = [*refused, *(found if strict else [])]
     if assessment.failed:
         return Verdict.FAILED, reasons
@@ -96,13 +96,13 @@ def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Asses
             messages.out(messages.Marked(messages.WARN, f"note: {assessment.note}"))
     if assessment.refused:
         if not assessment.failed:
-            messages.out(messages.Marked(messages.HINT, gate.CHOOSE_HINT))
-            messages.out(messages.Marked(messages.HINT, gate.config_hint(ctx, image)))
+            messages.out(messages.Marked(messages.HINT, imagedecision.CHOOSE_HINT))
+            messages.out(messages.Marked(messages.HINT, imagedecision.config_hint(ctx, image)))
         return
     if assessment.pins_user:
         user = ids.format_user(assessment.pinned_user)
         messages.out(f"  docker run would create it again with --user={user}, as numbers")
-    messages.out("  docker run also adds " + " ".join(gate.DEFAULTS) + "; later options override them")
+    messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
 
 
 def _report_findings(found: list[str], strict: bool) -> None:

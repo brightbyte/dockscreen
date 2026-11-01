@@ -13,18 +13,20 @@ Whatever is accepted is not left for the runtime to resolve a second time: it ru
 checked numbers, so a difference between our reading of the image's passwd and group
 files and the runtime's can at worst refuse a good image, never run root.
 
-Used by `docker run` (gate) and by compose (composeimages) alike.
+Used by `docker run` (docker_run) and by compose (composeimages) alike.
 """
 
 import enum
 from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen import ids, messages
+from dockscreen import ids, images, messages
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import idrules, imageuser
+
+CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 
 
 class Context(NamedTuple):
@@ -32,6 +34,13 @@ class Context(NamedTuple):
     ids: idrules.Rules
     runtime: Runtime               # the config file, the caller's ids, the host's accounts
     project_dir: str | None = None  # the compose project's; for docker run, the current directory
+
+    @classmethod
+    def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:
+        """Returns the context to pull, build, create, decide and start with, with runtime's docker and
+        id rules; allow_me: the caller's own ids are allowed.
+        """
+        return cls(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)
 
     @property
     def local(self) -> hostusers.HostAccounts:
@@ -205,3 +214,15 @@ def root_default_notice(ctx: Context) -> messages.Marked | None:
             f"the configured default user is {default}: images that would run as root run as root",
             "set default_user in the config file to change it")
     return None
+
+
+def explain(ctx: Context, assessment: Assessment, image: str) -> list[str]:
+    """Returns the assessment's problems, with how to get past them if they come from the image's user."""
+    if assessment.identity is None:
+        return assessment.problems
+    return [messages.Reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
+
+
+def config_hint(ctx: Context, image: str) -> str:
+    """Returns the hint how the config file can give image a user, for an image pulled from a registry."""
+    return f"or, for an image pulled from a registry, {images.section_hint(image, ctx.runtime.config_file)}"
