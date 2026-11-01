@@ -65,7 +65,7 @@ def main(argv: Sequence[str], runtime: Runtime, given: Collection[str]) -> int:
         return _passthrough(command.argv, runtime)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
     # with --skip-screening, which leaves compose as it is
-    command.runtime = runtime._replace(docker=runtime.docker.with_env(shellenv.exported(runtime.me)))
+    command.runtime = runtime.with_docker_env(shellenv.exported(runtime.me))
     return command.dispatch()
 
 

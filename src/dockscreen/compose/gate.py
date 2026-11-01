@@ -45,7 +45,7 @@ class Project(NamedTuple):
 
     def static_ctx(self) -> policy.Context:
         """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
-        return self.ctx._replace(vetted=composeimages.unset_user_services(self.hardened))
+        return self.ctx.with_vetted(composeimages.unset_user_services(self.hardened))
 
     def problems(self) -> list[str]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
@@ -62,7 +62,7 @@ class Project(NamedTuple):
         image, and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
-        return inspect.context(self.directory, self.runtime, self.allow_me, verified)._replace(vetted=vetted)
+        return inspect.context(self.directory, self.runtime, self.allow_me, verified).with_vetted(vetted)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
@@ -77,7 +77,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     """
     config, directory = inspect.project(global_args, runtime)
     hardened, additions = hardening.apply(config, runtime.accounts)
-    image_ctx = _image_context(runtime, allow_me)._replace(project_dir=directory)
+    image_ctx = _image_context(runtime, allow_me).with_project_dir(directory)
     remote = is_remote(global_args, image_ctx.docker)
     ctx = inspect.context(directory, runtime, allow_me)
     return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,

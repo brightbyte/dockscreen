@@ -24,7 +24,7 @@ realpath resolution.
 
 import os
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Self
 
 from dockscreen import ids
 from dockscreen.host import config as configuration
@@ -131,6 +131,18 @@ class Context(NamedTuple):
         """Returns the context to check the service called name with: scope's for it, else this one."""
         return self.scope(name, service) if self.scope else self
 
+    def with_vetted(self, vetted: frozenset) -> Self:
+        """Returns this context with vetted as the services whose unset user is acceptable."""
+        return self._replace(vetted=vetted)
+
+    def with_mounts(self, mounts: bool) -> Self:
+        """Returns this context for a service that reaches host files if mounts."""
+        return self._replace(mounts=mounts)
+
+    def with_scope(self, scope: Callable[[str, dict[str, Any]], "Context"]) -> Self:
+        """Returns this context with scope giving the context of each service (for_service)."""
+        return self._replace(scope=scope)
+
 
 # A check of one service key: takes its value and the Context, returns the problems.
 Check = Callable[[Any, Context], list[str]]
@@ -208,7 +220,7 @@ def check_service(service: dict[str, Any], ctx: Context, vetted: bool = False,
     volumes: the config's top-level volumes, to tell named volumes from host paths.
     """
     problems = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-    ctx = ctx._replace(mounts=has_host_mounts(service, volumes))
+    ctx = ctx.with_mounts(has_host_mounts(service, volumes))
     for key, check in SERVICE_CHECKS.items():
         if key == "user" and vetted:
             continue

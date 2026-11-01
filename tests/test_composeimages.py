@@ -269,13 +269,13 @@ def test_the_final_config_passes_the_policy_with_exactly_the_vetted_services():
                                active=("web", "db"))
     ctx = policy.Context("/p", rules())
 
-    assert policy.check_config(final, ctx._replace(vetted=vetted)) == []
+    assert policy.check_config(final, ctx.with_vetted(vetted)) == []
     # the vetting is what lets a configured user pass that the rules alone would refuse
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, vetted = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and "db" in vetted
-    assert policy.check_config(final, ctx._replace(vetted=vetted)) == []
+    assert policy.check_config(final, ctx.with_vetted(vetted)) == []
     assert [p for p in policy.check_config(final, ctx) if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
         "service db: user '1000:1000': gid 1000 exists on this host (local group daniel)"]

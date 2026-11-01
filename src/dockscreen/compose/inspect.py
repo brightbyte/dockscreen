@@ -64,7 +64,7 @@ def context(project_dir: str, runtime: Runtime, allow_me: bool = False,
             repository = verified.get(name)
         return settings_context(config.effective(runtime.settings, repository, project_dir))
 
-    return settings_context(config.effective(runtime.settings, None, project_dir))._replace(scope=scope)
+    return settings_context(config.effective(runtime.settings, None, project_dir)).with_scope(scope)
 
 
 def _sensitive_paths(runtime: Runtime) -> list[str]:

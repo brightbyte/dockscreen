@@ -55,7 +55,11 @@ class Context(NamedTuple):
 
     def with_allow_me(self, allow_me: bool) -> Self:
         """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
-        return self._replace(ids=self.ids._replace(allow_me=True)) if allow_me else self
+        return self._replace(ids=self.ids.with_allow_me(True)) if allow_me else self
+
+    def with_project_dir(self, project_dir: str) -> Self:
+        """Returns this context for the compose project in project_dir."""
+        return self._replace(project_dir=project_dir)
 
 
 class Kind(enum.StrEnum):

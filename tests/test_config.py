@@ -106,7 +106,8 @@ def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tm
     assert found.security_opts == ("a", "b")
     assert found.images == {} and found.projects == {}
 
-    assert config.effective(settings) == settings._replace(images={}, projects={})
+    without_sections = config.Config(user=(1, 1), mount_dirs=("/top",), security_opts=("a",))
+    assert config.effective(settings) == without_sections
     assert config.effective(settings, None, "/elsewhere").user == (1, 1)
     assert config.effective(settings, "docker.io/library/redis", str(tmp_path)).mount_dirs == ("/top",)
 

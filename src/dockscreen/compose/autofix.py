@@ -37,8 +37,8 @@ def fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
     """
     fixed = copy.deepcopy(config)
     for name, service in fixed.get("services", {}).items():
-        service_ctx = ctx.for_service(name, service)._replace(
-            mounts=policy.has_host_mounts(service, config.get("volumes")))
+        service_ctx = ctx.for_service(name, service).with_mounts(
+            policy.has_host_mounts(service, config.get("volumes")))
         vetted = name in ctx.vetted and not service.get("user")
         if not vetted and policy.check_user(service.get("user"), service_ctx):
             service["user"] = USER_TEMPLATE

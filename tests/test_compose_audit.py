@@ -106,7 +106,8 @@ def test_what_compose_says_about_a_config_it_cannot_read_follows_the_reason(caps
 
 def test_a_project_refused_before_inspection_is_refused_not_failed(capsys, tmp_path):
     runtime, _ = setup(tmp_path, project(web={}), FakeImages())
-    runtime = runtime._replace(home=str(tmp_path / "home"))  # the project directory holds the home directory
+    # the project directory holds the home directory
+    runtime = make_runtime(docker=runtime.docker, cwd=runtime.cwd, home=str(tmp_path / "home"))
     assert audit.audit([], [], runtime) == 1
     err = capsys.readouterr().err
     assert f"[dockscreen] {BAD} refusing: the project directory {tmp_path} contains" in err

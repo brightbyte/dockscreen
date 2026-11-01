@@ -7,7 +7,7 @@ caller's ids, the environment or the host's accounts on its own.
 import os
 import sys
 from collections.abc import Collection, Mapping, MutableMapping
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 from dockscreen import messages
 from dockscreen.host import config, hostusers
@@ -28,6 +28,13 @@ class Runtime(NamedTuple):
     def config_file(self) -> str:
         """Returns the path of the caller's own config file, which hints point to (config.user_file)."""
         return config.user_file(self.env, self.home)
+
+    def with_docker_env(self, variables: Mapping[str, str]) -> Self:
+        """Returns this runtime with variables added to the environment of what its docker runs.
+
+        env, this process's own environment, stays as it is.
+        """
+        return self._replace(docker=self.docker.with_env(variables))
 
 
 def load_runtime() -> Runtime:

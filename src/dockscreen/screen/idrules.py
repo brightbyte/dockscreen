@@ -50,6 +50,10 @@ class Rules(NamedTuple):
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
 
+    def with_allow_me(self, allow_me: bool) -> Self:
+        """Returns these rules with the caller's own ids allowed if allow_me, else not."""
+        return self._replace(allow_me=allow_me)
+
     def _allowed(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
         """Tells whether value is an allowed id of kind ("uid" or "gid").
 
