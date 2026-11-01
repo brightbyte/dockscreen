@@ -3,7 +3,7 @@ import subprocess
 import pytest
 
 from dockscreen import messages
-from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
+from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, _first_file_of_tar
 
 
 def test_a_missing_binary_is_docker_not_found(tmp_path):
@@ -58,3 +58,20 @@ def test_docker_failing_to_say_is_an_error():
     with pytest.raises(DockerError, match="docker ps failed") as raised:
         Docker.new_for_testing(Ps(code=1, err="daemon down")).label_values("project", "proj", "dir")
     assert messages.output_of(messages.reason_of(raised.value)) == "daemon down"
+
+
+def test_first_file_of_tar():
+    import io
+    import tarfile
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        data = b"root:x:0:0\n"
+        info = tarfile.TarInfo("passwd")
+        info.size = len(data)
+        archive.addfile(info, io.BytesIO(data))
+        link = tarfile.TarInfo("link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/shadow"
+        archive.addfile(link)
+    assert _first_file_of_tar(buffer.getvalue()) == "root:x:0:0\n"
+    assert _first_file_of_tar(b"not a tar") is None
