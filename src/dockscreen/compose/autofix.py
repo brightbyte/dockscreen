@@ -58,12 +58,17 @@ def fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
     return fixed
 
 
-def resolve_user_template(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
-    """Returns a copy of config with USER_TEMPLATE replaced by the caller's ids, for checking it."""
+def as_compose_reads(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+    """Returns a copy of config as compose reads the patch, for checking it: USER_TEMPLATE becomes the
+    caller's ids, and a relative placeholder mount source a path in the project directory.
+    """
     resolved = copy.deepcopy(config)
     for service in resolved.get("services", {}).values():
         if service.get("user") == USER_TEMPLATE:
             service["user"] = ids.format_user(ctx.ids.me)
+        for mount in service.get("volumes", []):
+            if mount.get("type") == "bind" and not os.path.isabs(mount["source"]):
+                mount["source"] = os.path.join(ctx.project_dir, mount["source"].removeprefix("./"))
     return resolved
 
 

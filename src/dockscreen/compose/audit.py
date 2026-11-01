@@ -91,9 +91,9 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
 
     base, static = project.hardened, project.static_ctx()
     fixed = autofix.fix_config(base, static)
-    # what the patch runs as, with ${UID}:${GID} as compose would read it; compose interpolates the
-    # generated file too, so a literal ${UID} there would read back differently from what was checked
-    resolved = autofix.resolve_user_template(fixed, static)
+    # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
+    # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
+    resolved = autofix.as_compose_reads(fixed, static)
     remaining = policy.check_config(resolved, static)
     notes = [hardening.defaults_note()]
     if remaining:

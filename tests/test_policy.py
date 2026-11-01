@@ -504,7 +504,7 @@ def test_fix_config_leaves_nothing_fixable(project):
         "user": autofix.USER_TEMPLATE, "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes_from": ["db"],
     }
-    resolved = autofix.resolve_user_template(fixed, context(project))
+    resolved = autofix.as_compose_reads(fixed, context(project))
     assert check(project, resolved) == []
 
 
@@ -536,6 +536,11 @@ def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placehol
     assert web[0]["read_only"] is True  # other mount attributes survive
     assert check(project, fixed) == []
     assert config["services"]["web"]["volumes"] == mounts
+    # compose reads the placeholders relative to the project, and the result still passes
+    resolved = autofix.as_compose_reads(fixed, context(project))
+    assert [m["source"] for m in resolved["services"]["web"]["volumes"]][:2] == [
+        str(project / "ETC"), str(project / "VAR_RUN_DOCKER.SOCK")]
+    assert check(project, resolved) == []
 
 
 def test_fix_config_keeps_a_compliant_service(project):
