@@ -81,6 +81,14 @@ def test_harden_looks_at_the_images_with_the_users_it_writes_resolved(capsys, tm
     assert "reads the checked config differently" not in captured.out + captured.err
 
 
+def test_harden_fixes_no_user_when_compose_reads_the_patched_config_back_differently(capsys, tmp_path):
+    runtime, recorder = setup(tmp_path, project(web={}), FakeImages(users={"web:1": "app"}),
+                              reads=lambda c: {**c, "name": "other"})
+    assert compose_harden.harden([], [], runtime) == 1
+    assert "reads the checked config differently at config.name" in capsys.readouterr().err
+    assert recorder.children == []
+
+
 def test_harden_leaves_a_user_the_config_file_sets_for_the_image(capsys, tmp_path):
     from dockscreen.host import config as configuration
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(900, 900))})

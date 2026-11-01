@@ -28,7 +28,7 @@ In a project, a named volume whose `driver_opts` bind a host path counts as a ho
 
 ### 4. `docker run` recreates the container by image name, not id
 
-`commands.docker_run.gate`: `create` for the fallback uses the name, not the id, so a tag that moves between the two creates applies the pinned user of image A to image B. `composeimages.finalize` already pins the id. Needs a concurrent actor.
+`commands.docker_run.gate`: `create` for the fallback uses the name, not the id, so a tag that moves between the two creates applies the pinned user of image A to image B. `serviceusers.finalize` already pins the id. Needs a concurrent actor.
 
 ### 5. `annotations` is allowed unchecked
 

@@ -14,7 +14,7 @@ Whatever is accepted is not left for the runtime to resolve a second time: it ru
 checked numbers, so a difference between our reading of the image's passwd and group
 files and the runtime's can at worst refuse a good image, never run root.
 
-Used by `docker run` (docker_run) and by compose (composeimages) alike.
+Used by `docker run` (docker_run) and by compose (serviceusers) alike.
 """
 
 import enum

@@ -111,7 +111,7 @@ class Context(NamedTuple):
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
     # Services whose unset `user` is acceptable because their image was looked at and would
-    # run as an acceptable user (see composeimages). Only dockscreen sets this, never the project.
+    # run as an acceptable user (see serviceusers). Only dockscreen sets this, never the project.
     vetted: frozenset = frozenset()
     # Whether the service being checked reaches host files (has_host_mounts); set per service.
     mounts: bool = False

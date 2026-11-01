@@ -20,7 +20,7 @@ import sys
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from dockscreen.compose import composeimages, composeproject, inspect
+from dockscreen.compose import composeproject, inspect, serviceusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import hardening, policy
@@ -84,13 +84,13 @@ def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], res
     with.
     """
     with project.generated() as command:
-        prepared = composeimages.prepare(command(resolved), resolved, [], project.image_ctx)
+        prepared = project.prepare(command(resolved), resolved)
     if not prepared.decisions:
         return prepared.problems, notes  # nothing could be looked at: pulling or building failed
     remaining = []
     for name, decision in prepared.decisions.items():
         if decision.assessment.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(composeimages.decision_problem(name, decision))
+            remaining.append(serviceusers.decision_problem(name, decision))
         elif decision.assessment.refused:
             fixed["services"][name]["user"] = _USER_TEMPLATE
             notes.append(f"service {name}: image {decision.image} chose a user that is not acceptable, "

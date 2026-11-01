@@ -7,7 +7,7 @@ select the project.
 
 from collections.abc import Sequence
 
-from dockscreen.compose import composeimages, composeproject, inspect
+from dockscreen.compose import composeproject, inspect
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
@@ -56,9 +56,9 @@ def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Verdict
             "the images were not looked at because of the problems below: nothing was pulled or built"]
     if not brief:
         messages.notice("pulling or building the images as `up` would, to look at the users they run as")
-    hardened, image_ctx = project.hardened, project.image_ctx
+    hardened = project.hardened
     with project.generated() as command:
-        prepared = composeimages.prepare(command(hardened), hardened, [], image_ctx)
+        prepared = project.prepare(command(hardened), hardened)
     problems = prepared.problems
     if not problems:  # what `up` checks once more before it runs: image sections need proof now
         final, vetted = prepared.finalize()

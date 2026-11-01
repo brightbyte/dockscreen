@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, make_runtime, rules
 
-from dockscreen.compose import composeimages
+from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import imagedecision, policy
@@ -16,7 +16,7 @@ NOBODY = "65534:65534"
 
 ROOT_FALLBACK = "running as 65534:65534 instead of root"
 PIN = "user, image id and pull_policy: never fixed to what was checked, in the generated file only"
-USER_HELP = composeimages.USER_HELP
+USER_HELP = serviceusers.USER_HELP
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # what prepare is given; only the tail matters
 
 
@@ -29,7 +29,7 @@ def project(**services):
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
                                          ctx=gate_context(images, settings))
-    return composeimages.prepare(COMMAND, config, list(args), image_ctx, chosen), recorder, images
+    return serviceusers.prepare(COMMAND, config, list(args), image_ctx, chosen), recorder, images
 
 
 def gate_context(images, settings=None):
@@ -46,7 +46,7 @@ def subcommands(recorder):
 def test_services_to_run_are_the_active_ones_plus_those_named():
     config = project(web={}, db={}, debug={})
     image_ctx, recorder = make_image_ctx(active=("web", "db"))
-    assert composeimages._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
+    assert serviceusers._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
         "web", "db", "debug"}
     assert recorder.captured == [[*COMMAND, "config", "--services"]]
 
@@ -123,41 +123,8 @@ def test_listing_the_services_can_fail_closed():
         return capture(cmd)
 
     image_ctx.docker.capture = failing_listing
-    prepared = composeimages.prepare(COMMAND, config, [], image_ctx)
+    prepared = serviceusers.prepare(COMMAND, config, [], image_ctx)
     assert prepared.problems == ["docker compose config --services failed"]
-
-
-# --- compose must read back what was checked ----------------------------------------
-
-def test_a_config_that_compose_reads_differently_is_refused_before_anything_is_pulled():
-    config = project(web={"pid": "${P:-host}"})
-    images = FakeImages(users={"web:1": "app"})
-
-    interpolated = {**config, "services": {"web": {**config["services"]["web"], "pid": "host"}}}
-    image_ctx, recorder = make_image_ctx(images, reads=lambda _: interpolated)
-    prepared = composeimages.prepare(COMMAND, config, [], image_ctx)
-
-    assert prepared.problems == [
-        "docker compose reads the checked config differently at config.services.web.pid; not running it"]
-    assert recorder.children == [] and images.created == []
-
-
-def test_a_config_that_cannot_be_read_back_is_refused():
-    image_ctx, _ = make_image_ctx()
-    image_ctx.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
-    prepared = composeimages.prepare(COMMAND, project(), [], image_ctx)
-    assert prepared.problems == ["docker compose could not read back the config that was checked"]
-
-
-@pytest.mark.parametrize("expected, actual, where", [
-    ({"a": [1, {"b": 2}]}, {"a": [1, {"b": 3}]}, "config.a[1].b"),
-    ({"a": 1}, {"a": 1, "b": 2}, "config.b"),
-    ({"a": [1]}, {"a": [1, 2]}, "config.a"),
-    ({"a": 1}, {"a": True}, "config.a"),
-    ({"a": [1, "x"]}, {"a": [1, "x"]}, None),
-])
-def test_first_difference_names_the_path(expected, actual, where):
-    assert composeimages._first_difference(expected, actual) == where
 
 
 # --- deciding about the images ---------------------------------------------------
@@ -402,7 +369,7 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
 
 def test_gate_assessment_is_what_decides():
     # the decision is imagedecision.assess's: nothing here duplicates the rule
-    assert composeimages.imagedecision is imagedecision
+    assert serviceusers.imagedecision is imagedecision
 
 
 def test_an_image_name_that_looks_like_an_option_is_not_read_as_one():

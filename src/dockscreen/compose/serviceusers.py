@@ -24,7 +24,6 @@ chose (`run -u`), which the command line then overrides.
 """
 
 import copy
-import json
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
@@ -157,7 +156,6 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
     chosen: services whose user the command line chooses (`run -u`); their images are not decided.
     """
     try:
-        _verify_round_trip(command, config, ctx)
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
@@ -204,43 +202,6 @@ def decision_problem(name: str, decision: Decision, config_file: str | None = No
         return text
     hint = images.section_hint(decision.image, config_file, decision.built) if config_file else None
     return messages.Reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
-
-
-def _verify_round_trip(command: Sequence[str], config: dict[str, Any], ctx: imagedecision.Context) -> None:
-    """Checks that compose reads the generated file back as exactly config.
-
-    Raises ImageError if it cannot read it or reads any value differently: that value would run differently
-    from what the policy saw.
-    """
-    result = ctx.docker.capture(
-        [*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
-    try:
-        resolved = json.loads(result.stdout) if result.returncode == 0 else None
-    except ValueError:
-        resolved = None
-    if resolved is None:
-        raise ImageError("docker compose could not read back the config that was checked")
-    where = _first_difference(config, resolved)
-    if where:
-        raise ImageError(f"docker compose reads the checked config differently at {where}; not running it")
-
-
-def _first_difference(expected: Any, actual: Any, path: str = "config") -> str | None:
-    """Returns the path at which two JSON values first differ, or None if they are equal."""
-    if isinstance(expected, dict) and isinstance(actual, dict):
-        for key in sorted(set(expected) | set(actual), key=str):
-            if key not in expected or key not in actual:
-                return f"{path}.{key}"
-            if where := _first_difference(expected[key], actual[key], f"{path}.{key}"):
-                return where
-        return None
-    if isinstance(expected, list) and isinstance(actual, list) and len(expected) == len(actual):
-        for i, (e, a) in enumerate(zip(expected, actual)):
-            if where := _first_difference(e, a, f"{path}[{i}]"):
-                return where
-        return None
-    # True == 1 and 1 == 1.0 in Python, but not to compose
-    return None if expected == actual and type(expected) is type(actual) else path
 
 
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],

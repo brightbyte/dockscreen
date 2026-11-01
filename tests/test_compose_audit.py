@@ -3,7 +3,7 @@
 from fakes import ME, FakeImages, compose_project, make_runtime
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.compose.composeimages import USER_HELP
+from dockscreen.compose.serviceusers import USER_HELP
 from dockscreen.util import messages
 from dockscreen.util.messages import BAD, GOOD
 
@@ -93,6 +93,14 @@ def test_a_config_compose_cannot_read_fails_the_audit(capsys, tmp_path):
     (tmp_path / "compose.yaml").write_text("services: [")
     assert compose_audit.audit([], ["--brief"], runtime) == 3
     assert capsys.readouterr().out == "\u2718 audit failed: docker compose config failed: bad yaml\n"
+
+
+def test_a_config_compose_reads_back_differently_fails_the_audit_before_anything_is_pulled(capsys, tmp_path):
+    runtime, recorder = setup(tmp_path, project(web={}), FakeImages(users={"web:1": "app"}),
+                              reads=lambda c: {**c, "name": "other"})
+    assert compose_audit.audit([], ["--brief"], runtime) == 3
+    assert "reads the checked config differently at config.name" in capsys.readouterr().out
+    assert recorder.children == []
 
 
 def test_what_compose_says_about_a_config_it_cannot_read_follows_the_reason(capsys, tmp_path):

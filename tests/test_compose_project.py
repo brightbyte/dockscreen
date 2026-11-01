@@ -1,7 +1,8 @@
 import os
+import subprocess
 
 import pytest
-from fakes import ME, FakeImages, compose_project, make_runtime, read_raw
+from fakes import ME, FakeImages, compose_project, make_image_ctx, make_runtime, read_raw
 
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import composeproject
@@ -10,6 +11,7 @@ from dockscreen.host.dockerclient import Docker
 from dockscreen.util import commandline
 
 UID, GID = ME
+COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # a generated file's, for the read-back
 
 
 def project_config(**service):
@@ -389,3 +391,39 @@ def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(tmp_path, ca
 
     assert up(["up"], 0, runtime) == 1
     assert "user '900:900': uid 900 is not in the nobody range" in capsys.readouterr().err
+
+
+# --- compose must read back what was checked ----------------------------------------
+
+
+def test_a_config_that_compose_reads_differently_is_named_where_it_differs():
+    config = project_config(pid="${P:-host}")
+    interpolated = {**config, "services": {"web": {**config["services"]["web"], "pid": "host"}}}
+    image_ctx, _ = make_image_ctx(reads=lambda _: interpolated)
+
+    assert composeproject._read_back_problem(COMMAND, config, image_ctx.docker) == (
+        "docker compose reads the checked config differently at config.services.web.pid; not running it")
+
+
+def test_a_config_that_compose_reads_back_unchanged_passes():
+    config = project_config()
+    image_ctx, _ = make_image_ctx(reads=lambda _: config)
+    assert composeproject._read_back_problem(COMMAND, config, image_ctx.docker) is None
+
+
+def test_a_config_that_cannot_be_read_back_is_refused():
+    image_ctx, _ = make_image_ctx()
+    image_ctx.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
+    assert composeproject._read_back_problem(COMMAND, project_config(), image_ctx.docker) == (
+        "docker compose could not read back the config that was checked")
+
+
+@pytest.mark.parametrize("expected, actual, where", [
+    ({"a": [1, {"b": 2}]}, {"a": [1, {"b": 3}]}, "config.a[1].b"),
+    ({"a": 1}, {"a": 1, "b": 2}, "config.b"),
+    ({"a": [1]}, {"a": [1, 2]}, "config.a"),
+    ({"a": 1}, {"a": True}, "config.a"),
+    ({"a": [1, "x"]}, {"a": [1, "x"]}, None),
+])
+def test_first_difference_names_the_path(expected, actual, where):
+    assert composeproject._first_difference(expected, actual) == where

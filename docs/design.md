@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `composeimages._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -152,13 +152,13 @@ The code is in layers, one package each, and each imports only its own and the o
 2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
 3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `verdict`.
 4. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
-5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), its images (`composeimages`), and `inspect`, which reads the config compose resolves.
+5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
 7. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
 
 The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `composeargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
-### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `composeimages`, `composeproject`)
+### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `serviceusers`, `composeproject`)
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
@@ -166,17 +166,17 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
 3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their images decide.
    The project's name is checked too (`inspect.name_conflicts`). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
-4. `composeimages.prepare`:
+4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
    - for each one without `user:`, creates a container with `--pull=never`, reads its passwd and group files, and decides as `docker run` does (below);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
-5. `composeimages.finalize`:
+5. `serviceusers.Prepared.finalize`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
    - the policy runs again on the result.
-6. Before anything is pulled or built, compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
+6. Before anything is pulled or built (`composeproject.Project.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
 `build` and `bake` get only `policy.check_build_config`, with no runtime checks:
@@ -223,7 +223,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.
-- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-commandscompose_-inspect-hardening-policy-composeimages-composeproject)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
+- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-commandscompose_-inspect-hardening-policy-serviceusers-composeproject)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
 
 ### Configuration and options (`config`)
 

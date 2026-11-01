@@ -5,9 +5,9 @@ The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
 and handed to compose as its only file, together with the project directory and
 name it came from. What was checked is then exactly what runs: no second
-reading of the project's files, no discovery rules to mirror. composeimages.prepare
-asks compose for the config of the generated file and refuses if it differs from
-what was checked. The price is that
+reading of the project's files, no discovery rules to mirror. Before any image is
+pulled or built, compose is asked for the config of the generated file, which is
+refused if it differs from what was checked (Project.prepare). The price is that
 compose runs as a child process (so the file can be removed afterwards) and
 shows the temporary file as its config file.
 """
@@ -21,9 +21,9 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen.cli import userargs
-from dockscreen.compose import composeimages, inspect
+from dockscreen.compose import inspect, serviceusers
 from dockscreen.host import hostusers, shellenv
-from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import hardening, imagedecision, policy, verdict
 from dockscreen.util import commandline, messages
@@ -49,7 +49,7 @@ class Project(NamedTuple):
 
     def static_ctx(self) -> policy.Context:
         """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
-        return self.ctx.with_vetted(composeimages.unset_user_services(self.hardened))
+        return self.ctx.with_vetted(serviceusers.unset_user_services(self.hardened))
 
     def problems(self) -> list[str]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
@@ -61,12 +61,26 @@ class Project(NamedTuple):
                                               self.image_ctx.docker)
         return problems
 
-    def final_ctx(self, prepared: composeimages.Prepared, vetted: frozenset[str]) -> policy.Context:
+    def final_ctx(self, prepared: serviceusers.Prepared, vetted: frozenset[str]) -> policy.Context:
         """Returns ctx for the config that will run, with vetted as the services pinned to an accepted
         image, and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
         return inspect.context(self.directory, self.runtime, self.allow_me, verified).with_vetted(vetted)
+
+    def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
+                chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
+        """Gets the images of config's services and decides their users (serviceusers.prepare), once compose
+        has been shown to read the generated file back as config.
+
+        Returns a failed Prepared, with nothing pulled or built, if compose reads it differently.
+        command: the compose command line on config's generated file (generated()).
+        args and chosen: as serviceusers.prepare takes them.
+        """
+        problem = _read_back_problem(command, config, self.image_ctx.docker)
+        if problem:
+            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, [problem], failed=True)
+        return serviceusers.prepare(command, config, list(args), self.image_ctx, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
@@ -95,7 +109,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
     subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
-    and decided on (composeimages); the config that runs is the one that was checked, with the result.
+    and decided on (serviceusers); the config that runs is the one that was checked, with the result.
     parsed: the subcommand's arguments, with the user the command line chose (compose_run).
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
@@ -116,7 +130,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
              imagedecision.root_default_notice(image_ctx), *hardening.describe(project.additions)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
-        prepared = composeimages.prepare(command(hardened), hardened, parsed.args, image_ctx, _chosen(parsed))
+        prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))
         if prepared.problems:
             verdict.screened(prepared.problems, failed=prepared.failed)
             return 1
@@ -158,3 +172,40 @@ def _generated(global_args: Sequence[str], project_dir: str,
             ]
         yield command
 
+
+def _read_back_problem(command: Sequence[str], config: dict[str, Any], docker: Docker) -> str | None:
+    """Returns why compose does not read the generated file back as exactly config, or None if it does.
+
+    A value compose reads differently would run differently from what the policy saw.
+    command: the compose command line on the generated file.
+    """
+    result = docker.capture(
+        [*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
+    try:
+        resolved = json.loads(result.stdout) if result.returncode == 0 else None
+    except ValueError:
+        resolved = None
+    if resolved is None:
+        return "docker compose could not read back the config that was checked"
+    where = _first_difference(config, resolved)
+    if where:
+        return f"docker compose reads the checked config differently at {where}; not running it"
+    return None
+
+
+def _first_difference(expected: Any, actual: Any, path: str = "config") -> str | None:
+    """Returns the path at which two JSON values first differ, or None if they are equal."""
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        for key in sorted(set(expected) | set(actual), key=str):
+            if key not in expected or key not in actual:
+                return f"{path}.{key}"
+            if where := _first_difference(expected[key], actual[key], f"{path}.{key}"):
+                return where
+        return None
+    if isinstance(expected, list) and isinstance(actual, list) and len(expected) == len(actual):
+        for i, (e, a) in enumerate(zip(expected, actual)):
+            if where := _first_difference(e, a, f"{path}[{i}]"):
+                return where
+        return None
+    # True == 1 and 1 == 1.0 in Python, but not to compose
+    return None if expected == actual and type(expected) is type(actual) else path
