@@ -1,5 +1,5 @@
-"""This module decides the user a container runs as when neither the command line nor the service chooses
-one.
+"""This module decides which user a container runs as and whether it may: the user chosen for it, or else
+one derived from its image under the id rules.
 
 The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in

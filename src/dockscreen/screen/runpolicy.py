@@ -1,9 +1,10 @@
-"""This module applies the compose policy to a container that a `docker run` command line created.
+"""This module applies the compose policy to an existing container, read back into the compose service keys
+it corresponds to.
 
-The command line is trusted, so `docker run` does not refuse what it asks for. `audit` points it out
-anyway: the inspected container is read back into the compose service keys it corresponds to, and
-policy.check_service judges them as it would judge a project's, with the same wording. Bind mounts
-are judged against the current directory, where a project would have its own.
+`audit` of `docker run` uses it: the command line is trusted, so `docker run` does not refuse what it
+asks for, but `audit` points it out anyway. policy.check_service judges the keys as it would judge a
+project's, with the same wording. Bind mounts are judged against the current directory, where a project
+would have its own.
 
 A user the command line chooses is judged by the id rules too, as if a project had chosen it.
 """

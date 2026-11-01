@@ -1,4 +1,5 @@
-"""This module provides the defaults dockscreen adds to every service before running it.
+"""This module provides the defaults dockscreen adds to every service of a compose config, and the
+resolution of the user names in it to ids on this host.
 
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
 or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
