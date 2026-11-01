@@ -1,0 +1,41 @@
+# The name keeps the images and containers of the tests apart from those of a real project.
+name: dockscreen-e2e-webapp
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        UID: ${UID}
+        GID: ${GID}
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://cache:6379
+      - TZ
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - cache
+
+  cache:
+    image: redis:7.4-alpine
+    volumes:
+      - cache-data:/data
+
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ${STATIC_DIR:-./static}:/usr/share/nginx/html:ro
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    profiles:
+      - debug
+    ports:
+      - "8025:8025"
+
+volumes:
+  cache-data:

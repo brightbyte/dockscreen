@@ -178,3 +178,7 @@ minikube() { PATH=/usr/bin:$PATH command minikube "$@"; }
 ```
 
 A config entry that skips screening for an image or a container name is deliberately not offered: it would stay in effect unnoticed, and a compose project can choose its image and container names. Use `--skip-screening` before the subcommand for a single command you type yourself.
+
+## Tests
+
+`pytest` runs the unit tests. `pytest -m e2e` runs the end-to-end tests in `tests/e2e`: audits of small example projects and images against the real docker of your host. They pull a few small images and build the example app image, but start no containers. Each test checks what it needs of the host first (a local daemon, a registry it can pull from, your ids, accounts or subordinate ranges) and is skipped with a warning if that is missing; `-rs` lists why.

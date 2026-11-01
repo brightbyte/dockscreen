@@ -1,0 +1,9 @@
+# For attaching gdb or py-spy to the app, and looking at its sibling containers.
+services:
+  app:
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
