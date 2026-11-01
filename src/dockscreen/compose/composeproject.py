@@ -1,4 +1,5 @@
-"""Running docker compose from the config we checked, not from the files it would find itself.
+"""A compose project as dockscreen checks it, and running docker compose from the config that was
+checked, not from the files it would find itself.
 
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
@@ -20,7 +21,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen import commandline, messages, userargs, verdict
-from dockscreen.compose import composeargs, composeimages, hardening, inspect, shellenv
+from dockscreen.compose import composeimages, hardening, inspect, shellenv
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
@@ -84,17 +85,18 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
                    runtime, allow_me)
 
 
-def run(global_args: list[str], sub: str, args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
-    """Runs `docker compose global_args sub args`, sub a subcommand that starts containers, on the project
-    global_args select if it passes the checks.
+def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,
+                  allow_me: bool = False) -> int:
+    """Runs `docker compose global_args sub` with parsed's arguments, sub a subcommand that starts
+    containers, on the project global_args select if it passes the checks.
 
     Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
     subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
     and decided on (composeimages); the config that runs is the one that was checked, with the result.
+    parsed: the subcommand's arguments, with the user the command line chose (compose_run).
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     try:
-        parsed = _command_line(sub, args, runtime)
         project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
     except (inspect.InspectError, DockerNotFound) as e:
@@ -125,17 +127,6 @@ def run(global_args: list[str], sub: str, args: list[str], runtime: Runtime, all
                 messages.notice(line)
         verdict.screened([])
         return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
-
-
-def _command_line(subcommand: str, args: list[str], runtime: Runtime) -> userargs.Parsed:
-    """Parses args for `run` as composeargs does, with --as resolved; other subcommands keep them as
-    they are.
-
-    Raises hostusers.UserError for a user that is not numeric `uid:gid`, or an unknown --as name.
-    """
-    if subcommand != "run":
-        return userargs.Parsed(None, False, args, [])
-    return composeargs.parse("run", args, runtime.me, runtime.accounts)
 
 
 def _chosen(parsed: userargs.Parsed) -> frozenset[str]:

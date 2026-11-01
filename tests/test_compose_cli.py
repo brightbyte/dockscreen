@@ -1,8 +1,7 @@
 import pytest
 from fakes import compose_project
 
-from dockscreen import commandline
-from dockscreen.compose import compose_cli
+from dockscreen import commandline, compose_cli
 
 
 @pytest.mark.parametrize("argv, expected", [

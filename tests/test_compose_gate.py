@@ -4,7 +4,8 @@ import pytest
 from fakes import ME, FakeImages, compose_project, make_runtime, read_raw
 
 from dockscreen import commandline
-from dockscreen.compose import gate
+from dockscreen.commands import compose_run, compose_up
+from dockscreen.compose import composeproject
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
 
@@ -16,7 +17,11 @@ def project_config(**service):
 
 
 def up(argv, idx, runtime, allow_me=False):
-    return gate.run(argv[:idx], argv[idx], argv[idx + 1:], runtime, allow_me=allow_me)
+    """Runs the compose subcommand at argv[idx], `up` or `run`, through its gate."""
+    global_args, sub, args = argv[:idx], argv[idx], argv[idx + 1:]
+    if sub == "run":
+        return compose_run.gate(global_args, args, runtime, allow_me=allow_me)
+    return compose_up.gate(global_args, sub, args, runtime, allow_me=allow_me)
 
 
 def last(recorder):
@@ -241,7 +246,7 @@ def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(tmp_
     ([], []),
 ])
 def test_strip_options(args, kept):
-    assert commandline.strip_options(args, gate.REPLACED_OPTIONS) == kept
+    assert commandline.strip_options(args, composeproject.REPLACED_OPTIONS) == kept
 
 
 def test_run_child_exit_codes_and_signals():

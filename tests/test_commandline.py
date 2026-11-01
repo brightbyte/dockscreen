@@ -1,8 +1,7 @@
 import pytest
 from fakes import FakeDocker, compose_project, make_runtime
 
-from dockscreen import commandline, docker_cli
-from dockscreen.compose import compose_cli
+from dockscreen import commandline, compose_cli, docker_cli
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}
 

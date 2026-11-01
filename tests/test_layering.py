@@ -4,12 +4,12 @@ import pathlib
 import pytest
 
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
-ENTRY = "dockscreen.docker_cli"
-FRONT_ENDS = ("compose", "commands")
+DISPATCH = ("dockscreen.docker_cli", "dockscreen.compose_cli")
 SHARED = ("messages", "ids", "images", "commandline")
 # Each layer may import its own and the ones before it: the shared vocabulary, then what describes the
-# host (host), then the checks (screen), then the command line's own modules, then the front ends.
-LAYERS = ("shared", "host", "screen", "command line", "front end", "entry point")
+# host (host), then the checks (screen), then the command line's own modules, then what compose
+# commands share (compose), then the commands, then the dispatchers that choose one.
+LAYERS = ("shared", "host", "screen", "command line", "compose", "commands", "dispatch")
 
 
 def module_name(path):
@@ -36,21 +36,11 @@ def imported(path):
 def layer(module):
     """Returns the layer the module belongs to (LAYERS)."""
     top = module.split(".")[1:2]
-    if module == ENTRY:
-        return "entry point"
-    if front_end(module):
-        return "front end"
-    if top in (["host"], ["screen"]):
+    if module in DISPATCH:
+        return "dispatch"
+    if top in (["host"], ["screen"], ["compose"], ["commands"]):
         return top[0]
     return "shared" if not top or top[0] in SHARED else "command line"
-
-
-def front_end(module):
-    """Returns the front end the module belongs to, or None: each command is one of its own."""
-    top = module.split(".")[1:2]
-    if top == ["commands"]:
-        return module
-    return top[0] if top and top[0] in FRONT_ENDS else None
 
 
 @pytest.mark.parametrize("path", MODULES, ids=lambda p: module_name(p))
@@ -58,8 +48,9 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
     module = module_name(path)
     for name in imported(path):
         assert LAYERS.index(layer(name)) <= LAYERS.index(layer(module)), f"{module} imports {name}"
-        if layer(module) == "front end":  # and none imports another
-            assert front_end(name) in (None, front_end(module)), f"{module} imports {name}"
+        if layer(module) == "commands":  # and none imports another
+            own = (module, "dockscreen.commands")
+            assert layer(name) != "commands" or name in own, f"{module} imports {name}"
 
 
 @pytest.mark.parametrize("package", ["commands", "compose", "host", "screen"])

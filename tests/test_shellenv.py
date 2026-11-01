@@ -4,8 +4,8 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen import messages
-from dockscreen.compose import compose_cli, shellenv
+from dockscreen import compose_cli, messages
+from dockscreen.compose import shellenv
 from dockscreen.host.dockerclient import Docker
 
 

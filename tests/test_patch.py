@@ -2,7 +2,8 @@ import os
 
 from fakes import compose_project, rules
 
-from dockscreen.compose import audit, autofix
+from dockscreen.commands import compose_harden
+from dockscreen.compose import autofix
 from dockscreen.screen import policy
 
 UID = os.getuid()
@@ -46,7 +47,7 @@ def test_fix_command_prints_patch_and_fails_when_problems_remain(capsys, tmp_pat
     original = config(user="0:0", build={"context": "/"})
     runtime, _ = compose_project(tmp_path, original)
 
-    assert audit.harden([], [], runtime) == 1
+    assert compose_harden.harden([], [], runtime) == 1
 
     captured = capsys.readouterr()
     assert "services:" in captured.out and "user:" in captured.out

@@ -8,10 +8,19 @@ parse is the position of the subcommand.
 from collections.abc import Collection, Sequence
 from typing import NoReturn
 
-from dockscreen import commandline, helptext, messages, userargs, verdict
-from dockscreen.compose import audit, composeargs, gate, inspect, shellenv
+from dockscreen import commandline, helptext, messages
+from dockscreen.commands import (
+    compose_audit,
+    compose_build,
+    compose_create,
+    compose_exec,
+    compose_harden,
+    compose_lifecycle,
+    compose_run,
+    compose_up,
+)
+from dockscreen.compose import shellenv
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy
 
 # Subcommands that create containers from the config. `alpha` is a group (older
 # compose has `alpha watch`); screening it is cheap and errs on the safe side.
@@ -24,7 +33,7 @@ NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", 
 
 # dockscreen's own subcommands, which shadow compose's of the same name; each is a callable(global_args,
 # args, runtime, allow_me) that returns the exit status
-COMMANDS = {"audit": audit.audit, "harden": audit.harden, "fix": audit.harden}
+COMMANDS = {"audit": compose_audit.audit, "harden": compose_harden.harden, "fix": compose_harden.harden}
 ALIASES = {"fix": "harden"}  # alias -> command it stands for
 
 # dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
@@ -98,39 +107,20 @@ class ComposeCommand(commandline.CommandLine):
             return COMMANDS[sub](global_args=self.global_args, args=self.args, runtime=runtime,
                                  allow_me=self.allow_me)
 
+        global_args, args, allow_me = self.global_args, self.args, self.allow_me
         if self._is_screened():
-            if sub not in BUILD_SUBCOMMANDS:
-                return gate.run(self.global_args, sub, self.args, runtime, allow_me=self.allow_me)
-            if not inspect.passes(self.global_args, runtime, policy.check_build_config):
-                return 1
-        elif sub in NAMED_PROJECT_SUBCOMMANDS:
-            if not self._name_is_free():
-                return 1
-        elif sub == "exec":
-            args = userargs.resolved(self.args, composeargs.VALUE_FLAGS["exec"], runtime)
-            if args is None:
-                return 1
-            argv = [*self.global_args, sub, *args]
-
+            if sub == "run":
+                return compose_run.gate(global_args, args, runtime, allow_me)
+            if sub == "create":
+                return compose_create.gate(global_args, args, runtime, allow_me)
+            if sub in BUILD_SUBCOMMANDS:
+                return compose_build.gate(global_args, sub, args, runtime)
+            return compose_up.gate(global_args, sub, args, runtime, allow_me)
+        if sub in NAMED_PROJECT_SUBCOMMANDS:
+            return compose_lifecycle.gate(global_args, sub, args, runtime)
+        if sub == "exec":
+            return compose_exec.gate(global_args, args, runtime)
         _passthrough(argv, runtime)
-
-    def _name_is_free(self) -> bool:
-        """Tells whether the project's name is free: chosen on the command line, or not used by containers
-        made from another directory.
-
-        Reports the conflict if it is not. A project that cannot be inspected is left to compose to report.
-        """
-        runtime = self.runtime
-        if inspect.names_project(self.global_args, runtime.env):
-            return True
-        try:
-            config, directory = inspect.project(self.global_args, runtime)
-        except inspect.ScreenError:
-            return True
-        if not config.get("name"):
-            return True
-        reasons = inspect.name_conflicts(config["name"], directory, runtime.docker)
-        return not reasons or verdict.screened(reasons)
 
     def _is_screened(self) -> bool:
         """Tells whether the subcommand is one that is screened (SCREENED)."""

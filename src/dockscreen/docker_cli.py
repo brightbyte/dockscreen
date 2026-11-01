@@ -8,9 +8,8 @@ import sys
 from collections.abc import Sequence
 from typing import NoReturn
 
-from dockscreen import commandline, helptext, messages
+from dockscreen import commandline, compose_cli, helptext, messages
 from dockscreen.commands import docker_bake, docker_create, docker_exec, docker_run, docker_start
-from dockscreen.compose import compose_cli
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime, load_runtime

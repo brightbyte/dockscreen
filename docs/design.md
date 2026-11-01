@@ -152,12 +152,13 @@ The code is in layers, each of which imports only its own and the ones before it
 2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`.
 3. `screen`: the checks: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`.
 4. The command line's own modules at the top of the package: `userargs`, `runargs`, `helptext`, `verdict`.
-5. The front ends, none of which imports another: the `compose` package, and the modules of `commands`, one per docker command.
-6. The entry point, `docker_cli`.
+5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), its images (`composeimages`), `inspect`, `hardening`, `autofix`, `shellenv`, `composeargs`.
+6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
+7. The dispatchers, `docker_cli` (the entry point) and `compose_cli`.
 
-The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A docker command's module (`commands.docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`) has a `check` that returns what it checked and why it may not run, a `gate` that checks and then runs what it checked, and, where dockscreen has one, an `audit` that checks and reports; the compose package has a `gate` and an `audit` too. Their command lines are read by `runargs` and `composeargs`. The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
+The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `composeargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
-### Compose (`compose_cli`, `inspect`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)
+### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `composeimages`, `composeproject`)
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
@@ -176,7 +177,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
    - the policy runs again on the result.
 6. Before anything is pulled or built, compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
-7. `compose.gate` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
+7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
 `build` and `bake` get only `policy.check_build_config`, with no runtime checks:
 
@@ -184,7 +185,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose.audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
+`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix (`autofix`) and lists the rest as comments.
 
 ### The policy (`policy.py`)
 
@@ -222,7 +223,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.
-- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-screen-hardening-policy-composeimages-composegate-composeaudit)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
+- `compose` goes to `compose_cli` (see [Compose](#compose-compose_cli-commandscompose_-inspect-hardening-policy-composeimages-composeproject)). Everything else is exec'd to the real docker unchanged. The real docker is the configured `docker`, or else the next `docker` on `PATH` that is not the wrapper. Empty and relative `PATH` entries are skipped, so the current directory cannot supply it, and dockscreen warns about them. Without a real docker, dockscreen stops with an error.
 
 ### Configuration and options (`config`)
 

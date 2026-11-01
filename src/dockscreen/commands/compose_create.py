@@ -1,0 +1,19 @@
+"""`docker compose create`: the checks of `up`, for containers that are created and not started.
+
+The project is checked, its images are looked at, and compose runs the config that was checked
+(composeproject.check_and_run).
+"""
+
+from dockscreen import userargs
+from dockscreen.compose import composeproject
+from dockscreen.host.runtime import Runtime
+
+
+def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
+    """Runs `docker compose global_args create args` if the project passes the checks, and returns the exit
+    status.
+
+    allow_me: --allow-me was given, so the caller's own ids are allowed.
+    """
+    return composeproject.check_and_run(global_args, "create", userargs.Parsed(None, False, args, []),
+                                        runtime, allow_me)

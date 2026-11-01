@@ -9,7 +9,7 @@ import fakes
 import pytest
 from fakes import PASSWD
 
-from dockscreen.compose import compose_cli
+from dockscreen import compose_cli
 from dockscreen.host.dockerclient import Docker
 
 # Canned answers come from files next to the script; every call is appended to `calls`.
