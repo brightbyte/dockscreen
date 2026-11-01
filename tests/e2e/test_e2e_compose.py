@@ -152,3 +152,20 @@ def test_the_audit_fails_when_the_compose_file_cannot_be_read(webapp, dockscreen
     assert result.status == 3, result.output
     assert "✘ audit failed" in result.output
 
+
+
+def test_harden_fixes_the_debug_override_so_that_the_audit_passes(webapp, webapp_images, dockscreen):
+    # the images are local already (webapp_images), so harden pulls nothing and only builds the app
+    debug = ("compose", "-f", "compose.yaml", "-f", "compose.debug.yaml")
+
+    hardened = dockscreen(*debug, "harden", cwd=webapp)
+    (webapp / "compose.harden.yaml").write_text(hardened.stdout)
+    audited = dockscreen("--allow-me", *debug, "-f", "compose.harden.yaml", "audit", cwd=webapp)
+
+    assert hardened.status == 0, hardened.output
+    patch = hardened.stdout
+    assert "cap_add: !reset null" in patch
+    assert "security_opt: !override [" in patch and "seccomp" not in patch
+    assert "mount source /var/run/docker.sock was replaced by the placeholder ./VAR_RUN_DOCKER.SOCK" in patch
+    assert "user:" not in patch  # the app runs as you, which harden allows as --allow-me would
+    assert audited.status == 0, audited.output
