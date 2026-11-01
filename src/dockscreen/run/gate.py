@@ -177,7 +177,7 @@ def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
         assessment = Assessment(Kind.REFUSED, problems) if problems else assess(
             ctx, container, info, explicit=parsed.user_given or bool(extra), reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
-        assessment = Assessment(Kind.FAILED, [str(e)])
+        assessment = Assessment(Kind.FAILED, [messages.with_output(messages.reason_of(e))])
     return code, Created(container, info, assessment)
 
 
@@ -223,7 +223,7 @@ def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Run
                 problems += [messages.Reason(f"{ref}: {p}", messages.help_of(p))
                              for p in explain(ctx, assessment, image)]
         except (DockerError, ValueError, KeyError) as e:
-            problems.append(f"{ref}: {e}")
+            problems.append(f"{ref}: {messages.with_output(messages.reason_of(e))}")
     return problems
 
 

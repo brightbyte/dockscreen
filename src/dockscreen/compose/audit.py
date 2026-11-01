@@ -31,7 +31,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     try:
         project = gate.load_project(global_args, runtime, allow_me)
     except (inspect.InspectError, DockerNotFound) as e:
-        return verdict.report(Verdict.FAILED, [str(e)], brief)
+        return verdict.report(Verdict.FAILED, [messages.reason_of(e)], brief)
     except (inspect.ScreenError, ValueError) as e:
         return verdict.report(Verdict.REFUSED, [str(e)], brief)
 
@@ -83,7 +83,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     try:
         project = gate.load_project(global_args, runtime, allow_me=True)
     except (inspect.ScreenError, ValueError) as e:
-        messages.notice(e)
+        messages.notice(messages.reason_of(e))
         return 1
     if project.remote:
         messages.notice(REMOTE_MESSAGE)

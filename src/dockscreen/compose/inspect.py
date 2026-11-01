@@ -98,7 +98,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
     try:
         config, project_dir = project(global_args, runtime)
     except InspectError as e:
-        return verdict.screened([str(e)], failed=True)
+        return verdict.screened([messages.reason_of(e)], failed=True)
     except ScreenError as e:
         return verdict.screened([str(e)])
     return verdict.screened(rules(config, context(project_dir, runtime)))
@@ -121,7 +121,7 @@ def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
     except DockerNotFound:
         raise InspectError("'docker' not found in PATH")
     if result.returncode != 0:
-        raise InspectError(f"docker compose config failed:\n{result.stderr.strip()}")
+        raise InspectError(messages.Reason("docker compose config failed", output=result.stderr.strip()))
     try:
         return json.loads(result.stdout)
     except ValueError as e:
@@ -144,7 +144,8 @@ def name_conflicts(name: str, directory: str, docker: Docker) -> list[str]:
     try:
         found = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
     except DockerError as e:
-        return [f"cannot tell whether another project is called {name!r}: {e}"]
+        return [messages.Reason(f"cannot tell whether another project is called {name!r}: {e}",
+                                output=messages.output_of(messages.reason_of(e)))]
     here = os.path.realpath(directory)
     # a container without the label cannot be shown to come from here
     others = sorted({path for path in found if not path or os.path.realpath(path) != here})

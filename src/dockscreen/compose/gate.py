@@ -98,7 +98,7 @@ def run(global_args: list[str], sub: str, args: list[str], runtime: Runtime, all
         project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
     except (inspect.InspectError, DockerNotFound) as e:
-        verdict.screened([str(e)], failed=True)
+        verdict.screened([messages.reason_of(e)], failed=True)
         return 1
     except (inspect.ScreenError, hostusers.UserError, ValueError) as e:
         problems = [str(e)]

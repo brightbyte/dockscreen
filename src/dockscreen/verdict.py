@@ -45,7 +45,7 @@ def brief(verdict: Verdict, reasons: Sequence[str]) -> messages.Marked:
     """
     if verdict is Verdict.PASSED:
         return line(verdict)
-    first = printable(reasons[0]) if reasons else "no reason given"
+    first = printable(messages.with_output(reasons[0])) if reasons else "no reason given"
     more = f" (+{len(reasons) - 1} more)" if len(reasons) > 1 else ""
     return messages.Marked(ICONS[verdict], f"{LINES[verdict]}: {first}{more}")
 
@@ -60,7 +60,8 @@ def report(verdict: Verdict, reasons: Sequence[str], brief_mode: bool = False) -
         return int(verdict)
     for reason in reasons:
         text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
-        messages.notice(messages.Marked(messages.BAD, text, messages.help_of(reason)))
+        help, output = messages.help_of(reason), messages.output_of(reason)
+        messages.notice(messages.Marked(messages.BAD, text, help, output))
     messages.notice(line(verdict))
     return int(verdict)
 

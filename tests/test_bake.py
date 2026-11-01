@@ -5,7 +5,7 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen import bake, docker_cli
+from dockscreen import bake, docker_cli, messages
 from dockscreen.host.dockerclient import DockerError
 
 
@@ -117,10 +117,11 @@ def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
     (Docker(out="[]"), "cannot read the bake definition: not an object"),
 ])
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
-    with pytest.raises(DockerError, match=message):
+    with pytest.raises(DockerError) as raised:
         bake._definition(docker, [])
+    assert message in messages.with_output(messages.reason_of(raised.value))
     reasons, failed = bake.screen(docker, [])
-    assert failed and message in reasons[0]
+    assert failed and message in messages.with_output(reasons[0])
 
 
 def test_screen_checks_against_the_current_directory(project, monkeypatch):

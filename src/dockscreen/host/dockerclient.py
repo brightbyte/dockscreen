@@ -92,7 +92,7 @@ class Docker:
         # `--`: a ref from the project or the command line must not be read as an option
         result = self.run([kind, "inspect", "--", ref], capture_output=True, text=True)
         if result.returncode != 0:
-            raise DockerError(result.stderr.strip() or f"docker {kind} inspect failed")
+            raise DockerError(messages.Reason(f"docker {kind} inspect failed", output=result.stderr.strip()))
         return json.loads(result.stdout)[0]
 
     def read_file(self, container: str, path: str) -> str | None:
@@ -138,7 +138,7 @@ class Docker:
         result = self.run(["ps", "--all", "--filter", f"label={label}={value}", "--format",
                            f'{{{{.Label "{wanted}"}}}}'], capture_output=True, text=True)
         if result.returncode != 0:
-            raise DockerError(result.stderr.strip() or "docker ps failed")
+            raise DockerError(messages.Reason("docker ps failed", output=result.stderr.strip()))
         return result.stdout.splitlines()
 
     def context(self) -> str | None:

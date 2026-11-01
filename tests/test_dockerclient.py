@@ -2,6 +2,7 @@ import subprocess
 
 import pytest
 
+from dockscreen import messages
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 
 
@@ -54,5 +55,6 @@ def test_label_values_are_read_from_every_container_with_the_label_running_or_no
 
 
 def test_docker_failing_to_say_is_an_error():
-    with pytest.raises(DockerError, match="daemon down"):
+    with pytest.raises(DockerError, match="docker ps failed") as raised:
         Docker.new_for_testing(Ps(code=1, err="daemon down")).label_values("project", "proj", "dir")
+    assert messages.output_of(messages.reason_of(raised.value)) == "daemon down"

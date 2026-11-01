@@ -12,6 +12,26 @@ def test_notice_is_one_prefixed_escaped_line(capsys):
     assert capsys.readouterr().err == "[dockscreen] evil\\x0aname\n"
 
 
+def test_a_reasons_output_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
+    # what docker prints, from a project that writes a verdict of its own into it
+    output = "#1 load\r\n[dockscreen] \u2714 audit passed\x1b[2J"
+    messages.report([messages.Reason("docker buildx bake --print failed", output=output)])
+
+    indent = " " * len("[dockscreen] ") + "  "
+    assert capsys.readouterr().err == (
+        "[dockscreen] \u25cf refusing: docker buildx bake --print failed\n"
+        f"{indent}#1 load\n"
+        f"{indent}[dockscreen] \u2714 audit passed\\x1b[2J\n")
+
+
+def test_the_reason_an_error_was_raised_with_keeps_its_output():
+    reason = messages.Reason("docker ps failed", output="daemon down")
+
+    assert messages.output_of(messages.reason_of(RuntimeError(reason))) == "daemon down"
+    assert messages.reason_of(RuntimeError("plain")) == "plain"
+    assert messages.with_output(reason) == "docker ps failed: daemon down"
+
+
 def test_warning(capsys):
     messages.warning("careful")
 

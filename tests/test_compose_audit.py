@@ -93,7 +93,15 @@ def test_a_config_compose_cannot_read_fails_the_audit(capsys, tmp_path):
     runtime, _ = setup(tmp_path, project(web={}), FakeImages())
     (tmp_path / "compose.yaml").write_text("services: [")
     assert audit.audit([], ["--brief"], runtime) == 3
-    assert capsys.readouterr().out == "\u2718 audit failed: docker compose config failed:\\x0abad yaml\n"
+    assert capsys.readouterr().out == "\u2718 audit failed: docker compose config failed: bad yaml\n"
+
+
+def test_what_compose_says_about_a_config_it_cannot_read_follows_the_reason(capsys, tmp_path):
+    runtime, _ = setup(tmp_path, project(web={}), FakeImages())
+    (tmp_path / "compose.yaml").write_text("services: [")
+    assert audit.audit([], [], runtime) == 3
+    assert capsys.readouterr().err.splitlines()[:2] == [
+        f"[dockscreen] {messages.BAD} docker compose config failed", f"{messages.OUTPUT_INDENT}bad yaml"]
 
 
 def test_a_project_refused_before_inspection_is_refused_not_failed(capsys, tmp_path):

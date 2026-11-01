@@ -2,6 +2,8 @@
 
 Every message is one line that starts with PREFIX, so it can be told apart from what docker and compose
 print. Text is escaped with printable(), because much of it quotes the untrusted project or image.
+Only what docker printed about a failure (a reason's output) keeps its line breaks: it follows the
+message on lines indented past PREFIX, each escaped, so none of them can pass for a message.
 Command output that is meant as data (audit reports, harden patches, help) goes to stdout and is not
 a message.
 
@@ -37,15 +39,17 @@ class Marked(str):
 
     help: an optional second part that says what to do about it, shown only in helpful mode
     (set_helpful). The line itself only states the facts, and its string value is just that.
+    output: what docker printed about it, shown after it (notice).
     """
 
     mark: Mark
     text: str
     help: str | None
+    output: str | None
 
-    def __new__(cls, mark: Mark, text: str, help: str | None = None) -> Self:
+    def __new__(cls, mark: Mark, text: str, help: str | None = None, output: str | None = None) -> Self:
         line = super().__new__(cls, f"{mark} {text}")
-        line.mark, line.text, line.help = mark, text, help
+        line.mark, line.text, line.help, line.output = mark, text, help, output
         return line
 
     @property
@@ -55,19 +59,39 @@ class Marked(str):
 
 
 class Reason(str):
-    """Why something is refused or failed, with an optional `help`: what to do about it."""
+    """Why something is refused or failed, with an optional `help`: what to do about it, and `output`:
+    what docker printed about it, which may span lines.
+    """
 
     help: str | None
+    output: str | None
 
-    def __new__(cls, text: str, help: str | None = None) -> Self:
+    def __new__(cls, text: str, help: str | None = None, output: str | None = None) -> Self:
         reason = super().__new__(cls, text)
-        reason.help = help
+        reason.help, reason.output = help, output or None
         return reason
 
 
 def help_of(reason: object) -> str | None:
     """Returns the help of a Reason, or None for a plain string."""
     return getattr(reason, "help", None)
+
+
+def output_of(reason: object) -> str | None:
+    """Returns the output of a Reason or Marked, or None for a plain string."""
+    return getattr(reason, "output", None)
+
+
+def with_output(reason: str) -> str:
+    """Returns reason followed by its output, as one text: for where it has to fit on one line."""
+    output = output_of(reason)
+    return f"{reason}: {output}" if output else reason
+
+
+def reason_of(error: BaseException) -> str:
+    """Returns why error was raised: the Reason it was raised with, or its text."""
+    given = error.args[0] if len(error.args) == 1 else None
+    return given if isinstance(given, Reason) else str(error)
 
 
 _helpful = False
@@ -95,6 +119,8 @@ FAILED = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
 # up with the text after the mark.
 MAX_WIDTH, MIN_WIDTH, TAB_WIDTH = 120, 20, 8
 CONTINUATION = "  "
+# Where the lines of a message's output start: past PREFIX and a mark, so that none starts like a message.
+OUTPUT_INDENT = " " * (len(PREFIX) + 1) + "  "
 
 
 def routine_change(text: str, help: str | None = None) -> Marked:
@@ -108,8 +134,13 @@ def notable_change(text: str, help: str | None = None) -> Marked:
 
 
 def notice(text: object) -> None:
-    """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted."""
+    """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted.
+
+    The output of a Reason or Marked follows, each of its lines escaped and indented by OUTPUT_INDENT.
+    """
     print(f"{PREFIX} {_paint(text, sys.stderr)}", file=sys.stderr)
+    for line in (output_of(text) or "").splitlines():
+        print(f"{OUTPUT_INDENT}{printable(line)}", file=sys.stderr)
 
 
 def out(text: str, indent: bool = True) -> None:
@@ -187,7 +218,7 @@ def warning(text: str) -> None:
 def report(problems: Sequence[str]) -> bool:
     """Prints a refusal for each problem, with its help; returns whether there were none."""
     for problem in problems:
-        notice(Marked(BAD, f"refusing: {problem}", help_of(problem)))
+        notice(Marked(BAD, f"refusing: {problem}", help_of(problem), output_of(problem)))
     return not problems
 
 

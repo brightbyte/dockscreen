@@ -14,6 +14,8 @@ def test_exit_statuses_leave_two_for_usage_errors():
     (Verdict.REFUSED, ["a", "b", "c"], "\u2296 denied by audit: a (+2 more)"),
     (Verdict.FAILED, ["no\nimage"], "\u2718 audit failed: no\\x0aimage"),  # still one line
     (Verdict.FAILED, [], "\u2718 audit failed: no reason given"),
+    (Verdict.FAILED, [messages.Reason("docker ps failed", output="a\nb")],
+     "\u2718 audit failed: docker ps failed: a\\x0ab"),  # the output too
 ])
 def test_brief(outcome, reasons, line):
     assert verdict.brief(outcome, reasons) == line
