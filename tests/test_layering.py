@@ -5,7 +5,7 @@ import pytest
 
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 ENTRY = "dockscreen.docker_cli"
-FRONT_ENDS = ("compose", "run", "bake")
+FRONT_ENDS = ("compose", "commands")
 SHARED = ("messages", "ids", "images", "commandline")
 # Each layer may import its own and the ones before it: the shared vocabulary, then what describes the
 # host (host), then the checks (screen), then the command line's own modules, then the front ends.
@@ -46,8 +46,10 @@ def layer(module):
 
 
 def front_end(module):
-    """Returns the front end the module belongs to, or None."""
+    """Returns the front end the module belongs to, or None: each command is one of its own."""
     top = module.split(".")[1:2]
+    if top == ["commands"]:
+        return module
     return top[0] if top and top[0] in FRONT_ENDS else None
 
 
@@ -60,6 +62,6 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
             assert front_end(name) in (None, front_end(module)), f"{module} imports {name}"
 
 
-@pytest.mark.parametrize("package", ["compose", "run", "host", "screen"])
+@pytest.mark.parametrize("package", ["commands", "compose", "host", "screen"])
 def test_packages_import_nothing_themselves(package):
     assert (SOURCE / package / "__init__.py").read_text() == ""

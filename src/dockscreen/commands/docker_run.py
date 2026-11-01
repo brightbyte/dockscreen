@@ -1,4 +1,4 @@
-"""The gate in front of commands that start a container from an image.
+"""`docker run`, and `dockscreen audit`, which says what `docker run` would do.
 
 `docker run` becomes create, inspect, check, start: the daemon parses the
 command line, and the policy looks at the container it produced, from an image
@@ -10,10 +10,10 @@ With no user chosen on the command line, imagedecision decides it. Whatever it a
 for the runtime to resolve a second time: the container is re-created with `--user uid:gid` as the
 checked numbers.
 
-`start` and `restart` apply the same check to existing containers, which cannot
-be rewritten. `create` only gets the hardening defaults; its container is
-checked when it is started. `audit` (run/audit) creates the container as `run` does here and reports
-what `run` would do.
+check creates the container and assesses it; gate starts it if it may run; audit creates it in the
+same way, reports what `run` would do and removes it. The command line is trusted, so what it asks for
+that a project or an image may not is pointed out (runpolicy), and fails the audit only with
+--strict-screen.
 """
 
 from collections.abc import Sequence
@@ -21,10 +21,11 @@ from typing import Any, NamedTuple
 
 from dockscreen import commandline, ids, messages, runargs, verdict
 from dockscreen.host import hostusers
-from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
+from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
+from dockscreen.messages import printable
 from dockscreen.runargs import DEFAULTS, defaults_notice
-from dockscreen.screen import imagedecision
+from dockscreen.screen import imagedecision, imageuser, policy, runpolicy
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
     Assessment,
@@ -35,15 +36,15 @@ from dockscreen.screen.imagedecision import (
     explain,
     instead_of_root,
     root_default_notice,
+    runs_as,
 )
 from dockscreen.verdict import Verdict
 
-# Options of `docker start` and `restart` that take a value.
-VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--signal", "--time"})
-VALUE_SHORT = frozenset("st")
+AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief] [docker run options] "
+               "IMAGE [COMMAND]")
 
 
-def run(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
+def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
     """Runs `docker global_args run args` through the gate and returns the exit status.
 
     The container starts only if the user it would run as is accepted, given as numbers where the image
@@ -137,7 +138,7 @@ def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
     A container that would be refused is removed and the refusal printed. Any other assessment is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, created = create_assessed(ctx, parsed, extra)
+    code, created = check(ctx, parsed, extra)
     if created is None:  # docker said why
         verdict.screened([f"docker could not create a container for {parsed.image}"], failed=True)
         return code
@@ -148,8 +149,8 @@ def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
     return created
 
 
-def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
-                    ) -> tuple[int, Created | None]:
+def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
+          ) -> tuple[int, Created | None]:
     """Creates the container as `docker run` would and returns (exit status, Created or None).
 
     extra: arguments that go before the command line's own. None if docker could not create a
@@ -169,57 +170,6 @@ def create_assessed(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
     return code, Created(container, info, assessment)
 
 
-def create_args(args: list[str], runtime: Runtime) -> list[str]:
-    """Returns the arguments of `docker create` with --as and --as-me replaced by ids, and prints notices.
-
-    Arguments that cannot be read are returned as they are: docker will report what is wrong with them.
-    Raises hostusers.UserError for a user that cannot be used.
-    """
-    try:
-        parsed = runargs.parse(args, runtime.me, runtime.accounts)
-    except runargs.ParseError:
-        return args
-    for message in parsed.notices:
-        messages.notice(message)
-    return parsed.create_args
-
-
-def check_existing(global_args: Sequence[str], args: Sequence[str], runtime: Runtime,
-                   allow_me: bool = False) -> list[str]:
-    """Returns the problems that forbid starting the containers named in `docker global_args start args`
-    (or `restart`).
-
-    An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
-    default user or a configured one) is refused like one whose user is not accepted, unless it
-    already runs as that user.
-    """
-    if is_remote(global_args, runtime.docker):
-        return [REMOTE_MESSAGE]
-    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
-    problems: list[str] = []
-    for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
-        try:
-            info = ctx.docker.inspect_container(ref)
-            assessment = assess(ctx, info["Id"], info)
-            if assessment.replaces_image_user and not _runs_as_pinned_user(info, assessment):
-                user = ids.format_user(assessment.pinned_user)
-                problems.append(messages.Reason(
-                    f"{ref}: cannot change the user of an existing container; it would run as the "
-                    f"image's user, not as {user}", f"recreate it with --user {user}"))
-            else:
-                image = info["Config"].get("Image") or ""
-                problems += [messages.Reason(f"{ref}: {p}", messages.help_of(p))
-                             for p in explain(ctx, assessment, image)]
-        except (DockerError, ValueError, KeyError) as e:
-            problems.append(f"{ref}: {messages.with_output(messages.reason_of(e))}")
-    return problems
-
-
-def _runs_as_pinned_user(info: dict[str, Any], assessment: Assessment) -> bool:
-    """Tells whether the container was created with the numeric user dockscreen would have chosen."""
-    return ids.parse_user(info["Config"].get("User") or "") == assessment.user
-
-
 def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[messages.Reason]:
     """Checks that our reading of the command line matches the container the daemon created.
 
@@ -234,3 +184,110 @@ def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[messa
                                 "use the real docker for this one")]
     return []
 
+
+def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False,
+          strict: bool = False) -> int:
+    """Reports what `docker global_args run args` would do, without starting anything.
+
+    The container is created as `run` would create it, pulling the image if `run` would, and removed.
+    Returns the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the
+    command line asks for something a project or an image may not; 3 if the audit failed to get that far;
+    2 if args cannot be read. --brief, before the image, prints only the verdict, in one line.
+    allow_me: --allow-me was given, so the caller's own ids are allowed.
+    """
+    line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
+    brief, args = line.has(commandline.BRIEF), line.argv
+    if is_remote(global_args, runtime.docker):
+        return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE], brief)
+    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
+    try:
+        parsed = runargs.parse(args, runtime.me, runtime.accounts)
+    except runargs.ParseError as e:
+        messages.notice(e)
+        messages.notice(AUDIT_USAGE)
+        return 2
+    except hostusers.UserError as e:
+        return verdict.report(Verdict.REFUSED, [str(e)], brief)
+    if not brief:
+        for message in parsed.notices:
+            messages.notice(message)
+    ctx = ctx.with_allow_me(parsed.allow_me)
+
+    try:
+        _, created = check(ctx, parsed, [])
+    except DockerNotFound as e:
+        return verdict.report(Verdict.FAILED, [str(e)], brief)
+    if created is None:
+        reason = f"docker could not create a container for {parsed.image}"
+        return verdict.report(Verdict.FAILED, [reason], brief)
+    container, info, assessment = created
+    try:
+        settings, _ = ctx.for_image(assessment.section)
+        policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
+        found = runpolicy.findings(info, parsed.user_given, policy_ctx) if info else []
+    finally:
+        ctx.docker.remove(container)
+
+    outcome, reasons = _audit_verdict(ctx, assessment, found, strict, parsed.image)
+    if brief:
+        messages.out(verdict.brief(outcome, reasons), indent=False)
+    else:
+        _report_assessment(ctx, parsed.image, assessment)
+        _report_findings(found, strict)
+        messages.notice(verdict.line(outcome))
+    return int(outcome)
+
+
+def _audit_verdict(ctx: imagedecision.Context, assessment: Assessment, found: list[str], strict: bool,
+                   image: str) -> tuple[Verdict, list[str]]:
+    """Returns the (verdict, reasons) of an audit: the assessment's, then the findings if strict."""
+    refused = imagedecision.explain(ctx, assessment, image) if assessment.refused else []
+    reasons = [*refused, *(found if strict else [])]
+    if assessment.failed:
+        return Verdict.FAILED, reasons
+    return (Verdict.REFUSED if reasons else Verdict.PASSED), reasons
+
+
+def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Assessment) -> None:
+    """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
+    name, dot = printable(image), verdict.dot(assessment)
+    if assessment.kind is Kind.EXPLICIT:
+        messages.out(messages.Marked(
+            dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
+    else:
+        messages.out(messages.Marked(dot, f"image {name}: {_describe_outcome(ctx, assessment)}"))
+        if assessment.note:
+            messages.out(messages.Marked(messages.WARN, f"note: {assessment.note}"))
+    if assessment.refused:
+        if not assessment.failed:
+            messages.out(messages.Marked(messages.HINT, imagedecision.CHOOSE_HINT))
+            messages.out(messages.Marked(messages.HINT, imagedecision.config_hint(ctx, image)))
+        return
+    if assessment.pins_user:
+        user = ids.format_user(assessment.pinned_user)
+        messages.out(f"  docker run would create it again with --user={user}, as numbers")
+    messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
+
+
+def _report_findings(found: list[str], strict: bool) -> None:
+    """Prints what the command line asks for that a project or an image may not; as failures if strict."""
+    dot = messages.BAD if strict else messages.WARN
+    for finding in found:
+        messages.out(messages.Marked(dot, f"command line: {finding}"))
+    if found and not strict:
+        messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
+                                                   "--strict-screen makes them fail the audit"))
+
+
+def _describe_outcome(ctx: imagedecision.Context, assessment: Assessment) -> str:
+    """Returns, as text, what the assessment means for running the image."""
+    if assessment.kind in (Kind.OK, Kind.CONFIGURED):
+        return runs_as(assessment, ctx.local)
+    who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
+    if assessment.kind is Kind.FALLBACK:
+        return (f"would run as {who}; docker run would run it as the default user "
+                f"({ids.format_user(assessment.pinned_user)}) instead")
+    reasons = "; ".join(printable(p) for p in assessment.problems)
+    if assessment.failed:
+        return f"could not be assessed: {reasons}"
+    return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"

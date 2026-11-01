@@ -15,8 +15,9 @@ import os
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from dockscreen import messages
+from dockscreen import messages, verdict
 from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
@@ -138,8 +139,18 @@ def _check_secrets(secrets: Sequence[Any], project_dir: str) -> list[str]:
     return problems
 
 
-def screen(docker: Docker, args: Sequence[str]) -> tuple[list[str], bool]:
-    """Screens `bake` with these arguments against the current directory as the project directory.
+def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
+    """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
+    passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
+    """
+    reasons, failed = check(runtime.docker, args)
+    if not verdict.screened(reasons, failed):
+        return 1
+    runtime.docker.exec([*lead, *args])
+
+
+def check(docker: Docker, args: Sequence[str]) -> tuple[list[str], bool]:
+    """Checks `bake` with these arguments against the current directory as the project directory.
 
     Returns (reasons, failed): why it may not run, and whether that is a failure to get the definition.
     """

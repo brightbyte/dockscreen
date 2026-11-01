@@ -1,10 +1,10 @@
 import pytest
 from fakes import FakeDocker, make_runtime
 
+from dockscreen.commands import docker_run
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError, DockerNotFound
 from dockscreen.messages import BAD, GOOD, WARN
-from dockscreen.run import audit, gate
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
@@ -30,11 +30,11 @@ def report(out):
 
 
 def audited(docker, *args):
-    return audit.audit([], list(args), runtime(docker))
+    return docker_run.audit([], list(args), runtime(docker))
 
 
 def audited_with(docker, settings, *args):
-    return audit.audit([], list(args), runtime(docker, settings))
+    return docker_run.audit([], list(args), runtime(docker, settings))
 
 
 def test_audit_without_mounts_creates_the_container_as_run_would_and_never_starts_it(capsys):
@@ -78,7 +78,7 @@ def test_audit_predicts_a_refusal_and_exits_one(capsys):
 
 
 def test_run_refusals_name_the_config_file_when_helpful(capsys, helpful):
-    assert gate.run([], ["img"], runtime(FakeDocker(image_user="web"))) == 1
+    assert docker_run.gate([], ["img"], runtime(FakeDocker(image_user="web"))) == 1
     assert f'[images."img"] in {make_runtime().config_file}' in capsys.readouterr().err
 
 
@@ -126,12 +126,12 @@ def test_audit_points_out_what_a_project_could_not_ask_for(monkeypatch, tmp_path
 
 def test_strict_screen_fails_the_audit_for_command_line_findings(capsys):
     docker = FakeDocker(image_user="nobody", info_extra={"HostConfig": {"Privileged": True}})
-    assert audit.audit([], ["img"], runtime(docker), strict=True) == 1
+    assert docker_run.audit([], ["img"], runtime(docker), strict=True) == 1
     out = capsys.readouterr().out
     assert f"{BAD} command line: privileged is not allowed" in out  # red: it fails the audit
     assert "--strict-screen makes them fail" not in out
 
-    assert audit.audit([], ["img"], runtime(FakeDocker(image_user="nobody")), strict=True) == 0
+    assert docker_run.audit([], ["img"], runtime(FakeDocker(image_user="nobody")), strict=True) == 0
 
 
 def test_audit_of_an_image_docker_cannot_create_fails(capsys):
@@ -164,7 +164,7 @@ def test_brief_prints_only_the_verdict(args, out, code, capsys):
 
 def test_brief_with_strict_screen_names_the_command_line_finding(capsys):
     docker = FakeDocker(image_user="nobody", info_extra={"HostConfig": {"Privileged": True}})
-    assert audit.audit([], ["--brief", "img"], runtime(docker), strict=True) == 1
+    assert docker_run.audit([], ["--brief", "img"], runtime(docker), strict=True) == 1
     assert capsys.readouterr().out == "\u2296 denied by audit: privileged is not allowed\n"
 
 
@@ -185,7 +185,7 @@ def test_audit_fails_and_removes_the_container_when_inspection_fails(capsys):
 def test_run_refuses_what_audit_calls_failed(capsys):
     docker = FakeDocker()
     docker.inspect_container = lambda ref: (_ for _ in ()).throw(DockerError("boom"))
-    assert gate.run([], ["img"], runtime(docker)) == 1  # not started: a failure to look is not a pass
+    assert docker_run.gate([], ["img"], runtime(docker)) == 1  # not started: a failure to look is not a pass
     assert capsys.readouterr().err.splitlines() == [
         f"[dockscreen] \u25cf added {' '.join(DEFAULTS)}",  # the routine notice comes before the failure
         f"[dockscreen] {BAD} boom", "[dockscreen] \u2718 audit failed"]

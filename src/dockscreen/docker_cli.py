@@ -8,12 +8,12 @@ import sys
 from collections.abc import Sequence
 from typing import NoReturn
 
-from dockscreen import bake, commandline, helptext, messages, runargs, userargs, verdict
+from dockscreen import commandline, helptext, messages
+from dockscreen.commands import docker_bake, docker_create, docker_exec, docker_run, docker_start
 from dockscreen.compose import compose_cli
-from dockscreen.host import config, hostusers
+from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime, load_runtime
-from dockscreen.run import audit, gate
 
 # Global `docker` options that consume the following token as their value.
 DOCKER_OPTS_WITH_VALUE = frozenset({
@@ -88,8 +88,8 @@ class DockerCommand(commandline.CommandLine):
                 return 1
             return compose_cli.main(argv[1:], self.runtime, self.given)
 
-        if (bake_args := self._bake_arguments()) is not None and bake.wants_screening(bake_args):
-            return self._screened_bake(bake_args)
+        if (bake_args := self._bake_arguments()) is not None and docker_bake.wants_screening(bake_args):
+            return docker_bake.gate(argv[:len(argv) - len(bake_args)], bake_args, self.runtime)
         sub, end = self._command(self.idx)
         if sub not in SCREENED:
             return _passthrough(argv, self.runtime)
@@ -113,16 +113,6 @@ class DockerCommand(commandline.CommandLine):
         at = commandline.find_subcommand(rest, BUILDX_OPTS_WITH_VALUE)
         return rest[at + 1:] if at is not None and rest[at] == "bake" else None
 
-    def _screened_bake(self, args: list[str]) -> int:
-        """Runs `buildx bake` with args if the definition it would build passes the policy for builds.
-
-        Returns 1 if it does not; otherwise docker replaces this process.
-        """
-        reasons, failed = bake.screen(self.runtime.docker, args)
-        if not verdict.screened(reasons, failed):
-            return 1
-        return _passthrough(self.argv, self.runtime)
-
     def _gated(self, sub: str, end: int) -> int:
         """Runs the SCREENED command sub (argv[end]) through the gate and returns the exit status, unless it
         passes and docker replaces this process.
@@ -130,28 +120,20 @@ class DockerCommand(commandline.CommandLine):
         argv, runtime = self.argv, self.runtime
         global_args, lead, args = self.global_args, argv[:end + 1], argv[end + 1:]
         if sub == "audit" and not args:
-            messages.notice(audit.AUDIT_USAGE)
+            messages.notice(docker_run.AUDIT_USAGE)
             messages.notice("Run 'dockscreen audit --help' for more.")
             return 2
         if sub in ("run", "create") and not args:
             return _passthrough(argv, runtime)  # docker says what is missing
         if sub == "create":
-            try:
-                resolved = gate.create_args(args, runtime)
-            except hostusers.UserError as e:
-                return messages.refuse([str(e)])
-            messages.notice(runargs.defaults_notice())
-            return _passthrough([*lead, *runargs.DEFAULTS, *resolved], runtime)
+            return docker_create.gate(lead, args, runtime)
         if sub == "exec":
-            exec_args = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
-            return 1 if exec_args is None else _passthrough([*lead, *exec_args], runtime)
+            return docker_exec.gate(lead, args, runtime)
         if sub == "run":
-            return gate.run(global_args, args, runtime, self.allow_me)
+            return docker_run.gate(global_args, args, runtime, self.allow_me)
         if sub == "audit":
-            return audit.audit(global_args, args, runtime, self.allow_me, self.strict)
-        if not verdict.screened(gate.check_existing(global_args, args, runtime, self.allow_me)):
-            return 1
-        return _passthrough(argv, runtime)
+            return docker_run.audit(global_args, args, runtime, self.allow_me, self.strict)
+        return docker_start.gate(global_args, lead, args, runtime, self.allow_me)  # start, restart
 
     def _help_request(self) -> str | None:
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.

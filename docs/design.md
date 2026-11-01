@@ -150,12 +150,12 @@ The code is in layers, each of which imports only its own and the ones before it
 
 1. Shared vocabulary at the top of the package: `messages`, `ids`, `images`, `commandline`.
 2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`.
-3. `screen`: the checks: `policy`, `idrules`, `imagedecision`, `imageuser`.
-4. The command line's own modules at the top of the package: `userargs`, `helptext`, `verdict`.
-5. The front ends, none of which imports another: the `compose` and `run` packages, and `bake`.
+3. `screen`: the checks: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`.
+4. The command line's own modules at the top of the package: `userargs`, `runargs`, `helptext`, `verdict`.
+5. The front ends, none of which imports another: the `compose` package, and the modules of `commands`, one per docker command.
 6. The entry point, `docker_cli`.
 
-The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). Each front end's package, `run` or `compose`, has a `gate` that checks and then runs, an `audit` that checks and reports, and the parser of its command lines (`runargs`, `composeargs`). The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
+The `docker` and `docker compose` front ends are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and dispatches; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A docker command's module (`commands.docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`) has a `check` that returns what it checked and why it may not run, a `gate` that checks and then runs what it checked, and, where dockscreen has one, an `audit` that checks and reports; the compose package has a `gate` and an `audit` too. Their command lines are read by `runargs` and `composeargs`. The entry points of both take `(global_args, args, runtime, allow_me)`. Both use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
 ### Compose (`compose_cli`, `inspect`, `hardening`, `policy`, `composeimages`, `compose.gate`, `compose.audit`)
 
@@ -208,17 +208,17 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 `imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image.
 
-### The `docker` wrapper (`docker_cli`, `runargs`, `run.gate`, `run.audit`, `hostusers`)
+### The `docker` wrapper (`docker_cli`, `runargs`, `commands`, `hostusers`)
 
 - `run` becomes `create`, `inspect`, check, `start`:
   - The daemon parses the command line. `runargs` reads only far enough to find the image and the `run`-only flags.
-  - `gate._verify_split` refuses if that reading disagrees with what the daemon created.
+  - `docker_run.check` refuses if that reading disagrees with what the daemon created (`_verify_split`).
   - Anything accepted removes the container and creates it again with `--user=uid:gid` as numbers: the default user, the configured image user, or the image's own ids.
-- `create` gets the defaults and user resolution. Its container is checked when it is started.
-- `start` and `restart` check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
-- `exec` checks only the form of the user (see [Forms](#forms)).
-- `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `bake._check_definition` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
-- `audit` (`run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
+- `create` (`docker_create`) gets the defaults and user resolution. Its container is checked when it is started.
+- `start` and `restart` (`docker_start`) check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
+- `exec` (`docker_exec`) checks only the form of the user (see [Forms](#forms)).
+- `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `docker_bake.check` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
+- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.

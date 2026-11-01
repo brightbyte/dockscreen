@@ -5,7 +5,8 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen import bake, docker_cli, messages
+from dockscreen import docker_cli, messages
+from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
 
 
@@ -18,8 +19,8 @@ def project(tmp_path):
 
 
 def check(project, **target):
-    return bake._check_definition({"group": {"default": {"targets": ["app"]}}, "target": {"app": target}},
-                                 str(project))
+    definition = {"group": {"default": {"targets": ["app"]}}, "target": {"app": target}}
+    return docker_bake._check_definition(definition, str(project))
 
 
 def test_a_definition_of_ordinary_builds_has_no_problems(project):
@@ -71,7 +72,7 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 
 
 def test_a_top_level_key_that_is_not_known_is_refused(project):
-    assert bake._check_definition({"target": {}, "variable": {}}, str(project)) == [
+    assert docker_bake._check_definition({"target": {}, "variable": {}}, str(project)) == [
         "key 'variable' is not on the allow list"]
 
 
@@ -83,7 +84,7 @@ def test_a_top_level_key_that_is_not_known_is_refused(project):
     (["-h"], False),
 ])
 def test_only_a_bake_that_builds_is_screened(args, screened):
-    assert bake.wants_screening(args) is screened
+    assert docker_bake.wants_screening(args) is screened
 
 
 class Docker:
@@ -107,7 +108,7 @@ class Docker:
 def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
     docker = Docker(out=json.dumps({"target": {}}))
 
-    assert bake._definition(docker, ["-f", "b.hcl", "app"]) == {"target": {}}
+    assert docker_bake._definition(docker, ["-f", "b.hcl", "app"]) == {"target": {}}
     assert docker.commands == [["docker", "buildx", "bake", "--print", "-f", "b.hcl", "app"]]
 
 
@@ -118,9 +119,9 @@ def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
 ])
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
-        bake._definition(docker, [])
+        docker_bake._definition(docker, [])
     assert message in messages.with_output(messages.reason_of(raised.value))
-    reasons, failed = bake.screen(docker, [])
+    reasons, failed = docker_bake.check(docker, [])
     assert failed and message in messages.with_output(reasons[0])
 
 
@@ -128,7 +129,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    assert bake.screen(docker, []) == (["target app: context '/etc' is outside " + str(project)], False)
+    assert docker_bake.check(docker, []) == (["target app: context '/etc' is outside " + str(project)], False)
 
 
 @pytest.mark.parametrize("argv, args", [
