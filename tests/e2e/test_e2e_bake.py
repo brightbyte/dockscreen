@@ -23,8 +23,14 @@ def test_an_output_that_writes_to_the_host_is_refused_and_nothing_is_built(webap
     assert not (webapp / "dist").exists()
 
 
-def test_a_cache_secrets_and_the_ssh_agent_from_the_host_are_refused(webapp, dockscreen):
-    result = dockscreen("buildx", "bake", "ci", cwd=webapp)
+def test_a_cache_secrets_and_the_ssh_agent_from_the_host_are_refused(webapp, dockscreen, tmp_path):
+    # bake --print fails on a secret file that is not there, so they are put outside the project
+    home = tmp_path / "home"
+    (home / "cache").mkdir(parents=True)
+    (home / ".npmrc").write_text("//registry.npmjs.org/:_authToken=not-a-token\n")
+    env = {"BUILDKIT_CACHE": str(home / "cache"), "NPMRC": str(home / ".npmrc")}
+
+    result = dockscreen("buildx", "bake", "ci", cwd=webapp, env=env)
 
     assert result.status == 1, result.output
     output = result.output
