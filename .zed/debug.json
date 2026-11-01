@@ -1,0 +1,11 @@
+[
+  {
+    "label": "docker_cli compose config",
+    "adapter": "Debugpy",
+    "request": "launch",
+    "module": "dockscreen.docker_cli",
+    "args": ["compose", "config", "tests/e2e/projects/monitoring"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "env": { "PYTHONPATH": "$ZED_WORKTREE_ROOT/src" }
+  }
+]
