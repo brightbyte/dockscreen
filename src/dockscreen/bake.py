@@ -80,11 +80,18 @@ def _check_target(target: dict[str, Any], project_dir: str) -> list[str]:
 def _fields(entry: Any) -> dict[str, str] | None:
     """Returns the {key: value} of a `key=value,key=value` entry, or None if it is not one.
 
+    Newer buildx prints some entries (cache-from, cache-to, secret) as objects of the same keys.
     A bare word has no keys.
     """
+    if isinstance(entry, dict):
+        if not all(isinstance(value, str) for value in entry.values()):
+            return None
+        return {str(key): value for key, value in entry.items()}
+    if not isinstance(entry, str):
+        return None
     try:
         # buildx reads these as CSV, so a quoted value may hold commas
-        parts = next(csv.reader([str(entry)]), [])
+        parts = next(csv.reader([entry]), [])
     except csv.Error:
         return None
     pairs = [part.partition("=") for part in parts]

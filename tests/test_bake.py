@@ -30,6 +30,12 @@ def test_a_definition_of_ordinary_builds_has_no_problems(project):
                     "cache-to": ["type=inline"], "secret": ["id=npm,src=app/.npmrc"]}) == []
 
 
+def test_entries_printed_as_objects_are_read_as_their_fields(project):
+    assert check(project, context=".", **{
+        "cache-from": [{"type": "registry", "ref": "r/app"}, {"type": "local", "src": "app"}],
+        "cache-to": [{"type": "inline"}], "secret": [{"id": "npm", "src": "app/.npmrc"}]}) == []
+
+
 @pytest.mark.parametrize("fields, problem", [
     ({"context": "/etc"}, "context '/etc' is outside"),
     ({"context": "escape"}, "context 'escape' is outside"),
@@ -48,6 +54,13 @@ def test_a_definition_of_ordinary_builds_has_no_problems(project):
     ({"secret": ["id=k,src=/home/me/.ssh/id_rsa"]}, "secret 'id=k,src=/home/me/.ssh/id_rsa' is outside"),
     ({"secret": ["id=k,env=AWS_SECRET_ACCESS_KEY"]}, "copies a variable"),
     ({"secret": ["id=AWS_SECRET_ACCESS_KEY"]}, "copies a variable"),
+    # newer buildx prints these as objects
+    ({"cache-from": [{"type": "local", "src": "/etc"}]},
+     "cache-from {'type': 'local', 'src': '/etc'} is outside"),
+    ({"cache-from": [{"type": "local", "src": ["/etc"]}]}, "cannot be read"),
+    ({"cache-to": [{"type": "local", "dest": "/etc"}]}, "writes to the host"),
+    ({"secret": [{"id": "k", "src": "/home/me/.ssh/id_rsa"}]}, "is outside"),
+    ({"secret": [{"id": "k", "env": "AWS_SECRET_ACCESS_KEY"}]}, "copies a variable"),
     ({"x-bake": {}}, "key 'x-bake' is not on the allow list"),
     ({"newkey": 1}, "key 'newkey' is not on the allow list"),
 ])
