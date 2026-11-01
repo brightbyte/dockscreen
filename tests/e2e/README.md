@@ -47,8 +47,9 @@ Some need more:
 - a registry to pull from: `alpine`, `redis`, `nginx` and `nginx-unprivileged`, at pinned tags
 - uid and gid between 1000 and 60000, for the app image built with your ids
 - a range in `/etc/subuid`, for the image whose user is a subordinate id
-- for nginx-unprivileged, which runs as 101: either a local user 101, or neither a user nor a group 101;
-  each case has its own test
+- a local user 101, for the test that nginx-unprivileged (which runs as 101) is refused for it
+- an id between 20000 and 60000 that is no user, group or subordinate id, for the app image built to run
+  as a stranger to the host
 - `docker buildx` for the bake tests, and `bake --call` for the one that passes
 - compose 2.24 or newer for the harden test, whose patch uses `!reset` and `!override`
 

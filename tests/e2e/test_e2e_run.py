@@ -1,7 +1,7 @@
 """`dockscreen audit`, what `docker run` would do, against the real docker.
 
 The images are alpine (root), nginx-unprivileged (USER 101), and the webapp's app image built with
-your ids or with ids from a subordinate range.
+your ids, with ids from a subordinate range, or with an id that is free on this host.
 """
 
 import pytest
@@ -10,9 +10,10 @@ from realdocker import (
     NGINX_UNPRIVILEGED,
     OWN_IDS_IMAGE,
     PROJECTS,
+    STRANGER_IMAGE,
     SUBORDINATE_IMAGE,
     first_subordinate_id,
-    group_exists,
+    free_id,
     require,
     toml_string,
     user_exists,
@@ -30,16 +31,24 @@ def build_app(docker, pulled, tag, uid, gid):
     return tag
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def own_ids_image(docker, pulled, ordinary_ids):
     return build_app(docker, pulled, OWN_IDS_IMAGE, *ordinary_ids)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def subordinate_image(docker, pulled):
     first = first_subordinate_id()
     require(first is not None, "/etc/subuid has no range")
     return build_app(docker, pulled, SUBORDINATE_IMAGE, first, first)
+
+
+@pytest.fixture(scope="session")
+def stranger_image(docker, pulled, me):
+    """The app image, run as an id that is no account, group or subordinate id here, nor yours."""
+    free = free_id(me)
+    require(free is not None, "no id between 20000 and 60000 is free of users, groups and subordinate ranges")
+    return build_app(docker, pulled, STRANGER_IMAGE, free, free), free
 
 
 @pytest.fixture
@@ -105,18 +114,17 @@ def test_an_image_user_that_is_a_local_account_is_refused(unprivileged, dockscre
     assert "the image's uid 101 exists on this host (local user " in result.output
 
 
-def test_an_image_user_outside_the_nobody_range_is_refused_with_mounts(unprivileged, dockscreen, tmp_path):
-    require(not user_exists(101) and not group_exists(101),
-            "this host has a user or group 101, which nginx-unprivileged runs as")
+def test_an_image_user_outside_the_nobody_range_is_refused_with_mounts(stranger_image, dockscreen, tmp_path):
+    image, uid = stranger_image
     site = tmp_path / "site"
     site.mkdir()
 
-    without = dockscreen("audit", unprivileged, cwd=tmp_path)
-    mounted = dockscreen("audit", "-v", f"{site}:/usr/share/nginx/html:ro", unprivileged, cwd=tmp_path)
+    without = dockscreen("audit", image, cwd=tmp_path)
+    mounted = dockscreen("audit", "-v", f"{site}:/app/src:ro", image, cwd=tmp_path)
 
     assert without.status == 0, without.output
     assert mounted.status == 1, mounted.output
-    expected = "the image's uid 101 is not in the nobody range 65530-65534, and there are host mounts"
+    expected = f"the image's uid {uid} is not in the nobody range 65530-65534, and there are host mounts"
     assert expected in mounted.output
 
 

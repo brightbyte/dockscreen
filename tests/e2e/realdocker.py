@@ -6,6 +6,7 @@ import pwd
 import subprocess
 import sys
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -26,7 +27,8 @@ NGINX_UNPRIVILEGED = "nginxinc/nginx-unprivileged:1.27-alpine"  # USER 101
 WEBAPP_APP = "dockscreen-e2e-webapp-app"  # what compose names the webapp's built app image
 OWN_IDS_IMAGE = "dockscreen-e2e/app:own-ids"
 SUBORDINATE_IMAGE = "dockscreen-e2e/app:subordinate"
-BUILT_IMAGES = (WEBAPP_APP, OWN_IDS_IMAGE, SUBORDINATE_IMAGE)
+STRANGER_IMAGE = "dockscreen-e2e/app:stranger"  # runs as an id that means nothing on this host
+BUILT_IMAGES = (WEBAPP_APP, OWN_IDS_IMAGE, SUBORDINATE_IMAGE, STRANGER_IMAGE)
 
 # The environment pytest was started in. The unit tests' fixtures change os.environ for each test
 # (DOCKER_HOST, COLUMNS), and docker has to be reached the way the developer's shell reaches it.
@@ -144,15 +146,35 @@ def group_exists(gid: int) -> bool:
     return True
 
 
-def first_subordinate_id(path: str = "/etc/subuid") -> int | None:
-    """Returns the first id of the first range in path (/etc/subuid), or None if it has none."""
+def subordinate_ranges(path: str = "/etc/subuid") -> list[range]:
+    """Returns the non-empty id ranges in path (/etc/subuid or /etc/subgid); none if it cannot be read."""
     try:
         with open(path) as f:
             lines = f.read().splitlines()
     except OSError:
-        return None
+        return []
+    ranges = []
     for line in lines:
         fields = line.split(":")
         if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit() and int(fields[2]) > 0:
-            return int(fields[1])
+            ranges.append(range(int(fields[1]), int(fields[1]) + int(fields[2])))
+    return ranges
+
+
+def first_subordinate_id(path: str = "/etc/subuid") -> int | None:
+    """Returns the first id of the first range in path (/etc/subuid), or None if it has none."""
+    ranges = subordinate_ranges(path)
+    return ranges[0].start if ranges else None
+
+
+def free_id(taken: Iterable[int], candidates: range = range(20000, 60000)) -> int | None:
+    """Returns an id of candidates that is neither in taken nor a user, group or subordinate id here.
+
+    The candidates are below the nobody range and above alpine's own accounts.
+    """
+    subordinate = subordinate_ranges("/etc/subuid") + subordinate_ranges("/etc/subgid")
+    for candidate in candidates:
+        if (candidate not in taken and not user_exists(candidate) and not group_exists(candidate)
+                and not any(candidate in r for r in subordinate)):
+            return candidate
     return None
