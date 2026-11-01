@@ -26,6 +26,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 # The end-to-end tests use the real docker; run them with `pytest -m e2e`.
 markers = ["e2e: end-to-end tests against the real docker of this host"]
 addopts = "-m 'not e2e'"
