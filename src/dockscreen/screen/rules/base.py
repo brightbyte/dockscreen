@@ -47,6 +47,7 @@ class RuleBase:
     configured_user: tuple | None
     default_user: tuple[int, int]
     default_home: str
+    default_origin: Origin
     section: configuration.Match
 
     def mount_roots(self, directory: str) -> tuple[str, ...]:

@@ -68,6 +68,7 @@ class Config(NamedTuple):
     docker: str | None = None                          # absolute path of the real docker
     images: MappingProxyType = MappingProxyType({})    # normalised repository -> Section
     projects: MappingProxyType = MappingProxyType({})  # absolute directory -> Section
+    configured: frozenset = frozenset()                # the settings a config file sets; others are defaults
 
 
 class Match(NamedTuple):
@@ -99,10 +100,12 @@ def _amend(config: Config, section: Section) -> Config:
     """Returns config with section applied: the values it sets replace, the lists it gives are added to."""
     changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
+    lists = [key for key in ("mount_dirs", "security_opts") if getattr(section, key)]
+    configured = frozenset({*config.configured, *changes, *lists})
     for key in ("mount_dirs", "security_opts"):
         before = getattr(config, key)
         changes[key] = (*before, *(v for v in getattr(section, key) if v not in before))
-    return config._replace(**changes)
+    return config._replace(**changes, configured=configured)
 
 
 def all_mount_dirs(config: Config) -> tuple[str, ...]:
@@ -209,7 +212,8 @@ def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
             raise ConfigError(f"{path}: docker must be an absolute path")
         changes["docker"] = data["docker"]
     return config._replace(**changes, images=MappingProxyType({**config.images, **images_}),
-                           projects=MappingProxyType({**config.projects, **projects}))
+                           projects=MappingProxyType({**config.projects, **projects}),
+                           configured=config.configured | (set(data) & SETTINGS))
 
 
 def _table(path: str, key: str, value: object) -> dict[str, Any]:

@@ -6,8 +6,8 @@ imageuser), and the id rules decide whether the image may have it (idrules). Wit
 this order:
 - the config file names a user for the image's repository, and the image was pulled from there:
   that user, whatever it is (config.section_for, config.effective);
-- the image would run as root (uid, gid or a supplementary gid of 0): the configured default user
-  instead, nobody unless configured otherwise, with a notice;
+- the image would run as root (uid, gid or a supplementary gid of 0): the default user instead, the
+  configured one or nobody, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
 
 Whatever is accepted is not left for the runtime to resolve a second time: it runs as `uid:gid`, the
@@ -57,7 +57,7 @@ class ImageRules(RuleBase):
         except ValueError as e:
             return Assessment(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
         if identity.involves_root:
-            return Assessment(Origin.CONFIG, image, notes, identity, user=self.default_user,
+            return Assessment(self.default_origin, image, notes, identity, user=self.default_user,
                               home=self.default_home, replaces_root=True, **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)

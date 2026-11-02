@@ -64,9 +64,11 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     # The user the config file sets for this service (its image's or project's, or the top level's):
     # its uid and gid are allowed ids for the service too, whoever names them.
     configured_user: tuple | None = None
-    # What runs instead of an image that would run as root, and the HOME it gets (default_home).
+    # What runs instead of an image that would run as root, and the HOME it gets (default_home); where that
+    # user comes from: the config file if it sets one, else it is dockscreen's own.
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
+    default_origin: Origin = Origin.DOCKSCREEN
     # Which image section of the config file applies to the image this policy is for, and why the one for
     # its repository does not (config.section_for); none for a policy that is not for an image.
     section: configuration.Match = NO_SECTION
@@ -84,7 +86,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         """
         return cls(rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
                    security_opts=settings.security_opts, configured_user=settings.user,
-                   default_user=settings.default_user, default_home=settings.default_home)
+                   default_user=settings.default_user, default_home=settings.default_home,
+                   default_origin=_origin_of(settings, "default_user"))
 
     def for_service(self, name: str, service: dict[str, Any]) -> "Policy":
         """Returns the policy to check the service called name with: per_service's for it, with this one's
@@ -197,3 +200,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
                 service_policy = self.for_service(name, project.service(name).definition)
                 found[name] = service_policy.check_image(image, Origin.IMAGE)
         return found
+
+
+def _origin_of(settings: configuration.Config, key: str) -> Origin:
+    """Returns where the setting called key comes from: the config file if one sets it, else dockscreen."""
+    return Origin.CONFIG if key in settings.configured else Origin.DOCKSCREEN

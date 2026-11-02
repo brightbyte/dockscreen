@@ -3,6 +3,7 @@ import os
 import pytest
 from fakes import project_of, rules
 
+from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
@@ -626,13 +627,19 @@ def inspected(user, mounts=False):
 
 
 @pytest.mark.parametrize("user, origin, root, runs_as", [
-    ("root", Origin.CONFIG, True, (65534, 65534)),  # the default user instead
+    ("root", Origin.DOCKSCREEN, True, (65534, 65534)),  # dockscreen's default user instead
     ("app", Origin.IMAGE, False, (100000, 100001)),
 ])
 def test_an_images_own_user_is_judged_from_its_files_without_docker(user, origin, root, runs_as):
     found = policy.Policy(rules()).check_image(inspected(user), Origin.IMAGE)
 
     assert (found.origin, found.replaces_root, found.user, found.refused) == (origin, root, runs_as, False)
+
+
+def test_the_default_user_the_config_file_sets_comes_from_it():
+    settings = configuration.Config(default_user=(9, 9), configured=frozenset({"default_user"}))
+    found = policy.Policy.for_settings(settings, rules()).check_image(inspected("root"), Origin.IMAGE)
+    assert (found.origin, found.replaces_root, found.user) == (Origin.CONFIG, True, (9, 9))
 
 
 def test_an_image_user_the_id_rules_refuse_with_host_mounts_is_refused():

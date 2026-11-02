@@ -2,9 +2,10 @@
 makes (Policy.check_image).
 
 Where that user comes from is an origin like any other value's: the image's own user (Origin.IMAGE),
-judged by the id rules; one the config file sets (Origin.CONFIG), for the image, the project or every one,
-or the default user it sets for an image that would run as root (replaces_root); or one the command line
-or dockscreen chose (any other origin), which the image does not decide.
+judged by the id rules; one the config file sets (Origin.CONFIG), for the image, the project or every one;
+the default user for an image that would run as root (replaces_root), the config file's or dockscreen's
+own; or one the command line chose, which the image does not decide. An image that could not be looked at
+has no user, and so no origin.
 """
 
 from typing import NamedTuple, Self
@@ -15,12 +16,12 @@ from dockscreen.screen.findings import Finding, Severity
 
 
 class Assessment(NamedTuple):
-    """Judgement of the user a container would run as: where the user comes from (origin, and whether it is
-    the default user instead of the image's root, replaces_root), the image, what was found (refusals,
-    failures to look, and notable findings), the identity read from the image, and the user dockscreen
-    pins.
+    """Judgement of the user a container would run as: where the user comes from (origin, None if the image
+    could not be looked at; and whether it is the default user instead of the image's root, replaces_root),
+    the image, what was found (refusals, failures to look, and notable findings), the identity read from the
+    image, and the user dockscreen pins.
     """
-    origin: Origin
+    origin: Origin | None
     image: Image
     findings: tuple[Finding, ...] = ()
     identity: Identity | None = None
@@ -32,7 +33,7 @@ class Assessment(NamedTuple):
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:
         """Returns the assessment of an image that could not be looked at, for reason."""
-        return cls(Origin.IMAGE, image, (Finding.of(reason, Severity.FAILED),))
+        return cls(None, image, (Finding.of(reason, Severity.FAILED),))
 
     @property
     def reasons(self) -> list[Finding]:
@@ -55,34 +56,21 @@ class Assessment(NamedTuple):
         return any(f.severity is Severity.FAILED for f in self.findings)
 
     @property
-    def decided(self) -> bool:
-        """Tells whether the user was decided for the image, from it or from the config file, rather than
-        chosen by the command line or dockscreen.
+    def pins_user(self) -> bool:
+        """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers: the
+        image's own, the config file's, or the default user; not one the command line chose.
         """
-        return self.origin in (Origin.IMAGE, Origin.CONFIG)
+        return self.user is not None and not self.refused
 
     @property
     def accepted(self) -> bool:
-        """Tells whether the image runs as the user decided for it without replacing its root: its own user,
-        accepted, or the one the config file sets for it.
+        """Tells whether the image runs as the user decided for it without replacing its root (pins_user):
+        its own user, accepted, or the one the config file sets for it.
         """
-        return self.decided and not self.replaces_root and not self.refused
-
-    @property
-    def pins_user(self) -> bool:
-        """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
-        return self.decided and not self.refused
+        return self.pins_user and not self.replaces_root
 
     @property
     def pinned_user(self) -> tuple[int, int]:
         """Returns the (uid, gid) dockscreen decided; only for an assessment that pins_user."""
         assert self.user is not None, f"an assessment of a user from {self.origin} pins none"
         return self.user
-
-    @property
-    def replaces_image_user(self) -> bool:
-        """Tells whether the user dockscreen decided differs from the one the image chose: the config file's,
-        or the default user instead of root.
-        """
-        return self.origin is Origin.CONFIG and not self.refused
-

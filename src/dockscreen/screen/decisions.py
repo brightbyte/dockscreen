@@ -49,7 +49,7 @@ class Decisions(NamedTuple):
 
     def changes(self) -> list[Substitution]:
         """Returns the substitutions that make the project the one to run (the function changes)."""
-        return changes(self.project, self.decisions, self.policy.default_user, self.policy.default_home)
+        return changes(self.project, self.decisions, self.policy)
 
     def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
@@ -80,11 +80,12 @@ class Decisions(NamedTuple):
         return substitutions.describe(self.changes())
 
 
-def changes(project: Project, decisions: Mapping[str, Assessment], default_user: tuple[int, int],
-            default_home: str) -> list[Substitution]:
+def changes(project: Project, decisions: Mapping[str, Assessment], project_policy: policy.Policy
+            ) -> list[Substitution]:
     """Returns the substitutions that make project the one to run, by service name: services that start
     and set no user get the decided user (decisions), pinned to the image that was checked; those that do
-    not start get default_user, with default_home as HOME (the function default_home).
+    not start get the default user of project_policy, with its default_home as HOME (the function
+    default_home).
     """
     found = []
     for name, service in sorted((project.definition.get("services") or {}).items()):
@@ -93,20 +94,20 @@ def changes(project: Project, decisions: Mapping[str, Assessment], default_user:
             continue
         decision = decisions.get(name)
         if decision is None:  # not started by this command
-            found += _user(name, service, default_user, default_home)
+            found += _user(name, service, project_policy.default_user, project_policy.default_home,
+                           project_policy.default_origin)
         elif decision.pins_user:
             found += _pinned(name, service, decision)
     return found
 
 
-def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, text: str | None = None,
-          group: Group | None = None) -> list[Substitution]:
-    """Returns the substitutions that set the service's user, the configured or the default one, reported
-    by text if given, and the HOME that comes with the default user (default_home) unless the service sets
-    HOME.
+def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, origin: Origin | None,
+          text: str | None = None, group: Group | None = None) -> list[Substitution]:
+    """Returns the substitutions that set the service's user to the default one, which comes from origin,
+    reported by text if given, and the HOME that comes with it (default_home) unless the service sets HOME.
     """
     found = [Substitution(name, "user", ids.format_user(user), text, notable=bool(text),
-                          help=USER_HELP if text else None, group=group, origin=Origin.CONFIG)]
+                          help=USER_HELP if text else None, group=group, origin=origin)]
     if home := default_home(user, home):
         found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
     return found
@@ -117,7 +118,7 @@ def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[
     the user, as numbers, the image by id unless it is built, and pull_policy never.
     """
     if assessment.replaces_root:
-        found = _user(name, service, assessment.pinned_user, assessment.home,
+        found = _user(name, service, assessment.pinned_user, assessment.home, assessment.origin,
                       verdict.instead_of_root(assessment), PINNED)
     else:  # the image's user, or the one its image section configures
         found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,

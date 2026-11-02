@@ -53,7 +53,8 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
         try:
             info = ctx.docker.inspect_container(ref)
             assessment = ctx.assess(runtime.cwd, info["Id"], info)
-            if assessment.replaces_image_user and not _runs_as_pinned_user(info, assessment):
+            replaces_image_user = assessment.pins_user and assessment.origin is not Origin.IMAGE
+            if replaces_image_user and not _runs_as_pinned_user(info, assessment):
                 user = ids.format_user(assessment.pinned_user)
                 problems.append(Finding(
                     f"cannot change the user of an existing container; it would run as the "
@@ -62,7 +63,8 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                 explained = explain(assessment, runtime.config_file)
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
             if strict:
-                user_origin = Origin.IMAGE if assessment.decided else Origin.COMMAND_LINE
+                chosen = assessment.origin is Origin.COMMAND_LINE
+                user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
                 strict_policy = ctx.policy_here(assessment.section, STRICT)
                 found = strict_policy.check_container(Container(info, runtime.cwd, user_origin))
                 problems += findings.about(found, ref)

@@ -93,7 +93,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         extra = [f"--user={user}"]
         if assessment.replaces_root:
             extra += _home_args(ctx, container, assessment)
-        created = _create_checked(ctx, parsed, extra)
+        created = _create_checked(ctx, parsed, extra, assessment)
         if isinstance(created, int):
             return created
         container, assessment = created
@@ -134,15 +134,15 @@ def _fallback_notice(assessment: Assessment) -> Finding:
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
-def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
-                    ) -> tuple[Container, Assessment] | int:
-    """Creates the container; returns it with the assessment of its user, or the exit status if it may not
-    start.
+def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str],
+                    decided: Assessment | None = None) -> tuple[Container, Assessment] | int:
+    """Creates the container (check); returns it with the assessment of its user, or the exit status if it
+    may not start.
 
     A container that would be refused is removed and the refusal printed. Any other assessment is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, created = check(ctx, parsed, extra)
+    code, created = check(ctx, parsed, extra, decided)
     if created is None:  # docker said why
         verdict.screened(Report.failure(f"docker could not create a container for {parsed.image}"))
         return code
@@ -154,12 +154,15 @@ def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     return created
 
 
-def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
+def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str], decided: Assessment | None = None
           ) -> tuple[int, tuple[Container, Assessment] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, assessment of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
-    extra: arguments that go before the command line's own. The container is left for the caller to remove.
+    extra: arguments that go before the command line's own. decided: the assessment of a first creation,
+    whose user extra pins; the container is then not assessed again, only checked to be what the command
+    line asked for, and its user comes from where the decided one does. The container is left for the
+    caller to remove.
     """
     code, created = ctx.docker.create([*DEFAULTS, *extra, *parsed.create_args])
     if created is None:
@@ -167,10 +170,13 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     here = ctx.runtime.cwd
     container, image = Container.uninspected(created, here), Image(parsed.image)
     try:
-        container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, extra))
+        container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, decided))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
-        assessment = Assessment(Origin.IMAGE, image, tuple(problems)) if problems else ctx.assess(
-            ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
+        if problems:
+            assessment = Assessment(None, image, tuple(problems))
+        else:
+            assessment = decided or ctx.assess(
+                ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
@@ -189,13 +195,12 @@ def _command_line_findings(ctx: Scope, container: Container, assessment: Assessm
     return ctx.policy_here(assessment.section, trust).check_container(container)
 
 
-def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
-    """Returns where the user of the container comes from: dockscreen when it adds options of its own
-    (extra, which re-create it with the user it decided), else the command line if it gives one, else the
-    image.
+def _user_origin(parsed: runargs.ParsedRun, decided: Assessment | None) -> Origin:
+    """Returns where the user of the container comes from: where the decided one does, for a container
+    re-created with it (check), else the command line if it gives one, else the image.
     """
-    if extra:
-        return Origin.DOCKSCREEN
+    if decided is not None and decided.origin is not None:
+        return decided.origin
     return Origin.COMMAND_LINE if parsed.user_given else Origin.IMAGE
 
 
@@ -271,7 +276,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
 def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
-    if not assessment.decided:
+    if assessment.origin is Origin.COMMAND_LINE:
         messages.out(messages.Marked(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:

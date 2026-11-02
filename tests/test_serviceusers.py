@@ -213,7 +213,8 @@ def test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own(
     assert services["db"]["user"] == "100000:100001"  # pinned as numbers
     assert services["user_set"]["user"] == "7:7"
     # the project's own user is not in it
-    assert user_origins(origins) == {"web": Origin.CONFIG, "db": Origin.IMAGE}
+    # no default_user configured: it is dockscreen's
+    assert user_origins(origins) == {"web": Origin.DOCKSCREEN, "db": Origin.IMAGE}
     assert origins["db"]["pull_policy"] is Origin.DOCKSCREEN
 
 
@@ -235,7 +236,7 @@ def test_a_service_that_is_not_started_runs_as_the_default_user_in_case_it_is():
     _, final, origins = decided(config, FakeImages(users={"web:1": "app"}), active=("web",))
     assert final["services"]["debug"]["user"] == NOBODY
     assert "pull_policy" not in final["services"]["debug"]
-    assert user_origins(origins) == {"debug": Origin.CONFIG, "web": Origin.IMAGE}
+    assert user_origins(origins) == {"debug": Origin.DOCKSCREEN, "web": Origin.IMAGE}
 
 
 def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from():

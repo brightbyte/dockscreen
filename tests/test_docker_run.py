@@ -1,9 +1,12 @@
 import pytest
 from fakes import FakeDocker, make_runtime
 
+from dockscreen.cli import runargs
 from dockscreen.commands import docker_run
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError, DockerNotFound
+from dockscreen.model.origin import Origin
+from dockscreen.screen.scope import Scope
 from dockscreen.util.messages import BAD, GOOD, WARN
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
@@ -60,6 +63,18 @@ def test_an_accepted_image_user_is_pinned_as_numbers_so_the_runtime_resolves_not
     assert "--user=100000:100001" not in docker.calls[0][1]
     assert docker.calls[3][1] == [*DEFAULTS, "--user=100000:100001", "img"]
     assert docker.calls[-1][:2] == ("start", "cid1")
+
+
+def test_the_re_created_container_runs_as_the_decided_user_from_where_that_comes_from():
+    docker, settings = FakeDocker(image_user="app"), config.Config(user=(4242, 4242))
+    ctx = Scope(runtime(docker, settings))
+    parsed = runargs.parse(["img"], ctx.runtime.me, ctx.runtime.accounts)
+    _, (_, decided) = docker_run.check(ctx, parsed, [])
+
+    _, (container, again) = docker_run.check(ctx, parsed, ["--user=4242:4242"], decided)
+
+    assert again is decided  # not assessed a second time
+    assert (decided.origin, container.user_origin) == (Origin.CONFIG, Origin.CONFIG)  # as compose has it
 
 
 # --- mounts: the user must be chosen explicitly --------------------------------------

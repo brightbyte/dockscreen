@@ -1,6 +1,6 @@
 import os
 import stat as stat_module
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -60,12 +60,19 @@ nobody_range = [80000, 80010]
     assert settings.mount_dirs == ("/data",)
     assert settings.security_opts == ("seccomp=/etc/docker/strict.json",)
     assert settings.docker == "/usr/local/bin/docker"
+    assert settings.configured == config.SETTINGS  # docker is not a setting the sections can have
     assert dict(settings.images) == {
         "docker.io/library/mariadb": config.Section(user=(999, 999), mount_dirs=("/srv/db",)),
         "ghcr.io/acme/app": config.Section(security_opts=("apparmor=acme",)),
         "ghcr.io/acme/tool": config.Section(default_home="")}  # "" is a choice: no HOME
     assert dict(settings.projects) == {
         "/home/me/src/shop": config.Section(default_user=(5000, 5000), nobody_range=(80000, 80010))}
+
+
+def test_the_settings_a_section_sets_count_as_configured_where_it_applies():
+    settings = config.Config(projects=MappingProxyType({"/p": config.Section(default_user=(5, 5))}))
+    assert config.effective(settings).configured == frozenset()
+    assert config.effective(settings, None, "/p/sub").configured == {"default_user"}
 
 
 def test_the_users_file_overrides_the_system_file_key_by_key_and_section_by_section(tmp_path):
