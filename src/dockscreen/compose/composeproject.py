@@ -28,7 +28,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, imagedecision, policy, substitutions, verdict
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
@@ -140,10 +140,10 @@ class Compose(NamedTuple):
         return substitutions.applied(self.resolved, [*self.hardening, *prepared.changes()])
 
     def final_policy(self, prepared: serviceusers.Prepared) -> policy.Policy:
-        """Returns the policy context for the project that will run, with image sections only where prepared
-        proved them.
+        """Returns the policy for the project that will run, with image sections only where its images, as
+        prepared found them, proved them.
         """
-        return self.scope.project_policy(self.resolved, prepared.verified)
+        return prepared.policy
 
     def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
@@ -156,7 +156,7 @@ class Compose(NamedTuple):
         """
         problem = _read_back_problem(command, project.definition, self.scope.docker)
         if problem:
-            return serviceusers.Prepared(project, self.scope, {}, Report.failure(problem))
+            return serviceusers.Prepared(project, self.scope, (Finding(problem, Severity.FAILED),))
         return serviceusers.prepare(command, project, list(args), self.scope, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:

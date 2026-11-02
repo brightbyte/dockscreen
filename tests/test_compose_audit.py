@@ -3,7 +3,7 @@
 from fakes import ME, FakeImages, compose_project, make_runtime
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.compose.serviceusers import USER_HELP
+from dockscreen.screen.userchanges import USER_HELP
 from dockscreen.util import messages
 from dockscreen.util.messages import BAD, GOOD
 

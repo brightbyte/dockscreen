@@ -34,7 +34,7 @@ from dockscreen.host import config as configuration
 from dockscreen.model.build import BakeDefinition, Build, fields
 from dockscreen.model.container import Container
 from dockscreen.model.identity import Identity
-from dockscreen.model.image import Inspected
+from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.location import Location
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.origin import TRUSTED, Origin
@@ -42,7 +42,7 @@ from dockscreen.model.project import Project
 from dockscreen.screen import idrules, imageuser
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Severity, about, judged, refused
-from dockscreen.util import ids
+from dockscreen.util import ids, images
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
 # What every service must have; hardening adds them where they are missing.
@@ -179,6 +179,9 @@ class Policy(NamedTuple):
     # What runs instead of an image that would run as root, and the HOME it gets (default_home).
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
+    # Which image section of the config file applies to the image this policy is for, and why the one for
+    # its repository does not (config.section_for); none for a policy that is not for an image.
+    section: configuration.Match = configuration.Match(None, None)
     # (name, service) -> this policy for that service, with the settings of its image section if one
     # applies; None if every service gets this one.
     per_service: Callable[[str, dict[str, Any]], "Policy"] | None = None
@@ -205,6 +208,10 @@ class Policy(NamedTuple):
         trust, else this one.
         """
         return self.per_service(name, service).with_trust(self.trust) if self.per_service else self
+
+    def with_section(self, section: configuration.Match) -> Self:
+        """Returns this policy for an image that section says which image section applies to."""
+        return self._replace(section=section)
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
         """Returns this policy with trust as the origins whose values are taken as given."""
@@ -241,6 +248,8 @@ class Policy(NamedTuple):
             problems += self.check_daemon(project.remote)
         if name and project.made_from is not None:
             problems += self.check_project_name(name, project.directory, project.made_from)
+        if project.inspected is not None:
+            problems += self.check_images(project)
         return problems
 
     def check_project_build(self, project: Project) -> list[Finding]:
@@ -295,15 +304,36 @@ class Policy(NamedTuple):
         """
         return origin is Origin.IMAGE and not self.configured_user
 
-    def check_image(self, inspected: Inspected, origin: Origin, match: configuration.Match) -> Assessment:
+    def check_images(self, project: Project) -> list[Finding]:
+        """Checks the images that decide the users of project's services, as they were looked at
+        (Project.inspected); returns one finding per service that must not run (image_problem).
+        """
+        return [image_problem(name, assessment, self.config_file)
+                for name, assessment in self.assess_images(project).items() if assessment.refused]
+
+    def assess_images(self, project: Project) -> dict[str, Assessment]:
+        """Decides the user of each service of project whose image decides it, from its image as it was
+        looked at (Project.inspected), with the policy for that service (for_service); returns the
+        Assessments by service.
+        """
+        found = {}
+        for name, image in (project.inspected or {}).items():
+            if isinstance(image, Unseen):
+                found[name] = Assessment.failure(image.image, image.reason)
+            else:
+                service_policy = self.for_service(name, project.service(name).definition)
+                found[name] = service_policy.check_image(image, Origin.IMAGE)
+        return found
+
+    def check_image(self, inspected: Inspected, origin: Origin) -> Assessment:
         """Decides which user the container that inspected looked through may run as, by the rules in
         imagedecision's docstring; returns the Assessment.
 
         origin: where the container's user comes from; one that is not the image's is not judged here
-        (Kind.EXPLICIT). match: which image section of the config file applies to the image, which is
-        this policy's. The passwd and group files must have been read if needs_user_files says so.
+        (Kind.EXPLICIT). The image section that applies is this policy's (section). The passwd and group
+        files must have been read if needs_user_files says so.
         """
-        image = inspected.image
+        image, match = inspected.image, self.section
         notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
         found: dict[str, Any] = {"section": match.repository}
         if origin is not Origin.IMAGE:
@@ -763,6 +793,21 @@ SERVICE_CHECKS: dict[str, Check] = {
 
 
 # --- helpers ----------------------------------------------------------------
+
+def image_problem(name: str, assessment: Assessment, config_file: str | None = None) -> Finding:
+    """Returns, as one finding, why the service called name must not run, for an assessment of its image
+    that refused or failed.
+
+    config_file: named in the hint for an image that is pulled, whose repository can be given a user.
+    """
+    image = assessment.image
+    text = f"image {image.reference}: {'; '.join(r.text for r in assessment.reasons)}"
+    if assessment.failed:
+        return Finding(text, Severity.FAILED, f"service {name}")
+    hint = images.section_hint(image.reference, config_file, image.built) if config_file else None
+    return Finding(text, Severity.REFUSED, f"service {name}",
+                   "set user: to choose one" + (f", or {hint}" if hint else ""))
+
 
 def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str,
                  extensions: bool = True) -> list[str]:

@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._find_section_images` records where each image was pulled from (`Project.found_images`), the policy for the project takes the section each image proves from that (`Scope.project_policy`, `Scope.image_policy`), and the check of the config that will run (`Compose.final_policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -170,7 +170,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
-   - for each one without `user:`, creates a container with `--pull=never`, reads its passwd and group files, and decides as `docker run` does (below);
+   - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`imagedecision.look`), which the project then holds (`Project.inspected`); the policy decides from that as `docker run` does (below), as part of checking the project (`Policy.check_images`);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
 5. `Compose.final`, which makes the substitutions of `Prepared.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;

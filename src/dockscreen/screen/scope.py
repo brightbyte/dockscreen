@@ -7,12 +7,12 @@ id rules with those settings, and the policy (policy.Policy) built from them. Th
 target's: a compose project's own, or for what a command line runs, the current one.
 """
 
-from collections.abc import Mapping
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.image import Image
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules, policy
@@ -64,22 +64,31 @@ class Scope(NamedTuple):
         """Returns the policy for what the command line runs (policy_for), in the current directory."""
         return self.policy_for(self.runtime.cwd, repository, trust)
 
-    def project_policy(self, project: Project, verified: Mapping[str, str] | None = None) -> policy.Policy:
+    def image_policy(self, directory: str, image: Image) -> policy.Policy:
+        """Returns the policy for a container of image in the project in directory, with the image section
+        that its name and where it was pulled from show to apply (config.section_for).
+        """
+        match = config.section_for(self.runtime.settings, image.reference, image.digests, image.built)
+        return self.policy_for(directory, match.repository).with_section(match)
+
+    def project_policy(self, project: Project) -> policy.Policy:
         """Returns the policy for project, which gives each service the settings of its image section, if one
         applies (policy.Policy.for_service).
 
-        Before the images are there, that is the section the image name points to; verified, once they are,
-        maps each service to the section its image was proven to have been pulled for (config.section_for).
+        Before the images were found (Project.found_images), that is the section the image name points to;
+        once they were, the section its image was proven to have been pulled for (image_policy), and none
+        for an image that was not found.
         """
-        directory = project.directory
+        directory, found = project.directory, project.found_images
 
         def per_service(name: str, service: dict[str, Any]) -> policy.Policy:
-            if verified is None:
+            if found is None:
                 image = str(service.get("image") or "")
                 repository = config.name_matches(self.runtime.settings, image, "build" in service)
-            else:
-                repository = verified.get(name)
-            return self.policy_for(directory, repository)
+                return self.policy_for(directory, repository)
+            if name in found:
+                return self.image_policy(directory, found[name])
+            return self.policy_for(directory)
 
         return self.policy_for(directory).with_per_service(per_service)
 

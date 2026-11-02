@@ -21,9 +21,10 @@ Used by `docker run` (docker_run) and by compose (serviceusers) alike.
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.host import config, hostusers, inspection
+from dockscreen.host import hostusers, inspection
+from dockscreen.model.image import Inspected
 from dockscreen.model.origin import Origin
-from dockscreen.screen import imageuser
+from dockscreen.screen import imageuser, policy
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding
 from dockscreen.screen.scope import Scope
@@ -45,13 +46,23 @@ def assess(ctx: Scope, directory: str, container: str, info: dict[str, Any], ori
     reference: the image name as the command line or the service gave it (the container's if None).
     built: the image is built from a Dockerfile by the service; the config file never applies then.
     """
+    inspected, image_policy = look(ctx, directory, container, info, origin, mounts, reference, built)
+    return image_policy.check_image(inspected, origin or inspected.user_origin)
+
+
+def look(ctx: Scope, directory: str, container: str, info: dict[str, Any], origin: Origin | None = None,
+         mounts: bool | None = None, reference: str | None = None, built: bool = False
+         ) -> tuple[Inspected, policy.Policy]:
+    """Looks at the container's image as far as the policy for it needs (inspection), and returns what
+    was found, with that policy (Scope.image_policy); the arguments are assess's.
+
+    Raises DockerError if the image cannot be inspected or its passwd or group file is too large.
+    """
     inspected = inspection.inspect(ctx.docker, info, reference, built, mounts)
-    match = config.section_for(ctx.runtime.settings, inspected.image.reference, inspected.digests, built)
-    image_policy = ctx.policy_for(directory, match.repository)
-    origin = origin or inspected.user_origin
-    if image_policy.needs_user_files(origin):
+    image_policy = ctx.image_policy(directory, inspected.image)
+    if image_policy.needs_user_files(origin or inspected.user_origin):
         inspected = inspection.with_user_files(ctx.docker, container, inspected)
-    return image_policy.check_image(inspected, origin, match)
+    return inspected, image_policy
 
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.

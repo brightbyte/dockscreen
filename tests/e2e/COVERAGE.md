@@ -33,7 +33,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `compose_lifecycle.check` for a project without a name.
 - `Policy.check_user` for a service without a user: the services that set none are left to their
   images, and those that start get a user before the final check.
-- `serviceusers.Prepared.finalize` for a decision that pins no user: a refused or failed decision stops
+- `serviceusers.Prepared.changes` for a decision that pins no user: a refused or failed decision stops
   the run before finalize.
 - `docker_run._verify_split` refusing a command line whose image dockscreen misread: it knows every
   value-taking option of `docker run` that the daemon accepts on Linux. An option it does not know, such
@@ -95,7 +95,7 @@ has a repo digest under its local name (`docs/security-review.md`). So these are
 
 - `config.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
-- `serviceusers._verify_sections` finding no proof for a section, and the final check of
+- `serviceusers._find_section_images` and `Scope.project_policy` finding no proof for a section, and the final check of
   `composeproject.check_and_run` refusing a service that only passed because of it.
 
 The scenarios for them are marked as expected failures.

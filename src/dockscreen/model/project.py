@@ -15,6 +15,7 @@ from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
+from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.location import Location
 from dockscreen.model.origin import Origin
 
@@ -22,14 +23,21 @@ from dockscreen.model.origin import Origin
 class Project(NamedTuple):
     """Compose project: its definition, where it is, whether its daemon may not be this host's (remote), the
     directories that the containers with its name say they were made from ("" for one that does not say;
-    made_from), and where the values in its definition come from where that is not the project (origins,
-    by service and key). remote and made_from are None until they are looked at.
+    made_from), where the values in its definition come from where that is not the project (origins, by
+    service and key), and what was found of its services' images.
+
+    The images are those an image section of the config file could apply to, as found here, with where
+    they were pulled from (found_images, by service), and those of the services whose image decides their
+    user, as looked at (inspected, by service). remote, made_from and the images are None until they are
+    looked at.
     """
     definition: dict[str, Any]
     location: Location
     remote: bool | None = None
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
     made_from: tuple[str, ...] | None = None
+    found_images: Mapping[str, Image] | None = None
+    inspected: Mapping[str, Inspected | Unseen] | None = None
 
     @property
     def name(self) -> str | None:
@@ -64,6 +72,13 @@ class Project(NamedTuple):
         from.
         """
         return self._replace(made_from=tuple(made_from))
+
+    def with_images(self, found: Mapping[str, Image], inspected: Mapping[str, Inspected | Unseen]) -> Self:
+        """Returns this project with found as its services' images that were found, and inspected as those
+        of the services whose image decides their user, as looked at.
+        """
+        return self._replace(found_images=MappingProxyType(dict(found)),
+                             inspected=MappingProxyType(dict(inspected)))
 
     def with_definition(self, definition: dict[str, Any]) -> Self:
         """Returns this project with definition as its definition."""

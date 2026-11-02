@@ -16,21 +16,22 @@ from dockscreen.model.origin import Origin
 
 class Image(NamedTuple):
     """Image a container is made from: the name it is asked for by, the id that name stood for when it was
-    looked at, and whether a compose service builds it, so that no image section of the config file applies.
+    looked at, whether a compose service builds it, so that no image section of the config file applies,
+    and where docker says it was pulled from (digests: its RepoDigests).
     """
     reference: str
     id: str | None = None  # None until it was looked at, or if it could not be
     built: bool = False
+    digests: tuple[str, ...] = ()
 
 
 class Inspected(NamedTuple):
-    """Image as dockscreen looked at it, through a container created from it: the image, where docker says
-    it was pulled from (digests), the image's own user (image_user), the user the container was created
-    with, whether the container reaches host files, and the image's passwd and group files as the
-    container has them ("" for a missing one), None until they are read.
+    """Image as dockscreen looked at it, through a container created from it: the image, the image's own
+    user (image_user), the user the container was created with, whether the container reaches host files,
+    and the image's passwd and group files as the container has them ("" for a missing one), None until
+    they are read.
     """
     image: Image
-    digests: tuple[str, ...]
     image_user: str
     user: str
     reaches_host: bool
@@ -47,3 +48,9 @@ class Inspected(NamedTuple):
     def with_user_files(self, passwd: str, group: str) -> Self:
         """Returns this image with the passwd and group files read from its container."""
         return self._replace(passwd=passwd, group=group)
+
+
+class Unseen(NamedTuple):
+    """Image that could not be looked at, and why (reason)."""
+    image: Image
+    reason: str

@@ -20,7 +20,7 @@ import sys
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from dockscreen.compose import composeproject, inspect, serviceusers
+from dockscreen.compose import composeproject, inspect
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
@@ -96,7 +96,7 @@ def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], res
     remaining: list[Finding] = []
     for name, assessment in prepared.decisions.items():
         if assessment.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(serviceusers.decision_problem(name, assessment))
+            remaining.append(policy.image_problem(name, assessment))
         elif assessment.refused:
             fixed["services"][name]["user"] = _USER_TEMPLATE
             notes.append(f"service {name}: image {assessment.image.reference} chose a user that is not "

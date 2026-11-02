@@ -18,12 +18,13 @@ def inspect(docker: Docker, info: dict[str, Any], reference: str | None = None, 
     built: a compose service builds the image. reaches_host: the container, or the service it stands for,
     reaches host files; worked out from info if None. Raises DockerError if the image cannot be inspected.
     """
-    image = Image(reference or info["Config"].get("Image") or "", info["Image"], built)
     inspected = docker.inspect_image(info["Image"])
+    image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
+                  tuple(inspected.get("RepoDigests") or ()))
     if reaches_host is None:
         reaches_host = Container(info).reaches_host
-    return Inspected(image, tuple(inspected.get("RepoDigests") or ()), inspected["Config"].get("User") or "",
-                     info["Config"].get("User") or "", reaches_host)
+    return Inspected(image, inspected["Config"].get("User") or "", info["Config"].get("User") or "",
+                     reaches_host)
 
 
 def with_user_files(docker: Docker, container: str, inspected: Inspected) -> Inspected:
