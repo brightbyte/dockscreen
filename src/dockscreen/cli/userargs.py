@@ -18,7 +18,7 @@ from typing import NamedTuple
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.policy import UserOption
+from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
 

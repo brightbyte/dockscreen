@@ -10,6 +10,8 @@ from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import policy
 from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity
+from dockscreen.screen.rules import project as project_rules
+from dockscreen.screen.rules import service as service_rules
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
 # for the rest of the host).
@@ -112,8 +114,8 @@ def test_unknown_keys_are_refused_in_nested_structures(project):
 
 
 def test_every_checked_key_is_outside_the_harmless_list():
-    assert not policy.HARMLESS_SERVICE_KEYS & policy.SERVICE_CHECKS.keys()
-    assert policy.REQUIRED_SERVICE_KEYS <= policy.SERVICE_CHECKS.keys()
+    assert not service_rules.HARMLESS_SERVICE_KEYS & service_rules.SERVICE_CHECKS.keys()
+    assert service_rules.REQUIRED_SERVICE_KEYS <= service_rules.SERVICE_CHECKS.keys()
 
 
 # --- users ----------------------------------------------------------------
@@ -561,7 +563,7 @@ def test_each_key_is_judged_as_where_its_value_comes_from():
 
 def test_a_daemon_that_may_not_be_this_hosts_is_refused():
     assert policy.Policy(rules()).check_daemon(False) == []
-    assert policy.Policy(rules()).check_daemon(True) == [policy.REMOTE_MESSAGE]
+    assert policy.Policy(rules()).check_daemon(True) == [project_rules.REMOTE_MESSAGE]
 
 
 def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
@@ -609,7 +611,7 @@ def test_a_project_is_judged_by_what_is_known_about_it_and_nothing_that_was_not_
     rules_ = context(project)
 
     assert rules_.check_project(known) == []  # its daemon and the containers with its name: not looked at
-    assert rules_.check_project(known.with_remote(True)) == [policy.REMOTE_MESSAGE]
+    assert rules_.check_project(known.with_remote(True)) == [project_rules.REMOTE_MESSAGE]
     [conflict] = rules_.check_project(known.with_remote(False).with_made_from(["/elsewhere"]))
     assert conflict.startswith("project name 'proj' is used by containers made from '/elsewhere'")
 

@@ -26,6 +26,9 @@ from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy
 from dockscreen.screen.findings import Finding, failure_of
+from dockscreen.screen.rules import service as service_rules
+from dockscreen.screen.rules.base import is_inside_any
+from dockscreen.screen.rules.image import image_problem
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -34,7 +37,7 @@ from dockscreen.util.messages import printable
 _USER_TEMPLATE = "${UID}:${GID}"
 
 # Keys whose removal is a safe fix.
-_REMOVABLE_SERVICE_KEYS = (*policy.FORBIDDEN_KEYS, "runtime", *policy.NAMESPACE_KEYS)
+_REMOVABLE_SERVICE_KEYS = (*service_rules.FORBIDDEN_KEYS, "runtime", *service_rules.NAMESPACE_KEYS)
 
 
 def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
@@ -96,7 +99,7 @@ def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], res
     remaining: list[Finding] = []
     for name, assessment in prepared.decisions.items():
         if assessment.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(policy.image_problem(name, assessment))
+            remaining.append(image_problem(name, assessment))
         elif assessment.refused:
             fixed["services"][name]["user"] = _USER_TEMPLATE
             notes.append(f"service {name}: image {assessment.image.reference} chose a user that is not "
@@ -120,9 +123,9 @@ def _fix_config(project: Project, ctx: policy.Policy) -> dict[str, Any]:
         if not from_image and service_ctx.check_user(service.get("user"), original):
             service["user"] = _USER_TEMPLATE
         if service_ctx.check_security_opt(service.get("security_opt"), original):
-            service["security_opt"] = [policy.SECURITY_OPT]
+            service["security_opt"] = [service_rules.SECURITY_OPT]
         if service_ctx.check_cap_drop(service.get("cap_drop"), original):
-            service["cap_drop"] = [policy.CAP_DROP]
+            service["cap_drop"] = [service_rules.CAP_DROP]
         for key in _REMOVABLE_SERVICE_KEYS:
             service.pop(key, None)
         if "volumes_from" in service:
@@ -153,7 +156,7 @@ def _fix_mount(mount: dict[str, Any], ctx: policy.Policy, directory: str) -> dic
     """Returns mount, with a bind source outside ctx's mount roots for a project in directory replaced by a
     placeholder to edit.
     """
-    if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots(directory)):
+    if mount.get("type") != "bind" or is_inside_any(mount["source"], ctx.mount_roots(directory)):
         return mount
     return {**mount, "source": _placeholder_source(mount["source"], directory)}
 

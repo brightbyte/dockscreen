@@ -16,6 +16,7 @@ from dockscreen.model.location import Location
 from dockscreen.model.project import Project
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
@@ -76,7 +77,7 @@ def _sensitive_paths(runtime: Runtime) -> list[str]:
 def _sensitive_inside(directory: str, runtime: Runtime) -> list[str]:
     """Returns the sensitive paths that directory equals or contains, with symlinks resolved."""
     root = os.path.realpath(directory)
-    return [path for path in _sensitive_paths(runtime) if policy.is_inside(os.path.realpath(path), root)]
+    return [path for path in _sensitive_paths(runtime) if is_inside(os.path.realpath(path), root)]
 
 
 def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:

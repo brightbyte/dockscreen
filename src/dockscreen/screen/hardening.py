@@ -14,8 +14,7 @@ from typing import Any
 
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
-from dockscreen.screen import policy
-from dockscreen.screen.policy import CAP_DROP, SECURITY_OPT
+from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids
 
@@ -40,9 +39,9 @@ def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
     sets the key itself, dockscreen extends its choice, which is notable.
     """
     found = []
-    if not policy.drops_all(service.get("cap_drop")):
+    if not drops_all(service.get("cap_drop")):
         found.append(_default(name, "cap_drop", service.get("cap_drop"), CAP_DROP, f"lacks {CAP_DROP}"))
-    if not policy.has_no_new_privileges(service.get("security_opt")):
+    if not has_no_new_privileges(service.get("security_opt")):
         found.append(_default(name, "security_opt", service.get("security_opt"), SECURITY_OPT,
                               "lacks no-new-privileges"))
     return found
