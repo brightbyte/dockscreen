@@ -60,7 +60,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     not have is refused too.
     """
     ctx = Scope(runtime, allow_me)
-    daemon = Report.of(ctx.policy_context(None).check_daemon(is_remote(global_args, runtime.docker)))
+    daemon = Report.of(ctx.policy_here().check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon)
     try:
@@ -69,11 +69,11 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
         return 1
-    refusals = ctx.policy_context(None).check_user_options(parsed.users)
+    refusals = ctx.policy_here().check_user_options(parsed.users)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
+    for message in [*parsed.notices, root_default_notice(ctx, runtime.cwd), defaults_notice()]:
         if message:
             messages.notice(message)
     ctx = ctx.with_allow_me(parsed.allow_me)
@@ -176,7 +176,7 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
         container = Container(ctx.docker.inspect_container(created), _user_origin(parsed, extra))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else assess(
-            ctx, container.id, container.info, container.user_origin, reference=parsed.image)
+            ctx, ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
@@ -192,7 +192,7 @@ def _command_line_findings(ctx: Scope, container: Container, assessment: Assessm
     """
     if not container.inspected:
         return []
-    return ctx.policy_context(assessment.section, trust).check_container(container)
+    return ctx.policy_here(assessment.section, trust).check_container(container)
 
 
 def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
@@ -233,7 +233,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
     ctx = Scope(runtime, allow_me)
-    daemon = Report.of(ctx.policy_context(None).check_daemon(is_remote(global_args, runtime.docker)))
+    daemon = Report.of(ctx.policy_here().check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon, brief)
     try:
@@ -242,7 +242,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    refusals = ctx.policy_context(None).check_user_options(parsed.users)
+    refusals = ctx.policy_here().check_user_options(parsed.users)
     if refusals:
         return verdict.report(Report.of(refusals), brief)
     if not brief:

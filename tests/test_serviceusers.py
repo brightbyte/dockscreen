@@ -32,7 +32,7 @@ def project(**services):
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
                                          ctx=gate_context(images, settings))
-    return serviceusers.prepare(COMMAND, config, list(args), image_ctx, chosen), recorder, images
+    return serviceusers.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen), recorder, images
 
 
 def gate_context(images, settings=None):
@@ -126,7 +126,7 @@ def test_listing_the_services_can_fail_closed():
         return capture(cmd)
 
     image_ctx.docker.capture = failing_listing
-    prepared = serviceusers.prepare(COMMAND, config, [], image_ctx)
+    prepared = serviceusers.prepare(COMMAND, project_of(config), [], image_ctx)
     assert prepared.report.reasons == ["docker compose config --services failed"]
 
 

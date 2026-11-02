@@ -46,12 +46,12 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     """
     ctx = Scope(runtime, allow_me)
     if is_remote(global_args, runtime.docker):
-        return ctx.policy_context(None).check_daemon(True)
+        return ctx.policy_here().check_daemon(True)
     problems: list[Finding] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
-            assessment = assess(ctx, info["Id"], info)
+            assessment = assess(ctx, runtime.cwd, info["Id"], info)
             if assessment.replaces_image_user and not _runs_as_pinned_user(info, assessment):
                 user = ids.format_user(assessment.pinned_user)
                 problems.append(Finding(
@@ -61,7 +61,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explain(ctx, assessment)]
             if strict:
                 user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
-                strict_policy = ctx.policy_context(assessment.section, STRICT)
+                strict_policy = ctx.policy_here(assessment.section, STRICT)
                 found = strict_policy.check_container(Container(info, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:

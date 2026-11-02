@@ -30,8 +30,8 @@ from typing import Any, NamedTuple
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.image import Image
-from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
+from dockscreen.model.project import Project
 from dockscreen.screen import findings, imagedecision, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
@@ -44,14 +44,19 @@ class ImageError(Exception):
 
 
 class Prepared(NamedTuple):
-    """Project config whose services' images have been fetched and their users decided in a scope (ctx),
-    ready to become the config that runs.
+    """Project whose services' images have been fetched and their users decided in a scope (ctx), ready to
+    become the project that runs.
     """
-    config: dict
+    project: Project
     ctx: Scope
     decisions: dict   # service -> imagedecision.Assessment, for the started services that set no user
     report: Report    # refusals, and failures to get or look at an image
     verified: Mapping[str, str] = MappingProxyType({})  # service -> the repository its image proved
+
+    @property
+    def config(self) -> dict[str, Any]:
+        """Returns the project's definition."""
+        return self.project.definition
 
     def changes(self) -> list[Substitution]:
         """Returns the substitutions that make config the config to run, by service name: services that start
@@ -59,7 +64,7 @@ class Prepared(NamedTuple):
         get the default user.
         """
         found = []
-        settings = self.ctx.settings
+        settings = self.ctx.settings_in(self.project.directory)
         for name, service in sorted(self.config["services"].items()):
             if service.get("user"):
                 continue
@@ -76,7 +81,7 @@ class Prepared(NamedTuple):
         for name in sorted(unset_user_services(self.config)):
             decision = self.decisions.get(name)
             if decision is None:
-                default = ids.format_user(self.ctx.settings.default_user)
+                default = ids.format_user(self.ctx.settings_in(self.project.directory).default_user)
                 text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
                         f"default user ({default}) if it is started")
                 lines.append(messages.notable_change(text, USER_HELP))
@@ -146,31 +151,32 @@ def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> s
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
-def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str], ctx: Scope,
+def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: Scope,
             chosen: frozenset[str] = frozenset()) -> Prepared:
     """Acquires the images of the services that start, and decides on those that set no user.
 
     Pulls and builds as `up` would. Returns a Prepared; its report passes if every image was acquired and
     accepted.
 
-    command: the compose command line (up to the subcommand) on the config to run.
+    command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
     ctx: the Scope to pull, build, decide and run with.
     chosen: services whose user the command line chooses (`run -u`); their images are not decided.
     """
+    config = project.definition
     try:
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(config, ctx, {}, Report.failure(str(e)))
+        return Prepared(project, ctx, {}, Report.failure(str(e)))
     if failures:
-        return Prepared(config, ctx, {}, Report.of(findings.failed(failures)))
+        return Prepared(project, ctx, {}, Report.of(findings.failed(failures)))
 
-    decisions = _decide(config, to_run - chosen, ctx)
+    decisions = _decide(project, to_run - chosen, ctx)
     verified = _verify_sections(config, ctx)
     config_file = ctx.runtime.config_file
     found = [decision_problem(name, d, config_file) for name, d in decisions.items() if d.refused]
-    return Prepared(config, ctx, decisions, Report.of(found), verified)
+    return Prepared(project, ctx, decisions, Report.of(found), verified)
 
 
 def _verify_sections(config: dict[str, Any], ctx: Scope) -> dict[str, str]:
@@ -262,13 +268,13 @@ def _image_exists(docker: Docker, image: str) -> bool:
     return True
 
 
-def _decide(config: dict[str, Any], to_run: frozenset[str],
+def _decide(project: Project, to_run: frozenset[str],
             ctx: Scope) -> dict[str, imagedecision.Assessment]:
     """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
 
     Returns {service: Assessment}. An image that cannot be looked at gets a failed assessment.
     """
-    decisions = {}
+    config, decisions = project.definition, {}
     for name in sorted(to_run & unset_user_services(config)):
         service = config["services"][name]
         image = Image(_image_name(config, name, service), built="build" in service)
@@ -280,8 +286,9 @@ def _decide(config: dict[str, Any], to_run: frozenset[str],
             continue
         try:
             info = ctx.docker.inspect_container(container)
-            mounts = service_reaches_host(service, config.get("volumes"))
-            decisions[name] = imagedecision.assess(ctx, container, info, Origin.IMAGE, mounts=mounts,
+            mounts = project.service(name).reaches_host
+            decisions[name] = imagedecision.assess(ctx, project.directory, container, info, Origin.IMAGE,
+                                                   mounts=mounts,
                                                    reference=image.reference, built=image.built)
         except (DockerError, ValueError, KeyError) as e:
             failure = messages.with_output(e)

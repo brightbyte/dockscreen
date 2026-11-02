@@ -80,7 +80,7 @@ class Compose(NamedTuple):
 
     def static_policy(self) -> policy.Policy:
         """Returns the policy context for the checks before any image is looked at."""
-        return self.scope.project_policy()
+        return self.scope.project_policy(self.project)
 
     def screen(self, command: Callable[[dict[str, Any]], list[str]], parsed: userargs.Parsed | None = None,
                strict: bool = False, announce: Callable[[], None] = lambda: None) -> Screened:
@@ -103,7 +103,7 @@ class Compose(NamedTuple):
             return Screened(found)
         announce()
         args, chosen = (parsed.args, _chosen(parsed)) if parsed else ([], frozenset())
-        prepared = self.prepare(command(self.hardened), self.hardened, args, chosen)
+        prepared = self.prepare(command(self.hardened), self.project, args, chosen)
         if not prepared.report.passed:
             return Screened(prepared.report, prepared)
         final = self.final(prepared)
@@ -138,21 +138,21 @@ class Compose(NamedTuple):
         """Returns the policy context for the project that will run, with image sections only where prepared
         proved them.
         """
-        return self.scope.project_policy(prepared.verified)
+        return self.scope.project_policy(self.project, prepared.verified)
 
-    def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
+    def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
-        """Gets the images of config's services and decides their users (serviceusers.prepare), once compose
-        has been shown to read the generated file back as config.
+        """Gets the images of project's services and decides their users (serviceusers.prepare), once compose
+        has been shown to read the generated file back as its definition.
 
         Returns a failed Prepared, with nothing pulled or built, if compose reads it differently.
-        command: the compose command line on config's generated file (generated()).
+        command: the compose command line on the generated file of project's definition (generated()).
         args and chosen: as serviceusers.prepare takes them.
         """
-        problem = _read_back_problem(command, config, self.scope.docker)
+        problem = _read_back_problem(command, project.definition, self.scope.docker)
         if problem:
-            return serviceusers.Prepared(config, self.scope, {}, Report.failure(problem))
-        return serviceusers.prepare(command, config, list(args), self.scope, chosen)
+            return serviceusers.Prepared(project, self.scope, {}, Report.failure(problem))
+        return serviceusers.prepare(command, project, list(args), self.scope, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
@@ -168,7 +168,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Co
     """
     found = inspect.project(global_args, runtime).with_remote(is_remote(global_args, runtime.docker))
     _, changes = hardening.apply(found.definition, runtime.accounts)
-    scope = Scope(runtime, allow_me, found.directory)
+    scope = Scope(runtime, allow_me)
     return Compose(global_args, substitutions.applied(found, changes), changes, scope)
 
 
@@ -199,7 +199,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     scope = project.scope
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(scope), *substitutions.describe(project.hardening)]
+             imagedecision.root_default_notice(scope, project.directory),
+             *substitutions.describe(project.hardening)]
     lines += shellenv.describe(project.hardened, runtime.env)
     with project.generated() as command:
         screened = project.screen(command, parsed, strict)

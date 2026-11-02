@@ -126,7 +126,7 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
     parse takes them.
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    refusals = Scope(runtime).policy_context(None).check_user_options(parsed.users)
+    refusals = Scope(runtime).policy_here().check_user_options(parsed.users)
     if refusals:
         messages.report(refusals)
         return None

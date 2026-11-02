@@ -97,9 +97,10 @@ class Assessment(NamedTuple):
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK) and not self.refused
 
 
-def assess(ctx: Scope, container: str, info: dict[str, Any], origin: Origin | None = None,
+def assess(ctx: Scope, directory: str, container: str, info: dict[str, Any], origin: Origin | None = None,
            mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
-    """Decides which user the container's image may run as, by the rules in this module's docstring.
+    """Decides which user the container's image may run as, by the rules in this module's docstring, for
+    the project in directory (the current one for what a command line runs).
 
     Returns an Assessment, of Kind.EXPLICIT if the container's user does not come from the image. Raises
     DockerError if the image cannot be inspected or its passwd or group file is too large.
@@ -120,7 +121,7 @@ def assess(ctx: Scope, container: str, info: dict[str, Any], origin: Origin | No
     if origin is not Origin.IMAGE:
         return Assessment(Kind.EXPLICIT, image, notes, **found)
 
-    settings, rules = ctx.for_image(match.repository)
+    settings, rules = ctx.for_image(match.repository, directory)
     if settings.user:
         return Assessment(Kind.CONFIGURED, image, notes, Identity(*settings.user),
                           user=settings.user, **found)
@@ -174,10 +175,13 @@ def instead_of_root(assessment: Assessment) -> str:
     return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
 
 
-def root_default_notice(ctx: Scope) -> messages.Marked | None:
-    """Returns the warning to give on every run if the configured default user is root, else None."""
-    if 0 in ctx.settings.default_user:
-        default = ids.format_user(ctx.settings.default_user)
+def root_default_notice(ctx: Scope, directory: str) -> messages.Marked | None:
+    """Returns the warning to give on every run in directory if the default user configured for it is root,
+    else None.
+    """
+    default_user = ctx.settings_in(directory).default_user
+    if 0 in default_user:
+        default = ids.format_user(default_user)
         return messages.Marked(
             messages.WARN,
             f"the configured default user is {default}: images that would run as root run as root",

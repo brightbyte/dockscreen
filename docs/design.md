@@ -115,7 +115,7 @@ The policy checks run before the images are pulled, so they apply the section th
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
-`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. Both come from the scope a command is screened in (`scope.Scope`): the policy gets per-service settings through `Scope.project_policy`, a container's through `Scope.policy_context`, and the image decision through `Scope.for_image`.
+`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. Both come from the scope a command is screened in (`scope.Scope`: the caller, this host and `--allow-me`) and from where the target is: a project's directory, or the current one for what a command line runs. The policy gets per-service settings through `Scope.project_policy(project)` (`Policy.per_service`), a container's through `Scope.policy_here`, and the image decision through `Scope.for_image`.
 
 ### Command-line options
 

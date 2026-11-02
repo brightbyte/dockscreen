@@ -175,7 +175,7 @@ class Policy(NamedTuple):
     configured_user: tuple | None = None
     # (name, service) -> this policy for that service, with the settings of its image section if one
     # applies; None if every service gets this one.
-    scope: Callable[[str, dict[str, Any]], "Policy"] | None = None
+    per_service: Callable[[str, dict[str, Any]], "Policy"] | None = None
 
     @classmethod
     def for_settings(cls, settings: configuration.Config, project_dir: str, rules: idrules.Rules,
@@ -194,18 +194,18 @@ class Policy(NamedTuple):
         return (self.project_dir, *self.extra_dirs)
 
     def for_service(self, name: str, service: dict[str, Any]) -> "Policy":
-        """Returns the policy to check the service called name with: scope's for it, with this one's trust,
-        else this one.
+        """Returns the policy to check the service called name with: per_service's for it, with this one's
+        trust, else this one.
         """
-        return self.scope(name, service).with_trust(self.trust) if self.scope else self
+        return self.per_service(name, service).with_trust(self.trust) if self.per_service else self
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
         """Returns this policy with trust as the origins whose values are taken as given."""
         return self._replace(trust=trust)
 
-    def with_scope(self, scope: Callable[[str, dict[str, Any]], "Policy"]) -> Self:
-        """Returns this policy with scope giving the policy of each service (for_service)."""
-        return self._replace(scope=scope)
+    def with_per_service(self, per_service: Callable[[str, dict[str, Any]], "Policy"]) -> Self:
+        """Returns this policy with per_service giving the policy of each service (for_service)."""
+        return self._replace(per_service=per_service)
 
     # --- projects, services and containers ---------------------------------------
 

@@ -51,7 +51,7 @@ def project(global_args: Sequence[str], runtime: Runtime) -> Project:
     compose cannot give the definition.
     """
     location = locate(global_args, runtime)
-    refusals = Scope(runtime, project_dir=location.directory).project_policy().check_location(location)
+    refusals = Scope(runtime).policy_for(location.directory).check_location(location)
     if refusals:
         raise Refused(refusals)
     return Project(_load_config(global_args, runtime.docker), location)
@@ -100,7 +100,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
         return verdict.screened(Report.failure(e))
     except Refused as e:
         return verdict.screened(Report.of(e.findings))
-    project_policy = Scope(runtime, project_dir=found.directory).project_policy()
+    project_policy = Scope(runtime).project_policy(found)
     return verdict.screened(Report.of(rules(project_policy, found)))
 
 

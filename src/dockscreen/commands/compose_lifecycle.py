@@ -40,5 +40,5 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     if not project.name:
         return []
-    project_policy = Scope(runtime, project_dir=project.directory).project_policy()
+    project_policy = Scope(runtime).project_policy(project)
     return inspect.name_conflicts(project_policy, project.name, project.directory, runtime.docker)
