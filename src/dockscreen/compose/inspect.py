@@ -1,5 +1,5 @@
-"""This module provides a project's config as docker compose resolves it, and the screening that applies to
-the project before and around the policy: where it is, what it is called, and which configured mount
+"""This module provides a project's config as docker compose resolves it, and what the policy judges about
+the project before and around its config: where it is, what it is called, and which configured mount
 directories are risky.
 """
 
@@ -12,6 +12,7 @@ from typing import Any
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.location import Location
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
@@ -24,13 +25,17 @@ SENSITIVE_DIRS = ("/", "/etc", "/usr", "/var", "/boot", "/root", "/run", "/proc"
 DOCKER_SOCKET = "/var/run/docker.sock"
 
 
-class ScreenError(Exception):
-    """Refusal of a project before its config is looked at, or failure to inspect the config."""
+class Refused(Exception):
+    """Refusal of a project before its config is looked at, with the policy's findings."""
+
+    def __init__(self, findings: Sequence[Finding]) -> None:
+        super().__init__("; ".join(findings))
+        self.findings = list(findings)
 
 
-class InspectError(ScreenError):
-    """Failure to inspect a project's config: no compose file, or compose could not read it; with what
-    compose printed about it (output), if anything.
+class InspectError(Exception):
+    """Failure to inspect a project's config: no compose file, one that cannot be looked at, or compose
+    could not read it; with what compose printed about it (output), if anything.
     """
 
     def __init__(self, message: str, output: str | None = None) -> None:
@@ -41,17 +46,23 @@ class InspectError(ScreenError):
 def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
     """Returns (config, project directory) for the project global_args select.
 
-    Raises ScreenError if the project directory is, or contains, a sensitive path ($HOME, /etc, ...), since
-    everything in it can be bind-mounted; InspectError if compose cannot give the config.
+    Raises Refused if the policy refuses where the project is (policy.check_location); InspectError if
+    compose cannot give the config.
     """
-    project_dir = _project_directory(global_args, runtime.cwd, runtime)
-    found = _sensitive_inside(project_dir, runtime)
-    if found:
-        raise ScreenError(f"the project directory {project_dir} contains {found[0]}; "
-                         "move the compose file into a directory of its own")
-    return _load_config(global_args, runtime.docker), project_dir
+    location = locate(global_args, runtime)
+    refusals = policy.check_location(location)
+    if refusals:
+        raise Refused(refusals)
+    return _load_config(global_args, runtime.docker), location.directory
 
 
+def locate(global_args: Sequence[str], runtime: Runtime) -> Location:
+    """Returns where the project global_args select is, as compose would find it.
+
+    Raises InspectError if that cannot be found: the compose file is read from stdin, or there is none.
+    """
+    location = _project_location(global_args, runtime.cwd, runtime)
+    return location._replace(sensitive=tuple(_sensitive_inside(location.directory, runtime)))
 
 
 def _sensitive_paths(runtime: Runtime) -> list[str]:
@@ -86,8 +97,8 @@ def passes(global_args: Sequence[str], runtime: Runtime,
         config, project_dir = project(global_args, runtime)
     except InspectError as e:
         return verdict.screened(Report.failure(e))
-    except ScreenError as e:
-        return verdict.screened(Report.refusal(str(e)))
+    except Refused as e:
+        return verdict.screened(Report.of(e.findings))
     ctx = Scope(runtime, project_dir=project_dir).project_policy()
     return verdict.screened(Report.of(rules(config, ctx)))
 
@@ -141,67 +152,64 @@ def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:
     return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 
 
-def _project_directory(global_args: Sequence[str], cwd: str, runtime: Runtime) -> str:
+def _project_location(global_args: Sequence[str], cwd: str, runtime: Runtime) -> Location:
     """Determines the project directory as docker compose would from global_args and cwd.
 
-    Raises ScreenError if that cannot be checked (a compose file from stdin, or as _find_compose_dir says).
+    Raises InspectError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
     """
     env = runtime.env
     explicit = commandline.option_values(global_args, "--project-directory", None)
-    if explicit:
-        return os.path.realpath(os.path.join(cwd, explicit[-1]))  # the last one wins, as in compose
+    if explicit:  # the last one wins, as in compose
+        return Location(os.path.realpath(os.path.join(cwd, explicit[-1])))
 
     files = commandline.option_values(global_args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
-        raise ScreenError("a compose file read from stdin cannot be inspected")
+        raise InspectError("a compose file read from stdin cannot be inspected")
     if files:  # compose takes the project directory from the first file
-        return os.path.realpath(os.path.dirname(os.path.join(cwd, files[0])))
+        return Location(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
 
     env_files = commandline.option_values(global_args, "--env-file", None)
     return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 
-def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> str:
-    """Finds the directory of the nearest compose file, walking up from start as compose does.
+def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> Location:
+    """Finds the directory of the nearest compose file, walking up from start as compose does, with the .env
+    files on the way (and the env_files entries) that could send compose elsewhere.
 
     The walk stops at home and at the first directory not owned by uid: a compose file found there was not
-    put there for this project, and raises ScreenError. The starting directory is the caller's own choice
-    and is not subject to the ownership rule. Raises ScreenError if a .env (or an env_files entry) could
-    send compose elsewhere, InspectError if there is no compose file.
+    put there for this project, and makes the location foreign. The starting directory is the caller's own
+    choice and is not subject to the ownership rule. Raises InspectError if there is no compose file.
     """
     home = os.path.realpath(home)
-    for env_file in env_files:
-        _refuse_compose_vars_in(os.path.join(start, env_file))
+    redirects = [path for path in (os.path.join(start, f) for f in env_files) if _sets_compose_vars(path)]
     directory = os.path.realpath(start)
     while True:
         has_file = any(os.path.exists(os.path.join(directory, n)) for n in COMPOSE_FILE_NAMES)
         if directory != os.path.realpath(start) and (directory == home or os.stat(directory).st_uid != uid):
             if has_file:
-                raise ScreenError(f"the nearest compose file is in {directory}, which is your home directory "
-                                 "or not yours; run from the project directory or use -f")
+                return Location(directory, foreign=True, redirects=tuple(redirects))
             raise InspectError("no compose file found")
-        _refuse_compose_vars_in(os.path.join(directory, ".env"))
+        if _sets_compose_vars(env_file := os.path.join(directory, ".env")):
+            redirects.append(env_file)
         if has_file:
-            return directory
+            return Location(directory, redirects=tuple(redirects))
         parent = os.path.dirname(directory)
         if parent == directory:
             raise InspectError("no compose file found")
         directory = parent
 
 
-def _refuse_compose_vars_in(path: str) -> None:
-    """Raises ScreenError if the .env file at path sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR.
+def _sets_compose_vars(path: str) -> bool:
+    """Tells whether the .env file at path sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR.
 
     dockscreen does not read .env files, so such a setting would send compose to a different project
-    directory than the one mounts are checked against. A file that cannot be read is ignored.
+    directory than the one mounts are checked against. A file that cannot be read sets nothing.
     """
     try:
         with open(path) as f:
             content = f.read()
     except OSError:
-        return
-    if COMPOSE_VARS_IN_ENV_FILE.search(content):
-        raise ScreenError(f"{path} sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR; "
-                         "set it in your shell or use -f, so the project directory can be verified")
+        return False
+    return bool(COMPOSE_VARS_IN_ENV_FILE.search(content))

@@ -52,7 +52,11 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     """
     try:
         project = composeproject.load_project(global_args, runtime, allow_me=True)
-    except (inspect.ScreenError, ValueError) as e:
+    except inspect.Refused as e:
+        for refusal in e.findings:
+            messages.notice(refusal)
+        return 1
+    except (inspect.InspectError, ValueError) as e:
         messages.notice(failure_of(e))
         return 1
     for refusal in policy.check_daemon(project.remote):

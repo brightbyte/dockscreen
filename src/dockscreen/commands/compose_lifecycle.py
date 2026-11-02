@@ -35,7 +35,7 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     try:
         config, directory = inspect.project(global_args, runtime)
-    except inspect.ScreenError:
+    except (inspect.Refused, inspect.InspectError):
         return []
     if not config.get("name"):
         return []

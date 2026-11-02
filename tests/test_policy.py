@@ -4,6 +4,7 @@ import pytest
 from fakes import rules
 
 from dockscreen.model.container import Container
+from dockscreen.model.location import Location
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
@@ -535,6 +536,18 @@ def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not
 def test_a_daemon_that_may_not_be_this_hosts_is_refused():
     assert policy.check_daemon(False) == []
     assert policy.check_daemon(True) == [policy.REMOTE_MESSAGE]
+
+
+def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
+    assert policy.check_location(Location("/p")) == []
+
+    found = policy.check_location(Location("/home/me", foreign=True, redirects=("/home/me/.env",),
+                                           sensitive=("/home/me",)))
+
+    assert [f.severity for f in found] == [Severity.REFUSED] * 3
+    assert found[0].startswith("the nearest compose file is in /home/me, which is your home directory")
+    assert found[1].startswith("/home/me/.env sets COMPOSE_FILE")
+    assert found[2].startswith("the project directory /home/me contains /home/me;")
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])

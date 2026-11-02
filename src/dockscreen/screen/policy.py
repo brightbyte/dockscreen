@@ -31,6 +31,7 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
+from dockscreen.model.location import Location
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags, service_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.screen import idrules
@@ -651,6 +652,22 @@ def check_daemon(remote: bool) -> list[Finding]:
     since the checks compare ids and paths with this host's.
     """
     return [Finding(REMOTE_MESSAGE)] if remote else []
+
+
+def check_location(location: Location) -> list[Finding]:
+    """Checks where a project is; returns a refusal for each reason its directory cannot be the one its bind
+    mounts are judged against.
+    """
+    found = []
+    if location.foreign:
+        found.append(Finding(f"the nearest compose file is in {location.directory}, which is your home "
+                             "directory or not yours; run from the project directory or use -f"))
+    found += [Finding(f"{path} sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR; set it in your shell or use -f, "
+                      "so the project directory can be verified") for path in location.redirects]
+    if location.sensitive:
+        found.append(Finding(f"the project directory {location.directory} contains {location.sensitive[0]}; "
+                             "move the compose file into a directory of its own"))
+    return found
 
 
 def check_project_name(name: str, directory: str, made_from: Iterable[str]) -> list[Finding]:

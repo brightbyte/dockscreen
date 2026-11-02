@@ -95,7 +95,8 @@ class Project(NamedTuple):
 def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Project:
     """Loads the project global_args select, hardened.
 
-    Raises inspect.ScreenError or ValueError if it cannot be inspected.
+    Raises inspect.Refused if the policy refuses where it is, inspect.InspectError if it cannot be inspected,
+    ValueError if it cannot be hardened.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     config, directory = inspect.project(global_args, runtime)
@@ -121,7 +122,9 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     except (inspect.InspectError, DockerNotFound) as e:
         verdict.screened(Report.failure(e))
         return 1
-    except (inspect.ScreenError, ValueError) as e:
+    except inspect.Refused as e:
+        problems = e.findings
+    except ValueError as e:
         problems = findings.refused([str(e)])
     if problems:
         verdict.screened(Report.of(problems))
