@@ -53,16 +53,11 @@ class Prepared(NamedTuple):
     report: Report    # refusals, and failures to get or look at an image
     verified: Mapping[str, str] = MappingProxyType({})  # service -> the repository its image proved
 
-    def finalize(self) -> dict[str, Any]:
-        """Returns the config to run, built from config and the decisions (changes), leaving config alone.
-
-        Services that start and set no user get the decided user, pinned to the image that was checked;
-        those that do not start get the default user.
-        """
-        return substitutions.apply(self.config, self.changes())
-
     def changes(self) -> list[Substitution]:
-        """Returns the substitutions that make config the config to run (finalize), by service name."""
+        """Returns the substitutions that make config the config to run, by service name: services that start
+        and set no user get the decided user, pinned to the image that was checked; those that do not start
+        get the default user.
+        """
         found = []
         settings = self.ctx.settings
         for name, service in sorted(self.config["services"].items()):

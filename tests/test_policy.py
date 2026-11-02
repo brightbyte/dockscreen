@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from fakes import rules
+from fakes import project_of, rules
 
 from dockscreen.model.container import Container
 from dockscreen.model.location import Location
@@ -35,7 +35,13 @@ def context(project, extra_dirs=(), allow_me=True):
 
 
 def check(project, config, extra_dirs=(), allow_me=True):
-    return policy.check_config({"name": "proj", **config}, context(project, extra_dirs, allow_me))
+    return policy.check_config(project_of({"name": "proj", **config}, project),
+                               context(project, extra_dirs, allow_me))
+
+
+def web(definition=None, project="/p"):
+    """The service web, with definition, of a project in project."""
+    return project_of({"services": {"web": definition or {}}}, project).service("web")
 
 
 def problems_for(project, allow_me=True, **overrides):
@@ -156,7 +162,8 @@ def test_subordinate_ids_are_refused(project):
             return 100000 <= value < 165536
 
     ctx = policy.Context(str(project), rules(subordinate=Subordinate()))
-    problems = policy.check_config({"name": "proj", "services": {"web": service(user="100000:5000")}}, ctx)
+    definition = {"name": "proj", "services": {"web": service(user="100000:5000")}}
+    problems = policy.check_config(project_of(definition, project), ctx)
     assert_refused(problems, "uid 100000 is in a subordinate id range")
 
 
@@ -252,26 +259,27 @@ def test_selinux_relabel_does_not_allow_a_bind_mount_outside_the_project(project
 
 
 def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
-    ctx = policy.Context(str(project), rules(), mounts=True)
-    assert policy.check_user("900:900", ctx)  # refused: not in the nobody range, and there are mounts
-    configured = policy.Context(str(project), rules(), mounts=True, configured_user=(900, 900))
-    assert policy.check_user("900:900", configured) == []
-    assert policy.check_user("900:65534", configured) == []  # each id on its own, as for the nobody range
-    assert policy.check_user("901:900", configured) == [("user '901:900': uid 901 is not in the nobody range "
-                                                         "65530-65534, and there are host mounts")]
+    ctx = policy.Context(str(project), rules())
+    mounted = web({"volumes": [bind(project / "data")]}, project)
+    assert policy.check_user("900:900", ctx, mounted)  # refused: not in the nobody range, with mounts
+    configured = policy.Context(str(project), rules(), configured_user=(900, 900))
+    assert policy.check_user("900:900", configured, mounted) == []
+    assert policy.check_user("900:65534", configured, mounted) == []  # each id on its own, as for nobody
+    assert policy.check_user("901:900", configured, mounted) == [
+        "user '901:900': uid 901 is not in the nobody range 65530-65534, and there are host mounts"]
 
 
 def test_security_opts_from_the_config_file_are_allowed_too(project):
     ctx = policy.Context(str(project), rules(), security_opts=("seccomp=/etc/strict.json",))
-    assert policy.check_security_opt(["no-new-privileges:true", "seccomp=/etc/strict.json"], ctx) == []
-    assert policy.check_security_opt(["seccomp=/etc/strict.json"], ctx) == [
+    assert policy.check_security_opt(["no-new-privileges:true", "seccomp=/etc/strict.json"], ctx, web()) == []
+    assert policy.check_security_opt(["seccomp=/etc/strict.json"], ctx, web()) == [
         "security_opt must include no-new-privileges:true"]  # still required
 
 
 def test_a_mount_outside_says_how_the_config_file_can_allow_it(project):
     config_file = "/home/me/.config/dockscreen/config.toml"
     ctx = policy.Context(str(project), rules(allow_me=True), config_file=config_file)
-    assert policy._check_mounts([bind("/srv/data")], ctx) == [
+    assert policy._check_mounts([bind("/srv/data")], ctx, web()) == [
         (f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
          f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml')]
 
@@ -326,7 +334,7 @@ def test_build_context_outside_project_is_refused(project):
 def test_unsafe_build_options_are_refused_when_building_and_running(project, build, reason):
     build = {"context": str(project), **build}
     build_only = policy.check_build_config(
-        {"name": "proj", "services": {"web": {"build": build}}}, context(project))
+        project_of({"name": "proj", "services": {"web": {"build": build}}}, project), context(project))
 
     assert_refused(problems_for(project, build=build), reason)
     assert_refused(build_only, reason)
@@ -342,12 +350,13 @@ def test_remote_build_contexts_and_images_are_not_paths(project):
 def test_build_config_check_ignores_runtime_policy(project):
     config = {"name": "proj", "services": {"web": {"build": {"context": str(project)}, "privileged": True,
                                                    "user": "0"}}}
-    assert policy.check_build_config(config, context(project)) == []
+    assert policy.check_build_config(project_of(config, project), context(project)) == []
 
 
 def test_build_config_check_covers_secret_files(project):
     config = {"name": "proj", "secrets": {"s": {"file": "/etc/shadow"}}}
-    assert_refused(policy.check_build_config(config, context(project)), "file '/etc/shadow' is outside")
+    assert_refused(policy.check_build_config(project_of(config, project), context(project)),
+                   "file '/etc/shadow' is outside")
 
 
 # --- named volumes, networks, secrets -------------------------------------
@@ -489,7 +498,8 @@ def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project)
     reason = "service name '--ssh' starts with '-', which compose would read as an option"
 
     assert check(project, config) == [reason]
-    assert policy.check_build_config({"name": "proj", **config}, context(project)) == [reason]
+    assert policy.check_build_config(project_of({"name": "proj", **config}, project), context(project)) == [
+        reason]
 
 
 # --- containers ---------------------------------------------------------------
@@ -498,7 +508,7 @@ def check_container(user="", user_origin=Origin.IMAGE, trust=None, **host):
     info = {"Config": {"User": user},
             "HostConfig": {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"], **host}}
     ctx = policy.Context("/work", rules())
-    return policy.check_container(Container(info), ctx.with_trust(trust) if trust else ctx, user_origin)
+    return policy.check_container(Container(info, user_origin), ctx.with_trust(trust) if trust else ctx)
 
 
 def test_a_hardened_container_with_nothing_else_has_no_findings():
@@ -535,7 +545,9 @@ def test_each_key_is_judged_as_where_its_value_comes_from():
     service = {"user": "0:0", "cap_drop": [], "security_opt": ["no-new-privileges:true"]}
     origins = {"user": Origin.CONFIG, "cap_drop": Origin.DOCKSCREEN}
 
-    found = policy.check_service(service, policy.Context("/p", rules()), Origin.PROJECT, origins)
+    web = project_of({"services": {"web": service}}, origins={"web": origins}).service("web")
+
+    found = policy.check_service(web, policy.Context("/p", rules()))
 
     # the config file is trusted, dockscreen is not: its values are checked once more
     assert [(f, f.severity) for f in found] == [

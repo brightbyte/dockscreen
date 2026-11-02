@@ -149,7 +149,7 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`, `image`, `identity`.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
 4. `screen`: the checks and their verdict: `policy`, `idrules`, `scope`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
@@ -176,7 +176,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
-   - the policy runs again on the result, with each value it set judged by where it came from (`policy.Context.origins`, from the substitutions that set them): an image's own user was checked when it was decided, a user from the config file (configured or default) is trusted, so what the rules say about it is pointed out, not refused, and what dockscreen chose itself (the defaults, the pinned image) is checked like the project's.
+   - the policy runs again on the result, with each value it set judged by where it came from (`project.Project.origins`, from the substitutions that set them): an image's own user was checked when it was decided, a user from the config file (configured or default) is trusted, so what the rules say about it is pointed out, not refused, and what dockscreen chose itself (the defaults, the pinned image) is checked like the project's.
 6. Before anything is pulled or built (`composeproject.Project.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 

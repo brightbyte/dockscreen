@@ -5,6 +5,8 @@ import subprocess
 
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.model.location import Location
+from dockscreen.model.project import Project
 from dockscreen.screen import idrules
 from dockscreen.screen.scope import Scope
 
@@ -14,6 +16,11 @@ GROUP = "app:x:100001:\npg:x:998:\n"
 
 
 SUBCOMMANDS = ("pull", "build", "up", "run", "create", "watch", "scale")
+
+
+def project_of(definition, directory="/p", origins=None):
+    """The compose project in directory with definition, and the origins of the values dockscreen set."""
+    return Project(definition, Location(str(directory))).with_origins(origins or {})
 
 
 class NoSubordinate:

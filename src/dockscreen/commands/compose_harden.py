@@ -22,8 +22,8 @@ from typing import Any
 
 from dockscreen.compose import composeproject, inspect, serviceusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
+from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy
 from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.util import ids, messages
@@ -63,12 +63,12 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
         messages.notice(refusal)
         return 1
 
-    base, static = project.hardened, project.static_ctx()
+    base, static = project.static(), project.static_ctx()
     fixed = _fix_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
     resolved = _as_compose_reads(fixed, static)
-    remaining = [f for f in policy.check_config(resolved, static) if f.fatal]
+    remaining = [f for f in policy.check_config(base.with_definition(resolved), static) if f.fatal]
     notes = [hardening.defaults_note()]
     if remaining:
         messages.notice("the images were not looked at because of the problems below: "
@@ -76,13 +76,13 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     else:
         remaining, notes = _fix_image_users(project, fixed, resolved, notes)
 
-    sys.stdout.write(_render(base, fixed, remaining, notes=notes))
+    sys.stdout.write(_render(base.definition, fixed, remaining, notes=notes))
     for problem in remaining:
         messages.notice(f"cannot fix automatically: {problem}")
     return 1 if remaining else 0
 
 
-def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], resolved: dict[str, Any],
+def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], resolved: dict[str, Any],
                      notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
@@ -104,23 +104,23 @@ def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], res
     return remaining, notes
 
 
-def _fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
-    """Returns a copy of config with the problems that have a mechanical fix fixed.
+def _fix_config(project: Project, ctx: policy.Context) -> dict[str, Any]:
+    """Returns a copy of the project's definition with the problems that have a mechanical fix fixed.
 
     Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
     become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
     and env files have no safe automatic fix; they stay and are reported by check_config on the result.
     """
-    fixed = copy.deepcopy(config)
-    for name, service in fixed.get("services", {}).items():
-        service_ctx = ctx.for_service(name, service).with_mounts(
-            service_reaches_host(service, config.get("volumes")))
-        from_image = ctx.origins_of(name).get("user") is Origin.IMAGE and not service.get("user")
-        if not from_image and policy.check_user(service.get("user"), service_ctx):
+    fixed = copy.deepcopy(project.definition)
+    for original in project.services:
+        service = fixed["services"][original.name]
+        service_ctx = ctx.for_service(original.name, original.definition)
+        from_image = original.origin_of("user") is Origin.IMAGE and not service.get("user")
+        if not from_image and policy.check_user(service.get("user"), service_ctx, original):
             service["user"] = _USER_TEMPLATE
-        if policy.check_security_opt(service.get("security_opt"), service_ctx):
+        if policy.check_security_opt(service.get("security_opt"), service_ctx, original):
             service["security_opt"] = [policy.SECURITY_OPT]
-        if policy.check_cap_drop(service.get("cap_drop"), ctx):
+        if policy.check_cap_drop(service.get("cap_drop"), ctx, original):
             service["cap_drop"] = [policy.CAP_DROP]
         for key in _REMOVABLE_SERVICE_KEYS:
             service.pop(key, None)

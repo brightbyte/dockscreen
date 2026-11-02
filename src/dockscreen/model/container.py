@@ -10,6 +10,7 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
 from dockscreen.model.mounts import Mount
+from dockscreen.model.origin import Origin
 
 # Inspected HostConfig fields that hold what the compose key of the same meaning holds.
 SERVICE_FIELDS = {
@@ -33,8 +34,13 @@ SERVICE_FIELDS = {
 
 
 class Container(NamedTuple):
-    """Container as docker inspect shows it (info): its user, its image, its mounts and its host settings."""
+    """Container as docker inspect shows it (info): its user, its image, its mounts and its host settings;
+    with where its user comes from (user_origin).
+
+    Everything else it has comes from the command line that created it.
+    """
     info: dict[str, Any]
+    user_origin: Origin = Origin.COMMAND_LINE
 
     @classmethod
     def uninspected(cls, container: str) -> Self:
@@ -65,6 +71,21 @@ class Container(NamedTuple):
     def reaches_host(self) -> bool:
         """Tells whether it reaches host files (mounts.container_reaches_host)."""
         return mounts.container_reaches_host(self.info)
+
+    @property
+    def definition(self) -> dict[str, Any]:
+        """Returns the compose service keys that ask for what it has (as_service), with its user unless that
+        comes from its image.
+        """
+        return self.as_service(with_user=self.user_origin is not Origin.IMAGE)
+
+    def origin_of(self, key: str) -> Origin:
+        """Returns where the value of the service key of definition comes from."""
+        return self.user_origin if key == "user" else Origin.COMMAND_LINE
+
+    def with_user_origin(self, user_origin: Origin) -> Self:
+        """Returns this container with its user coming from user_origin."""
+        return self._replace(user_origin=user_origin)
 
     def as_service(self, with_user: bool) -> dict[str, Any]:
         """Returns the compose service keys that ask for what this container has; its user only if

@@ -13,6 +13,7 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.location import Location
+from dockscreen.model.project import Project
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
@@ -43,17 +44,17 @@ class InspectError(Exception):
         self.output = output or None
 
 
-def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
-    """Returns (config, project directory) for the project global_args select.
+def project(global_args: Sequence[str], runtime: Runtime) -> Project:
+    """Returns the project global_args select, with its definition as compose resolves it.
 
     Raises Refused if the policy refuses where the project is (policy.check_location); InspectError if
-    compose cannot give the config.
+    compose cannot give the definition.
     """
     location = locate(global_args, runtime)
     refusals = policy.check_location(location)
     if refusals:
         raise Refused(refusals)
-    return _load_config(global_args, runtime.docker), location.directory
+    return Project(_load_config(global_args, runtime.docker), location)
 
 
 def locate(global_args: Sequence[str], runtime: Runtime) -> Location:
@@ -91,16 +92,16 @@ def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:
 
 
 def passes(global_args: Sequence[str], runtime: Runtime,
-           rules: Callable[[dict[str, Any], policy.Context], list[Finding]] = policy.check_config) -> bool:
-    """Tells whether rules(config, ctx) finds nothing in the selected project, printing the verdict."""
+           rules: Callable[[Project, policy.Context], list[Finding]] = policy.check_config) -> bool:
+    """Tells whether rules(project, ctx) finds nothing in the selected project, printing the verdict."""
     try:
-        config, project_dir = project(global_args, runtime)
+        found = project(global_args, runtime)
     except InspectError as e:
         return verdict.screened(Report.failure(e))
     except Refused as e:
         return verdict.screened(Report.of(e.findings))
-    ctx = Scope(runtime, project_dir=project_dir).project_policy()
-    return verdict.screened(Report.of(rules(config, ctx)))
+    ctx = Scope(runtime, project_dir=found.directory).project_policy()
+    return verdict.screened(Report.of(rules(found, ctx)))
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:

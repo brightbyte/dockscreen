@@ -34,9 +34,9 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
     if inspect.names_project(global_args, runtime.env):
         return []
     try:
-        config, directory = inspect.project(global_args, runtime)
+        project = inspect.project(global_args, runtime)
     except (inspect.Refused, inspect.InspectError):
         return []
-    if not config.get("name"):
+    if not project.name:
         return []
-    return inspect.name_conflicts(config["name"], directory, runtime.docker)
+    return inspect.name_conflicts(project.name, project.directory, runtime.docker)

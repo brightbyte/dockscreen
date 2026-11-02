@@ -1,6 +1,6 @@
 import os
 
-from fakes import FakeImages, compose_project, rules
+from fakes import FakeImages, compose_project, project_of, rules
 
 from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.screen import policy
@@ -21,7 +21,8 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
-    fixed = compose_harden._fix_config(original, policy.Context("/proj", rules(me=(UID, GID), allow_me=True)))
+    ctx = policy.Context("/proj", rules(me=(UID, GID), allow_me=True))
+    fixed = compose_harden._fix_config(project_of(original), ctx)
 
     text = compose_harden._render(original, fixed, ["bind mount " + evil])
 

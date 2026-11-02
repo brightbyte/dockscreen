@@ -47,7 +47,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     return verdict.report(outcome, brief)
 
 
-def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Report, Sequence[str]]:
+def _audit_images(project: composeproject.Compose, brief: bool) -> tuple[Report, Sequence[str]]:
     """Checks the project, then its images if the checks pass.
 
     Returns (what was found, report lines).
@@ -64,5 +64,5 @@ def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Report,
     if not prepared.report.passed:
         return prepared.report, prepared.describe()
     # what `up` checks once more before it runs: image sections need proof now
-    checked = policy.check_config(prepared.finalize(), project.final_ctx(prepared))
+    checked = policy.check_config(project.final(prepared), project.final_ctx(prepared))
     return Report.of(checked), prepared.describe()

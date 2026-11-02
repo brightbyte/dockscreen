@@ -82,7 +82,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         return created
     container, assessment = created
     if strict:
-        found = Report.of(_command_line_findings(ctx, parsed, container, assessment, STRICT))
+        found = Report.of(_command_line_findings(ctx, container, assessment, STRICT))
         if not found.passed:
             ctx.docker.remove(container.id)
             verdict.screened(found)
@@ -172,26 +172,27 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
         return code, None
     container, image = Container.uninspected(created), Image(parsed.image)
     try:
-        container = Container(ctx.docker.inspect_container(created))
+        container = Container(ctx.docker.inspect_container(created), _user_origin(parsed, extra))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else assess(
-            ctx, container.id, container.info, _user_origin(parsed, extra), reference=parsed.image)
+            ctx, container.id, container.info, container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
 
 
-def _command_line_findings(ctx: Scope, parsed: runargs.ParsedRun, container: Container,
-                           assessment: Assessment, trust: frozenset[Origin]) -> list[Finding]:
-    """Returns what the command line asks for, in the container it created, that a project or an image may
-    not have: refused, or notable where trust trusts the command line (policy.check_container).
+def _command_line_findings(ctx: Scope, container: Container, assessment: Assessment,
+                           trust: frozenset[Origin]) -> list[Finding]:
+    """Returns what the command line asks for, in the container it created (check, with no options of
+    dockscreen's own), that a project or an image may not have: refused, or notable where trust trusts the
+    command line (policy.check_container).
 
     Empty if the container could not be inspected.
     """
     if not container.inspected:
         return []
     policy_ctx = ctx.policy_context(assessment.section, trust)
-    return policy.check_container(container, policy_ctx, _user_origin(parsed, []))
+    return policy.check_container(container, policy_ctx)
 
 
 def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
@@ -257,7 +258,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         return verdict.report(Report.failure(reason), brief)
     container, assessment = created
     try:
-        found = _command_line_findings(ctx, parsed, container, assessment, STRICT if strict else TRUSTED)
+        found = _command_line_findings(ctx, container, assessment, STRICT if strict else TRUSTED)
     finally:
         ctx.docker.remove(container.id)
 

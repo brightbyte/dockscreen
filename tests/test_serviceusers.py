@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_image_ctx, make_runtime, rules
+from fakes import FakeImages, make_image_ctx, make_runtime, project_of, rules
 
 from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
@@ -195,7 +195,8 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
-    return prepared, prepared.finalize(), substitutions.origins(prepared.changes())
+    changes = prepared.changes()
+    return prepared, substitutions.apply(prepared.config, changes), substitutions.origins(changes)
 
 
 def user_origins(origins):
@@ -246,15 +247,15 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
                                 active=("web", "db"))
     ctx = policy.Context("/p", rules())
 
-    assert policy.check_config(final, ctx.with_origins(origins)) == []
+    assert policy.check_config(project_of(final, origins=origins), ctx) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, origins = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
-    found = policy.check_config(final, ctx.with_origins(origins))
+    found = policy.check_config(project_of(final, origins=origins), ctx)
     assert found and {f.severity for f in found} == {Severity.NOTABLE}
-    assert [p for p in policy.check_config(final, ctx) if p.startswith("service db: user")] == [
+    assert [p for p in policy.check_config(project_of(final), ctx) if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
         "service db: user '1000:1000': gid 1000 exists on this host (local group daniel)"]
 
@@ -358,7 +359,7 @@ def test_services_whose_user_the_command_line_chooses_are_not_decided():
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     # No key in a compose file can mark a service as vetted: it lives in the Context only.
     config = project(web={"x-vetted": True, "vetted": True})
-    problems = policy.check_config(config, policy.Context("/p", rules()))
+    problems = policy.check_config(project_of(config), policy.Context("/p", rules()))
     assert "service web: key 'vetted' is not on the allow list" in problems
     assert "service web: user is not set, the image default may be root" in problems
 

@@ -1,4 +1,5 @@
 from dockscreen.model.container import Container
+from dockscreen.model.origin import Origin
 
 HARDENED = {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"]}
 
@@ -30,3 +31,12 @@ def test_as_service_has_the_user_only_when_asked_to():
     assert "user" not in container(user="0:0").as_service(with_user=False)
     assert container(user="0:0").as_service(with_user=True)["user"] == "0:0"
     assert container().as_service(with_user=True)["user"] == ""  # the image's, which run decides
+
+
+def test_its_definition_has_its_user_unless_that_comes_from_its_image():
+    assert container(user="0:0").definition["user"] == "0:0"  # the command line's, by default
+    from_image = container(user="0:0").with_user_origin(Origin.IMAGE)
+
+    assert "user" not in from_image.definition
+    assert (from_image.origin_of("user"), from_image.origin_of("cap_drop")) == (Origin.IMAGE,
+                                                                               Origin.COMMAND_LINE)

@@ -4,7 +4,7 @@ import json
 import os
 
 import pytest
-from fakes import ME, FakeImages, compose_project, rules
+from fakes import ME, FakeImages, compose_project, project_of, rules
 
 from dockscreen.commands import compose_harden
 from dockscreen.model.origin import Origin
@@ -153,7 +153,7 @@ def context(directory, extra_dirs=()):
 
 
 def check(directory, config):
-    return policy.check_config({"name": "proj", **config}, context(directory))
+    return policy.check_config(project_of({"name": "proj", **config}, directory), context(directory))
 
 
 def bind(source):
@@ -162,7 +162,7 @@ def bind(source):
 
 def test_patch_resets_removed_keys_and_overrides_changed_ones():
     original = config(user="0:0", privileged=True, group_add=["0", str(GID)], image="x")
-    fixed = compose_harden._fix_config(original, context("/proj"))
+    fixed = compose_harden._fix_config(project_of(original), context("/proj"))
 
     lines = compose_harden._render(original, fixed).splitlines()
 
@@ -176,7 +176,7 @@ def test_patch_resets_removed_keys_and_overrides_changed_ones():
 
 def test_patch_for_compliant_config_is_empty():
     original = compliant()
-    fixed = compose_harden._fix_config(original, context("/proj"))
+    fixed = compose_harden._fix_config(project_of(original), context("/proj"))
     assert compose_harden._render(original, fixed).splitlines()[-1] == "services: {}"
 
 
@@ -198,7 +198,7 @@ def test_fix_command_prints_patch_and_fails_when_problems_remain(capsys, tmp_pat
 
 def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path):
     original = compliant(volumes=[{"type": "bind", "source": "/etc", "target": "/e"}])
-    fixed = compose_harden._fix_config(original, context(tmp_path))
+    fixed = compose_harden._fix_config(project_of(original), context(tmp_path))
 
     text = compose_harden._render(original, fixed)
 
@@ -208,8 +208,8 @@ def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path)
 
 def test_fix_config_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
     config = project(web={}, db={})
-    ctx = policy.Context("/p", rules()).with_origins({"web": {"user": Origin.IMAGE}})
-    fixed = compose_harden._fix_config(config, ctx)
+    fixed = compose_harden._fix_config(project_of(config, origins={"web": {"user": Origin.IMAGE}}),
+                                       policy.Context("/p", rules()))
     assert "user" not in fixed["services"]["web"]
     assert fixed["services"]["db"]["user"] == compose_harden._USER_TEMPLATE
 
@@ -224,7 +224,7 @@ def test_fix_config_leaves_nothing_fixable(project_dir):
         "devices": ["/dev/sda"], "security_opt": ["seccomp=unconfined"], "network_mode": "host",
         "volumes_from": ["container:x", "db"], "runtime": "nvidia",
     }}}
-    fixed = compose_harden._fix_config(config, context(project_dir))
+    fixed = compose_harden._fix_config(project_of(config), context(project_dir))
     assert fixed["services"]["web"] == {
         "user": compose_harden._USER_TEMPLATE, "security_opt": ["no-new-privileges:true"],
         "cap_drop": ["ALL"], "volumes_from": ["db"],
@@ -235,7 +235,7 @@ def test_fix_config_leaves_nothing_fixable(project_dir):
 
 def test_fix_config_does_not_touch_input_and_keeps_unfixable_problems(project_dir):
     config = {"services": {"web": service(privileged=True, build={"context": "/"}, provider={"type": "x"})}}
-    fixed = compose_harden._fix_config(config, context(project_dir))
+    fixed = compose_harden._fix_config(project_of(config), context(project_dir))
     assert config["services"]["web"]["privileged"] is True
     assert check(project_dir, fixed) == [
         "service web: key 'provider' is not on the allow list",
@@ -253,7 +253,7 @@ def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placehol
     ]
     config = {"services": {"web": service(volumes=mounts)}}
 
-    fixed = compose_harden._fix_config(config, context(project_dir))
+    fixed = compose_harden._fix_config(project_of(config), context(project_dir))
 
     web = fixed["services"]["web"]["volumes"]
     assert [m["source"] for m in web] == [
@@ -270,13 +270,13 @@ def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placehol
 
 def test_fix_config_keeps_a_compliant_service(project_dir):
     config = {"services": {"web": service()}}
-    assert compose_harden._fix_config(config, context(project_dir)) == config
+    assert compose_harden._fix_config(project_of(config), context(project_dir)) == config
 
 
 def test_fix_config_keeps_mounts_from_extra_dirs(project_dir):
     outside = project_dir.parent / "outside"
     config = {"services": {"web": service(volumes=[bind(outside), bind("/etc")])}}
 
-    fixed = compose_harden._fix_config(config, context(project_dir, [outside]))
+    fixed = compose_harden._fix_config(project_of(config), context(project_dir, [outside]))
 
     assert [m["source"] for m in fixed["services"]["web"]["volumes"]] == [str(outside), "./ETC"]

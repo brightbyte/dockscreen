@@ -15,8 +15,9 @@ beginning with `x-` are extension fields that Compose itself ignores; they pass
 everywhere except in `build` (see check_build).
 
 A key is listed either as harmless (any value is fine) or as checked (it has an
-entry in SERVICE_CHECKS that validates the value). Checks take the value and a
-Context, whose rules (idrules.Rules) decide which uids and gids the project may choose.
+entry in SERVICE_CHECKS that validates the value). Checks take the value, a
+Context, whose rules (idrules.Rules) decide which uids and gids the project may choose,
+and the service the value belongs to (Subject).
 
 Every check of a key returns a list of human-readable problems; an empty list means
 the value is acceptable. The checks of a whole config turn them into refusals
@@ -26,14 +27,14 @@ here touches docker, only the filesystem for realpath resolution.
 
 import os
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from types import MappingProxyType
-from typing import Any, NamedTuple, Self
+from typing import Any, NamedTuple, Protocol, Self
 
 from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
 from dockscreen.model.location import Location
-from dockscreen.model.mounts import BIND_FLAGS, mount_flags, service_reaches_host
+from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.origin import TRUSTED, Origin
+from dockscreen.model.project import Project
 from dockscreen.screen import idrules
 from dockscreen.screen.findings import Finding, about, judged, refused
 from dockscreen.util import ids
@@ -116,13 +117,8 @@ class Context(NamedTuple):
     project_dir: str
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
-    # Where the values of a service's keys come from, by service and key, where that is not the project
-    # (substitutions.origins). Only dockscreen sets this, never the project.
-    origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
     # Whose values are taken as given: what the policy refuses in them is pointed out instead.
     trust: frozenset[Origin] = TRUSTED
-    # Whether the service being checked reaches host files (mounts.service_reaches_host); set per service.
-    mounts: bool = False
     # The caller's config file, named in hints on what it can allow; no hints without it.
     config_file: str | None = None
     security_opts: tuple = ()  # allowed besides no-new-privileges (security_opts in the config file)
@@ -142,32 +138,37 @@ class Context(NamedTuple):
         """Returns the context to check the service called name with: scope's for it, else this one."""
         return self.scope(name, service) if self.scope else self
 
-    def origins_of(self, name: str) -> Mapping[str, Origin]:
-        """Returns where the values of the keys of the service called name come from, where that is not
-        the project.
-        """
-        return self.origins.get(name, MappingProxyType({}))
-
-    def with_origins(self, origins: Mapping[str, Mapping[str, Origin]]) -> Self:
-        """Returns this context with origins as where the values of the services' keys come from."""
-        frozen = {name: MappingProxyType(dict(keys)) for name, keys in origins.items()}
-        return self._replace(origins=MappingProxyType(frozen))
-
     def with_trust(self, trust: frozenset[Origin]) -> Self:
         """Returns this context with trust as the origins whose values are taken as given."""
         return self._replace(trust=trust)
-
-    def with_mounts(self, mounts: bool) -> Self:
-        """Returns this context for a service that reaches host files if mounts."""
-        return self._replace(mounts=mounts)
 
     def with_scope(self, scope: Callable[[str, dict[str, Any]], "Context"]) -> Self:
         """Returns this context with scope giving the context of each service (for_service)."""
         return self._replace(scope=scope)
 
 
-# A check of one service key: takes its value and the Context, returns the problems.
-Check = Callable[[Any, Context], list[str]]
+class Subject(Protocol):
+    """Service as check_service judges it: one of a compose project (project.Service), or what a container
+    asks for, read back as one (container.Container).
+    """
+
+    @property
+    def definition(self) -> dict[str, Any]:
+        """Returns its compose service keys."""
+        ...
+
+    @property
+    def reaches_host(self) -> bool:
+        """Tells whether it reaches host files (mounts.service_reaches_host)."""
+        ...
+
+    def origin_of(self, key: str) -> Origin:
+        """Returns where the value of key comes from."""
+        ...
+
+
+# A check of one service key: takes its value, the Context and the service, returns the problems.
+Check = Callable[[Any, Context, Subject], list[str]]
 
 
 def context_for(settings: configuration.Config, project_dir: str, rules: idrules.Rules,
@@ -181,25 +182,23 @@ def context_for(settings: configuration.Config, project_dir: str, rules: idrules
                    security_opts=settings.security_opts, configured_user=settings.user)
 
 
-def check_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
-    """Checks a resolved compose config against the policy; returns the refusals, each about what it
+def check_config(project: Project, ctx: Context) -> list[Finding]:
+    """Checks a compose project's definition against the policy; returns what it finds, each about what it
     concerns.
 
-    Empty if the config passes. Each service is checked with its own context (ctx.for_service).
+    Empty if the definition passes. Each service is checked with its own context (ctx.for_service).
     """
-    project = config.get("name")
+    config, name = project.definition, project.name
     problems = refused(unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + _check_service_names(config))
-    if not project:  # volumes and networks are scoped to the project by its name
+    if not name:  # volumes and networks are scoped to the project by its name
         problems += refused(["config has no project name"])
-    for name, service in (config.get("services") or {}).items():
-        service_ctx = ctx.for_service(name, service or {})
-        found = check_service(service or {}, service_ctx, Origin.PROJECT, ctx.origins_of(name),
-                              config.get("volumes"))
-        problems += about(found, f"service {name}")
-    for key, volume in (config.get("volumes") or {}).items():
-        problems += refused(_check_volume(key, volume, project, ctx), f"volume {key}")
+    for service in project.services:
+        found = check_service(service, ctx.for_service(service.name, service.definition))
+        problems += about(found, f"service {service.name}")
+    for key, volume in project.volumes.items():
+        problems += refused(_check_volume(key, volume, name, ctx), f"volume {key}")
     for key, network in (config.get("networks") or {}).items():
-        problems += refused(_check_network(key, network, project, ctx), f"network {key}")
+        problems += refused(_check_network(key, network, name, ctx), f"network {key}")
     return problems + _check_file_sources(config, ctx)
 
 
@@ -209,18 +208,20 @@ def _check_service_names(config: dict[str, Any]) -> list[str]:
             for name in config.get("services") or {} if str(name).startswith("-")]
 
 
-def check_build_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
-    """Checks config against the part of the policy that applies to `build`; returns the refusals.
+def check_build_config(project: Project, ctx: Context) -> list[Finding]:
+    """Checks a compose project against the part of the policy that applies to `build`; returns the
+    refusals.
 
     That part is what building can reach on the host: names, build sections, secrets and configs.
 
     Runtime hardening (user, capabilities, mounts) is irrelevant until containers run.
     """
-    problems = refused(_check_service_names(config))
-    for name, service in (config.get("services") or {}).items():
-        if service and "build" in service:
-            problems += refused(_check_build(service["build"], ctx), f"service {name}")
-    return problems + _check_file_sources(config, ctx)  # build secrets refer to these
+    problems = refused(_check_service_names(project.definition))
+    for service in project.services:
+        if "build" in service.definition:
+            build = _check_build(service.definition["build"], ctx, service)
+            problems += refused(build, f"service {service.name}")
+    return problems + _check_file_sources(project.definition, ctx)  # build secrets refer to these
 
 
 def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str,
@@ -236,37 +237,34 @@ def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str
     ]
 
 
-def check_service(service: dict[str, Any], ctx: Context, origin: Origin,
-                  origins: Mapping[str, Origin] = MappingProxyType({}),
-                  volumes: dict[str, Any] | None = None) -> list[Finding]:
+def check_service(service: Subject, ctx: Context) -> list[Finding]:
     """Checks one service against the policy; returns what it finds, empty if there is nothing.
 
-    A problem is refused, or notable if the value comes from an origin that ctx trusts (findings.judged).
-    origin: where the service's keys come from; origins: where the values of some keys come from, if not
-    from there. A user from the image is left to the image decision. volumes: the config's top-level
-    volumes, to tell named volumes from host paths.
+    A problem is refused, or notable if its value comes from an origin that ctx trusts (findings.judged).
+    A user from the image is left to the image decision.
     """
-    unknown = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-    found = judged(unknown, origin, ctx.trust)
-    ctx = ctx.with_mounts(service_reaches_host(service, volumes))
+    keys = service.definition
+    found = []
+    for key in keys:
+        unknown = unknown_keys({key: keys[key]}, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
+        found += judged(unknown, service.origin_of(key), ctx.trust)
     for key, check in SERVICE_CHECKS.items():
-        key_origin = origins.get(key, origin)
-        if key == "user" and key_origin is Origin.IMAGE:
+        origin = service.origin_of(key)
+        if key == "user" and origin is Origin.IMAGE:
             continue
-        if key in REQUIRED_SERVICE_KEYS or key in service:
-            found += judged(check(service.get(key), ctx), key_origin, ctx.trust)
+        if key in REQUIRED_SERVICE_KEYS or key in keys:
+            found += judged(check(keys.get(key), ctx, service), origin, ctx.trust)
     return found
 
 
-def check_container(container: Container, ctx: Context, user_origin: Origin) -> list[Finding]:
+def check_container(container: Container, ctx: Context) -> list[Finding]:
     """Checks what a container asks for as check_service would check a service that asked for the same
-    (Container.as_service); returns what it finds.
+    (Container.definition); returns what it finds.
 
     Its keys come from the command line that created it, judged with the current directory as the
-    project's (ctx). user_origin: where its user comes from, the command line or the image.
+    project's (ctx); its user from where container.user_origin says.
     """
-    service = container.as_service(with_user=user_origin is not Origin.IMAGE)
-    return check_service(service, ctx, Origin.COMMAND_LINE, {"user": user_origin})
+    return check_service(container, ctx)
 
 
 # --- users and privileges -------------------------------------------------
@@ -280,11 +278,12 @@ def _not_a_name(kind: str, value: str) -> str:
             "never in the image)")
 
 
-def check_user(value: Any, ctx: Context) -> list[str]:
-    """Checks a `user:` as hardening left it; returns the problems, empty for an acceptable `uid:gid`.
+def check_user(value: Any, ctx: Context, service: Subject) -> list[str]:
+    """Checks a `user:` of service as hardening left it; returns the problems, empty for an acceptable
+    `uid:gid`.
 
     Refused are a missing user, a name (hardening resolved those that exist), a missing group, and ids
-    the id rules refuse (ctx.ids, with ctx.mounts and the configured user allowed).
+    the id rules refuse (ctx.ids, with whether service reaches host files and the configured user allowed).
     """
     if not value:
         return ["user is not set, the image default may be root"]
@@ -298,7 +297,7 @@ def check_user(value: Any, ctx: Context) -> list[str]:
     if gid is None:
         return [_not_a_name("group", group)]
     return [f"user {value!r}: {p}"
-            for p in ctx.ids.problems(uid, gid, mounts=ctx.mounts, extra=_configured_ids(ctx))]
+            for p in ctx.ids.problems(uid, gid, mounts=service.reaches_host, extra=_configured_ids(ctx))]
 
 
 SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option instead"
@@ -314,7 +313,7 @@ def _configured_ids(ctx: Context) -> tuple[tuple[int, int], ...]:
     return (ctx.configured_user,) if ctx.configured_user else ()
 
 
-def check_security_opt(value: Any, ctx: Context) -> list[str]:
+def check_security_opt(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
 
     Allowed are no-new-privileges and the security_opts of ctx.
@@ -333,7 +332,7 @@ def has_no_new_privileges(options: Iterable[Any] | None) -> bool:
     return any(str(o) in NO_NEW_PRIVILEGES for o in options or [])
 
 
-def check_cap_drop(value: Any, ctx: Context) -> list[str]:
+def check_cap_drop(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks cap_drop; returns a problem unless it drops ALL."""
     return [] if drops_all(value) else [f"cap_drop must include {CAP_DROP}"]
 
@@ -345,12 +344,12 @@ def drops_all(cap_drop: Iterable[Any] | None) -> bool:
 
 def _forbidden(key: str) -> Check:
     """Returns a check that refuses key whenever it carries a value."""
-    return lambda value, ctx: [f"{key} is not allowed"] if value else []
+    return lambda value, ctx, service: [f"{key} is not allowed"] if value else []
 
 
 def _check_namespace(key: str) -> Check:
     """Returns a check for the namespace key that refuses the host's namespace and other containers'."""
-    def check(value: Any, ctx: Context) -> list[str]:
+    def check(value: Any, ctx: Context, service: Subject) -> list[str]:
         text = str(value)
         if text == "host" or text.startswith("container:"):
             return [f"{key}: {text} shares a namespace outside the project"]
@@ -358,14 +357,14 @@ def _check_namespace(key: str) -> Check:
     return check
 
 
-def _check_runtime(value: Any, ctx: Context) -> list[str]:
+def _check_runtime(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks runtime; returns a problem unless it is runc or unset."""
     return [] if value in (None, "", "runc") else [f"runtime {value!r} is not allowed"]
 
 
 # --- mounts and files -----------------------------------------------------
 
-def _check_volumes_from(value: Any, ctx: Context) -> list[str]:
+def _check_volumes_from(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks volumes_from; returns a problem for each source that is a container, not a service."""
     return [
         f"volumes_from {source!r} reaches a container outside the project"
@@ -374,7 +373,7 @@ def _check_volumes_from(value: Any, ctx: Context) -> list[str]:
     ]
 
 
-def _check_mounts(value: Any, ctx: Context) -> list[str]:
+def _check_mounts(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks a service's volumes; returns their unknown keys and types, and bind mounts outside the
     mount roots of ctx.
     """
@@ -392,7 +391,7 @@ def _check_mounts(value: Any, ctx: Context) -> list[str]:
     return problems
 
 
-def _check_build(value: Any, ctx: Context) -> list[str]:
+def _check_build(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks a service's build; returns unknown keys, sources outside the project, and escapes from it."""
     build = {"context": value} if isinstance(value, str) else value or {}
     # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
@@ -445,7 +444,7 @@ def _check_host_files(key: str) -> Check:
 
     These keys only show up in the config when it is loaded without env resolution.
     """
-    def check(value: Any, ctx: Context) -> list[str]:
+    def check(value: Any, ctx: Context, service: Subject) -> list[str]:
         problems = []
         for entry in [value] if isinstance(value, (str, dict)) else value or []:
             path = entry.get("path") if isinstance(entry, dict) else entry
@@ -457,7 +456,7 @@ def _check_host_files(key: str) -> Check:
 
 # --- other structured keys ------------------------------------------------
 
-def _check_develop(value: Any, ctx: Context) -> list[str]:
+def _check_develop(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks develop; returns unknown keys, and watch rules with bad actions or paths outside the project."""
     value = value or {}
     problems = unknown_keys(value, DEVELOP_KEYS, "develop key")
@@ -470,7 +469,7 @@ def _check_develop(value: Any, ctx: Context) -> list[str]:
     return problems
 
 
-def _check_deploy(value: Any, ctx: Context) -> list[str]:
+def _check_deploy(value: Any, ctx: Context, service: Subject) -> list[str]:
     """Checks deploy; returns unknown keys, and reservations of host devices."""
     value = value or {}
     problems = unknown_keys(value, DEPLOY_KEYS, "deploy key")
@@ -487,14 +486,14 @@ def _check_hooks(key: str) -> Check:
 
     Those are hooks with unknown keys, privileged ones, and ones whose user check_user refuses.
     """
-    def check(value: Any, ctx: Context) -> list[str]:
+    def check(value: Any, ctx: Context, service: Subject) -> list[str]:
         problems = []
         for hook in value or []:
             problems += unknown_keys(hook, HOOK_KEYS, f"{key} key")
             if hook.get("privileged"):
                 problems.append(f"{key} privileged is not allowed")
             if hook.get("user") is not None:  # without one, the hook runs as the service's checked user
-                problems += check_user(hook["user"], ctx)
+                problems += check_user(hook["user"], ctx, service)
         return problems
     return check
 

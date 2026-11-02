@@ -1,4 +1,6 @@
+from dockscreen.model.location import Location
 from dockscreen.model.origin import Origin
+from dockscreen.model.project import Project
 from dockscreen.screen import substitutions
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import messages
@@ -45,3 +47,13 @@ def test_describe_gives_a_line_each_then_one_per_group_naming_its_services_once(
     ]
     assert substitutions.grouped(found) == [
         messages.routine_change("services web, db: pinned", "nothing to do")]
+
+
+def test_applied_makes_them_in_a_projects_definition_with_their_origins():
+    found = Project({"services": {"web": {}}}, Location("/p"))
+
+    changed = substitutions.applied(found, [Substitution("web", "user", "1:1", origin=Origin.CONFIG)])
+
+    assert changed.definition == {"services": {"web": {"user": "1:1"}}}
+    assert changed.service("web").origin_of("user") is Origin.CONFIG
+    assert found.definition == {"services": {"web": {}}}

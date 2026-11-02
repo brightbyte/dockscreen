@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from typing import Any, NamedTuple
 
 from dockscreen.model.origin import Origin
+from dockscreen.model.project import Project
 from dockscreen.util import messages
 
 
@@ -45,6 +46,14 @@ def apply(config: dict[str, Any], substitutions: Iterable[Substitution]) -> dict
     for s in substitutions:
         changed["services"][s.service][s.key] = copy.deepcopy(s.value)
     return changed
+
+
+def applied(project: Project, substitutions: Iterable[Substitution]) -> Project:
+    """Returns project with the substitutions made in its definition (apply), and the origins they name
+    (origins).
+    """
+    found = list(substitutions)
+    return project.with_definition(apply(project.definition, found)).with_origins(origins(found))
 
 
 def origins(substitutions: Iterable[Substitution]) -> dict[str, dict[str, Origin]]:

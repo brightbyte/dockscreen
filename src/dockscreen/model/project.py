@@ -1,0 +1,90 @@
+"""This module defines a compose project as screening sees it, and the services in it.
+
+A project's definition is what `docker compose config` resolves from all its files: every compose file,
+`.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
+runs, so it is what is judged; the files themselves are not. The project also has what its definition
+does not say: where it is, which daemon its containers would run on, and where the values that
+dockscreen changed in its definition come from.
+"""
+
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, NamedTuple, Self
+
+from dockscreen.model import mounts
+from dockscreen.model.location import Location
+from dockscreen.model.origin import Origin
+
+
+class Project(NamedTuple):
+    """Compose project: its definition, where it is, whether its daemon may not be this host's (remote; None
+    if that was not looked at), and where the values in its definition come from where that is not the
+    project (origins, by service and key).
+    """
+    definition: dict[str, Any]
+    location: Location
+    remote: bool | None = None
+    origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
+
+    @property
+    def name(self) -> str | None:
+        """Returns the project's name, which scopes its volumes, networks and containers; None if unset."""
+        return self.definition.get("name")
+
+    @property
+    def directory(self) -> str:
+        """Returns the project directory, which its relative paths and bind mounts are judged against."""
+        return self.location.directory
+
+    @property
+    def volumes(self) -> dict[str, Any]:
+        """Returns the top-level volumes, by name."""
+        return self.definition.get("volumes") or {}
+
+    @property
+    def services(self) -> list["Service"]:
+        """Returns its services, in the order of the definition."""
+        return [Service(self, name) for name in self.definition.get("services") or {}]
+
+    def service(self, name: str) -> "Service":
+        """Returns the service called name."""
+        return Service(self, name)
+
+    def with_remote(self, remote: bool) -> Self:
+        """Returns this project with remote telling whether its daemon may not be this host's."""
+        return self._replace(remote=remote)
+
+    def with_definition(self, definition: dict[str, Any]) -> Self:
+        """Returns this project with definition as its definition."""
+        return self._replace(definition=definition)
+
+    def with_origins(self, origins: Mapping[str, Mapping[str, Origin]]) -> Self:
+        """Returns this project with origins added to where the values of its services' keys come from; a
+        key in both takes its origin from origins.
+        """
+        merged = {name: dict(keys) for name, keys in self.origins.items()}
+        for name, keys in origins.items():
+            merged.setdefault(name, {}).update(keys)
+        return self._replace(origins=MappingProxyType({n: MappingProxyType(k) for n, k in merged.items()}))
+
+
+class Service(NamedTuple):
+    """Service of a compose project, called name: its keys as the project's definition gives them, and what
+    follows from them.
+    """
+    project: Project
+    name: str
+
+    @property
+    def definition(self) -> dict[str, Any]:
+        """Returns its keys, as the project's definition gives them."""
+        return (self.project.definition.get("services") or {}).get(self.name) or {}
+
+    @property
+    def reaches_host(self) -> bool:
+        """Tells whether it reaches host files (mounts.service_reaches_host)."""
+        return mounts.service_reaches_host(self.definition, self.project.volumes)
+
+    def origin_of(self, key: str) -> Origin:
+        """Returns where the value of key comes from: the project, unless dockscreen set it."""
+        return (self.project.origins.get(self.name) or {}).get(key, Origin.PROJECT)
