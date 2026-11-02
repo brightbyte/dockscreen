@@ -5,10 +5,11 @@ import pytest
 
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 # Each layer is a package and may import its own and the ones before it: the shared vocabulary (util),
-# then what describes the host (host), then the checks (screen), then reading the command line (cli), then
+# then the concepts that screening judges (model), then what describes the host (host), then the checks
+# (screen), then reading the command line (cli), then
 # what compose commands share (compose), then the commands. The modules at the top are the dispatchers
 # that choose a command.
-LAYERS = ("util", "host", "screen", "cli", "compose", "commands", "dispatch")
+LAYERS = ("util", "model", "host", "screen", "cli", "compose", "commands", "dispatch")
 
 
 def module_name(path):
@@ -48,6 +49,6 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
             assert layer(name) != "commands" or name in own, f"{module} imports {name}"
 
 
-@pytest.mark.parametrize("package", ["cli", "commands", "compose", "host", "screen", "util"])
+@pytest.mark.parametrize("package", ["cli", "commands", "compose", "host", "model", "screen", "util"])
 def test_packages_import_nothing_themselves(package):
     assert (SOURCE / package / "__init__.py").read_text() == ""

@@ -7,7 +7,9 @@ from fakes import FakeImages, make_image_ctx, make_runtime, rules
 from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.model.origin import Origin
 from dockscreen.screen import imagedecision, policy
+from dockscreen.screen.findings import Severity
 from dockscreen.screen.imagedecision import Kind
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
@@ -199,12 +201,13 @@ def test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own(
     config = project(web={}, db={}, user_set={"user": "7:7"})
     images = FakeImages(users={"web:1": "", "db:1": "app", "user_set:1": ""})
 
-    _, final, vetted = decided(config, images, active=("web", "db", "user_set"))
+    _, final, origins = decided(config, images, active=("web", "db", "user_set"))
 
     services = final["services"]
     assert services["web"]["user"] == NOBODY
-    assert services["db"]["user"] == "100000:100001" and vetted == {"db"}  # pinned as numbers
+    assert services["db"]["user"] == "100000:100001"  # pinned as numbers
     assert services["user_set"]["user"] == "7:7"
+    assert origins == {"web": Origin.CONFIG, "db": Origin.IMAGE}  # the project's own user is not in it
 
 
 def test_looked_at_images_are_pinned_in_the_generated_config_only():
@@ -222,27 +225,28 @@ def test_looked_at_images_are_pinned_in_the_generated_config_only():
 
 def test_a_service_that_is_not_started_runs_as_the_default_user_in_case_it_is():
     config = project(web={}, debug={})
-    _, final, vetted = decided(config, FakeImages(users={"web:1": "app"}), active=("web",))
+    _, final, origins = decided(config, FakeImages(users={"web:1": "app"}), active=("web",))
     assert final["services"]["debug"]["user"] == NOBODY
     assert "pull_policy" not in final["services"]["debug"]
-    assert vetted == {"web"}
+    assert origins == {"debug": Origin.CONFIG, "web": Origin.IMAGE}
 
 
-def test_the_final_config_passes_the_policy_with_exactly_the_vetted_services():
+def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from():
     config = project(web={}, db={}, debug={})
     for name in config["services"]:
         config["services"][name].update(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
-    _, final, vetted = decided(config, FakeImages(users={"web:1": "", "db:1": "app"}),
-                               active=("web", "db"))
+    _, final, origins = decided(config, FakeImages(users={"web:1": "", "db:1": "app"}),
+                                active=("web", "db"))
     ctx = policy.Context("/p", rules())
 
-    assert policy.check_config(final, ctx.with_vetted(vetted)) == []
-    # the vetting is what lets a configured user pass that the rules alone would refuse
+    assert policy.check_config(final, ctx.with_user_origins(origins)) == []
+    # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
-    _, final, vetted = decided(config, images, active=("db",), settings=settings)
-    assert final["services"]["db"]["user"] == "1000:1000" and "db" in vetted
-    assert policy.check_config(final, ctx.with_vetted(vetted)) == []
+    _, final, origins = decided(config, images, active=("db",), settings=settings)
+    assert final["services"]["db"]["user"] == "1000:1000" and origins["db"] is Origin.CONFIG
+    found = policy.check_config(final, ctx.with_user_origins(origins))
+    assert found and {f.severity for f in found} == {Severity.NOTABLE}
     assert [p for p in policy.check_config(final, ctx) if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
         "service db: user '1000:1000': gid 1000 exists on this host (local group daniel)"]
@@ -324,10 +328,10 @@ def mariadb_project(**fields):
 
 def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     images = FakeImages(users={"mariadb:11": ""}, digests={"mariadb:11": ["mariadb@sha256:abc"]})
-    prepared, final, vetted = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
+    prepared, final, origins = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
 
     assert prepared.decisions["db"].assessment.kind is Kind.CONFIGURED
-    assert final["services"]["db"]["user"] == "999:999" and vetted == {"db"}
+    assert final["services"]["db"]["user"] == "999:999" and origins == {"db": Origin.CONFIG}
     assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
     assert prepared.describe() == [

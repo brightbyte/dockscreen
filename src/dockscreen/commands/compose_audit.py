@@ -61,6 +61,6 @@ def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Report,
         prepared = project.prepare(command(hardened), hardened)
     problems = prepared.problems
     if not problems:  # what `up` checks once more before it runs: image sections need proof now
-        final, vetted = prepared.finalize()
-        problems = policy.check_config(final, project.final_ctx(prepared, vetted))
+        final, user_origins = prepared.finalize()
+        problems = policy.check_config(final, project.final_ctx(prepared, user_origins))
     return Report.of(problems), prepared.describe()

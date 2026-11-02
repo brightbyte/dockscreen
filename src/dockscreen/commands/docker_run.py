@@ -24,6 +24,7 @@ from dockscreen.cli.runargs import DEFAULTS, defaults_notice
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import imagedecision, imageuser, policy, runpolicy, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import (
@@ -168,10 +169,20 @@ def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str
         info = ctx.docker.inspect_container(container)
         problems = _verify_split(info, parsed)  # a misread command line may hide a --user: assess nothing
         assessment = Assessment(Kind.REFUSED, problems) if problems else assess(
-            ctx, container, info, explicit=parsed.user_given or bool(extra), reference=parsed.image)
+            ctx, container, info, _user_origin(parsed, extra), reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment(Kind.FAILED, [messages.with_output(messages.reason_of(e))])
     return code, Created(container, info, assessment)
+
+
+def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
+    """Returns where the user of the container comes from: dockscreen when it adds options of its own
+    (extra, which re-create it with the user it decided), else the command line if it gives one, else the
+    image.
+    """
+    if extra:
+        return Origin.DOCKSCREEN
+    return Origin.COMMAND_LINE if parsed.user_given else Origin.IMAGE
 
 
 def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[messages.Reason]:
@@ -228,27 +239,20 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     try:
         settings, _ = ctx.for_image(assessment.section)
         policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
-        found = runpolicy.findings(info, parsed.user_given, policy_ctx) if info else []
+        policy_ctx = policy_ctx.with_trust(STRICT if strict else TRUSTED)
+        found = runpolicy.findings(info, _user_origin(parsed, []), policy_ctx) if info else []
     finally:
         ctx.docker.remove(container)
 
-    outcome = _audit_report(ctx, assessment, found, strict, parsed.image)
+    refused = imagedecision.explain(ctx, assessment, parsed.image) if assessment.refused else []
+    outcome = Report.of([*refused, *found])
     if brief:
         messages.out(verdict.brief(outcome), indent=False)
     else:
         _report_assessment(ctx, parsed.image, assessment)
-        _report_findings(found, strict)
+        _report_findings(found)
         messages.notice(verdict.line(outcome.verdict))
     return int(outcome.verdict)
-
-
-def _audit_report(ctx: imagedecision.Context, assessment: Assessment, found: list[Finding], strict: bool,
-                  image: str) -> Report:
-    """Returns the report of an audit: the assessment's findings, then what the command line asks for, which
-    is refused only if strict.
-    """
-    refused = imagedecision.explain(ctx, assessment, image) if assessment.refused else []
-    return Report.of([*refused, *(found if strict else [])])
 
 
 def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Assessment) -> None:
@@ -272,12 +276,14 @@ def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Asses
     messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
 
 
-def _report_findings(found: list[Finding], strict: bool) -> None:
-    """Prints what the command line asks for that a project or an image may not; as failures if strict."""
-    dot = messages.BAD if strict else messages.WARN
+def _report_findings(found: list[Finding]) -> None:
+    """Prints what the command line asks for that a project or an image may not: as refusals, or as worth a
+    look where the command line is trusted.
+    """
     for finding in found:
+        dot = messages.BAD if finding.fatal else messages.WARN
         messages.out(messages.Marked(dot, f"command line: {finding}"))
-    if found and not strict:
+    if any(not finding.fatal for finding in found):
         messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
 

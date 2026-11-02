@@ -11,8 +11,9 @@ A user the command line chooses is judged by the id rules too, as if a project h
 
 from typing import Any
 
+from dockscreen.model.origin import Origin
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Finding, refused
+from dockscreen.screen.findings import Finding
 
 # Inspected HostConfig fields that hold what the compose key of the same meaning holds.
 FIELDS = {
@@ -35,19 +36,19 @@ FIELDS = {
 }
 
 
-def findings(info: dict[str, Any], explicit_user: bool, ctx: policy.Context) -> list[Finding]:
-    """Returns, as refusals, what the policy would refuse in a project that asked for what this container
-    has.
+def findings(info: dict[str, Any], user_origin: Origin, ctx: policy.Context) -> list[Finding]:
+    """Returns what the policy would refuse in a project that asked for what this container has: refused,
+    or notable if ctx trusts the command line (findings.judged).
 
-    info: the container as inspected; explicit_user: the command line chose the user;
-    ctx: the policy.Context, with the current directory as the project directory.
+    info: the container as inspected; user_origin: where its user comes from, the command line or the
+    image; ctx: the policy.Context, with the current directory as the project directory.
     """
-    return refused(policy.check_service(_service_of(info, explicit_user), ctx, vetted=not explicit_user))
+    return policy.check_service(_service_of(info, user_origin), ctx, Origin.COMMAND_LINE, user_origin)
 
 
-def _service_of(info: dict[str, Any], explicit_user: bool) -> dict[str, Any]:
-    """Returns the compose service keys that the inspected container corresponds to; with its user if
-    explicit_user, since only a user the command line chose is judged.
+def _service_of(info: dict[str, Any], user_origin: Origin) -> dict[str, Any]:
+    """Returns the compose service keys that the inspected container corresponds to; with its user unless
+    it comes from the image, which the image decision judges.
     """
     host = info.get("HostConfig") or {}
     service = {key: host[field] for field, key in FIELDS.items() if host.get(field)}
@@ -57,7 +58,7 @@ def _service_of(info: dict[str, Any], explicit_user: bool) -> dict[str, Any]:
         service["volumes_from"] = [f"container:{source}" for source in host["VolumesFrom"]]
     if volumes := _mounts(info):
         service["volumes"] = volumes
-    if explicit_user:
+    if user_origin is not Origin.IMAGE:
         service["user"] = info["Config"].get("User") or ""
     return service
 

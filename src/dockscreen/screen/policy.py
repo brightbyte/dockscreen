@@ -26,11 +26,13 @@ here touches docker, only the filesystem for realpath resolution.
 
 import os
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config as configuration
+from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.screen import idrules
-from dockscreen.screen.findings import Finding, refused
+from dockscreen.screen.findings import Finding, about, judged, refused
 from dockscreen.util import ids
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
@@ -112,9 +114,11 @@ class Context(NamedTuple):
     project_dir: str
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
-    # Services whose unset `user` is acceptable because their image was looked at and would
-    # run as an acceptable user (see serviceusers). Only dockscreen sets this, never the project.
-    vetted: frozenset = frozenset()
+    # Where each service's user comes from, if not from the project (see user_origin). Only dockscreen
+    # sets this, never the project.
+    user_origins: Mapping[str, Origin] = MappingProxyType({})
+    # Whose values are taken as given: what the policy refuses in them is pointed out instead.
+    trust: frozenset[Origin] = TRUSTED
     # Whether the service being checked reaches host files (has_host_mounts); set per service.
     mounts: bool = False
     # The caller's config file, named in hints on what it can allow; no hints without it.
@@ -136,9 +140,22 @@ class Context(NamedTuple):
         """Returns the context to check the service called name with: scope's for it, else this one."""
         return self.scope(name, service) if self.scope else self
 
-    def with_vetted(self, vetted: frozenset) -> Self:
-        """Returns this context with vetted as the services whose unset user is acceptable."""
-        return self._replace(vetted=vetted)
+    def user_origin(self, name: str) -> Origin:
+        """Returns where the user of the service called name comes from: the project unless user_origins
+        says otherwise.
+
+        A user from the image, set or still to be decided, is checked by the image decision
+        (imagedecision.assess), not by check_user.
+        """
+        return self.user_origins.get(name, Origin.PROJECT)
+
+    def with_user_origins(self, user_origins: Mapping[str, Origin]) -> Self:
+        """Returns this context with user_origins as where the services' users come from."""
+        return self._replace(user_origins=MappingProxyType(dict(user_origins)))
+
+    def with_trust(self, trust: frozenset[Origin]) -> Self:
+        """Returns this context with trust as the origins whose values are taken as given."""
+        return self._replace(trust=trust)
 
     def with_mounts(self, mounts: bool) -> Self:
         """Returns this context for a service that reaches host files if mounts."""
@@ -176,8 +193,9 @@ def check_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
         problems += refused(["config has no project name"])
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
-        found = check_service(service or {}, service_ctx, name in ctx.vetted, config.get("volumes"))
-        problems += refused(found, f"service {name}")
+        found = check_service(service or {}, service_ctx, Origin.PROJECT, ctx.user_origin(name),
+                              config.get("volumes"))
+        problems += about(found, f"service {name}")
     for key, volume in (config.get("volumes") or {}).items():
         problems += refused(_check_volume(key, volume, project, ctx), f"volume {key}")
     for key, network in (config.get("networks") or {}).items():
@@ -218,21 +236,25 @@ def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str
     ]
 
 
-def check_service(service: dict[str, Any], ctx: Context, vetted: bool = False,
-                  volumes: dict[str, Any] | None = None) -> list[str]:
-    """Checks one service against the policy; returns the problems, empty if there are none.
+def check_service(service: dict[str, Any], ctx: Context, origin: Origin,
+                  user_origin: Origin | None = None, volumes: dict[str, Any] | None = None) -> list[Finding]:
+    """Checks one service against the policy; returns what it finds, empty if there is nothing.
 
-    vetted: its user was pinned from a checked image and is not checked again.
-    volumes: the config's top-level volumes, to tell named volumes from host paths.
+    A problem is refused, or notable if the value comes from an origin that ctx trusts (findings.judged).
+    origin: where the service's keys come from; user_origin: where its user comes from, if not from there.
+    A user from the image is left to the image decision. volumes: the config's top-level volumes, to tell
+    named volumes from host paths.
     """
-    problems = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
+    user_origin = user_origin or origin
+    unknown = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
+    found = judged(unknown, origin, ctx.trust)
     ctx = ctx.with_mounts(has_host_mounts(service, volumes))
     for key, check in SERVICE_CHECKS.items():
-        if key == "user" and vetted:
+        if key == "user" and user_origin is Origin.IMAGE:
             continue
         if key in REQUIRED_SERVICE_KEYS or key in service:
-            problems += check(service.get(key), ctx)
-    return problems
+            found += judged(check(service.get(key), ctx), user_origin if key == "user" else origin, ctx.trust)
+    return found
 
 
 # --- users and privileges -------------------------------------------------

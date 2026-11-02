@@ -23,6 +23,7 @@ from typing import Any
 from dockscreen.compose import composeproject, inspect, serviceusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy
 from dockscreen.screen.findings import Finding
 from dockscreen.util import ids, messages
@@ -63,7 +64,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
     resolved = _as_compose_reads(fixed, static)
-    remaining = policy.check_config(resolved, static)
+    remaining = [f for f in policy.check_config(resolved, static) if f.fatal]
     notes = [hardening.defaults_note()]
     if remaining:
         messages.notice("the images were not looked at because of the problems below: "
@@ -110,8 +111,8 @@ def _fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
     for name, service in fixed.get("services", {}).items():
         service_ctx = ctx.for_service(name, service).with_mounts(
             policy.has_host_mounts(service, config.get("volumes")))
-        vetted = name in ctx.vetted and not service.get("user")
-        if not vetted and policy.check_user(service.get("user"), service_ctx):
+        from_image = ctx.user_origin(name) is Origin.IMAGE and not service.get("user")
+        if not from_image and policy.check_user(service.get("user"), service_ctx):
             service["user"] = _USER_TEMPLATE
         if policy.check_security_opt(service.get("security_opt"), service_ctx):
             service["security_opt"] = [policy.SECURITY_OPT]

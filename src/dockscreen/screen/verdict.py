@@ -2,7 +2,7 @@
 what the verdicts mean).
 """
 
-from dockscreen.screen.findings import Report, Verdict
+from dockscreen.screen.findings import Report, Severity, Verdict
 from dockscreen.screen.imagedecision import Assessment, Kind
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
@@ -41,12 +41,17 @@ def brief(found: Report) -> messages.Marked:
 def report(found: Report, brief_mode: bool = False) -> int:
     """Prints the verdict of what was found and returns it as the exit status.
 
-    brief_mode: print one line on stdout (brief); otherwise each reason and the closing line go to stderr.
+    brief_mode: print one line on stdout (brief); otherwise each finding that does not stop the command,
+    each reason and the closing line go to stderr.
     """
     verdict = found.verdict
     if brief_mode:
         messages.out(brief(found), indent=False)
         return int(verdict)
+    for finding in found.findings:
+        if not finding.fatal:
+            mark = messages.WARN if finding.severity is Severity.NOTABLE else messages.ROUTINE
+            messages.notice(messages.Marked(mark, finding, finding.help, finding.output))
     for reason in found.reasons:
         text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
         messages.notice(messages.Marked(messages.BAD, text, reason.help, reason.output))

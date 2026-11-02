@@ -1,6 +1,8 @@
 from fakes import rules
 
+from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import policy, runpolicy
+from dockscreen.screen.findings import Severity
 
 HARDENED = {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"]}
 
@@ -9,8 +11,9 @@ def container(user="", **host):
     return {"Config": {"User": user}, "HostConfig": {**HARDENED, **host}}
 
 
-def findings(info, explicit_user=False):
-    return runpolicy.findings(info, explicit_user, policy.Context("/work", rules()))
+def findings(info, user_origin=Origin.IMAGE, trust=None):
+    ctx = policy.Context("/work", rules())
+    return runpolicy.findings(info, user_origin, ctx.with_trust(trust) if trust else ctx)
 
 
 def test_a_hardened_container_with_nothing_else_has_no_findings():
@@ -35,5 +38,12 @@ def test_volumes_from_and_devices_are_found():
 
 def test_a_user_is_judged_only_when_the_command_line_chose_it():
     assert findings(container(user="0:0")) == []  # the image's: run decides that one, not this
-    assert findings(container(user="0:0"), explicit_user=True) == ["user '0:0': uid 0 is root",
-                                                                   "user '0:0': gid 0 is root"]
+    assert findings(container(user="0:0"), Origin.COMMAND_LINE) == ["user '0:0': uid 0 is root",
+                                                                    "user '0:0': gid 0 is root"]
+
+
+def test_what_the_command_line_asks_for_is_refused_only_where_it_is_not_trusted():
+    info = container(user="0:0", Privileged=True)
+
+    assert {f.severity for f in findings(info, Origin.COMMAND_LINE)} == {Severity.NOTABLE}
+    assert {f.severity for f in findings(info, Origin.COMMAND_LINE, STRICT)} == {Severity.REFUSED}

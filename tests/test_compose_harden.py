@@ -7,6 +7,7 @@ import pytest
 from fakes import ME, FakeImages, compose_project, rules
 
 from dockscreen.commands import compose_harden
+from dockscreen.model.origin import Origin
 from dockscreen.screen import policy
 
 UID, GID = ME
@@ -207,7 +208,7 @@ def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path)
 
 def test_fix_config_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
     config = project(web={}, db={})
-    ctx = policy.Context("/p", rules(), vetted=frozenset({"web"}))
+    ctx = policy.Context("/p", rules()).with_user_origins({"web": Origin.IMAGE})
     fixed = compose_harden._fix_config(config, ctx)
     assert "user" not in fixed["services"]["web"]
     assert fixed["services"]["db"]["user"] == compose_harden._USER_TEMPLATE

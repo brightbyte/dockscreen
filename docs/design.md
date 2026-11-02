@@ -149,12 +149,13 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `findings`, `verdict`.
-4. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
-5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
-6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
-7. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`.
+3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
+4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `findings`, `verdict`.
+5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
+6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
+7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
+8. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
 
 The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `composeargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
@@ -164,7 +165,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
 1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it. A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
 2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
-3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their images decide.
+3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their user comes from the image (`origin.Origin.IMAGE`), which decides it.
    The project's name is checked too (`inspect.name_conflicts`). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
 4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
@@ -175,7 +176,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
-   - the policy runs again on the result.
+   - the policy runs again on the result, with each user it set judged by where it came from (`policy.Context.user_origins`): an image's own user was checked when it was decided, and a user from the config file (configured or default) is trusted, so what the rules say about it is pointed out, not refused.
 6. Before anything is pulled or built (`composeproject.Project.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
@@ -186,6 +187,10 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
 `audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+
+### Origins and trust (`origin`, `findings`)
+
+Every value the policy judges has an origin (`Origin`): the command line, the config file, the project, the image, or dockscreen itself. What the policy finds in a value from a trusted origin (`origin.TRUSTED`: the command line, the config file and dockscreen) is a notable finding, not a refusal (`findings.judged`); `--strict-screen` drops the command line from the trusted origins. The origins are as coarse as what docker shows: everything in `compose config` comes from the project, and everything in a container that `docker run` created comes from the command line, except a user equal to its image's.
 
 ### The policy (`policy.py`)
 

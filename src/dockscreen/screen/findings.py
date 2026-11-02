@@ -13,6 +13,7 @@ import enum
 from collections.abc import Iterable
 from typing import NamedTuple, Self
 
+from dockscreen.model.origin import Origin
 from dockscreen.util import messages
 
 
@@ -47,17 +48,27 @@ class Finding(messages.Reason):
         return finding
 
     @classmethod
-    def of(cls, reason: object, severity: Severity = Severity.REFUSED, subject: str | None = None) -> Self:
+    def of(cls, reason: object, severity: Severity | None = None, subject: str | None = None) -> Self:
         """Returns reason as a finding of severity about subject, keeping its help and output.
 
         reason: a text, a messages.Reason, or a Finding, whose own subject becomes part of the text.
+        severity: if None, a Finding's own, else REFUSED.
         """
+        if severity is None:
+            severity = reason.severity if isinstance(reason, Finding) else Severity.REFUSED
         return cls(str(reason), severity, subject, messages.help_of(reason), messages.output_of(reason))
 
     @property
     def fatal(self) -> bool:
         """Tells whether this finding stops the command."""
         return self.severity.fatal
+
+
+def about(found: Iterable[Finding], subject: str) -> list[Finding]:
+    """Returns each finding of found as one about subject, which its own subject becomes part of the text of,
+    with its severity.
+    """
+    return [Finding.of(f, subject=subject) for f in found]
 
 
 def refused(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
@@ -68,6 +79,15 @@ def refused(reasons: Iterable[object], subject: str | None = None) -> list[Findi
 def failed(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
     """Returns each of reasons as a failure to look (Finding.of), about subject if given."""
     return [Finding.of(r, Severity.FAILED, subject) for r in reasons]
+
+
+def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], subject: str | None = None
+           ) -> list[Finding]:
+    """Returns each of reasons, what the policy refuses in a value from origin, as a refusal; or as a
+    notable finding if origin is in trust, whose values are taken as given.
+    """
+    severity = Severity.NOTABLE if origin in trust else Severity.REFUSED
+    return [Finding.of(r, severity, subject) for r in reasons]
 
 
 class Verdict(enum.IntEnum):

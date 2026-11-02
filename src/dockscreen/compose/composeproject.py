@@ -25,6 +25,7 @@ from dockscreen.compose import inspect, serviceusers
 from dockscreen.host import hostusers, shellenv
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, hardening, imagedecision, policy, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.util import commandline, messages
@@ -41,7 +42,7 @@ class Project(NamedTuple):
     directory: str
     hardened: dict             # the resolved config with hardening applied
     additions: list            # what hardening added (hardening.Addition)
-    ctx: policy.Context        # with nothing vetted yet
+    ctx: policy.Context        # with every user from the project
     image_ctx: imagedecision.Context  # to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
     docker_binary: str         # the real docker, to run `docker compose` with
@@ -50,7 +51,8 @@ class Project(NamedTuple):
 
     def static_ctx(self) -> policy.Context:
         """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
-        return self.ctx.with_vetted(serviceusers.unset_user_services(self.hardened))
+        return self.ctx.with_user_origins(dict.fromkeys(serviceusers.unset_user_services(self.hardened),
+                                                        Origin.IMAGE))
 
     def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
@@ -62,12 +64,13 @@ class Project(NamedTuple):
                                               self.image_ctx.docker)
         return problems
 
-    def final_ctx(self, prepared: serviceusers.Prepared, vetted: frozenset[str]) -> policy.Context:
-        """Returns ctx for the config that will run, with vetted as the services pinned to an accepted
-        image, and image sections only where prepared proved them.
+    def final_ctx(self, prepared: serviceusers.Prepared, user_origins: dict[str, Origin]) -> policy.Context:
+        """Returns ctx for the config that will run, with user_origins as where the users that dockscreen
+        set come from (Prepared.finalize), and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
-        return inspect.context(self.directory, self.runtime, self.allow_me, verified).with_vetted(vetted)
+        ctx = inspect.context(self.directory, self.runtime, self.allow_me, verified)
+        return ctx.with_user_origins(user_origins)
 
     def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
@@ -135,15 +138,15 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         if prepared.problems:
             verdict.screened(Report.of(prepared.problems))
             return 1
-        final, vetted = prepared.finalize()
-        problems = policy.check_config(final, project.final_ctx(prepared, vetted))  # what will run
-        if problems:
-            verdict.screened(Report.of(problems))
+        final, user_origins = prepared.finalize()
+        checked = Report.of(policy.check_config(final, project.final_ctx(prepared, user_origins)))
+        if not checked.passed:  # what will run
+            verdict.screened(checked)
             return 1
         for line in [*lines, *prepared.notices()]:
             if line:
                 messages.notice(line)
-        verdict.screened(Report())
+        verdict.screened(checked)
         return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
 
 

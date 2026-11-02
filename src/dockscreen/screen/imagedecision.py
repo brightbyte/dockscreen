@@ -24,6 +24,7 @@ from typing import Any, NamedTuple, Self
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.origin import Origin
 from dockscreen.screen import idrules, imageuser
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import ids, images, messages
@@ -78,7 +79,7 @@ class Context(NamedTuple):
 
 class Kind(enum.StrEnum):
     """Category of decision about the user a container runs as."""
-    EXPLICIT = "explicit"      # the command line chose the user: trusted, not checked
+    EXPLICIT = "explicit"      # the command line or dockscreen chose the user, not the image
     CONFIGURED = "configured"  # the config file names the user, for this image, project or every one
     OK = "ok"                  # the image's own user, which the id rules accept
     FALLBACK = "fallback"      # the image would run as root: the default user instead
@@ -139,13 +140,14 @@ def _has_host_mounts(info: dict[str, Any]) -> bool:
     return bool(binds_or_devices or host.get("Devices") or host.get("VolumesFrom"))
 
 
-def assess(ctx: Context, container: str, info: dict[str, Any], explicit: bool | None = None,
+def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | None = None,
            mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
     """Decides which user the container's image may run as, by the rules in this module's docstring.
 
-    Returns an Assessment. Raises DockerError if the image cannot be inspected or its passwd or group
-    file is too large.
-    explicit: the user was set on the command line, if known.
+    Returns an Assessment, of Kind.EXPLICIT if the container's user does not come from the image. Raises
+    DockerError if the image cannot be inspected or its passwd or group file is too large.
+    origin: where the container's user comes from, if known. Otherwise a user that differs from the
+    image's own is taken to come from the command line.
     mounts: the container reaches host files or devices; worked out from info if not given.
     reference: the image name as the command line or the service gave it (the container's if None).
     built: the image is built from a Dockerfile by the service; the config file never applies then.
@@ -155,10 +157,10 @@ def assess(ctx: Context, container: str, info: dict[str, Any], explicit: bool | 
                                image.get("RepoDigests"), built)
     found: dict[str, Any] = {"note": match.problem, "section": match.repository}
     spec = info["Config"].get("User") or ""
-    if explicit is None:  # the container's user differs from the image's only if the command line set one
-        explicit = spec != (image["Config"].get("User") or "")
-    if explicit:
-        return Assessment(Kind.EXPLICIT, [], **found)  # trusted: the person typing the command chose it
+    if origin is None:  # the container's user differs from the image's only if the command line set one
+        origin = Origin.IMAGE if spec == (image["Config"].get("User") or "") else Origin.COMMAND_LINE
+    if origin is not Origin.IMAGE:
+        return Assessment(Kind.EXPLICIT, [], **found)
 
     settings, rules = ctx.for_image(match.repository)
     if settings.user:

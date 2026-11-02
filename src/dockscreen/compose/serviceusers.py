@@ -29,6 +29,7 @@ from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, imagedecision, policy, verdict
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import commandline, ids, images, messages
@@ -64,24 +65,24 @@ class Prepared(NamedTuple):
         """Tells whether an image could not be got or looked at, rather than only refused."""
         return any(p.severity is Severity.FAILED for p in self.problems)
 
-    def finalize(self) -> tuple[dict[str, Any], frozenset[str]]:
+    def finalize(self) -> tuple[dict[str, Any], dict[str, Origin]]:
         """Builds the config to run from config and the decisions, leaving config alone.
 
-        Returns (config to run, services whose user was pinned from an image that was accepted). Services that
-        start and set no user get the decided user, pinned to the image that was checked; those that do not
-        start get the default user.
+        Returns (config to run, where the users it sets come from). Services that start and set no user get
+        the decided user, pinned to the image that was checked; those that do not start get the default
+        user. Users the project set itself are not in the second part.
         """
         settings = self.ctx.settings
         final = copy.deepcopy(self.config)
-        vetted = set()
+        origins = {}
         for name, service in final["services"].items():
             if service.get("user"):
                 continue
             decision = self.decisions.get(name)
             if decision is None:  # not started by this command
-                # an allowed id: the policy accepts it
                 service["user"] = ids.format_user(settings.default_user)
                 _give_default_home(service, settings.default_user, settings.default_home)
+                origins[name] = Origin.CONFIG
                 continue
             if not decision.assessment.pins_user:
                 continue
@@ -90,12 +91,12 @@ class Prepared(NamedTuple):
             service["user"] = ids.format_user(decision.assessment.pinned_user)
             if decision.assessment.kind is imagedecision.Kind.FALLBACK:
                 _give_default_home(service, decision.assessment.pinned_user, decision.assessment.home)
-            else:
-                vetted.add(name)  # ... which needs no vetting
+            from_image = decision.assessment.kind is imagedecision.Kind.OK
+            origins[name] = Origin.IMAGE if from_image else Origin.CONFIG  # the configured or default user
             service["pull_policy"] = "never"  # the image that was checked is the one that runs
             if decision.image_id and "build" not in service:
                 service["image"] = decision.image_id  # ... even if the name is moved to another image
-        return final, frozenset(vetted)
+        return final, origins
 
     def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
@@ -283,7 +284,7 @@ def _decide(config: dict[str, Any], to_run: frozenset[str],
             try:
                 info = ctx.docker.inspect_container(container)
                 image_id = info.get("Image")
-                assessment = imagedecision.assess(ctx, container, info, explicit=False,
+                assessment = imagedecision.assess(ctx, container, info, Origin.IMAGE,
                                          mounts=policy.has_host_mounts(service, config.get("volumes")),
                                          reference=image,
                                          built="build" in service)
