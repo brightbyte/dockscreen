@@ -12,6 +12,7 @@ A user the command line chooses is judged by the id rules too, as if a project h
 from typing import Any
 
 from dockscreen.screen import policy
+from dockscreen.screen.findings import Finding, refused
 
 # Inspected HostConfig fields that hold what the compose key of the same meaning holds.
 FIELDS = {
@@ -34,13 +35,14 @@ FIELDS = {
 }
 
 
-def findings(info: dict[str, Any], explicit_user: bool, ctx: policy.Context) -> list[str]:
-    """Returns what the policy would refuse in a project that asked for what this container has.
+def findings(info: dict[str, Any], explicit_user: bool, ctx: policy.Context) -> list[Finding]:
+    """Returns, as refusals, what the policy would refuse in a project that asked for what this container
+    has.
 
     info: the container as inspected; explicit_user: the command line chose the user;
     ctx: the policy.Context, with the current directory as the project directory.
     """
-    return policy.check_service(_service_of(info, explicit_user), ctx, vetted=not explicit_user)
+    return refused(policy.check_service(_service_of(info, explicit_user), ctx, vetted=not explicit_user))
 
 
 def _service_of(info: dict[str, Any], explicit_user: bool) -> dict[str, Any]:

@@ -1,26 +1,11 @@
-"""This module defines the outcome of an audit, which is also its exit status, and of the screening before a
-command runs, and how it is reported.
-
-Refused means the policy says no. Failed means the audit could not get far enough to judge: docker,
-the image or the compose config was not there, or pulling or building failed. A refusal is about the
-project, image or command line; a failure is about getting to them, and may go away when retried.
-Exit status 2 is left for usage errors.
+"""This module defines how the verdict of screening a command or of an audit is reported (see findings for
+what the verdicts mean).
 """
 
-import enum
-from collections.abc import Sequence
-
+from dockscreen.screen.findings import Report, Verdict
 from dockscreen.screen.imagedecision import Assessment, Kind
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
-
-
-class Verdict(enum.IntEnum):
-    """Outcome of an audit, or of the screening before a command runs, whose value is the exit status."""
-    PASSED = 0
-    REFUSED = 1
-    FAILED = 3
-
 
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
 
@@ -41,39 +26,35 @@ def line(verdict: Verdict) -> messages.Marked:
     return messages.Marked(ICONS[verdict], LINES[verdict])
 
 
-def brief(verdict: Verdict, reasons: Sequence[str]) -> messages.Marked:
-    """Builds the verdict as one line, for --brief: the closing line, then the first reason if it did not
-    pass and how many more there are.
+def brief(found: Report) -> messages.Marked:
+    """Builds the verdict of what was found as one line, for --brief: the closing line, then the first
+    reason if it did not pass and how many more there are.
     """
+    verdict, reasons = found.verdict, found.reasons
     if verdict is Verdict.PASSED:
         return line(verdict)
-    first = printable(messages.with_output(reasons[0])) if reasons else "no reason given"
+    first = printable(messages.with_output(reasons[0]))
     more = f" (+{len(reasons) - 1} more)" if len(reasons) > 1 else ""
     return messages.Marked(ICONS[verdict], f"{LINES[verdict]}: {first}{more}")
 
 
-def report(verdict: Verdict, reasons: Sequence[str], brief_mode: bool = False) -> int:
-    """Prints the verdict and returns it as the exit status.
+def report(found: Report, brief_mode: bool = False) -> int:
+    """Prints the verdict of what was found and returns it as the exit status.
 
     brief_mode: print one line on stdout (brief); otherwise each reason and the closing line go to stderr.
     """
+    verdict = found.verdict
     if brief_mode:
-        messages.out(brief(verdict, reasons), indent=False)
+        messages.out(brief(found), indent=False)
         return int(verdict)
-    for reason in reasons:
+    for reason in found.reasons:
         text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
-        help, output = messages.help_of(reason), messages.output_of(reason)
-        messages.notice(messages.Marked(messages.BAD, text, help, output))
+        messages.notice(messages.Marked(messages.BAD, text, reason.help, reason.output))
     messages.notice(line(verdict))
     return int(verdict)
 
 
-def screened(reasons: Sequence[str], failed: bool = False) -> bool:
-    """Prints the verdict of screening a command and returns whether it may run: only if there are no
-    reasons.
-
-    reasons: why it may not; failed: the reasons are failures to look, not refusals.
-    """
-    outcome = Verdict.FAILED if failed else Verdict.REFUSED if reasons else Verdict.PASSED
-    report(outcome, reasons)
-    return outcome is Verdict.PASSED
+def screened(found: Report) -> bool:
+    """Prints the verdict of screening a command and returns whether it may run."""
+    report(found)
+    return found.passed

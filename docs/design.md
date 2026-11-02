@@ -134,7 +134,7 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done.
 
-A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`messages.Reason`), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
+A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`messages.Reason`, and `findings.Finding`, which also names its subject and how much it matters), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
 
 - **routine** (cyan): a default added where nothing was set (`cap_drop`, `security_opt`, `--cap-drop`, `--security-opt`), a name resolved to ids, a checked image user passed on as numbers, an image pinned by id with `pull_policy: never`. These rarely change how the thing runs. The defaults can still break a program that needs a capability or a setuid binary, and the line says so.
 - **check this** (yellow): a change that can alter behaviour: an image's root user replaced by the default user, a service that is not started getting the default user whatever its image would choose, a `cap_drop` or `security_opt` the project set itself that dockscreen extends.
@@ -150,7 +150,7 @@ The code is in layers, one package each, and each imports only its own and the o
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `verdict`.
+3. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `findings`, `verdict`.
 4. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 5. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 6. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
@@ -185,7 +185,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### The policy (`policy.py`)
 

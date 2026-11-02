@@ -25,7 +25,8 @@ from dockscreen.compose import inspect, serviceusers
 from dockscreen.host import hostusers, shellenv
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import hardening, imagedecision, policy, verdict
+from dockscreen.screen import findings, hardening, imagedecision, policy, verdict
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
@@ -51,11 +52,11 @@ class Project(NamedTuple):
         """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
         return self.ctx.with_vetted(serviceusers.unset_user_services(self.hardened))
 
-    def problems(self) -> list[str]:
+    def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx())
         if self.remote:
-            problems.append(REMOTE_MESSAGE)
+            problems.append(Finding(REMOTE_MESSAGE))
         elif not problems and not inspect.names_project(self.global_args, self.runtime.env):
             problems += inspect.name_conflicts(self.hardened["name"], self.directory,
                                               self.image_ctx.docker)
@@ -79,7 +80,7 @@ class Project(NamedTuple):
         """
         problem = _read_back_problem(command, config, self.image_ctx.docker)
         if problem:
-            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, [problem], failed=True)
+            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, findings.failed([problem]))
         return serviceusers.prepare(command, config, list(args), self.image_ctx, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
@@ -117,12 +118,12 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
     except (inspect.InspectError, DockerNotFound) as e:
-        verdict.screened([messages.reason_of(e)], failed=True)
+        verdict.screened(Report.failure(messages.reason_of(e)))
         return 1
     except (inspect.ScreenError, hostusers.UserError, ValueError) as e:
-        problems = [str(e)]
+        problems = findings.refused([str(e)])
     if problems:
-        verdict.screened(problems)
+        verdict.screened(Report.of(problems))
         return 1
 
     hardened, image_ctx = project.hardened, project.image_ctx
@@ -132,17 +133,17 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     with project.generated() as command:
         prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))
         if prepared.problems:
-            verdict.screened(prepared.problems, failed=prepared.failed)
+            verdict.screened(Report.of(prepared.problems))
             return 1
         final, vetted = prepared.finalize()
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))  # what will run
         if problems:
-            verdict.screened(problems)
+            verdict.screened(Report.of(problems))
             return 1
         for line in [*lines, *prepared.notices()]:
             if line:
                 messages.notice(line)
-        verdict.screened([])
+        verdict.screened(Report())
         return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
 
 

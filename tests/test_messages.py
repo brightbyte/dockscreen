@@ -166,12 +166,13 @@ def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
 
 def test_a_reasons_help_follows_it_on_the_refusal_line(capsys):
     from dockscreen.screen import verdict
+    from dockscreen.screen.findings import Report
     reason = messages.Reason("it is wrong", "make it right")
 
-    verdict.report(verdict.Verdict.REFUSED, [reason])
+    verdict.report(Report.refusal(reason))
     assert capsys.readouterr().err.splitlines()[0] == "[dockscreen] ● refusing: it is wrong"
 
     messages.set_helpful(True)
-    verdict.report(verdict.Verdict.REFUSED, [reason])
+    verdict.report(Report.refusal(reason))
     assert capsys.readouterr().err.splitlines()[0] == (
         "[dockscreen] ● refusing: it is wrong - make it right")

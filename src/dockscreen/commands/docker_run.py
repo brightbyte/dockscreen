@@ -25,6 +25,7 @@ from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import imagedecision, imageuser, policy, runpolicy, verdict
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
     Assessment,
@@ -37,7 +38,6 @@ from dockscreen.screen.imagedecision import (
     root_default_notice,
     runs_as,
 )
-from dockscreen.screen.verdict import Verdict
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -54,16 +54,16 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     if is_remote(global_args, runtime.docker):
-        return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE])
+        return verdict.report(Report.refusal(REMOTE_MESSAGE))
     ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
-        verdict.screened([messages.Reason(f"cannot read the command line: {e}",
-                                          "use the real docker for this one")])
+        verdict.screened(Report.refusal(messages.Reason(f"cannot read the command line: {e}",
+                                                        "use the real docker for this one")))
         return 1
     except hostusers.UserError as e:
-        verdict.screened([str(e)])
+        verdict.screened(Report.refusal(str(e)))
         return 1
     for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
         if message:
@@ -93,7 +93,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
             return created
         container, info, assessment = created
 
-    verdict.screened([])
+    verdict.screened(Report())
     return ctx.docker.start(
         container,
         attach=not parsed.detach,
@@ -144,11 +144,11 @@ def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
     """
     code, created = check(ctx, parsed, extra)
     if created is None:  # docker said why
-        verdict.screened([f"docker could not create a container for {parsed.image}"], failed=True)
+        verdict.screened(Report.failure(f"docker could not create a container for {parsed.image}"))
         return code
     if created.assessment.refused:
         ctx.docker.remove(created.container)
-        verdict.screened(explain(ctx, created.assessment, parsed.image), failed=created.assessment.failed)
+        verdict.screened(Report.of(explain(ctx, created.assessment, parsed.image)))
         return 1
     return created
 
@@ -202,7 +202,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
     if is_remote(global_args, runtime.docker):
-        return verdict.report(Verdict.REFUSED, [REMOTE_MESSAGE], brief)
+        return verdict.report(Report.refusal(REMOTE_MESSAGE), brief)
     ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
@@ -211,7 +211,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         messages.notice(AUDIT_USAGE)
         return 2
     except hostusers.UserError as e:
-        return verdict.report(Verdict.REFUSED, [str(e)], brief)
+        return verdict.report(Report.refusal(str(e)), brief)
     if not brief:
         for message in parsed.notices:
             messages.notice(message)
@@ -220,10 +220,10 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     try:
         _, created = check(ctx, parsed, [])
     except DockerNotFound as e:
-        return verdict.report(Verdict.FAILED, [str(e)], brief)
+        return verdict.report(Report.failure(str(e)), brief)
     if created is None:
         reason = f"docker could not create a container for {parsed.image}"
-        return verdict.report(Verdict.FAILED, [reason], brief)
+        return verdict.report(Report.failure(reason), brief)
     container, info, assessment = created
     try:
         settings, _ = ctx.for_image(assessment.section)
@@ -232,24 +232,23 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     finally:
         ctx.docker.remove(container)
 
-    outcome, reasons = _audit_verdict(ctx, assessment, found, strict, parsed.image)
+    outcome = _audit_report(ctx, assessment, found, strict, parsed.image)
     if brief:
-        messages.out(verdict.brief(outcome, reasons), indent=False)
+        messages.out(verdict.brief(outcome), indent=False)
     else:
         _report_assessment(ctx, parsed.image, assessment)
         _report_findings(found, strict)
-        messages.notice(verdict.line(outcome))
-    return int(outcome)
+        messages.notice(verdict.line(outcome.verdict))
+    return int(outcome.verdict)
 
 
-def _audit_verdict(ctx: imagedecision.Context, assessment: Assessment, found: list[str], strict: bool,
-                   image: str) -> tuple[Verdict, list[str]]:
-    """Returns the (verdict, reasons) of an audit: the assessment's, then the findings if strict."""
+def _audit_report(ctx: imagedecision.Context, assessment: Assessment, found: list[Finding], strict: bool,
+                  image: str) -> Report:
+    """Returns the report of an audit: the assessment's findings, then what the command line asks for, which
+    is refused only if strict.
+    """
     refused = imagedecision.explain(ctx, assessment, image) if assessment.refused else []
-    reasons = [*refused, *(found if strict else [])]
-    if assessment.failed:
-        return Verdict.FAILED, reasons
-    return (Verdict.REFUSED if reasons else Verdict.PASSED), reasons
+    return Report.of([*refused, *(found if strict else [])])
 
 
 def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Assessment) -> None:
@@ -273,7 +272,7 @@ def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Asses
     messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
 
 
-def _report_findings(found: list[str], strict: bool) -> None:
+def _report_findings(found: list[Finding], strict: bool) -> None:
     """Prints what the command line asks for that a project or an image may not; as failures if strict."""
     dot = messages.BAD if strict else messages.WARN
     for finding in found:

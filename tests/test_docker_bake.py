@@ -8,6 +8,7 @@ from fakes import make_runtime
 from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen.findings import Severity
 from dockscreen.util import messages
 
 
@@ -122,15 +123,17 @@ def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
         docker_bake._definition(docker, [])
     assert message in messages.with_output(messages.reason_of(raised.value))
-    reasons, failed = docker_bake.check(docker, [])
-    assert failed and message in messages.with_output(reasons[0])
+    [reason] = docker_bake.check(docker, [])
+    assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
 
 
 def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    assert docker_bake.check(docker, []) == (["target app: context '/etc' is outside " + str(project)], False)
+    [reason] = docker_bake.check(docker, [])
+    assert reason == "target app: context '/etc' is outside " + str(project)
+    assert reason.severity is Severity.REFUSED
 
 
 @pytest.mark.parametrize("argv, args", [

@@ -18,9 +18,10 @@ A key is listed either as harmless (any value is fine) or as checked (it has an
 entry in SERVICE_CHECKS that validates the value). Checks take the value and a
 Context, whose rules (idrules.Rules) decide which uids and gids the project may choose.
 
-Every check returns a list of human-readable problems; an empty list means the
-config is acceptable. Nothing here touches docker, only the filesystem for
-realpath resolution.
+Every check of a key returns a list of human-readable problems; an empty list means
+the value is acceptable. The checks of a whole config turn them into refusals
+(findings.Finding) about the service, volume or network they concern. Nothing
+here touches docker, only the filesystem for realpath resolution.
 """
 
 import os
@@ -29,6 +30,7 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config as configuration
 from dockscreen.screen import idrules
+from dockscreen.screen.findings import Finding, refused
 from dockscreen.util import ids
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
@@ -162,23 +164,24 @@ def context_for(settings: configuration.Config, project_dir: str, rules: idrules
                    security_opts=settings.security_opts, configured_user=settings.user)
 
 
-def check_config(config: dict[str, Any], ctx: Context) -> list[str]:
-    """Checks a resolved compose config against the policy; returns the problems, each saying where.
+def check_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
+    """Checks a resolved compose config against the policy; returns the refusals, each about what it
+    concerns.
 
     Empty if the config passes. Each service is checked with its own context (ctx.for_service).
     """
     project = config.get("name")
-    problems = unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + _check_service_names(config)
+    problems = refused(unknown_keys(config, TOP_LEVEL_KEYS, "top-level key") + _check_service_names(config))
     if not project:  # volumes and networks are scoped to the project by its name
-        problems.append("config has no project name")
+        problems += refused(["config has no project name"])
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
         found = check_service(service or {}, service_ctx, name in ctx.vetted, config.get("volumes"))
-        problems += [f"service {name}: {p}" for p in found]
+        problems += refused(found, f"service {name}")
     for key, volume in (config.get("volumes") or {}).items():
-        problems += [f"volume {key}: {p}" for p in _check_volume(key, volume, project, ctx)]
+        problems += refused(_check_volume(key, volume, project, ctx), f"volume {key}")
     for key, network in (config.get("networks") or {}).items():
-        problems += [f"network {key}: {p}" for p in _check_network(key, network, project, ctx)]
+        problems += refused(_check_network(key, network, project, ctx), f"network {key}")
     return problems + _check_file_sources(config, ctx)
 
 
@@ -188,17 +191,17 @@ def _check_service_names(config: dict[str, Any]) -> list[str]:
             for name in config.get("services") or {} if str(name).startswith("-")]
 
 
-def check_build_config(config: dict[str, Any], ctx: Context) -> list[str]:
-    """Checks config against the part of the policy that applies to `build`; returns the problems.
+def check_build_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
+    """Checks config against the part of the policy that applies to `build`; returns the refusals.
 
     That part is what building can reach on the host: names, build sections, secrets and configs.
 
     Runtime hardening (user, capabilities, mounts) is irrelevant until containers run.
     """
-    problems = _check_service_names(config)
+    problems = refused(_check_service_names(config))
     for name, service in (config.get("services") or {}).items():
         if service and "build" in service:
-            problems += [f"service {name}: {p}" for p in _check_build(service["build"], ctx)]
+            problems += refused(_check_build(service["build"], ctx), f"service {name}")
     return problems + _check_file_sources(config, ctx)  # build secrets refer to these
 
 
@@ -580,12 +583,12 @@ def _check_network(key: str, network: dict[str, Any] | None, project: str | None
     return problems
 
 
-def _check_file_sources(config: dict[str, Any], ctx: Context) -> list[str]:
+def _check_file_sources(config: dict[str, Any], ctx: Context) -> list[Finding]:
     """Checks the top-level secrets and configs, whose files building and running read from the host."""
     problems = []
     for kind in ("secrets", "configs"):
         for key, item in (config.get(kind) or {}).items():
-            problems += [f"{kind} {key}: {p}" for p in _check_file_source(item, ctx)]
+            problems += refused(_check_file_source(item, ctx), f"{kind} {key}")
     return problems
 
 

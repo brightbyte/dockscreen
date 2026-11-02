@@ -1,36 +1,38 @@
 import pytest
 
 from dockscreen.screen import verdict
-from dockscreen.screen.verdict import Verdict
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.util import messages
 
 
-def test_exit_statuses_leave_two_for_usage_errors():
-    assert [int(v) for v in Verdict] == [0, 1, 3]
-
-
-@pytest.mark.parametrize("outcome, reasons, line", [
-    (Verdict.PASSED, [], "\u2714 audit passed"),
-    (Verdict.REFUSED, ["a"], "\u2296 denied by audit: a"),
-    (Verdict.REFUSED, ["a", "b", "c"], "\u2296 denied by audit: a (+2 more)"),
-    (Verdict.FAILED, ["no\nimage"], "\u2718 audit failed: no\\x0aimage"),  # still one line
-    (Verdict.FAILED, [], "\u2718 audit failed: no reason given"),
-    (Verdict.FAILED, [messages.Reason("docker ps failed", output="a\nb")],
-     "\u2718 audit failed: docker ps failed: a\\x0ab"),  # the output too
+@pytest.mark.parametrize("found, line", [
+    (Report(), "✔ audit passed"),
+    (Report.refusal("a"), "⊖ denied by audit: a"),
+    (Report.of(Finding(r) for r in "abc"), "⊖ denied by audit: a (+2 more)"),
+    (Report.failure("no\nimage"), "✘ audit failed: no\\x0aimage"),  # still one line
+    (Report.failure(messages.Reason("docker ps failed", output="a\nb")),
+     "✘ audit failed: docker ps failed: a\\x0ab"),  # the output too
+    # what stops the command comes first in the line, whatever was reported before it
+    (Report.of([Finding("fine", Severity.ROUTINE), Finding("a")]), "⊖ denied by audit: a"),
 ])
-def test_brief(outcome, reasons, line):
-    assert verdict.brief(outcome, reasons) == line
+def test_brief(found, line):
+    assert verdict.brief(found) == line
 
 
 def test_report(capsys):
-    assert verdict.report(Verdict.REFUSED, ["a"]) == 1
-    assert verdict.report(Verdict.FAILED, ["b"]) == 3
-    assert verdict.report(Verdict.PASSED, []) == 0
+    assert verdict.report(Report.refusal("a")) == 1
+    assert verdict.report(Report.failure("b")) == 3
+    assert verdict.report(Report()) == 0
     assert capsys.readouterr().err.splitlines() == [
-        f"[dockscreen] {messages.BAD} refusing: a", "[dockscreen] \u2296 denied by audit",
-        f"[dockscreen] {messages.BAD} b", "[dockscreen] \u2718 audit failed",
-        "[dockscreen] \u2714 audit passed",
+        f"[dockscreen] {messages.BAD} refusing: a", "[dockscreen] ⊖ denied by audit",
+        f"[dockscreen] {messages.BAD} b", "[dockscreen] ✘ audit failed",
+        "[dockscreen] ✔ audit passed",
     ]
 
-    assert verdict.report(Verdict.REFUSED, ["a"], brief_mode=True) == 1
-    assert capsys.readouterr() == ("\u2296 denied by audit: a\n", "")
+    assert verdict.report(Report.refusal("a"), brief_mode=True) == 1
+    assert capsys.readouterr() == ("⊖ denied by audit: a\n", "")
+
+
+def test_screened_tells_whether_the_command_may_run(capsys):
+    assert verdict.screened(Report.of([Finding("noted", Severity.NOTABLE)]))
+    assert not verdict.screened(Report.refusal("a"))

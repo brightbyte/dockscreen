@@ -11,6 +11,7 @@ from dockscreen.compose import composeproject
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
 
 
 def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
@@ -22,6 +23,6 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     try:
         parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
     except hostusers.UserError as e:
-        verdict.screened([str(e)])
+        verdict.screened(Report.refusal(str(e)))
         return 1
     return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me)

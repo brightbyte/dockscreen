@@ -19,6 +19,7 @@ from typing import Any
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy, verdict
+from dockscreen.screen.findings import Finding, Report, Severity, refused
 from dockscreen.util import messages
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
@@ -144,20 +145,19 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
     passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
     """
-    reasons, failed = check(runtime.docker, args)
-    if not verdict.screened(reasons, failed):
+    if not verdict.screened(Report.of(check(runtime.docker, args))):
         return 1
     runtime.docker.exec([*lead, *args])
 
 
-def check(docker: Docker, args: Sequence[str]) -> tuple[list[str], bool]:
+def check(docker: Docker, args: Sequence[str]) -> list[Finding]:
     """Checks `bake` with these arguments against the current directory as the project directory.
 
-    Returns (reasons, failed): why it may not run, and whether that is a failure to get the definition.
+    Returns why it may not run: refusals, or the failure to get the definition.
     """
     try:
         found = _definition(docker, args)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
-        return [messages.Reason(str(e), hint, messages.output_of(messages.reason_of(e)))], True
-    return _check_definition(found, os.getcwd()), False
+        return [Finding(str(e), Severity.FAILED, help=hint, output=messages.output_of(messages.reason_of(e)))]
+    return refused(_check_definition(found, os.getcwd()))

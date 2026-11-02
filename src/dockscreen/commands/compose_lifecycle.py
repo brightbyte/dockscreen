@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dockscreen.compose import inspect
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
+from dockscreen.screen.findings import Finding, Report
 
 
 def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:
@@ -19,12 +20,12 @@ def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) ->
     """
     reasons = check(global_args, runtime)
     if reasons:
-        verdict.screened(reasons)
+        verdict.screened(Report.of(reasons))
         return 1
     runtime.docker.exec(["compose", *global_args, sub, *args])
 
 
-def check(global_args: Sequence[str], runtime: Runtime) -> list[str]:
+def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
     """Returns why the project's name may not be used: containers made from another directory have it.
 
     Empty for a name chosen on the command line or in the environment, and for a project that cannot be

@@ -24,6 +24,7 @@ from dockscreen.compose import composeproject, inspect, serviceusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import hardening, policy
+from dockscreen.screen.findings import Finding
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -77,7 +78,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
 
 
 def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], resolved: dict[str, Any],
-                     notes: list[str]) -> tuple[list[str], list[str]]:
+                     notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
     Returns (problems left, notes). resolved: fixed as it will run, which is what the images are looked at
@@ -87,7 +88,7 @@ def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], res
         prepared = project.prepare(command(resolved), resolved)
     if not prepared.decisions:
         return prepared.problems, notes  # nothing could be looked at: pulling or building failed
-    remaining = []
+    remaining: list[Finding] = []
     for name, decision in prepared.decisions.items():
         if decision.assessment.failed:  # setting a user does not fix an image that could not be read
             remaining.append(serviceusers.decision_problem(name, decision))

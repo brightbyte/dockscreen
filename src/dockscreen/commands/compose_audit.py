@@ -12,7 +12,7 @@ from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import hardening, policy, verdict
-from dockscreen.screen.verdict import Verdict
+from dockscreen.screen.findings import Report
 from dockscreen.util import commandline, messages
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
@@ -31,28 +31,28 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     try:
         project = composeproject.load_project(global_args, runtime, allow_me)
     except (inspect.InspectError, DockerNotFound) as e:
-        return verdict.report(Verdict.FAILED, [messages.reason_of(e)], brief)
+        return verdict.report(Report.failure(messages.reason_of(e)), brief)
     except (inspect.ScreenError, ValueError) as e:
-        return verdict.report(Verdict.REFUSED, [str(e)], brief)
+        return verdict.report(Report.refusal(str(e)), brief)
 
-    outcome, problems, lines = _audit_images(project, brief)
+    outcome, lines = _audit_images(project, brief)
     if not brief:
         warnings = [*inspect.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
         for line in [*hardening.describe(project.additions), *warnings, *lines]:
             messages.out(line)
-        if problems or project.additions:
+        if outcome.reasons or project.additions:
             messages.out(messages.Marked(messages.HINT, HARDEN_HINT))
-    return verdict.report(outcome, problems, brief)
+    return verdict.report(outcome, brief)
 
 
-def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Verdict, list[str], Sequence[str]]:
+def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Report, Sequence[str]]:
     """Checks the project, then its images if the checks pass.
 
-    Returns (verdict, problems, report lines).
+    Returns (what was found, report lines).
     """
     problems = project.problems()
     if problems:
-        return Verdict.REFUSED, problems, [
+        return Report.of(problems), [
             "the images were not looked at because of the problems below: nothing was pulled or built"]
     if not brief:
         messages.notice("pulling or building the images as `up` would, to look at the users they run as")
@@ -63,5 +63,4 @@ def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Verdict
     if not problems:  # what `up` checks once more before it runs: image sections need proof now
         final, vetted = prepared.finalize()
         problems = policy.check_config(final, project.final_ctx(prepared, vetted))
-    outcome = Verdict.FAILED if prepared.failed else Verdict.REFUSED if problems else Verdict.PASSED
-    return outcome, problems, prepared.describe()
+    return Report.of(problems), prepared.describe()

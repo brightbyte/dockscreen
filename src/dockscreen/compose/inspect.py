@@ -13,6 +13,7 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import idrules, policy, verdict
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.util import commandline, messages
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -96,15 +97,15 @@ def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:
 
 
 def passes(global_args: Sequence[str], runtime: Runtime,
-           rules: Callable[[dict[str, Any], policy.Context], list[str]] = policy.check_config) -> bool:
+           rules: Callable[[dict[str, Any], policy.Context], list[Finding]] = policy.check_config) -> bool:
     """Tells whether rules(config, ctx) finds nothing in the selected project, printing the verdict."""
     try:
         config, project_dir = project(global_args, runtime)
     except InspectError as e:
-        return verdict.screened([messages.reason_of(e)], failed=True)
+        return verdict.screened(Report.failure(messages.reason_of(e)))
     except ScreenError as e:
-        return verdict.screened([str(e)])
-    return verdict.screened(rules(config, context(project_dir, runtime)))
+        return verdict.screened(Report.refusal(str(e)))
+    return verdict.screened(Report.of(rules(config, context(project_dir, runtime))))
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
@@ -136,10 +137,10 @@ PROJECT_LABEL = "com.docker.compose.project"
 WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
-def name_conflicts(name: str, directory: str, docker: Docker) -> list[str]:
+def name_conflicts(name: str, directory: str, docker: Docker) -> list[Finding]:
     """Checks whether containers of a project called name exist that were made from another directory.
 
-    Returns the problems, empty if there are none. The name is the project's own choice (`name:`, or
+    Returns the refusals, empty if there are none. The name is the project's own choice (`name:`, or
     `COMPOSE_PROJECT_NAME` in its `.env`), and it decides which volumes, networks and containers compose
     uses, replaces and, for `down -v`, removes. Volumes and networks alone say nothing about where they came
     from, so only containers count.
@@ -147,17 +148,16 @@ def name_conflicts(name: str, directory: str, docker: Docker) -> list[str]:
     try:
         found = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
     except DockerError as e:
-        return [messages.Reason(f"cannot tell whether another project is called {name!r}: {e}",
-                                output=messages.output_of(messages.reason_of(e)))]
+        return [Finding(f"cannot tell whether another project is called {name!r}: {e}",
+                        output=messages.output_of(messages.reason_of(e)))]
     here = os.path.realpath(directory)
     # a container without the label cannot be shown to come from here
     others = sorted({path for path in found if not path or os.path.realpath(path) != here})
     if not others:
         return []
     shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
-    return [messages.Reason(
-        f"project name {name!r} is used by containers made from {shown}, not from {here}",
-        "pass -p NAME to choose the name yourself")]
+    return [Finding(f"project name {name!r} is used by containers made from {shown}, not from {here}",
+                    help="pass -p NAME to choose the name yourself")]
 
 
 def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:

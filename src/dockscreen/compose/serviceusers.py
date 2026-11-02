@@ -29,7 +29,8 @@ from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
-from dockscreen.screen import imagedecision, policy, verdict
+from dockscreen.screen import findings, imagedecision, policy, verdict
+from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import commandline, ids, images, messages
 
 
@@ -55,9 +56,13 @@ class Prepared(NamedTuple):
     ctx: imagedecision.Context
     to_run: frozenset
     decisions: dict   # service -> Decision, for the started services that set no user
-    problems: list
-    failed: bool = False  # some problems are failures to get or look at an image, not refusals
+    problems: list    # findings.Finding: refusals, and failures to get or look at an image
     verified: dict | None = None  # service -> the repository whose image section its image proved
+
+    @property
+    def failed(self) -> bool:
+        """Tells whether an image could not be got or looked at, rather than only refused."""
+        return any(p.severity is Severity.FAILED for p in self.problems)
 
     def finalize(self) -> tuple[dict[str, Any], frozenset[str]]:
         """Builds the config to run from config and the decisions, leaving config alone.
@@ -159,17 +164,16 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(config, ctx, frozenset(), {}, [str(e)], failed=True)
+        return Prepared(config, ctx, frozenset(), {}, findings.failed([str(e)]))
     if failures:
-        return Prepared(config, ctx, to_run, {}, failures, failed=True)
+        return Prepared(config, ctx, to_run, {}, findings.failed(failures))
 
     decisions = _decide(config, to_run - chosen, ctx)
     verified = _verify_sections(config, ctx)
     config_file = ctx.runtime.config_file
     problems = [decision_problem(name, d, config_file)
                 for name, d in decisions.items() if d.assessment.refused]
-    failed = any(d.assessment.failed for d in decisions.values())
-    return Prepared(config, ctx, to_run, decisions, problems, failed=failed, verified=verified)
+    return Prepared(config, ctx, to_run, decisions, problems, verified=verified)
 
 
 def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict[str, str]:
@@ -192,16 +196,17 @@ def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict
     return verified
 
 
-def decision_problem(name: str, decision: Decision, config_file: str | None = None) -> str:
+def decision_problem(name: str, decision: Decision, config_file: str | None = None) -> Finding:
     """Returns why the service must not run, for a decision that refused or failed.
 
     config_file: named in the hint for an image that is pulled, whose repository can be given a user.
     """
-    text = f"service {name}: image {decision.image}: {'; '.join(decision.assessment.problems)}"
+    text = f"image {decision.image}: {'; '.join(decision.assessment.problems)}"
     if decision.assessment.failed:
-        return text
+        return Finding(text, Severity.FAILED, f"service {name}")
     hint = images.section_hint(decision.image, config_file, decision.built) if config_file else None
-    return messages.Reason(text, "set user: to choose one" + (f", or {hint}" if hint else ""))
+    return Finding(text, Severity.REFUSED, f"service {name}",
+                   "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],

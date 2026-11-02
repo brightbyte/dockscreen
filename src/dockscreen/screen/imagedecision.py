@@ -25,6 +25,7 @@ from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import idrules, imageuser
+from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import ids, images, messages
 
 CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
@@ -224,11 +225,14 @@ def root_default_notice(ctx: Context) -> messages.Marked | None:
     return None
 
 
-def explain(ctx: Context, assessment: Assessment, image: str) -> list[str]:
-    """Returns the assessment's problems, with how to get past them if they come from the image's user."""
-    if assessment.identity is None:
-        return assessment.problems
-    return [messages.Reason(p, f"{CHOOSE_HINT}, {config_hint(ctx, image)}") for p in assessment.problems]
+def explain(ctx: Context, assessment: Assessment, image: str) -> list[Finding]:
+    """Returns the assessment's problems as findings, failures if it failed, else refusals; with how to get
+    past them if they come from the image's user.
+    """
+    severity = Severity.FAILED if assessment.failed else Severity.REFUSED
+    help = f"{CHOOSE_HINT}, {config_hint(ctx, image)}" if assessment.identity else None
+    return [Finding(p, severity, help=help or messages.help_of(p), output=messages.output_of(p))
+            for p in assessment.problems]
 
 
 def config_hint(ctx: Context, image: str) -> str:
