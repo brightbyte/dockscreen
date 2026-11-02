@@ -23,6 +23,7 @@ from typing import Any
 from dockscreen.compose import composeproject, inspect, serviceusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy
 from dockscreen.screen.findings import Finding
@@ -110,7 +111,7 @@ def _fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
     fixed = copy.deepcopy(config)
     for name, service in fixed.get("services", {}).items():
         service_ctx = ctx.for_service(name, service).with_mounts(
-            policy.has_host_mounts(service, config.get("volumes")))
+            service_reaches_host(service, config.get("volumes")))
         from_image = ctx.user_origin(name) is Origin.IMAGE and not service.get("user")
         if not from_image and policy.check_user(service.get("user"), service_ctx):
             service["user"] = _USER_TEMPLATE

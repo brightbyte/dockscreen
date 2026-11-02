@@ -5,26 +5,6 @@ from dockscreen.screen import imagedecision
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
 
 
-@pytest.mark.parametrize("extra", [
-    BIND,
-    {"HostConfig": {"Binds": ["/p:/p:ro"]}},
-    {"HostConfig": {"Mounts": [{"Type": "bind"}]}},
-    {"HostConfig": {"Devices": [{"PathOnHost": "/dev/dri"}]}},
-    {"HostConfig": {"VolumesFrom": ["other"]}},
-])
-def test_has_host_mounts(extra):
-    assert imagedecision._has_host_mounts({"Config": {}, **extra})
-
-
-@pytest.mark.parametrize("extra", [
-    {},
-    {"Mounts": [{"Type": "volume", "Name": "data"}, {"Type": "tmpfs"}]},
-    {"HostConfig": {"Binds": ["data:/var/lib/data"], "Devices": [], "VolumesFrom": None}},
-])
-def test_named_volumes_and_tmpfs_are_not_host_mounts(extra):
-    assert not imagedecision._has_host_mounts({"Config": {}, **extra})
-
-
 @pytest.mark.parametrize("kind, refused, pins_user, replaces_image_user", [
     (imagedecision.Kind.EXPLICIT, False, False, False),   # the command line's user runs as given
     (imagedecision.Kind.CONFIGURED, False, True, True),

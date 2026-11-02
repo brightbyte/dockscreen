@@ -24,6 +24,7 @@ from typing import Any, NamedTuple, Self
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.container import Container
 from dockscreen.model.origin import Origin
 from dockscreen.screen import idrules, imageuser
 from dockscreen.screen.findings import Finding, Severity
@@ -126,20 +127,6 @@ class Assessment(NamedTuple):
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK)
 
 
-def _has_host_mounts(info: dict[str, Any]) -> bool:
-    """Tells whether the container, as inspected, reaches host files or devices.
-
-    Bind mounts, devices and volumes taken from another container all do. Named volumes live in
-    docker's own directory and tmpfs in memory, so the user id means nothing to the host there.
-    """
-    host = info.get("HostConfig") or {}
-    mounts = [*(info.get("Mounts") or []), *(host.get("Mounts") or [])]
-    # a Binds source that is not a path names a volume
-    binds = [b for b in host.get("Binds") or [] if str(b).split(":")[0].startswith("/")]
-    binds_or_devices = any(m.get("Type") == "bind" for m in mounts) or binds
-    return bool(binds_or_devices or host.get("Devices") or host.get("VolumesFrom"))
-
-
 def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | None = None,
            mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
     """Decides which user the container's image may run as, by the rules in this module's docstring.
@@ -178,7 +165,7 @@ def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | 
         return Assessment(Kind.FALLBACK, [], identity, user=settings.default_user, home=settings.default_home,
                           **found)
     if mounts is None:
-        mounts = _has_host_mounts(info)
+        mounts = Container(info).reaches_host
     problems = rules.problems(identity.uid, identity.gid, identity.supplementary, mounts=mounts)
     if problems:
         return Assessment(Kind.REFUSED, [f"the image's {p}" for p in problems], identity, **found)

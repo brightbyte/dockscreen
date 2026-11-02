@@ -3,7 +3,10 @@ import os
 import pytest
 from fakes import rules
 
+from dockscreen.model.container import Container
+from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import policy
+from dockscreen.screen.findings import Severity
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
 # for the rest of the host).
@@ -396,18 +399,6 @@ def test_volume_driver_opts_are_an_allowlist_and_bind_needs_a_device(project):
     assert_refused(volume({"type": "none", "o": "bind"}), "bind needs a device")
 
 
-@pytest.mark.parametrize("volumes, mounts", [
-    ({}, False),
-    ({"d": {"name": "proj_d"}}, False),
-    ({"d": {"name": "proj_d", "driver_opts": {"type": "tmpfs", "device": "tmpfs", "o": "size=1m"}}}, False),
-    ({"d": {"name": "proj_d", "driver_opts": {"type": "none", "o": "bind", "device": "/p/data"}}}, True),
-    ({"d": {"name": "proj_d", "driver_opts": {"type": "tmpfs", "o": "bind", "device": "/etc"}}}, True),
-])
-def test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files(volumes, mounts):
-    web = {"volumes": [{"type": "volume", "source": "d", "target": "/h"}]}
-    assert policy.has_host_mounts(web, volumes) is mounts
-
-
 def test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume(project):
     def check_user(volumes):
         web = service(user="5000:5001", volumes=[{"type": "volume", "source": "d", "target": "/h"}])
@@ -498,3 +489,42 @@ def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project)
 
     assert check(project, config) == [reason]
     assert policy.check_build_config({"name": "proj", **config}, context(project)) == [reason]
+
+
+# --- containers ---------------------------------------------------------------
+
+def check_container(user="", user_origin=Origin.IMAGE, trust=None, **host):
+    info = {"Config": {"User": user},
+            "HostConfig": {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"], **host}}
+    ctx = policy.Context("/work", rules())
+    return policy.check_container(Container(info), ctx.with_trust(trust) if trust else ctx, user_origin)
+
+
+def test_a_hardened_container_with_nothing_else_has_no_findings():
+    assert check_container(NetworkMode="default", IpcMode="private", Runtime="runc") == []
+
+
+def test_a_containers_bind_mounts_are_judged_against_the_current_directory_once_each():
+    found = check_container(Binds=["/etc:/etc:ro", "/work/src:/src"],
+                            Mounts=[{"Type": "bind", "Source": "/etc", "Target": "/etc"}])
+
+    assert found == ["bind mount '/etc' is outside /work"]
+
+
+def test_a_containers_volumes_from_and_devices_are_found():
+    assert check_container(VolumesFrom=["db"], Devices=[{"PathOnHost": "/dev/kvm"}]) == [
+        "devices is not allowed", "volumes_from 'container:db' reaches a container outside the project"]
+
+
+def test_a_containers_user_is_judged_only_when_the_command_line_chose_it():
+    assert check_container(user="0:0") == []  # the image's: run decides that one, not this
+    assert check_container(user="0:0", user_origin=Origin.COMMAND_LINE) == [
+        "user '0:0': uid 0 is root", "user '0:0': gid 0 is root"]
+
+
+def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not_trusted():
+    found = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, Privileged=True)
+    strict = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, trust=STRICT, Privileged=True)
+
+    assert {f.severity for f in found} == {Severity.NOTABLE}
+    assert {f.severity for f in strict} == {Severity.REFUSED}

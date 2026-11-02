@@ -4,8 +4,8 @@ can reach.
 Services come from two places. A compose project's come from its resolved config (`docker compose
 config --format json`), which check_config judges as a whole: services, and the volumes, networks,
 secrets and configs they use. A container that `docker run` created is read back into the service keys
-of the same meaning (see runpolicy) and judged by check_service alone. Builds, from compose or bake,
-are judged by the build checks.
+of the same meaning (container.Container.as_service) and judged by check_container. Builds, from compose
+or bake, are judged by the build checks.
 
 The policy is an allowlist and fails closed: a key that is not listed below is
 refused, so a Compose feature added tomorrow is denied until someone has
@@ -30,6 +30,8 @@ from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config as configuration
+from dockscreen.model.container import Container
+from dockscreen.model.mounts import BIND_FLAGS, mount_flags, service_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.screen import idrules
 from dockscreen.screen.findings import Finding, about, judged, refused
@@ -52,7 +54,6 @@ NAMESPACE_KEYS = ("pid", "ipc", "uts", "userns_mode", "cgroup", "network_mode")
 # Volume driver_opts types that stay on this host's filesystem or memory.
 LOCAL_VOLUME_TYPES = frozenset({"", "none", "tmpfs"})
 VOLUME_DRIVER_OPTS = frozenset({"type", "device", "o"})
-BIND_FLAGS = frozenset({"bind", "rbind"})
 NETWORK_DRIVERS = frozenset({None, "", "bridge", "none"})
 NETWORK_DRIVER_OPTS = frozenset({"com.docker.network.driver.mtu"})
 
@@ -119,7 +120,7 @@ class Context(NamedTuple):
     user_origins: Mapping[str, Origin] = MappingProxyType({})
     # Whose values are taken as given: what the policy refuses in them is pointed out instead.
     trust: frozenset[Origin] = TRUSTED
-    # Whether the service being checked reaches host files (has_host_mounts); set per service.
+    # Whether the service being checked reaches host files (mounts.service_reaches_host); set per service.
     mounts: bool = False
     # The caller's config file, named in hints on what it can allow; no hints without it.
     config_file: str | None = None
@@ -248,7 +249,7 @@ def check_service(service: dict[str, Any], ctx: Context, origin: Origin,
     user_origin = user_origin or origin
     unknown = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
     found = judged(unknown, origin, ctx.trust)
-    ctx = ctx.with_mounts(has_host_mounts(service, volumes))
+    ctx = ctx.with_mounts(service_reaches_host(service, volumes))
     for key, check in SERVICE_CHECKS.items():
         if key == "user" and user_origin is Origin.IMAGE:
             continue
@@ -257,33 +258,18 @@ def check_service(service: dict[str, Any], ctx: Context, origin: Origin,
     return found
 
 
+def check_container(container: Container, ctx: Context, user_origin: Origin) -> list[Finding]:
+    """Checks what a container asks for as check_service would check a service that asked for the same
+    (Container.as_service); returns what it finds.
+
+    Its keys come from the command line that created it, judged with the current directory as the
+    project's (ctx). user_origin: where its user comes from, the command line or the image.
+    """
+    service = container.as_service(with_user=user_origin is not Origin.IMAGE)
+    return check_service(service, ctx, Origin.COMMAND_LINE, user_origin)
+
+
 # --- users and privileges -------------------------------------------------
-
-def has_host_mounts(service: dict[str, Any], volumes: dict[str, Any] | None = None) -> bool:
-    """Tells whether the service reaches host files: bind mounts, secrets and configs (bind-mounted
-    files), devices, or the volumes of another container.
-
-    volumes: the config's top-level volumes. A named volume whose driver_opts name a device or mount
-    options is a bind mount of host files too.
-    """
-    mounts = [m for m in service.get("volumes") or [] if isinstance(m, dict)]
-    binds = any(m.get("type") == "bind" or _reaches_host(m, volumes or {}) for m in mounts)
-    others = ("volumes_from", "devices", "secrets", "configs")
-    return binds or any(service.get(key) for key in others)
-
-
-def _reaches_host(mount: dict[str, Any], volumes: Mapping[Any, Any]) -> bool:
-    """Tells whether mount is of a named volume in volumes whose driver_opts mount a device or options.
-
-    A plain tmpfs does not count.
-    """
-    if mount.get("type") != "volume":
-        return False
-    opts = (volumes.get(mount.get("source")) or {}).get("driver_opts") or {}
-    plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
-                   and not _mount_flags(opts) & BIND_FLAGS)
-    return bool(opts.get("device") or opts.get("o")) and not plain_tmpfs
-
 
 def _not_a_name(kind: str, value: str) -> str:
     """Returns the problem with a user or group (kind) value that is still a name after hardening.
@@ -560,11 +546,6 @@ def _check_volume(key: str, volume: dict[str, Any] | None, project: str | None, 
     return [*problems, *_check_driver_opts(volume.get("driver_opts") or {}, ctx)]
 
 
-def _mount_flags(opts: Mapping[str, Any]) -> set[str]:
-    """Returns the comma-separated mount options in the `o` of opts, lower case."""
-    return {flag.strip().lower() for flag in str(opts.get("o", "")).split(",")}
-
-
 def _check_driver_opts(opts: dict[str, Any], ctx: Context) -> list[str]:
     """Checks a local volume's driver_opts; returns the problems with mounts from the host or the network.
 
@@ -579,11 +560,11 @@ def _check_driver_opts(opts: dict[str, Any], ctx: Context) -> list[str]:
     if kind == "tmpfs":
         # The kernel ignores the filesystem type when the bind flag is set, so tmpfs with `bind`
         # mounts whatever `device` names.
-        if device not in ("", "tmpfs") or _mount_flags(opts) & BIND_FLAGS:
+        if device not in ("", "tmpfs") or mount_flags(opts) & BIND_FLAGS:
             problems.append("a tmpfs volume must not name a device or bind")
         return problems
     if not device:
-        return [*problems, *(["bind needs a device"] if _mount_flags(opts) & BIND_FLAGS else [])]
+        return [*problems, *(["bind needs a device"] if mount_flags(opts) & BIND_FLAGS else [])]
     if not os.path.isabs(device):  # the daemon would resolve it against its own working directory
         return [*problems, f"device {device!r} must be an absolute path"]
     if not is_inside_any(device, ctx.mount_roots):

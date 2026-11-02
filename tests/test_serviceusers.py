@@ -282,21 +282,6 @@ def test_a_refusal_names_the_local_account_that_the_images_id_would_be():
 BIND = {"volumes": [{"type": "bind", "source": "/p/data", "target": "/data"}]}
 
 
-@pytest.mark.parametrize("fields, mounts", [
-    ({}, False),
-    (BIND, True),
-    ({"volumes": [{"type": "volume", "source": "d", "target": "/d"}, {"type": "tmpfs", "target": "/t"}]},
-     False),
-    ({"secrets": [{"source": "s"}]}, True),
-    ({"configs": [{"source": "c"}]}, True),
-    ({"volumes_from": ["other"]}, True),
-    ({"devices": ["/dev/dri:/dev/dri"]}, True),
-    ({"volumes": ["/short/syntax:/not-normalized"]}, False),  # config output is always the long form
-])
-def test_which_services_reach_host_files(fields, mounts):
-    assert policy.has_host_mounts(fields) is mounts
-
-
 def test_with_mounts_an_image_user_outside_the_nobody_range_is_refused():
     prepared, _, _ = prepare(project(web=BIND), FakeImages(users={"web:1": "app"}))
     assert prepared.decisions["web"].assessment.kind is Kind.REFUSED

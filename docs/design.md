@@ -55,7 +55,7 @@ Who a container runs as is the decision dockscreen spends most of its effort on.
 - **default user**: what replaces an image's root user. `default_user`, 65534:65534 by default. It also gets `HOME` set to `default_home`, `/tmp` by default (not when it is root, nor when `default_home` is `""`), because the image's own `HOME` is root's. A `HOME` that the command line, an env file or the service sets stays: for `docker run`, a `HOME` in the created container that differs from the image's `ENV` counts as set by the caller. The image's own user and a configured user keep the home docker finds in passwd.
 - **configured user**: a `uid:gid` that `user` sets in the config file, at the top level or in the image's or project's section.
 - **allowed ids**: the nobody range, the default user, the uid and the gid of the configured user that applies to the service, and me when `--allow-me` was given (`--as-me` implies it for `docker run`). Each id is allowed on its own: with a configured `900:900`, `900:65534` passes too. A top-level `user` makes its ids allowed for every service of every project.
-- **host mounts**: bind mounts, devices, `volumes_from`, secrets and configs. Named volumes and tmpfs are not.
+- **host mounts**: bind mounts, devices, `volumes_from`, secrets and configs, and a named volume whose `driver_opts` mount a device or a host path (`mounts.service_reaches_host`, `mounts.container_reaches_host`). Other named volumes and tmpfs are not.
 
 ### Forms
 
@@ -149,9 +149,9 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `model`: the concepts screening judges, without reaching the host or docker: `origin`.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `runpolicy`, `hardening`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `hardening`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
@@ -224,7 +224,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `start` and `restart` (`docker_start`) check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` (`docker_exec`) checks only the form of the user (see [Forms](#forms)).
 - `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `docker_bake.check` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
-- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `runpolicy` reads the inspected container back into compose service keys and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
+- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `policy.check_container` reads the inspected container back into compose service keys (`container.Container.as_service`) and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.

@@ -12,7 +12,7 @@ checked numbers.
 
 check creates the container and assesses it; gate starts it if it may run; audit creates it in the
 same way, reports what `run` would do and removes it. The command line is trusted, so what it asks for
-that a project or an image may not is pointed out (runpolicy), and fails the audit only with
+that a project or an image may not is pointed out (policy.check_container), and fails the audit only with
 --strict-screen.
 """
 
@@ -24,8 +24,9 @@ from dockscreen.cli.runargs import DEFAULTS, defaults_notice
 from dockscreen.host import hostusers
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import imagedecision, imageuser, policy, runpolicy, verdict
+from dockscreen.screen import imagedecision, imageuser, policy, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
@@ -240,7 +241,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         settings, _ = ctx.for_image(assessment.section)
         policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
         policy_ctx = policy_ctx.with_trust(STRICT if strict else TRUSTED)
-        found = runpolicy.findings(info, _user_origin(parsed, []), policy_ctx) if info else []
+        found = policy.check_container(Container(info), policy_ctx, _user_origin(parsed, [])) if info else []
     finally:
         ctx.docker.remove(container)
 

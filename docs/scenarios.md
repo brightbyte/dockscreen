@@ -151,7 +151,7 @@ The service has no bind mount of its own, so it counts as having no host mounts,
 - Check: whether a service has host mounts is worked out from the whole config. A mount of a volume whose `driver_opts` name a device or mount options counts; a plain tmpfs volume does not.
 - Variants: a volume with `o: bind` and no device; the same through `compose run`, `harden` and the image decision for a service that sets no user.
 - Not covered: `docker run` and `docker start`, where a volume is only a name (see the open list in `security-review.md`).
-- Status: tested (`tests/test_policy.py::test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files`, `::test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume`).
+- Status: tested (`tests/test_mounts.py::test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files`, `tests/test_policy.py::test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume`).
 
 ### U2. A numeric `group_add` that the daemon reads as a group name
 

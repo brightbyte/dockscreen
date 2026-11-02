@@ -29,8 +29,9 @@ from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
-from dockscreen.screen import findings, imagedecision, policy, verdict
+from dockscreen.screen import findings, imagedecision, verdict
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import commandline, ids, images, messages
 
@@ -285,7 +286,7 @@ def _decide(config: dict[str, Any], to_run: frozenset[str],
                 info = ctx.docker.inspect_container(container)
                 image_id = info.get("Image")
                 assessment = imagedecision.assess(ctx, container, info, Origin.IMAGE,
-                                         mounts=policy.has_host_mounts(service, config.get("volumes")),
+                                         mounts=service_reaches_host(service, config.get("volumes")),
                                          reference=image,
                                          built="build" in service)
             except (DockerError, ValueError, KeyError) as e:
