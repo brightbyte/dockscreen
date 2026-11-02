@@ -7,17 +7,10 @@ difference between this reading and docker's can at worst refuse a good image.
 """
 
 from collections.abc import Sequence
-from typing import Any, NamedTuple
+from typing import Any
 
 from dockscreen.host import hostusers
-
-
-class Identity(NamedTuple):
-    """Set of ids a process runs as: a uid, a primary gid and the supplementary gids."""
-    uid: int
-    gid: int
-    supplementary: tuple
-
+from dockscreen.model.identity import Identity
 
 # What Go's unicode.IsSpace trims; Python's str.strip() differs (it also strips \x1c to \x1f).
 GO_SPACE = "\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009" \
@@ -118,11 +111,6 @@ def _is_id(text: str) -> bool:
     """Tells whether Go's Atoi reads text as a number: an optional sign and ASCII digits."""
     digits = text[1:] if text[:1] in "+-" else text
     return bool(digits) and all(c in "0123456789" for c in digits)
-
-
-def involves_root(identity: Identity) -> bool:
-    """Tells whether identity has uid 0 or gid 0, also among its supplementary groups."""
-    return 0 in (identity.uid, identity.gid, *identity.supplementary)
 
 
 def describe(identity: Identity, local: hostusers.HostAccounts | None = None) -> str:

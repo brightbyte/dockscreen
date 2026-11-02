@@ -1,5 +1,6 @@
 import pytest
 
+from dockscreen.model.identity import Identity
 from dockscreen.screen import imageuser
 
 PASSWD = """root:x:0:0:root:/root:/bin/bash
@@ -95,21 +96,21 @@ def test_an_image_with_a_negative_id_is_an_error():
 
 
 def test_root_is_what_makes_an_identity_fall_back():
-    assert imageuser.involves_root(imageuser.Identity(0, 5, ()))
-    assert imageuser.involves_root(imageuser.Identity(5, 0, ()))
-    assert imageuser.involves_root(imageuser.Identity(5, 5, (0,)))
-    assert not imageuser.involves_root(imageuser.Identity(1000, 999, (7,)))
+    assert Identity(0, 5).involves_root
+    assert Identity(5, 0).involves_root
+    assert Identity(5, 5, (0,)).involves_root
+    assert not Identity(1000, 999, (7,)).involves_root
 
 
 def test_describe():
-    assert imageuser.describe(imageuser.Identity(5, 6, ())) == "uid 5, gid 6"
-    assert imageuser.describe(imageuser.Identity(5, 6, (7, 8))) == "uid 5, gid 6, supplementary gids 7, 8"
+    assert imageuser.describe(Identity(5, 6, ())) == "uid 5, gid 6"
+    assert imageuser.describe(Identity(5, 6, (7, 8))) == "uid 5, gid 6, supplementary gids 7, 8"
 
 
 def test_describe_with_the_local_accounts_says_who_the_ids_are():
     local = Local(uids={1000: "daniel"}, gids={1000: "daniel", 999: "docker"})
-    assert imageuser.describe(imageuser.Identity(1000, 1000, (999, 4242)), local) == (
+    assert imageuser.describe(Identity(1000, 1000, (999, 4242)), local) == (
         "uid 1000 (local user daniel), gid 1000 (local group daniel), "
         "supplementary gids 999 (local group docker), 4242 (no local group)")
-    assert imageuser.describe(imageuser.Identity(100000, 100001, ()), local) == (
+    assert imageuser.describe(Identity(100000, 100001, ()), local) == (
         "uid 100000 (no local user), gid 100001 (no local group)")

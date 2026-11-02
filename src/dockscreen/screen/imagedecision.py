@@ -25,6 +25,7 @@ from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
+from dockscreen.model.identity import Identity
 from dockscreen.model.image import Image
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.screen import idrules, imageuser, policy
@@ -103,7 +104,7 @@ class Assessment(NamedTuple):
     kind: Kind
     image: Image
     findings: tuple[Finding, ...] = ()
-    identity: imageuser.Identity | None = None
+    identity: Identity | None = None
     user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
     section: str | None = None     # the repository whose image section applied, if one did
     home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
@@ -175,7 +176,7 @@ def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | 
 
     settings, rules = ctx.for_image(match.repository)
     if settings.user:
-        return Assessment(Kind.CONFIGURED, image, notes, imageuser.Identity(*settings.user, ()),
+        return Assessment(Kind.CONFIGURED, image, notes, Identity(*settings.user),
                           user=settings.user, **found)
 
     # a missing file has no names in it, for docker as for us
@@ -185,7 +186,7 @@ def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | 
         identity = imageuser.resolve(spec, passwd, groups)
     except ValueError as e:
         return Assessment(Kind.IMAGE, image, (*notes, Finding(str(e))), **found)
-    if imageuser.involves_root(identity):
+    if identity.involves_root:
         return Assessment(Kind.FALLBACK, image, notes, identity, user=settings.default_user,
                           home=settings.default_home, **found)
     if mounts is None:
