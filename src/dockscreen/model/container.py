@@ -6,7 +6,7 @@ back into the compose service keys of the same meaning (Container.as_service), i
 policy for compose services, with the same wording.
 """
 
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
 from dockscreen.model.mounts import Mount
@@ -35,6 +35,21 @@ SERVICE_FIELDS = {
 class Container(NamedTuple):
     """Container as docker inspect shows it (info): its user, its image, its mounts and its host settings."""
     info: dict[str, Any]
+
+    @classmethod
+    def uninspected(cls, container: str) -> Self:
+        """Returns the container called container, which exists but could not be inspected."""
+        return cls({"Id": container})
+
+    @property
+    def id(self) -> str:
+        """Returns its id, or the name it was found by if it could not be inspected."""
+        return self.info["Id"]
+
+    @property
+    def inspected(self) -> bool:
+        """Tells whether docker inspect showed it; if not, only its id is known."""
+        return "Config" in self.info
 
     @property
     def user(self) -> str:

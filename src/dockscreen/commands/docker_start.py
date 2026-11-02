@@ -57,8 +57,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                     f"cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
             else:
-                image = info["Config"].get("Image") or ""
-                problems += [Finding(p, subject=ref, help=p.help) for p in explain(ctx, assessment, image)]
+                problems += [Finding(p.text, subject=ref, help=p.help) for p in explain(ctx, assessment)]
             if strict:
                 user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
                 policy_ctx = ctx.policy_context(assessment.section, STRICT)

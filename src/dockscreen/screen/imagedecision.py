@@ -25,6 +25,7 @@ from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
+from dockscreen.model.image import Image
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.screen import idrules, imageuser, policy
 from dockscreen.screen.findings import Finding, Severity
@@ -87,41 +88,55 @@ class Context(NamedTuple):
 
 
 class Kind(enum.StrEnum):
-    """Category of decision about the user a container runs as."""
+    """Source of the user a container runs as, as the decision about it found it."""
     EXPLICIT = "explicit"      # the command line or dockscreen chose the user, not the image
     CONFIGURED = "configured"  # the config file names the user, for this image, project or every one
-    OK = "ok"                  # the image's own user, which the id rules accept
+    IMAGE = "image"            # the image's own user, accepted or not (Assessment.refused)
     FALLBACK = "fallback"      # the image would run as root: the default user instead
-    REFUSED = "refused"
-    FAILED = "failed"          # the image could not be looked at: missing, or docker failed
 
 
 class Assessment(NamedTuple):
-    """Judgement of the user a container would run as: the kind of decision, the problems found, the
-    identity read from the image, and the user dockscreen pins.
+    """Judgement of the user a container would run as: where the user comes from, the image, what was found
+    (refusals, failures to look, and notable findings), the identity read from the image, and the user
+    dockscreen pins.
     """
     kind: Kind
-    problems: list
+    image: Image
+    findings: tuple[Finding, ...] = ()
     identity: imageuser.Identity | None = None
-    note: str | None = None        # a section for the repository that does not apply, and why
     user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
     section: str | None = None     # the repository whose image section applied, if one did
     home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
 
+    @classmethod
+    def failure(cls, image: Image, reason: object) -> Self:
+        """Returns the assessment of an image that could not be looked at, for reason."""
+        return cls(Kind.IMAGE, image, (Finding.of(reason, Severity.FAILED),))
+
+    @property
+    def reasons(self) -> list[Finding]:
+        """Returns the findings that forbid running the container: refusals, or failures to look."""
+        return [f for f in self.findings if f.fatal]
+
+    @property
+    def notes(self) -> list[Finding]:
+        """Returns what is worth a look but forbids nothing: an image section that does not apply, and why."""
+        return [f for f in self.findings if not f.fatal]
+
     @property
     def refused(self) -> bool:
         """Tells whether the container must not run: refused, or not assessed at all."""
-        return self.kind in (Kind.REFUSED, Kind.FAILED)
+        return bool(self.reasons)
 
     @property
     def failed(self) -> bool:
         """Tells whether the image could not be assessed at all."""
-        return self.kind is Kind.FAILED
+        return any(f.severity is Severity.FAILED for f in self.findings)
 
     @property
     def pins_user(self) -> bool:
         """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
-        return self.kind in (Kind.CONFIGURED, Kind.OK, Kind.FALLBACK)
+        return self.kind is not Kind.EXPLICIT and not self.refused
 
     @property
     def pinned_user(self) -> tuple[int, int]:
@@ -132,7 +147,7 @@ class Assessment(NamedTuple):
     @property
     def replaces_image_user(self) -> bool:
         """Tells whether the user dockscreen decided differs from the one the image chose."""
-        return self.kind in (Kind.CONFIGURED, Kind.FALLBACK)
+        return self.kind in (Kind.CONFIGURED, Kind.FALLBACK) and not self.refused
 
 
 def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | None = None,
@@ -147,20 +162,21 @@ def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | 
     reference: the image name as the command line or the service gave it (the container's if None).
     built: the image is built from a Dockerfile by the service; the config file never applies then.
     """
-    image = ctx.docker.inspect_image(info["Image"])
-    match = config.section_for(ctx.runtime.settings, reference or info["Config"].get("Image") or "",
-                               image.get("RepoDigests"), built)
-    found: dict[str, Any] = {"note": match.problem, "section": match.repository}
+    image = Image(reference or info["Config"].get("Image") or "", info["Image"], built)
+    inspected = ctx.docker.inspect_image(info["Image"])
+    match = config.section_for(ctx.runtime.settings, image.reference, inspected.get("RepoDigests"), built)
+    notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
+    found: dict[str, Any] = {"section": match.repository}
     spec = info["Config"].get("User") or ""
     if origin is None:  # the container's user differs from the image's only if the command line set one
-        origin = Origin.IMAGE if spec == (image["Config"].get("User") or "") else Origin.COMMAND_LINE
+        origin = Origin.IMAGE if spec == (inspected["Config"].get("User") or "") else Origin.COMMAND_LINE
     if origin is not Origin.IMAGE:
-        return Assessment(Kind.EXPLICIT, [], **found)
+        return Assessment(Kind.EXPLICIT, image, notes, **found)
 
     settings, rules = ctx.for_image(match.repository)
     if settings.user:
-        return Assessment(Kind.CONFIGURED, [], imageuser.Identity(*settings.user, ()), user=settings.user,
-                          **found)
+        return Assessment(Kind.CONFIGURED, image, notes, imageuser.Identity(*settings.user, ()),
+                          user=settings.user, **found)
 
     # a missing file has no names in it, for docker as for us
     passwd = ctx.docker.read_file(container, "/etc/passwd") or ""
@@ -168,16 +184,16 @@ def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | 
     try:
         identity = imageuser.resolve(spec, passwd, groups)
     except ValueError as e:
-        return Assessment(Kind.REFUSED, [str(e)], **found)
+        return Assessment(Kind.IMAGE, image, (*notes, Finding(str(e))), **found)
     if imageuser.involves_root(identity):
-        return Assessment(Kind.FALLBACK, [], identity, user=settings.default_user, home=settings.default_home,
-                          **found)
+        return Assessment(Kind.FALLBACK, image, notes, identity, user=settings.default_user,
+                          home=settings.default_home, **found)
     if mounts is None:
         mounts = Container(info).reaches_host
     problems = rules.problems(identity.uid, identity.gid, identity.supplementary, mounts=mounts)
-    if problems:
-        return Assessment(Kind.REFUSED, [f"the image's {p}" for p in problems], identity, **found)
-    return Assessment(Kind.OK, [], identity, user=(identity.uid, identity.gid), **found)
+    refusals = tuple(Finding(f"the image's {p}") for p in problems)
+    return Assessment(Kind.IMAGE, image, (*notes, *refusals), identity, user=(identity.uid, identity.gid),
+                      **found)
 
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
@@ -199,7 +215,7 @@ def env_value(env: Sequence[str] | None, name: str) -> str | None:
 
 
 def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
-    """Describes what an accepted image (Kind.OK or Kind.CONFIGURED) runs as; local: HostAccounts."""
+    """Describes what an accepted image (Kind.IMAGE or Kind.CONFIGURED) runs as; local: HostAccounts."""
     if assessment.kind is Kind.CONFIGURED:
         return f"runs as {ids.format_user(assessment.pinned_user)}, the user the config file sets for it"
     assert assessment.identity is not None, "an accepted image was looked at"
@@ -222,14 +238,12 @@ def root_default_notice(ctx: Context) -> messages.Marked | None:
     return None
 
 
-def explain(ctx: Context, assessment: Assessment, image: str) -> list[Finding]:
-    """Returns the assessment's problems as findings, failures if it failed, else refusals; with how to get
-    past them if they come from the image's user.
-    """
-    severity = Severity.FAILED if assessment.failed else Severity.REFUSED
-    help = f"{CHOOSE_HINT}, {config_hint(ctx, image)}" if assessment.identity else None
-    return [Finding(p, severity, help=help or messages.help_of(p), output=messages.output_of(p))
-            for p in assessment.problems]
+def explain(ctx: Context, assessment: Assessment) -> list[Finding]:
+    """Returns the assessment's reasons, with how to get past them if they come from the image's user."""
+    if not assessment.identity:
+        return assessment.reasons
+    help = f"{CHOOSE_HINT}, {config_hint(ctx, assessment.image.reference)}"
+    return [Finding(r.text, r.severity, r.subject, help, r.output) for r in assessment.reasons]
 
 
 def config_hint(ctx: Context, image: str) -> str:

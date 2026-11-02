@@ -83,7 +83,7 @@ class Project(NamedTuple):
         """
         problem = _read_back_problem(command, config, self.image_ctx.docker)
         if problem:
-            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, findings.failed([problem]))
+            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, Report.failure(problem))
         return serviceusers.prepare(command, config, list(args), self.image_ctx, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
@@ -135,8 +135,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
         prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))
-        if prepared.problems:
-            verdict.screened(Report.of(prepared.problems))
+        if not prepared.report.passed:
+            verdict.screened(prepared.report)
             return 1
         final, user_origins = prepared.finalize()
         checked = Report.of(policy.check_config(final, project.final_ctx(prepared, user_origins)))

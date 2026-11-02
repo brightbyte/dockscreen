@@ -28,26 +28,17 @@ from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.model.image import Image
 from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, imagedecision, substitutions, verdict
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import commandline, ids, images, messages
 
 
 class ImageError(Exception):
     pass
-
-
-class Decision(NamedTuple):
-    """Decision on the user of one service's image: the image, the assessment of its user, and what was
-    looked at.
-    """
-    image: str
-    assessment: imagedecision.Assessment
-    image_id: str | None = None  # what the image name was when it was looked at
-    built: bool = False          # the service builds the image, so no image section applies
 
 
 class Prepared(NamedTuple):
@@ -57,14 +48,9 @@ class Prepared(NamedTuple):
     config: dict
     ctx: imagedecision.Context
     to_run: frozenset
-    decisions: dict   # service -> Decision, for the started services that set no user
-    problems: list    # findings.Finding: refusals, and failures to get or look at an image
+    decisions: dict   # service -> imagedecision.Assessment, for the started services that set no user
+    report: Report    # refusals, and failures to get or look at an image
     verified: dict | None = None  # service -> the repository whose image section its image proved
-
-    @property
-    def failed(self) -> bool:
-        """Tells whether an image could not be got or looked at, rather than only refused."""
-        return any(p.severity is Severity.FAILED for p in self.problems)
 
     def finalize(self) -> tuple[dict[str, Any], dict[str, Origin]]:
         """Builds the config to run from config and the decisions, leaving config alone.
@@ -76,9 +62,9 @@ class Prepared(NamedTuple):
         origins = {}
         for name, service in self.config["services"].items():
             decision = self.decisions.get(name)
-            if service.get("user") or decision and not decision.assessment.pins_user:
+            if service.get("user") or decision and not decision.pins_user:
                 continue
-            if decision is None or decision.assessment.kind is not imagedecision.Kind.OK:
+            if decision is None or decision.kind is not imagedecision.Kind.IMAGE:
                 origins[name] = Origin.CONFIG  # the configured or the default user
             else:
                 origins[name] = Origin.IMAGE
@@ -94,7 +80,7 @@ class Prepared(NamedTuple):
             decision = self.decisions.get(name)
             if decision is None:  # not started by this command
                 found += _user(name, service, settings.default_user, settings.default_home)
-            elif decision.assessment.pins_user:
+            elif decision.pins_user:
                 found += _pinned(name, service, decision)
         return found
 
@@ -109,16 +95,16 @@ class Prepared(NamedTuple):
                         f"default user ({default}) if it is started")
                 lines.append(messages.notable_change(text, USER_HELP))
                 continue
-            assessment, dot = decision.assessment, verdict.dot(decision.assessment)
-            if assessment.kind in (imagedecision.Kind.OK, imagedecision.Kind.CONFIGURED):
-                runs_as = imagedecision.runs_as(assessment, self.ctx.local)
-                text = f"service {name}: no user set; image {decision.image} {runs_as}"
-                lines.append(messages.Marked(dot, text))
-            elif assessment.kind is imagedecision.Kind.FALLBACK:
-                instead = imagedecision.instead_of_root(assessment)
+            accepted = decision.kind in (imagedecision.Kind.IMAGE, imagedecision.Kind.CONFIGURED)
+            if accepted and not decision.refused:
+                runs_as = imagedecision.runs_as(decision, self.ctx.local)
+                text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
+                lines.append(messages.Marked(verdict.dot(decision), text))
+            elif decision.kind is imagedecision.Kind.FALLBACK:
+                instead = imagedecision.instead_of_root(decision)
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
-            if assessment.note:
-                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
+            for note in decision.notes:
+                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {note}"))
         return [*lines, *substitutions.grouped(self.changes())]
 
     def notices(self) -> list[messages.Marked]:
@@ -138,11 +124,10 @@ def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, 
     return found
 
 
-def _pinned(name: str, service: dict[str, Any], decision: Decision) -> list[Substitution]:
-    """Returns the substitutions that pin a started service to what its decision checked: the user, as
-    numbers, the image by id unless it is built, and pull_policy never.
+def _pinned(name: str, service: dict[str, Any], assessment: imagedecision.Assessment) -> list[Substitution]:
+    """Returns the substitutions that pin a started service to what the assessment of its image checked:
+    the user, as numbers, the image by id unless it is built, and pull_policy never.
     """
-    assessment = decision.assessment
     # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot resolve
     # the image's user to anything but what was checked
     if assessment.kind is imagedecision.Kind.FALLBACK:
@@ -151,9 +136,9 @@ def _pinned(name: str, service: dict[str, Any], decision: Decision) -> list[Subs
     else:
         found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED)]
     found.append(Substitution(name, "pull_policy", "never", group=PINNED))  # the image checked is what runs
-    if decision.image_id and "build" not in service:
+    if assessment.image.id and "build" not in service:
         # ... even if the name is moved to another image
-        found.append(Substitution(name, "image", decision.image_id, group=PINNED))
+        found.append(Substitution(name, "image", assessment.image.id, group=PINNED))
     return found
 
 
@@ -175,8 +160,8 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
             chosen: frozenset[str] = frozenset()) -> Prepared:
     """Acquires the images of the services that start, and decides on those that set no user.
 
-    Pulls and builds as `up` would. Returns a Prepared; its problems are empty if every image was acquired
-    and accepted.
+    Pulls and builds as `up` would. Returns a Prepared; its report passes if every image was acquired and
+    accepted.
 
     command: the compose command line (up to the subcommand) on the config to run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
@@ -187,16 +172,15 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(config, ctx, frozenset(), {}, findings.failed([str(e)]))
+        return Prepared(config, ctx, frozenset(), {}, Report.failure(str(e)))
     if failures:
-        return Prepared(config, ctx, to_run, {}, findings.failed(failures))
+        return Prepared(config, ctx, to_run, {}, Report.of(findings.failed(failures)))
 
     decisions = _decide(config, to_run - chosen, ctx)
     verified = _verify_sections(config, ctx)
     config_file = ctx.runtime.config_file
-    problems = [decision_problem(name, d, config_file)
-                for name, d in decisions.items() if d.assessment.refused]
-    return Prepared(config, ctx, to_run, decisions, problems, verified=verified)
+    found = [decision_problem(name, d, config_file) for name, d in decisions.items() if d.refused]
+    return Prepared(config, ctx, to_run, decisions, Report.of(found), verified=verified)
 
 
 def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict[str, str]:
@@ -219,15 +203,18 @@ def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict
     return verified
 
 
-def decision_problem(name: str, decision: Decision, config_file: str | None = None) -> Finding:
-    """Returns why the service must not run, for a decision that refused or failed.
+def decision_problem(name: str, assessment: imagedecision.Assessment, config_file: str | None = None
+                     ) -> Finding:
+    """Returns, as one finding, why the service must not run, for an assessment of its image that refused
+    or failed.
 
     config_file: named in the hint for an image that is pulled, whose repository can be given a user.
     """
-    text = f"image {decision.image}: {'; '.join(decision.assessment.problems)}"
-    if decision.assessment.failed:
+    image = assessment.image
+    text = f"image {image.reference}: {'; '.join(r.text for r in assessment.reasons)}"
+    if assessment.failed:
         return Finding(text, Severity.FAILED, f"service {name}")
-    hint = images.section_hint(decision.image, config_file, decision.built) if config_file else None
+    hint = images.section_hint(image.reference, config_file, image.built) if config_file else None
     return Finding(text, Severity.REFUSED, f"service {name}",
                    "set user: to choose one" + (f", or {hint}" if hint else ""))
 
@@ -286,36 +273,31 @@ def _image_exists(docker: Docker, image: str) -> bool:
 
 
 def _decide(config: dict[str, Any], to_run: frozenset[str],
-            ctx: imagedecision.Context) -> dict[str, Decision]:
+            ctx: imagedecision.Context) -> dict[str, imagedecision.Assessment]:
     """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
 
-    Returns {service: Decision}. An image that cannot be looked at gets a failed assessment.
+    Returns {service: Assessment}. An image that cannot be looked at gets a failed assessment.
     """
     decisions = {}
     for name in sorted(to_run & unset_user_services(config)):
         service = config["services"][name]
-        image = _image_name(config, name, service)
+        image = Image(_image_name(config, name, service), built="build" in service)
         platform = ["--platform", service["platform"]] if service.get("platform") else []
         # a container that is never started shows the user docker would run, and its files can be copied out
-        _, container = ctx.docker.create(["--pull=never", *platform, "--", image])
-        image_id = None
+        _, container = ctx.docker.create(["--pull=never", *platform, "--", image.reference])
         if container is None:
-            assessment = imagedecision.Assessment(
-                imagedecision.Kind.FAILED, ["the image is not available locally"])
-        else:
-            try:
-                info = ctx.docker.inspect_container(container)
-                image_id = info.get("Image")
-                assessment = imagedecision.assess(ctx, container, info, Origin.IMAGE,
-                                         mounts=service_reaches_host(service, config.get("volumes")),
-                                         reference=image,
-                                         built="build" in service)
-            except (DockerError, ValueError, KeyError) as e:
-                failure = messages.with_output(messages.reason_of(e))
-                assessment = imagedecision.Assessment(imagedecision.Kind.FAILED, [failure])
-            finally:
-                ctx.docker.remove(container)
-        decisions[name] = Decision(image, assessment, image_id, built="build" in service)
+            decisions[name] = imagedecision.Assessment.failure(image, "the image is not available locally")
+            continue
+        try:
+            info = ctx.docker.inspect_container(container)
+            mounts = service_reaches_host(service, config.get("volumes"))
+            decisions[name] = imagedecision.assess(ctx, container, info, Origin.IMAGE, mounts=mounts,
+                                                   reference=image.reference, built=image.built)
+        except (DockerError, ValueError, KeyError) as e:
+            failure = messages.with_output(messages.reason_of(e))
+            decisions[name] = imagedecision.Assessment.failure(image, failure)
+        finally:
+            ctx.docker.remove(container)
     return decisions
 
 

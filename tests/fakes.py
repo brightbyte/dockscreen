@@ -189,7 +189,7 @@ class FakeDocker(Executing):
         if ref == "gone":
             raise DockerError("No such container: gone")
         host = {**getattr(self, "host_config", {}), **(self.info_extra.get("HostConfig") or {})}
-        return {"Id": "id-" + ref, "Image": "sha256:abc", "Config": {
+        return {"Id": ref, "Image": "sha256:abc", "Config": {
             "Image": self.image, "Cmd": self.command, "User": self.container_user,
             "OpenStdin": self.open_stdin, "Env": self.env}, **self.info_extra, "HostConfig": host}
 

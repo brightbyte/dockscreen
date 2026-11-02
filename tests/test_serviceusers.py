@@ -9,7 +9,7 @@ from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imagedecision, policy
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.imagedecision import Kind
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
@@ -108,7 +108,7 @@ def test_pulling_before_building_and_failure_stops_everything():
 
     prepared, recorder, images = prepare(config, FakeImages(users={}, local=set()), active=("web", "app"),
                                          codes={"pull": 1})
-    assert prepared.problems == ["docker compose pull web failed"]
+    assert prepared.report.reasons == ["docker compose pull web failed"]
     # build never started
     assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]
     assert images.calls == []  # and nothing was created
@@ -126,40 +126,40 @@ def test_listing_the_services_can_fail_closed():
 
     image_ctx.docker.capture = failing_listing
     prepared = serviceusers.prepare(COMMAND, config, [], image_ctx)
-    assert prepared.problems == ["docker compose config --services failed"]
+    assert prepared.report.reasons == ["docker compose config --services failed"]
 
 
 # --- deciding about the images ---------------------------------------------------
 
-@pytest.mark.parametrize("image_user, kind", [
-    ("app", Kind.OK),          # 100000:100001, high and unknown to the host
-    ("", Kind.FALLBACK),       # no USER: root
-    ("root", Kind.FALLBACK),
-    ("0:0", Kind.FALLBACK),
-    ("web", Kind.REFUSED),     # 1000: low, and the host has it
-    ("ghost", Kind.REFUSED),   # not defined in the image
+@pytest.mark.parametrize("image_user, kind, refused", [
+    ("app", Kind.IMAGE, False),       # 100000:100001, high and unknown to the host
+    ("", Kind.FALLBACK, False),       # no USER: root
+    ("root", Kind.FALLBACK, False),
+    ("0:0", Kind.FALLBACK, False),
+    ("web", Kind.IMAGE, True),        # 1000: low, and the host has it
+    ("ghost", Kind.IMAGE, True),      # not defined in the image
 ])
-def test_the_images_own_user_is_judged_as_docker_run_does(image_user, kind):
+def test_the_images_own_user_is_judged_as_docker_run_does(image_user, kind, refused):
     prepared, _, images = prepare(project(), FakeImages(users={"web:1": image_user}))
 
-    assessment = prepared.decisions["web"].assessment
-    assert assessment.kind is kind
-    assert (prepared.problems != []) == (kind is Kind.REFUSED)
+    assessment = prepared.decisions["web"]
+    assert (assessment.kind, assessment.refused) == (kind, refused)
+    assert prepared.report.passed is not refused
     assert [call for call in images.calls if call[0] == "remove"] == [("remove", "c1")]  # nothing is left
 
 
 def test_refusals_say_what_to_do():
     prepared, _, _ = prepare(project(), FakeImages(users={"web:1": "web"}))
-    assert len(prepared.problems) == 1  # one line per service, however many ids are the problem
-    assert "service web: image web:1: the image's uid 1000 exists on this host" in prepared.problems[0]
-    assert "gid 1000" in prepared.problems[0]
-    assert prepared.problems[0].help == (
+    assert len(prepared.report.reasons) == 1  # one line per service, however many ids are the problem
+    assert "service web: image web:1: the image's uid 1000 exists on this host" in prepared.report.reasons[0]
+    assert "gid 1000" in prepared.report.reasons[0]
+    assert prepared.report.reasons[0].help == (
         f'set user: to choose one, or set user under [images."web"] in {make_runtime().config_file}')
 
 
 def test_a_built_image_is_not_pointed_at_an_image_section():
     prepared, _, _ = prepare(project(web={"build": {"context": "."}}), FakeImages(users={"web:1": "web"}))
-    assert prepared.problems[0].help == "set user: to choose one"  # the config file never applies
+    assert prepared.report.reasons[0].help == "set user: to choose one"  # the config file never applies
 
 
 def test_services_with_a_user_are_not_looked_at():
@@ -178,15 +178,15 @@ def test_only_started_services_are_looked_at_and_the_platform_is_passed():
 
 def test_an_image_that_is_not_there_is_a_failure():
     prepared, _, _ = prepare(project(web={"pull_policy": "never"}), FakeImages(users={}, local=set()))
-    assert prepared.problems == ["service web: image web:1: the image is not available locally"]
-    assert prepared.failed  # no user would fix it
+    assert prepared.report.reasons == ["service web: image web:1: the image is not available locally"]
+    assert prepared.report.verdict is Verdict.FAILED  # no user would fix it
 
 
 def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
     images = FakeImages(users={"web:1": "app"})
     images.inspect_container = lambda ref: (_ for _ in ()).throw(DockerError("boom"))
     prepared, _, _ = prepare(project(), images)
-    assert prepared.decisions["web"].assessment.problems == ["boom"]
+    assert prepared.decisions["web"].reasons == ["boom"] and prepared.decisions["web"].failed
     assert ("remove", "c1") in images.calls
 
 
@@ -272,7 +272,7 @@ def test_descriptions_and_notices():
 
 def test_a_refusal_names_the_local_account_that_the_images_id_would_be():
     refused, _, _ = prepare(project(web={}), FakeImages(users={"web:1": "web"}))
-    assert refused.problems == [
+    assert refused.report.reasons == [
         ("service web: image web:1: the image's uid 1000 exists on this host (local user daniel); "
          "the image's gid 1000 exists on this host (local group daniel)")]
 
@@ -284,16 +284,16 @@ BIND = {"volumes": [{"type": "bind", "source": "/p/data", "target": "/data"}]}
 
 def test_with_mounts_an_image_user_outside_the_nobody_range_is_refused():
     prepared, _, _ = prepare(project(web=BIND), FakeImages(users={"web:1": "app"}))
-    assert prepared.decisions["web"].assessment.kind is Kind.REFUSED
-    assert "the image's uid 100000 is not in the nobody range 65530-65534" in prepared.problems[0]
+    assert prepared.decisions["web"].refused
+    assert "the image's uid 100000 is not in the nobody range 65530-65534" in prepared.report.reasons[0]
 
 
 def test_without_mounts_a_low_unknown_id_is_accepted_and_with_mounts_it_is_not():
     images = FakeImages(users={"web:1": "pg"})
     plain, _, _ = prepare(project(web={}), images)
     mounted, _, _ = prepare(project(web=BIND), images)
-    assert plain.decisions["web"].assessment.kind is Kind.OK
-    assert mounted.decisions["web"].assessment.kind is Kind.REFUSED
+    assert plain.decisions["web"].kind is Kind.IMAGE and not plain.decisions["web"].refused
+    assert mounted.decisions["web"].refused
 
 
 def test_with_mounts_a_root_image_still_runs_as_the_default_user():
@@ -315,7 +315,7 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     images = FakeImages(users={"mariadb:11": ""}, digests={"mariadb:11": ["mariadb@sha256:abc"]})
     prepared, final, origins = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
 
-    assert prepared.decisions["db"].assessment.kind is Kind.CONFIGURED
+    assert prepared.decisions["db"].kind is Kind.CONFIGURED
     assert final["services"]["db"]["user"] == "999:999" and origins == {"db": Origin.CONFIG}
     assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
@@ -335,7 +335,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
     config = mariadb_project(**fields)
     prepared, _, _ = prepare(config, images, active=("db",), settings=MARIADB)
 
-    assessment = prepared.decisions["db"].assessment
+    assessment = prepared.decisions["db"]
     assert assessment.kind is Kind.FALLBACK  # the normal rules: root runs as the default user
     lines = prepared.describe()
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
@@ -345,7 +345,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
 def test_services_whose_user_the_command_line_chooses_are_not_decided():
     images = FakeImages(users={"web:1": "web"})  # would be refused
     prepared, _, _ = prepare(project(), images, chosen=frozenset({"web"}))
-    assert prepared.problems == [] and prepared.decisions == {}
+    assert prepared.report.passed and prepared.decisions == {}
 
 
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():

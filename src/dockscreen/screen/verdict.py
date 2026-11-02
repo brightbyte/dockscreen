@@ -14,7 +14,7 @@ def dot(assessment: Assessment) -> messages.Mark:
     """Returns the mark for an assessment of an image's user: BAD if refused, GOOD if accepted, else WARN."""
     if assessment.refused:
         return messages.BAD
-    return messages.GOOD if assessment.kind in (Kind.OK, Kind.CONFIGURED) else messages.WARN
+    return messages.GOOD if assessment.kind in (Kind.IMAGE, Kind.CONFIGURED) else messages.WARN
 
 
 # The closing line, the same for an audit, for --brief and for the check before a command runs.

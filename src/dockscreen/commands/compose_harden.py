@@ -89,15 +89,15 @@ def _fix_image_users(project: composeproject.Project, fixed: dict[str, Any], res
     with project.generated() as command:
         prepared = project.prepare(command(resolved), resolved)
     if not prepared.decisions:
-        return prepared.problems, notes  # nothing could be looked at: pulling or building failed
+        return prepared.report.reasons, notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []
-    for name, decision in prepared.decisions.items():
-        if decision.assessment.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(serviceusers.decision_problem(name, decision))
-        elif decision.assessment.refused:
+    for name, assessment in prepared.decisions.items():
+        if assessment.failed:  # setting a user does not fix an image that could not be read
+            remaining.append(serviceusers.decision_problem(name, assessment))
+        elif assessment.refused:
             fixed["services"][name]["user"] = _USER_TEMPLATE
-            notes.append(f"service {name}: image {decision.image} chose a user that is not acceptable, "
-                         "so user is set explicitly")
+            notes.append(f"service {name}: image {assessment.image.reference} chose a user that is not "
+                         "acceptable, so user is set explicitly")
     return remaining, notes
 
 

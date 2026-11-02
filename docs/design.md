@@ -149,7 +149,7 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`, `image`.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
 4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
@@ -186,7 +186,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.failed`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### Origins and trust (`origin`, `findings`)
 
@@ -212,7 +212,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 
 `idrules.Rules` implements [the id rules](#ids-the-project-and-the-image-may-not-choose). It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 
-`imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image.
+`imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image. The `Assessment` says where the user comes from (`Kind`: the command line, the config file, the image, or the default user instead of root), the image (`image.Image`: the name, and the id that is pinned), and what was found: refusals, failures to look, and a notable finding for an image section that does not apply.
 
 ### The `docker` wrapper (`docker_cli`, `runargs`, `commands`, `hostusers`)
 
@@ -224,7 +224,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `start` and `restart` (`docker_start`) check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` (`docker_exec`) checks only the form of the user (see [Forms](#forms)).
 - `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `docker_bake.check` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
-- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets `Kind.FAILED`: `run` refuses it like a refusal, the audit reports it as failed. `policy.check_container` reads the inspected container back into compose service keys (`container.Container.as_service`) and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
+- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets an assessment whose findings are failures (`Assessment.failure`): `run` refuses it like a refusal, the audit reports it as failed. `policy.check_container` reads the inspected container back into compose service keys (`container.Container.as_service`) and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.
