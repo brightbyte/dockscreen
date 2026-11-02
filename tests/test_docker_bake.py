@@ -122,7 +122,7 @@ def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
         docker_bake._definition(docker, [])
-    assert message in messages.with_output(messages.reason_of(raised.value))
+    assert message in messages.with_output(raised.value)
     [reason] = docker_bake.check(docker, [])
     assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
 

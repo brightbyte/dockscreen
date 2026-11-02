@@ -3,7 +3,6 @@ import subprocess
 import pytest
 
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, _first_file_of_tar
-from dockscreen.util import messages
 
 
 def test_a_missing_binary_is_docker_not_found(tmp_path):
@@ -57,7 +56,7 @@ def test_label_values_are_read_from_every_container_with_the_label_running_or_no
 def test_docker_failing_to_say_is_an_error():
     with pytest.raises(DockerError, match="docker ps failed") as raised:
         Docker.new_for_testing(Ps(code=1, err="daemon down")).label_values("project", "proj", "dir")
-    assert messages.output_of(messages.reason_of(raised.value)) == "daemon down"
+    assert raised.value.output == "daemon down"
 
 
 def test_first_file_of_tar():

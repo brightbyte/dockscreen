@@ -59,40 +59,22 @@ class Marked(str):
         return f"{self.text} - {self.help}" if self.help and _helpful else self.text
 
 
-class Reason(str):
-    """Explanation of why something is refused or failed, with an optional `help`: what to do about it,
-    and `output`: what docker printed about it, which may span lines.
+def help_of(text: object) -> str | None:
+    """Returns the help that comes with text (a Marked line, or a finding), or None for a plain string."""
+    return getattr(text, "help", None)
+
+
+def output_of(text: object) -> str | None:
+    """Returns what docker printed that comes with text (a Marked line, a finding, or an error that carries
+    an `output`), or None for a plain string.
     """
-
-    help: str | None
-    output: str | None
-
-    def __new__(cls, text: str, help: str | None = None, output: str | None = None) -> Self:
-        reason = super().__new__(cls, text)
-        reason.help, reason.output = help, output or None
-        return reason
+    return getattr(text, "output", None) or None
 
 
-def help_of(reason: object) -> str | None:
-    """Returns the help of a Reason, or None for a plain string."""
-    return getattr(reason, "help", None)
-
-
-def output_of(reason: object) -> str | None:
-    """Returns the output of a Reason or Marked, or None for a plain string."""
-    return getattr(reason, "output", None)
-
-
-def with_output(reason: str) -> str:
-    """Returns reason followed by its output, as one text: for where it has to fit on one line."""
-    output = output_of(reason)
-    return f"{reason}: {output}" if output else reason
-
-
-def reason_of(error: BaseException) -> str:
-    """Returns why error was raised: the Reason it was raised with, or its text."""
-    given = error.args[0] if len(error.args) == 1 else None
-    return given if isinstance(given, Reason) else str(error)
+def with_output(text: object) -> str:
+    """Returns text followed by its output (output_of), as one text: for where it has to fit on one line."""
+    output = output_of(text)
+    return f"{text}: {output}" if output else str(text)
 
 
 _helpful = False
@@ -137,7 +119,7 @@ def notable_change(text: str, help: str | None = None) -> Marked:
 def notice(text: object) -> None:
     """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted.
 
-    The output of a Reason or Marked follows, each of its lines escaped and indented by OUTPUT_INDENT.
+    The output of a Marked line or a finding follows, each of its lines escaped and indented by OUTPUT_INDENT.
     """
     print(f"{PREFIX} {_paint(text, sys.stderr)}", file=sys.stderr)
     for line in (output_of(text) or "").splitlines():

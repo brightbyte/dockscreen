@@ -22,8 +22,8 @@ from typing import Any, NamedTuple
 
 from dockscreen.cli import userargs
 from dockscreen.compose import inspect, serviceusers
-from dockscreen.host import hostusers, shellenv
-from dockscreen.host.dockerclient import REMOTE_MESSAGE, Docker, DockerNotFound, is_remote
+from dockscreen.host import shellenv
+from dockscreen.host.dockerclient import Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, hardening, imagedecision, policy, substitutions, verdict
@@ -56,10 +56,9 @@ class Project(NamedTuple):
 
     def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
-        problems = policy.check_config(self.hardened, self.static_ctx())
-        if self.remote:
-            problems.append(Finding(REMOTE_MESSAGE))
-        elif not problems and not inspect.names_project(self.global_args, self.runtime.env):
+        problems = policy.check_config(self.hardened, self.static_ctx()) + policy.check_daemon(self.remote)
+        # the name check asks the daemon, which must be this host's
+        if not problems and not inspect.names_project(self.global_args, self.runtime.env):
             problems += inspect.name_conflicts(self.hardened["name"], self.directory,
                                               self.image_ctx.docker)
         return problems
@@ -121,9 +120,9 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         project = load_project(global_args, runtime, allow_me)
         problems = project.problems()
     except (inspect.InspectError, DockerNotFound) as e:
-        verdict.screened(Report.failure(messages.reason_of(e)))
+        verdict.screened(Report.failure(e))
         return 1
-    except (inspect.ScreenError, hostusers.UserError, ValueError) as e:
+    except (inspect.ScreenError, ValueError) as e:
         problems = findings.refused([str(e)])
     if problems:
         verdict.screened(Report.of(problems))

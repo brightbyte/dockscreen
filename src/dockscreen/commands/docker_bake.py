@@ -20,7 +20,6 @@ from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity, refused
-from dockscreen.util import messages
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
 TARGET_KEYS = frozenset({
@@ -46,7 +45,7 @@ def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
     """
     result = docker.capture([docker.binary, "buildx", "bake", "--print", *args])
     if result.returncode != 0:
-        raise DockerError(messages.Reason("docker buildx bake --print failed", output=result.stderr.strip()))
+        raise DockerError("docker buildx bake --print failed", result.stderr.strip())
     try:
         found = json.loads(result.stdout)
     except ValueError as e:
@@ -159,5 +158,5 @@ def check(docker: Docker, args: Sequence[str]) -> list[Finding]:
         found = _definition(docker, args)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
-        return [Finding(str(e), Severity.FAILED, help=hint, output=messages.output_of(messages.reason_of(e)))]
+        return [Finding(str(e), Severity.FAILED, help=hint, output=e.output)]
     return refused(_check_definition(found, os.getcwd()))

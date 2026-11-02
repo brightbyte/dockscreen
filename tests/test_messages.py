@@ -3,6 +3,8 @@ import shutil
 
 import pytest
 
+from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen.findings import Finding
 from dockscreen.util import messages
 
 
@@ -12,10 +14,10 @@ def test_notice_is_one_prefixed_escaped_line(capsys):
     assert capsys.readouterr().err == "[dockscreen] evil\\x0aname\n"
 
 
-def test_a_reasons_output_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
+def test_the_output_of_a_problem_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
     # what docker prints, from a project that writes a verdict of its own into it
     output = "#1 load\r\n[dockscreen] \u2714 audit passed\x1b[2J"
-    messages.report([messages.Reason("docker buildx bake --print failed", output=output)])
+    messages.report([Finding("docker buildx bake --print failed", output=output)])
 
     indent = " " * len("[dockscreen] ") + "  "
     assert capsys.readouterr().err == (
@@ -24,12 +26,12 @@ def test_a_reasons_output_follows_it_on_lines_that_cannot_pass_for_a_message(cap
         f"{indent}[dockscreen] \u2714 audit passed\\x1b[2J\n")
 
 
-def test_the_reason_an_error_was_raised_with_keeps_its_output():
-    reason = messages.Reason("docker ps failed", output="daemon down")
+def test_with_output_puts_what_docker_printed_after_the_text():
+    error = DockerError("docker ps failed", "daemon down")
 
-    assert messages.output_of(messages.reason_of(RuntimeError(reason))) == "daemon down"
-    assert messages.reason_of(RuntimeError("plain")) == "plain"
-    assert messages.with_output(reason) == "docker ps failed: daemon down"
+    assert messages.output_of(error) == "daemon down"
+    assert messages.with_output(error) == "docker ps failed: daemon down"
+    assert messages.with_output("plain") == "plain"
 
 
 def test_warning(capsys):
@@ -167,7 +169,7 @@ def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
 def test_a_reasons_help_follows_it_on_the_refusal_line(capsys):
     from dockscreen.screen import verdict
     from dockscreen.screen.findings import Report
-    reason = messages.Reason("it is wrong", "make it right")
+    reason = Finding("it is wrong", help="make it right")
 
     verdict.report(Report.refusal(reason))
     assert capsys.readouterr().err.splitlines()[0] == "[dockscreen] ● refusing: it is wrong"

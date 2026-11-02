@@ -16,7 +16,11 @@ FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class DockerError(Exception):
-    pass
+    """Failure of a docker command, with what docker printed about it (output), if anything."""
+
+    def __init__(self, message: str, output: str | None = None) -> None:
+        super().__init__(message)
+        self.output = output or None
 
 
 class DockerNotFound(DockerError):
@@ -96,7 +100,7 @@ class Docker:
         # `--`: a ref from the project or the command line must not be read as an option
         result = self.run([kind, "inspect", "--", ref], capture_output=True, text=True)
         if result.returncode != 0:
-            raise DockerError(messages.Reason(f"docker {kind} inspect failed", output=result.stderr.strip()))
+            raise DockerError(f"docker {kind} inspect failed", result.stderr.strip())
         return json.loads(result.stdout)[0]
 
     def read_file(self, container: str, path: str) -> str | None:
@@ -142,7 +146,7 @@ class Docker:
         result = self.run(["ps", "--all", "--filter", f"label={label}={value}", "--format",
                            f'{{{{.Label "{wanted}"}}}}'], capture_output=True, text=True)
         if result.returncode != 0:
-            raise DockerError(messages.Reason("docker ps failed", output=result.stderr.strip()))
+            raise DockerError("docker ps failed", result.stderr.strip())
         return result.stdout.splitlines()
 
     def context(self) -> str | None:
@@ -207,9 +211,6 @@ def _first_file_of_tar(data: bytes) -> str | None:
             return None if file is None else file.read().decode("utf-8", errors="replace")
     except tarfile.TarError:
         return None
-
-
-REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot be checked"
 
 
 def is_remote(global_args: Sequence[str], docker: Docker) -> bool:

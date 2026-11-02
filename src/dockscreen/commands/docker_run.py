@@ -21,8 +21,7 @@ from typing import Any
 
 from dockscreen.cli import runargs
 from dockscreen.cli.runargs import DEFAULTS, defaults_notice
-from dockscreen.host import hostusers
-from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, DockerNotFound, is_remote
+from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image
@@ -59,17 +58,18 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     strict: --strict-screen was given, so what the command line asks for that a project or an image may
     not have is refused too.
     """
-    if is_remote(global_args, runtime.docker):
-        return verdict.report(Report.refusal(REMOTE_MESSAGE))
+    daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
+    if not daemon.passed:
+        return verdict.report(daemon)
     ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
-        verdict.screened(Report.refusal(messages.Reason(f"cannot read the command line: {e}",
-                                                        "use the real docker for this one")))
+        verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
+                                            help="use the real docker for this one")]))
         return 1
-    except hostusers.UserError as e:
-        verdict.screened(Report.refusal(str(e)))
+    if parsed.refusals:
+        verdict.screened(Report.of(parsed.refusals))
         return 1
     for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
         if message:
@@ -176,7 +176,7 @@ def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str
         assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else assess(
             ctx, container.id, container.info, _user_origin(parsed, extra), reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
-        assessment = Assessment.failure(image, messages.with_output(messages.reason_of(e)))
+        assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
 
 
@@ -230,8 +230,9 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     """
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
-    if is_remote(global_args, runtime.docker):
-        return verdict.report(Report.refusal(REMOTE_MESSAGE), brief)
+    daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
+    if not daemon.passed:
+        return verdict.report(daemon, brief)
     ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
@@ -239,8 +240,8 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    except hostusers.UserError as e:
-        return verdict.report(Report.refusal(str(e)), brief)
+    if parsed.refusals:
+        return verdict.report(Report.of(parsed.refusals), brief)
     if not brief:
         for message in parsed.notices:
             messages.notice(message)

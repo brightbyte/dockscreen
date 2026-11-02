@@ -21,12 +21,11 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from dockscreen.compose import composeproject, inspect, serviceusers
-from dockscreen.host.dockerclient import REMOTE_MESSAGE
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy
-from dockscreen.screen.findings import Finding
+from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -54,10 +53,10 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     try:
         project = composeproject.load_project(global_args, runtime, allow_me=True)
     except (inspect.ScreenError, ValueError) as e:
-        messages.notice(messages.reason_of(e))
+        messages.notice(failure_of(e))
         return 1
-    if project.remote:
-        messages.notice(REMOTE_MESSAGE)
+    for refusal in policy.check_daemon(project.remote):
+        messages.notice(refusal)
         return 1
 
     base, static = project.hardened, project.static_ctx()

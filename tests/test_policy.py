@@ -528,3 +528,38 @@ def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not
 
     assert {f.severity for f in found} == {Severity.NOTABLE}
     assert {f.severity for f in strict} == {Severity.REFUSED}
+
+
+# --- the daemon, the project name, and the command line's users ----------------
+
+def test_a_daemon_that_may_not_be_this_hosts_is_refused():
+    assert policy.check_daemon(False) == []
+    assert policy.check_daemon(True) == [policy.REMOTE_MESSAGE]
+
+
+@pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])
+def test_user_option_takes_numeric_ids(spec):
+    assert policy.check_user_option(spec) == []
+
+
+@pytest.mark.parametrize("spec", [
+    "alice", "nobody", "root", "1000:staff", "alice:1000", "", "1000:", ":1000", "-1", "1000", "0",
+])
+def test_user_option_refuses_everything_else_and_points_at_the_alternatives(spec):
+    [refusal] = policy.check_user_option(spec)
+    assert "--user takes numeric ids as uid:gid" in refusal
+    assert "--as NAME runs as a local user, --as-me as yourself" in refusal
+
+
+def test_a_user_option_with_a_uid_alone_says_to_give_the_group():
+    [refusal] = policy.check_user_option("1000")
+    assert "not '1000'; give the group too, as uid:gid" in refusal
+
+
+def test_as_option_needs_the_name_of_an_account_on_this_host():
+    assert policy.check_as_option("alice", (4242, 4343)) == []
+    assert policy.check_as_option("ghost", None) == [
+        "user 'ghost' does not exist on this host; use --user with a numeric id"]
+    for name in ("1000", "alice:staff", ""):
+        [refusal] = policy.check_as_option(name, (1, 1))
+        assert "--as takes the name of a local user" in refusal

@@ -1,5 +1,6 @@
 import pytest
 
+from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.util import messages
@@ -10,7 +11,7 @@ from dockscreen.util import messages
     (Report.refusal("a"), "⊖ denied by audit: a"),
     (Report.of(Finding(r) for r in "abc"), "⊖ denied by audit: a (+2 more)"),
     (Report.failure("no\nimage"), "✘ audit failed: no\\x0aimage"),  # still one line
-    (Report.failure(messages.Reason("docker ps failed", output="a\nb")),
+    (Report.failure(DockerError("docker ps failed", "a\nb")),
      "✘ audit failed: docker ps failed: a\\x0ab"),  # the output too
     # what stops the command comes first in the line, whatever was reported before it
     (Report.of([Finding("fine", Severity.ROUTINE), Finding("a")]), "⊖ denied by audit: a"),

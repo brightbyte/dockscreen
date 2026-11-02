@@ -1,16 +1,10 @@
-"""This module provides what dockscreen knows about the users of this host, and turns the users a command
-line gives into ids.
-
-Docker resolves a user name in the container's own /etc/passwd, where an image can map it
-to root. So `--user` takes only numbers, which mean the same everywhere, and `--as NAME` takes the
-name of an account on this host and turns it into ids before docker sees it.
+"""This module provides what dockscreen knows about the users and groups of this host: its accounts, and
+the subordinate id ranges of rootless containers.
 """
 
 import grp
 import pwd
 from typing import Self
-
-from dockscreen.util import ids
 
 SUBUID_FILE = "/etc/subuid"
 SUBGID_FILE = "/etc/subgid"
@@ -49,80 +43,6 @@ class HostAccounts:
             return grp.getgrgid(gid).gr_name
         except KeyError:
             return None
-
-
-class UserError(Exception):
-    """Rejection of a user given on the command line that cannot be used."""
-
-
-class UnknownUser(UserError):
-    pass
-
-
-DOCKER_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yourself"
-
-
-def _require_numeric(spec: str, alternatives: str = DOCKER_ALTERNATIVES) -> str:
-    """Returns spec as typed if it is numeric `uid:gid`; raises UserError saying what to use otherwise.
-
-    A uid alone would leave the group to the image: docker takes it, and the supplementary groups,
-    from the image's own passwd and group files, which can say root.
-    """
-    if ids.parse_user(spec):
-        return spec
-    hint = "; give the group too, as uid:gid" if ids.is_id(spec) else ""
-    raise UserError(f"--user takes numeric ids as uid:gid, not {spec!r}{hint}{alternatives}")
-
-
-def _resolve_account(name: str, accounts: HostAccounts) -> tuple[str, list[str]]:
-    """Resolves name to the account of that name on this host; returns (`uid:gid`, notices).
-
-    The gid is the account's primary group. accounts: where to look the name up (HostAccounts).
-    Raises UserError for an empty name, an id or a `:`, UnknownUser if there is no such account.
-    """
-    if not name or ":" in name or ids.is_id(name):
-        raise UserError(f"--as takes the name of a local user, not {name!r}; use --user for ids")
-    account = accounts.user(name)
-    if account is None:
-        raise UnknownUser(f"user {name!r} does not exist on this host; use --user with a numeric id")
-    uid, gid = account
-    return ids.format_user(account), [f"Resolving user {name} to uid {uid}, gid {gid}"]
-
-
-class UserOptions:
-    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker.
-
-    Records whether a user was given, whether the caller's own ids are allowed (--as-me), and the
-    notices that resolving names produced.
-    """
-
-    def __init__(self, me: tuple[int, int], accounts: HostAccounts) -> None:
-        """Starts with no user given; me: the (uid, gid) --as-me stands for; accounts: where --as looks."""
-        self.callers_ids = me
-        self.accounts = accounts
-        self.user_given = False
-        self.allow_me = False
-        self.notices: list[str] = []
-
-    def numeric(self, spec: str) -> str:
-        """Returns `--user=` for spec (--user or -u); raises UserError unless it is numeric `uid:gid`."""
-        self.user_given = True
-        return f"--user={_require_numeric(spec)}"
-
-    def account(self, name: str) -> str:
-        """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice.
-
-        Raises UserError if there is no such account (_resolve_account).
-        """
-        self.user_given = True
-        resolved, messages = _resolve_account(name, self.accounts)
-        self.notices += messages
-        return f"--user={resolved}"
-
-    def me(self) -> str:
-        """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
-        self.user_given = self.allow_me = True
-        return f"--user={ids.format_user(self.callers_ids)}"
 
 
 class Subordinate:

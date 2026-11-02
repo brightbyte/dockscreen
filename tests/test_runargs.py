@@ -2,7 +2,6 @@ import fakes
 import pytest
 
 from dockscreen.cli import runargs
-from dockscreen.host import hostusers
 
 ME = (4242, 4343)
 
@@ -92,11 +91,11 @@ def test_as_resolves_a_local_account_on_the_host(flags):
     assert parsed.user_given
 
 
-def test_as_with_an_unknown_account_or_an_id_is_an_error():
-    with pytest.raises(hostusers.UnknownUser):
-        runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
-    with pytest.raises(hostusers.UserError):
-        runargs.parse(["--as", "1000", "img"], ME, fakes.Accounts())
+def test_as_with_an_unknown_account_or_an_id_is_refused():
+    assert runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts()).refusals == (
+        "user 'ghost' does not exist on this host; use --user with a numeric id",)
+    assert runargs.parse(["--as", "1000", "img"], ME, fakes.Accounts()).refusals == (
+        "--as takes the name of a local user, not '1000'; use --user for ids",)
     with pytest.raises(runargs.ParseError):
         runargs.parse(["--as"], ME, fakes.Accounts())
 
@@ -120,8 +119,8 @@ def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
     ["--user", "1000"], ["--user=0"], ["-u", "7"],  # a uid alone leaves the group to the image
 ])
 def test_user_names_are_refused_with_a_pointer_to_as(flags):
-    with pytest.raises(hostusers.UserError, match="--user takes numeric ids as uid:gid"):
-        parse(*flags, "img")
+    [refusal] = parse(*flags, "img").refusals
+    assert "--user takes numeric ids as uid:gid" in refusal
 
 
 def test_a_user_flag_in_a_cluster_keeps_its_neighbours():

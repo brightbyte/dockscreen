@@ -8,7 +8,6 @@ checked against the image.
 
 from dockscreen.cli import composeargs
 from dockscreen.compose import composeproject
-from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
@@ -20,9 +19,8 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    try:
-        parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
-    except hostusers.UserError as e:
-        verdict.screened(Report.refusal(str(e)))
+    parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
+    if parsed.refusals:
+        verdict.screened(Report.of(parsed.refusals))
         return 1
     return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me)

@@ -294,7 +294,7 @@ def _decide(config: dict[str, Any], to_run: frozenset[str],
             decisions[name] = imagedecision.assess(ctx, container, info, Origin.IMAGE, mounts=mounts,
                                                    reference=image.reference, built=image.built)
         except (DockerError, ValueError, KeyError) as e:
-            failure = messages.with_output(messages.reason_of(e))
+            failure = messages.with_output(e)
             decisions[name] = imagedecision.Assessment.failure(image, failure)
         finally:
             ctx.docker.remove(container)

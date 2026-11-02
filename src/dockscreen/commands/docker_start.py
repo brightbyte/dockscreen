@@ -9,7 +9,7 @@ that user.
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
+from dockscreen.host.dockerclient import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
@@ -44,7 +44,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     container asked for is judged as a project's would be, and refused (policy.check_container).
     """
     if is_remote(global_args, runtime.docker):
-        return [Finding(REMOTE_MESSAGE)]
+        return policy.check_daemon(True)
     ctx = imagedecision.Context.for_runtime(runtime, allow_me)
     problems: list[Finding] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
@@ -64,7 +64,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                 found = policy.check_container(Container(info), policy_ctx, user_origin)
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
-            problems.append(Finding(messages.with_output(messages.reason_of(e)), subject=ref))
+            problems.append(Finding(messages.with_output(e), subject=ref))
     return problems
 
 

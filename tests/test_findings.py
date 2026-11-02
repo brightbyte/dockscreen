@@ -1,8 +1,8 @@
 import pytest
 
+from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import findings
 from dockscreen.screen.findings import Finding, Report, Severity, Verdict
-from dockscreen.util import messages
 
 
 def test_exit_statuses_leave_two_for_usage_errors():
@@ -19,14 +19,22 @@ def test_a_finding_reads_as_its_subject_and_text():
     assert Finding("no subject") == "no subject"
 
 
-def test_of_keeps_what_a_reason_says_beyond_its_text():
-    reason = messages.Reason("docker ps failed", "is docker running?", "connection refused")
+def test_of_keeps_what_a_finding_says_beyond_its_text():
+    reason = Finding("docker ps failed", help="is docker running?", output="connection refused")
 
     finding = Finding.of(reason, Severity.FAILED, "container abc")
 
     assert finding == "container abc: docker ps failed"
     assert (finding.help, finding.output, finding.severity) == (
         "is docker running?", "connection refused", Severity.FAILED)
+
+
+def test_failure_of_an_error_keeps_what_docker_printed():
+    failure = findings.failure_of(DockerError("docker ps failed", "daemon down"), "container abc")
+
+    assert failure == "container abc: docker ps failed"
+    assert (failure.output, failure.severity) == ("daemon down", Severity.FAILED)
+    assert findings.failure_of(ValueError("bad")).output is None
 
 
 def test_of_a_finding_keeps_its_subject_in_the_text():

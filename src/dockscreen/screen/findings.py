@@ -30,9 +30,9 @@ class Severity(enum.Enum):
         return self in (Severity.REFUSED, Severity.FAILED)
 
 
-class Finding(messages.Reason):
-    """Statement about one subject of screening, with how much it matters and, as a Reason, what to do
-    about it and what docker printed.
+class Finding(str):
+    """Statement about one subject of screening, with how much it matters, what to do about it (help) and
+    what docker printed about it (output), which may span lines.
 
     Its string value is the text, after the subject and a colon if there is a subject.
     """
@@ -40,18 +40,21 @@ class Finding(messages.Reason):
     text: str
     severity: Severity
     subject: str | None
+    help: str | None
+    output: str | None
 
     def __new__(cls, text: str, severity: Severity = Severity.REFUSED, subject: str | None = None,
                 help: str | None = None, output: str | None = None) -> Self:
-        finding = super().__new__(cls, f"{subject}: {text}" if subject else text, help, output)
+        finding = super().__new__(cls, f"{subject}: {text}" if subject else text)
         finding.text, finding.severity, finding.subject = text, severity, subject
+        finding.help, finding.output = help, output or None
         return finding
 
     @classmethod
     def of(cls, reason: object, severity: Severity | None = None, subject: str | None = None) -> Self:
         """Returns reason as a finding of severity about subject, keeping its help and output.
 
-        reason: a text, a messages.Reason, or a Finding, whose own subject becomes part of the text.
+        reason: a text, or a Finding, whose own subject becomes part of the text.
         severity: if None, a Finding's own, else REFUSED.
         """
         if severity is None:
@@ -62,6 +65,13 @@ class Finding(messages.Reason):
     def fatal(self) -> bool:
         """Tells whether this finding stops the command."""
         return self.severity.fatal
+
+
+def failure_of(error: BaseException, subject: str | None = None) -> Finding:
+    """Returns the failure to look that error reports, about subject if given, with what docker printed
+    about it if the error carries that (an `output`).
+    """
+    return Finding(str(error), Severity.FAILED, subject, output=getattr(error, "output", None))
 
 
 def about(found: Iterable[Finding], subject: str) -> list[Finding]:
@@ -113,7 +123,9 @@ class Report(NamedTuple):
 
     @classmethod
     def failure(cls, reason: object) -> Self:
-        """Returns the report of a single failure to look (Finding.of)."""
+        """Returns the report of a single failure to look: an error (failure_of), or a text."""
+        if isinstance(reason, BaseException):
+            return cls((failure_of(reason),))
         return cls((Finding.of(reason, Severity.FAILED),))
 
     @property

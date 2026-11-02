@@ -31,7 +31,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     try:
         project = composeproject.load_project(global_args, runtime, allow_me)
     except (inspect.InspectError, DockerNotFound) as e:
-        return verdict.report(Report.failure(messages.reason_of(e)), brief)
+        return verdict.report(Report.failure(e), brief)
     except (inspect.ScreenError, ValueError) as e:
         return verdict.report(Report.refusal(str(e)), brief)
 

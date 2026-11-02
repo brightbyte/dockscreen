@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 
-from dockscreen.host import config, hostusers
+from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import idrules, imagedecision
 
@@ -55,14 +55,6 @@ class Accounts:
 
     def group_name(self, gid):
         return {0: "root", 1000: "daniel", 999: "docker"}.get(gid)
-
-
-REAL_RESOLVE = hostusers._resolve_account  # tests that replace it by host_account must not recurse
-
-
-def host_account(name, accounts=None):
-    """hostusers._resolve_account against the host of Accounts, whatever accounts are given."""
-    return REAL_RESOLVE(name, Accounts())
 
 
 def make_runtime(**fields):

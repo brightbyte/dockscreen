@@ -639,3 +639,61 @@ def is_inside(path: str, root: str) -> bool:
     real_root = os.path.realpath(root)
     real = os.path.realpath(os.path.join(real_root, path))
     return os.path.commonpath([real_root, real]) == real_root
+
+
+# --- what else the project and the command line choose ------------------------
+
+REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot be checked"
+
+
+def check_daemon(remote: bool) -> list[Finding]:
+    """Checks the daemon a command talks to; returns a refusal if it may not be this host's own (remote),
+    since the checks compare ids and paths with this host's.
+    """
+    return [Finding(REMOTE_MESSAGE)] if remote else []
+
+
+def check_project_name(name: str, directory: str, made_from: Iterable[str]) -> list[Finding]:
+    """Checks that the project in directory may use its name; returns a refusal if containers with that
+    project name were made from another directory.
+
+    The name is the project's own choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`), and it decides
+    which volumes, networks and containers compose uses, replaces and, for `down -v`, removes.
+    made_from: the directories the containers with that project name say they were made from, "" for a
+    container that does not say, which cannot be shown to come from directory.
+    """
+    here = os.path.realpath(directory)
+    others = sorted({path for path in made_from if not path or os.path.realpath(path) != here})
+    if not others:
+        return []
+    shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
+    return [Finding(f"project name {name!r} is used by containers made from {shown}, not from {here}",
+                    help="pass -p NAME to choose the name yourself")]
+
+
+# The ways to choose a user on a docker command line, named in refusals of --user.
+USER_OPTION_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yourself"
+
+
+def check_user_option(spec: str) -> list[Finding]:
+    """Checks a user that --user or -u gives; returns a refusal unless it is numeric `uid:gid`.
+
+    A name would be resolved in the image, or for exec in the running container, which the image controls.
+    A uid alone would leave the group to the image: docker takes it, and the supplementary groups, from
+    the image's own passwd and group files, which can say root.
+    """
+    if ids.parse_user(spec):
+        return []
+    hint = "; give the group too, as uid:gid" if ids.is_id(spec) else ""
+    return [Finding(f"--user takes numeric ids as uid:gid, not {spec!r}{hint}{USER_OPTION_ALTERNATIVES}")]
+
+
+def check_as_option(name: str, account: tuple[int, int] | None) -> list[Finding]:
+    """Checks the name that --as gives and the account of that name on this host (None: there is none);
+    returns a refusal unless it names an account here.
+    """
+    if not name or ":" in name or ids.is_id(name):
+        return [Finding(f"--as takes the name of a local user, not {name!r}; use --user for ids")]
+    if account is None:
+        return [Finding(f"user {name!r} does not exist on this host; use --user with a numeric id")]
+    return []

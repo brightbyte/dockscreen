@@ -17,7 +17,52 @@ from typing import NamedTuple
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.util import commandline, messages
+from dockscreen.screen import policy
+from dockscreen.screen.findings import Finding
+from dockscreen.util import commandline, ids, messages
+
+
+class UserOptions:
+    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker.
+
+    Records whether a user was given, whether the caller's own ids are allowed (--as-me), the notices that
+    resolving names produced, and the refusals of users that cannot be used (policy.check_user_option,
+    policy.check_as_option).
+    """
+
+    def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
+        """Starts with no user given; me: the (uid, gid) --as-me stands for; accounts: where --as looks."""
+        self.callers_ids = me
+        self.accounts = accounts
+        self.user_given = False
+        self.allow_me = False
+        self.notices: list[str] = []
+        self.refusals: list[Finding] = []
+
+    def numeric(self, spec: str) -> str:
+        """Returns `--user=` for spec (--user or -u), and keeps the refusal unless it is numeric `uid:gid`."""
+        self.user_given = True
+        self.refusals += policy.check_user_option(spec)
+        return f"--user={spec}"
+
+    def account(self, name: str) -> str:
+        """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice;
+        or keeps the refusal if there is no such account, and returns --as as given.
+        """
+        self.user_given = True
+        account = self.accounts.user(name) if name else None
+        refused = policy.check_as_option(name, account)
+        if refused or account is None:
+            self.refusals += refused
+            return f"{commandline.AS}={name}"
+        uid, gid = account
+        self.notices.append(f"Resolving user {name} to uid {uid}, gid {gid}")
+        return f"--user={ids.format_user(account)}"
+
+    def me(self) -> str:
+        """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
+        self.user_given = self.allow_me = True
+        return f"--user={ids.format_user(self.callers_ids)}"
 
 
 class Parsed(NamedTuple):
@@ -28,26 +73,27 @@ class Parsed(NamedTuple):
     user_given: bool  # --user, -u or --as before the service
     args: list        # args with --as NAME replaced by --user=uid:gid
     notices: list     # what resolving user names on this host did, for the caller to print
+    refusals: tuple = ()  # the users it gives that cannot be used (findings.Finding)
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
           accounts: hostusers.HostAccounts) -> Parsed:
     """Parses args far enough to find the service or container, and whether a user is given.
 
-    Returns a Parsed, with --as and --as-me replaced by ids. Raises hostusers.UserError for a user that is
-    not numeric `uid:gid`, or an --as that does not name a local user.
+    Returns a Parsed, with --as and --as-me replaced by ids, and refusals of a user that is not numeric
+    `uid:gid`, or an --as that does not name a local user.
     value_flags: the command's options that take a value in the next argument.
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     """
-    users = hostusers.UserOptions(me, accounts)
+    users = UserOptions(me, accounts)
     kept: list[str] = []
     i = 0
     while i < len(args):
         token = args[i]
         if token == "--":
             service = args[i + 1] if i + 1 < len(args) else None
-            return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices)
+            return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.refusals))
         if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
@@ -56,8 +102,8 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         elif token.startswith("-") and token != "-":
             i = _parse_short(args, i, value_flags, users, kept)
         else:
-            return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices)
-    return Parsed(None, users.user_given, kept, users.notices)
+            return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.refusals))
+    return Parsed(None, users.user_given, kept, users.notices, tuple(users.refusals))
 
 
 
@@ -66,16 +112,15 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
 
     Returns None, and reports why, if the user cannot be used. value_flags: as parse takes them.
     """
-    try:
-        parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    except hostusers.UserError as e:
-        messages.report([str(e)])
+    parsed = parse(args, value_flags, runtime.me, runtime.accounts)
+    if parsed.refusals:
+        messages.report(parsed.refusals)
         return None
     for notice in parsed.notices:
         messages.notice(notice)
     return parsed.args
 
-def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: hostusers.UserOptions,
+def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: UserOptions,
                 kept: list[str]) -> int:
     """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
@@ -92,7 +137,7 @@ def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users
     return end + 1
 
 
-def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: hostusers.UserOptions,
+def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: UserOptions,
                  kept: list[str]) -> int:
     """Reads the cluster at args[i] (such as -it or -u0:0) into kept, and returns the index after it."""
     token = args[i]

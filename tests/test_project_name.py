@@ -5,6 +5,7 @@ from dockscreen import compose_cli
 from dockscreen.commands import compose_up
 from dockscreen.compose import inspect
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen.findings import Severity
 
 
 def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():
@@ -42,13 +43,14 @@ def test_containers_without_a_directory_label_count_as_another_project():
     assert "an unknown directory" in conflicts([""])[0]
 
 
-def test_not_being_able_to_ask_is_a_refusal():
+def test_not_being_able_to_ask_is_a_failure_to_look():
     class Broken:
         def label_values(self, label, value, wanted):
             raise DockerError("daemon down")
 
-    assert inspect.name_conflicts("proj", "/p", Broken()) == [
-        "cannot tell whether another project is called 'proj': daemon down"]
+    [failure] = inspect.name_conflicts("proj", "/p", Broken())
+    assert failure == "cannot tell whether another project is called 'proj': daemon down"
+    assert failure.severity is Severity.FAILED
 
 
 @pytest.mark.parametrize("args, env, chosen", [

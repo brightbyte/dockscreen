@@ -13,7 +13,7 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import idrules, policy, verdict
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.util import commandline, messages
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -28,7 +28,13 @@ class ScreenError(Exception):
 
 
 class InspectError(ScreenError):
-    """Failure to inspect a project's config: no compose file, or compose could not read it."""
+    """Failure to inspect a project's config: no compose file, or compose could not read it; with what
+    compose printed about it (output), if anything.
+    """
+
+    def __init__(self, message: str, output: str | None = None) -> None:
+        super().__init__(message)
+        self.output = output or None
 
 
 def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any], str]:
@@ -102,7 +108,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
     try:
         config, project_dir = project(global_args, runtime)
     except InspectError as e:
-        return verdict.screened(Report.failure(messages.reason_of(e)))
+        return verdict.screened(Report.failure(e))
     except ScreenError as e:
         return verdict.screened(Report.refusal(str(e)))
     return verdict.screened(Report.of(rules(config, context(project_dir, runtime))))
@@ -125,7 +131,7 @@ def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
     except DockerNotFound:
         raise InspectError("'docker' not found in PATH")
     if result.returncode != 0:
-        raise InspectError(messages.Reason("docker compose config failed", output=result.stderr.strip()))
+        raise InspectError("docker compose config failed", result.stderr.strip())
     try:
         return json.loads(result.stdout)
     except ValueError as e:
@@ -138,26 +144,17 @@ WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
 def name_conflicts(name: str, directory: str, docker: Docker) -> list[Finding]:
-    """Checks whether containers of a project called name exist that were made from another directory.
+    """Checks the name of the project in directory against the containers that have it
+    (policy.check_project_name); returns what it finds, or the failure to look.
 
-    Returns the refusals, empty if there are none. The name is the project's own choice (`name:`, or
-    `COMPOSE_PROJECT_NAME` in its `.env`), and it decides which volumes, networks and containers compose
-    uses, replaces and, for `down -v`, removes. Volumes and networks alone say nothing about where they came
-    from, so only containers count.
+    Volumes and networks say nothing about where they came from, so only containers count.
     """
     try:
-        found = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
+        made_from = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
     except DockerError as e:
-        return [Finding(f"cannot tell whether another project is called {name!r}: {e}",
-                        output=messages.output_of(messages.reason_of(e)))]
-    here = os.path.realpath(directory)
-    # a container without the label cannot be shown to come from here
-    others = sorted({path for path in found if not path or os.path.realpath(path) != here})
-    if not others:
-        return []
-    shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
-    return [Finding(f"project name {name!r} is used by containers made from {shown}, not from {here}",
-                    help="pass -p NAME to choose the name yourself")]
+        return [Finding(f"cannot tell whether another project is called {name!r}: {e}", Severity.FAILED,
+                        output=e.output)]
+    return policy.check_project_name(name, directory, made_from)
 
 
 def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:

@@ -9,6 +9,7 @@ and docker_run checks that our reading of the command line matched the daemon's.
 
 from typing import NamedTuple
 
+from dockscreen.cli import userargs
 from dockscreen.host import hostusers
 from dockscreen.util import commandline, messages
 
@@ -57,11 +58,12 @@ class ParsedRun(NamedTuple):
     user_given: bool  # --user, -u, --as or --as-me before the image
     notices: list     # what resolving user names on this host did, for the caller to print
     allow_me: bool = False  # --allow-me or --as-me before the image
+    refusals: tuple = ()    # the users it gives that cannot be used (findings.Finding)
 
 
 class _State:
-    def __init__(self, users: hostusers.UserOptions) -> None:
-        self.users = users  # hostusers.UserOptions
+    def __init__(self, users: userargs.UserOptions) -> None:
+        self.users = users
         self.kept: list[str] = []
         self.detach = False
         self.detach_keys: str | None = None
@@ -73,10 +75,10 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
 
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
-    Raises ParseError if there is no image or an option lacks its value, and hostusers.UserError if
-    --user is not numeric or --as does not name a local user.
+    Raises ParseError if there is no image or an option lacks its value. A --user that is not numeric, or
+    an --as that does not name a local user, is in the refusals.
     """
-    users = hostusers.UserOptions(me, accounts)
+    users = userargs.UserOptions(me, accounts)
     state = _State(users)
     i = 0
     while i < len(args):
@@ -94,7 +96,7 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
     if i >= len(args):
         raise ParseError("no image found in the command line")
     return ParsedRun([*state.kept, *args[i:]], args[i], args[i + 1:], state.detach, state.detach_keys,
-                     users.user_given, users.notices, users.allow_me)
+                     users.user_given, users.notices, users.allow_me, tuple(users.refusals))
 
 
 def _parse_long(args: list[str], i: int, state: _State) -> int:

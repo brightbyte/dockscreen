@@ -1,7 +1,6 @@
 import pytest
 
 from dockscreen.cli import composeargs, runargs, userargs
-from dockscreen.host import hostusers
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value
@@ -34,16 +33,15 @@ def test_run_arguments(args, service, user_given):
     ["--user", "1000:staff", "web"],
 ])
 def test_users_must_be_numeric_uid_gid(args):
-    with pytest.raises(hostusers.UserError, match="--user takes numeric ids as uid:gid"):
-        parse("run", args)
+    [refusal] = parse("run", args).refusals
+    assert "--user takes numeric ids as uid:gid" in refusal
 
 
 def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
     assert parse("exec", exec_args)[:2] == ("web", True)
     assert parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])[:2] == ("c", False)
-    with pytest.raises(hostusers.UserError):
-        parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"])
+    assert parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"]).refusals
 
 
 class Accounts:
@@ -71,14 +69,14 @@ def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, arg
     assert parsed.notices == ([] if "--as" in rewritten else ["Resolving user alice to uid 1001, gid 1002"])
 
 
-def test_as_with_an_unknown_name_is_an_error():
-    with pytest.raises(hostusers.UnknownUser):
-        parse("exec", ["--as", "bob", "web", "sh"])
+def test_as_with_an_unknown_name_is_refused():
+    assert parse("exec", ["--as", "bob", "web", "sh"]).refusals == (
+        "user 'bob' does not exist on this host; use --user with a numeric id",)
 
 
 def test_a_name_given_to_user_points_to_as():
-    with pytest.raises(hostusers.UserError, match="--as NAME runs as a local user"):
-        parse("exec", ["-u", "postgres", "web", "sh"])
+    [refusal] = parse("exec", ["-u", "postgres", "web", "sh"]).refusals
+    assert "--as NAME runs as a local user" in refusal
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
