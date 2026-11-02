@@ -133,18 +133,31 @@ PROJECT_LABEL = "com.docker.compose.project"
 WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
+def made_from(name: str, docker: Docker) -> list[str]:
+    """Returns the directories that the containers with the project name say they were made from, "" for
+    one that does not say.
+
+    Volumes and networks say nothing about where they came from, so only containers count. Raises
+    DockerError if docker cannot say.
+    """
+    return docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
+
+
+def name_lookup_failure(name: str, error: DockerError) -> Finding:
+    """Returns the failure to look at the containers called by the project name (made_from)."""
+    return Finding(f"cannot tell whether another project is called {name!r}: {error}", Severity.FAILED,
+                   output=error.output)
+
+
 def name_conflicts(project_policy: policy.Policy, name: str, directory: str, docker: Docker) -> list[Finding]:
     """Checks the name of the project in directory against the containers that have it, by project_policy
     (Policy.check_project_name); returns what it finds, or the failure to look.
-
-    Volumes and networks say nothing about where they came from, so only containers count.
     """
     try:
-        made_from = docker.label_values(PROJECT_LABEL, name, WORKING_DIR_LABEL)
+        found = made_from(name, docker)
     except DockerError as e:
-        return [Finding(f"cannot tell whether another project is called {name!r}: {e}", Severity.FAILED,
-                        output=e.output)]
-    return project_policy.check_project_name(name, directory, made_from)
+        return [name_lookup_failure(name, e)]
+    return project_policy.check_project_name(name, directory, found)
 
 
 def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:

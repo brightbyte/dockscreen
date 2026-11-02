@@ -161,23 +161,23 @@ The `docker` and `docker compose` dispatchers are built alike. A command object 
 
 ### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `serviceusers`, `composeproject`)
 
-For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
+For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.Project`) is screened in stages, each only once the one before it passed (`composeproject.Compose.screen`). What is known about the project grows with each stage, and `Policy.check_project` judges what is known; only a screening that passed every stage has a project to run (`Screened.final`):
 
 1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it (`inspect.locate`), and the policy judges it before the config is read (`Policy.check_location`). A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
 2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
-3. `Policy.check_project` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their user comes from the image (`origin.Origin.IMAGE`), which decides it.
-   The project's name is checked too (`policy.check_project_name`, with the labels `inspect.name_conflicts` asks docker for; a failure to ask is a failure, not a refusal). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
+3. `Policy.check_project` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives, and refuses a daemon that may not be this host's. Services that set no `user:` are exempt for now: their user comes from the image (`origin.Origin.IMAGE`), which decides it.
+   Once that passes, the project's name is checked too (`Policy.check_project_name`, with the directories `inspect.made_from` asks docker for, `Project.made_from`; a failure to ask is a failure, not a refusal). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
 4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
    - for each one without `user:`, creates a container with `--pull=never`, reads its passwd and group files, and decides as `docker run` does (below);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
-5. `serviceusers.Prepared.finalize`, which makes the substitutions of `Prepared.changes`:
+5. `Compose.final`, which makes the substitutions of `Prepared.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
    - the policy runs again on the result, with each value it set judged by where it came from (`project.Project.origins`, from the substitutions that set them): an image's own user was checked when it was decided, a user from the config file (configured or default) is trusted, so what the rules say about it is pointed out, not refused, and what dockscreen chose itself (the defaults, the pinned image) is checked like the project's.
-6. Before anything is pulled or built (`composeproject.Project.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
+6. Before anything is pulled or built (`composeproject.Compose.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
 `build` and `bake` get only `Policy.check_project_build`, with no runtime checks:
@@ -186,7 +186,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs steps 1–4 and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### Origins and trust (`origin`, `findings`)
 

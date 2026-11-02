@@ -3,11 +3,14 @@
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
 runs, so it is what is judged; the files themselves are not. The project also has what its definition
-does not say: where it is, which daemon its containers would run on, and where the values that
-dockscreen changed in its definition come from.
+does not say: where it is, which daemon its containers would run on, which containers already have its
+name, and where the values that dockscreen changed in its definition come from.
+
+What is known about a project is gathered in stages, some of which ask docker; a fact that was not
+looked at yet is None, and the checks of the project judge what is known.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
@@ -17,14 +20,16 @@ from dockscreen.model.origin import Origin
 
 
 class Project(NamedTuple):
-    """Compose project: its definition, where it is, whether its daemon may not be this host's (remote; None
-    if that was not looked at), and where the values in its definition come from where that is not the
-    project (origins, by service and key).
+    """Compose project: its definition, where it is, whether its daemon may not be this host's (remote), the
+    directories that the containers with its name say they were made from ("" for one that does not say;
+    made_from), and where the values in its definition come from where that is not the project (origins,
+    by service and key). remote and made_from are None until they are looked at.
     """
     definition: dict[str, Any]
     location: Location
     remote: bool | None = None
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
+    made_from: tuple[str, ...] | None = None
 
     @property
     def name(self) -> str | None:
@@ -53,6 +58,12 @@ class Project(NamedTuple):
     def with_remote(self, remote: bool) -> Self:
         """Returns this project with remote telling whether its daemon may not be this host's."""
         return self._replace(remote=remote)
+
+    def with_made_from(self, made_from: Sequence[str]) -> Self:
+        """Returns this project with made_from as the directories the containers with its name were made
+        from.
+        """
+        return self._replace(made_from=tuple(made_from))
 
     def with_definition(self, definition: dict[str, Any]) -> Self:
         """Returns this project with definition as its definition."""

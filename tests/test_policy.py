@@ -600,3 +600,13 @@ def test_as_option_needs_the_name_of_an_account_on_this_host():
     for name in ("1000", "alice:staff", ""):
         [refusal] = policy.Policy("/p", rules()).check_as_option(name, (1, 1))
         assert "--as takes the name of a local user" in refusal
+
+
+def test_a_project_is_judged_by_what_is_known_about_it_and_nothing_that_was_not_looked_at(project):
+    known = project_of({"name": "proj", "services": {}}, project)
+    rules_ = context(project)
+
+    assert rules_.check_project(known) == []  # its daemon and the containers with its name: not looked at
+    assert rules_.check_project(known.with_remote(True)) == [policy.REMOTE_MESSAGE]
+    [conflict] = rules_.check_project(known.with_remote(False).with_made_from(["/elsewhere"]))
+    assert conflict.startswith("project name 'proj' is used by containers made from '/elsewhere'")

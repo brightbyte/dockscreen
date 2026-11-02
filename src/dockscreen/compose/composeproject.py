@@ -23,17 +23,27 @@ from typing import Any, NamedTuple
 from dockscreen.cli import userargs
 from dockscreen.compose import inspect, runoptions, serviceusers
 from dockscreen.host import shellenv
-from dockscreen.host.dockerclient import Docker, DockerNotFound, is_remote
+from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import findings, hardening, imagedecision, policy, substitutions, verdict
+from dockscreen.screen import hardening, imagedecision, policy, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
+
+
+class Screened(NamedTuple):
+    """Outcome of screening a compose project stage by stage (Compose.screen): what the last stage that ran
+    found, the images as they were prepared if it got that far, and the project that will run, which only a
+    screening that passed every stage has.
+    """
+    report: Report
+    prepared: serviceusers.Prepared | None = None
+    final: Project | None = None
 
 
 class Compose(NamedTuple):
@@ -72,15 +82,51 @@ class Compose(NamedTuple):
         """Returns the policy context for the checks before any image is looked at."""
         return self.scope.project_policy()
 
-    def problems(self) -> list[Finding]:
-        """Returns what is refused before any image is looked at; empty if nothing is."""
-        static = self.static_policy()
-        problems = static.check_project(self.static()) + static.check_daemon(self.remote)
-        # the name check asks the daemon, which must be this host's
-        if not problems and not inspect.names_project(self.global_args, self.scope.runtime.env):
-            problems += inspect.name_conflicts(static, self.hardened["name"], self.directory,
-                                              self.scope.docker)
-        return problems
+    def screen(self, command: Callable[[dict[str, Any]], list[str]], parsed: userargs.Parsed | None = None,
+               strict: bool = False, announce: Callable[[], None] = lambda: None) -> Screened:
+        """Screens the project for a command that starts its containers, stage by stage, each only once the
+        one before it passed: the project before any image is looked at (static), the containers that
+        already have its name, its images (prepare), and the project that will run (final).
+
+        command: the compose command line on a generated file (generated()).
+        parsed: the arguments of the subcommand, with the user the command line chose (compose_run).
+        strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is
+        judged, with the command line untrusted; otherwise those options are taken as given, as for
+        `docker run`. announce: called before any image is pulled or built.
+        """
+        static_policy = self.static_policy()
+        found = Report.of(static_policy.check_project(self.static()))
+        if found.passed:  # asking docker about the name is left until nothing else stands in the way
+            static, failures = self._with_name_users(self.static())
+            found = Report.of([*static_policy.check_project(static), *failures])
+        if not found.passed:
+            return Screened(found)
+        announce()
+        args, chosen = (parsed.args, _chosen(parsed)) if parsed else ([], frozenset())
+        prepared = self.prepare(command(self.hardened), self.hardened, args, chosen)
+        if not prepared.report.passed:
+            return Screened(prepared.report, prepared)
+        final = self.final(prepared)
+        judged, trust = (final, TRUSTED)
+        if strict and parsed:
+            judged, trust = _as_run(final, parsed, self.scope.runtime), STRICT
+        checked = Report.of(self.final_policy(prepared).with_trust(trust).check_project(judged))
+        return Screened(checked, prepared, final if checked.passed else None)
+
+    def _with_name_users(self, project: Project) -> tuple[Project, list[Finding]]:
+        """Returns project with the directories its name's containers were made from (inspect.made_from),
+        and the failure to look, if any.
+
+        Not looked at for a name the caller chose, or on a daemon that may not be this host's.
+        """
+        name = project.name
+        if not name or project.remote is not False or inspect.names_project(self.global_args,
+                                                                           self.scope.runtime.env):
+            return project, []
+        try:
+            return project.with_made_from(inspect.made_from(name, self.scope.docker)), []
+        except DockerError as e:
+            return project, [inspect.name_lookup_failure(name, e)]
 
     def final(self, prepared: serviceusers.Prepared) -> Project:
         """Returns the project that will run (Prepared.changes applied), with where the values dockscreen set
@@ -141,38 +187,30 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     """
     try:
         project = load_project(global_args, runtime, allow_me)
-        problems = project.problems()
     except (inspect.InspectError, DockerNotFound) as e:
         verdict.screened(Report.failure(e))
         return 1
     except inspect.Refused as e:
-        problems = e.findings
+        verdict.screened(Report.of(e.findings))
+        return 1
     except ValueError as e:
-        problems = findings.refused([str(e)])
-    if problems:
-        verdict.screened(Report.of(problems))
+        verdict.screened(Report.refusal(str(e)))
         return 1
 
-    hardened, scope = project.hardened, project.scope
+    scope = project.scope
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
              imagedecision.root_default_notice(scope), *substitutions.describe(project.hardening)]
-    lines += shellenv.describe(hardened, runtime.env)
+    lines += shellenv.describe(project.hardened, runtime.env)
     with project.generated() as command:
-        prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))
-        if not prepared.report.passed:
-            verdict.screened(prepared.report)
+        screened = project.screen(command, parsed, strict)
+        if screened.final is None or screened.prepared is None:  # it did not pass every stage
+            verdict.screened(screened.report)
             return 1
-        final = project.final(prepared)
-        judged, trust = (_as_run(final, parsed, runtime), STRICT) if strict else (final, TRUSTED)
-        checked = Report.of(project.final_policy(prepared).with_trust(trust).check_project(judged))
-        if not checked.passed:  # what will run
-            verdict.screened(checked)
-            return 1
-        for line in [*lines, *prepared.notices()]:
+        for line in [*lines, *screened.prepared.notices()]:
             if line:
                 messages.notice(line)
-        verdict.screened(checked)
-        return scope.docker.run_child([*command(final.definition), sub, *parsed.args])
+        verdict.screened(screened.report)
+        return scope.docker.run_child([*command(screened.final.definition), sub, *parsed.args])
 
 
 def _as_run(final: Project, parsed: userargs.Parsed, runtime: Runtime) -> Project:

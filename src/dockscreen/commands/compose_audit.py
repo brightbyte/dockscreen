@@ -48,21 +48,19 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
 
 
 def _audit_images(project: composeproject.Compose, brief: bool) -> tuple[Report, Sequence[str]]:
-    """Checks the project, then its images if the checks pass.
+    """Screens the project as `up` would, stage by stage (Compose.screen), pulling and building its images
+    if the checks before them pass.
 
-    Returns (what was found, report lines).
+    Returns (what the last stage found, report lines).
     """
-    problems = project.problems()
-    if problems:
-        return Report.of(problems), [
-            "the images were not looked at because of the problems below: nothing was pulled or built"]
-    if not brief:
-        messages.notice("pulling or building the images as `up` would, to look at the users they run as")
-    hardened = project.hardened
+    def announce() -> None:
+        if not brief:
+            messages.notice("pulling or building the images as `up` would, to look at the users they run as")
+
+    # the last stage is what `up` checks once more before it runs: image sections need proof then
     with project.generated() as command:
-        prepared = project.prepare(command(hardened), hardened)
-    if not prepared.report.passed:
-        return prepared.report, prepared.describe()
-    # what `up` checks once more before it runs: image sections need proof now
-    checked = project.final_policy(prepared).check_project(project.final(prepared))
-    return Report.of(checked), prepared.describe()
+        screened = project.screen(command, announce=announce)
+    if screened.prepared is None:
+        return screened.report, [
+            "the images were not looked at because of the problems below: nothing was pulled or built"]
+    return screened.report, screened.prepared.describe()

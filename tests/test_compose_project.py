@@ -447,3 +447,13 @@ def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path,
     assert code == 0
     _, config = last(recorder)
     assert "volumes" not in config["services"]["web"]  # compose applies run's options itself
+
+
+def test_only_a_screening_that_passed_every_stage_has_a_project_to_run(tmp_path):
+    runtime, _ = compose_project(tmp_path, project_config(privileged=True), FakeImages(users={"x:1": "app"}))
+    project = composeproject.load_project([], runtime, allow_me=False)
+
+    with project.generated() as command:
+        screened = project.screen(command)
+
+    assert not screened.report.passed and screened.prepared is None and screened.final is None

@@ -199,9 +199,11 @@ class Policy(NamedTuple):
     # --- projects, services and containers ---------------------------------------
 
     def check_project(self, project: Project) -> list[Finding]:
-        """Checks a compose project's definition; returns what it finds, each about what it concerns.
+        """Checks what is known about a compose project: its definition, where it is, and, once they have
+        been looked at, its daemon and the containers that have its name; returns what it finds, each about
+        what it concerns.
 
-        Empty if the definition passes. Each service is checked with its own policy (for_service).
+        Empty if it passes. Each service is checked with its own policy (for_service).
         """
         config, name = project.definition, project.name
         problems = refused([*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
@@ -215,7 +217,13 @@ class Policy(NamedTuple):
             problems += refused(self._check_volume(key, volume, name), f"volume {key}")
         for key, network in (config.get("networks") or {}).items():
             problems += refused(self._check_network(key, network, name), f"network {key}")
-        return problems + self._check_file_sources(config)
+        problems += self._check_file_sources(config)
+        problems += self.check_location(project.location)
+        if project.remote is not None:
+            problems += self.check_daemon(project.remote)
+        if name and project.made_from is not None:
+            problems += self.check_project_name(name, project.directory, project.made_from)
+        return problems
 
     def check_project_build(self, project: Project) -> list[Finding]:
         """Checks a compose project against the part of the policy that applies to `build`; returns the
