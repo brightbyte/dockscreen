@@ -27,11 +27,10 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import imagedecision, imageuser, verdict
+from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
-    Assessment,
-    Kind,
     assess,
     default_home,
     env_value,

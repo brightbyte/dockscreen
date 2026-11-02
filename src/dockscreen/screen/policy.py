@@ -33,12 +33,15 @@ from typing import Any, NamedTuple, Protocol, Self
 from dockscreen.host import config as configuration
 from dockscreen.model.build import BakeDefinition, Build, fields
 from dockscreen.model.container import Container
+from dockscreen.model.identity import Identity
+from dockscreen.model.image import Inspected
 from dockscreen.model.location import Location
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import idrules
-from dockscreen.screen.findings import Finding, about, judged, refused
+from dockscreen.screen import idrules, imageuser
+from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.findings import Finding, Severity, about, judged, refused
 from dockscreen.util import ids
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
@@ -173,6 +176,9 @@ class Policy(NamedTuple):
     # The user the config file sets for this service (its image's or project's, or the top level's):
     # its uid and gid are allowed ids for the service too, whoever names them.
     configured_user: tuple | None = None
+    # What runs instead of an image that would run as root, and the HOME it gets (default_home).
+    default_user: tuple[int, int] = configuration.Config().default_user
+    default_home: str = configuration.Config().default_home
     # (name, service) -> this policy for that service, with the settings of its image section if one
     # applies; None if every service gets this one.
     per_service: Callable[[str, dict[str, Any]], "Policy"] | None = None
@@ -186,7 +192,8 @@ class Policy(NamedTuple):
         default user. config_file: named in hints, as in Policy.
         """
         return cls(project_dir, rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
-                   security_opts=settings.security_opts, configured_user=settings.user)
+                   security_opts=settings.security_opts, configured_user=settings.user,
+                   default_user=settings.default_user, default_home=settings.default_home)
 
     @property
     def mount_roots(self) -> tuple[str, ...]:
@@ -278,6 +285,45 @@ class Policy(NamedTuple):
         project's; its user from where container.user_origin says.
         """
         return self.check_service(container)
+
+    # --- images -------------------------------------------------------------------
+
+    def needs_user_files(self, origin: Origin) -> bool:
+        """Tells whether check_image needs the image's passwd and group files (Inspected.passwd) for a
+        container whose user comes from origin: only to judge the image's own user, when the config file
+        sets none for it.
+        """
+        return origin is Origin.IMAGE and not self.configured_user
+
+    def check_image(self, inspected: Inspected, origin: Origin, match: configuration.Match) -> Assessment:
+        """Decides which user the container that inspected looked through may run as, by the rules in
+        imagedecision's docstring; returns the Assessment.
+
+        origin: where the container's user comes from; one that is not the image's is not judged here
+        (Kind.EXPLICIT). match: which image section of the config file applies to the image, which is
+        this policy's. The passwd and group files must have been read if needs_user_files says so.
+        """
+        image = inspected.image
+        notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
+        found: dict[str, Any] = {"section": match.repository}
+        if origin is not Origin.IMAGE:
+            return Assessment(Kind.EXPLICIT, image, notes, **found)
+        if self.configured_user:
+            return Assessment(Kind.CONFIGURED, image, notes, Identity(*self.configured_user),
+                              user=self.configured_user, **found)
+        assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
+        try:
+            identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
+        except ValueError as e:
+            return Assessment(Kind.IMAGE, image, (*notes, Finding(str(e))), **found)
+        if identity.involves_root:
+            return Assessment(Kind.FALLBACK, image, notes, identity, user=self.default_user,
+                              home=self.default_home, **found)
+        problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
+                                     mounts=inspected.reaches_host)
+        refusals = tuple(Finding(f"the image's {p}") for p in problems)
+        return Assessment(Kind.IMAGE, image, (*notes, *refusals), identity,
+                          user=(identity.uid, identity.gid), **found)
 
     # --- users and privileges -------------------------------------------------
 

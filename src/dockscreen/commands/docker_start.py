@@ -14,8 +14,9 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings, verdict
+from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report
-from dockscreen.screen.imagedecision import Assessment, Kind, assess, explain
+from dockscreen.screen.imagedecision import assess, explain
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
 

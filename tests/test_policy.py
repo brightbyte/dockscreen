@@ -3,10 +3,13 @@ import os
 import pytest
 from fakes import project_of, rules
 
+from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
+from dockscreen.model.image import Image, Inspected
 from dockscreen.model.location import Location
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import policy
+from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
@@ -610,3 +613,39 @@ def test_a_project_is_judged_by_what_is_known_about_it_and_nothing_that_was_not_
     assert rules_.check_project(known.with_remote(True)) == [policy.REMOTE_MESSAGE]
     [conflict] = rules_.check_project(known.with_remote(False).with_made_from(["/elsewhere"]))
     assert conflict.startswith("project name 'proj' is used by containers made from '/elsewhere'")
+
+
+# --- images ---------------------------------------------------------------------
+
+PASSWD = "root:x:0:0::/root:/bin/sh\napp:x:100000:100001::/home/app:/bin/sh\n"
+NO_SECTION = configuration.Match(None, None)
+
+
+def inspected(user, mounts=False):
+    """An image whose own user is user, looked at through a container created with it, files read."""
+    return Inspected(Image("app:1", "sha256:1"), (), user, user, mounts).with_user_files(PASSWD, "")
+
+
+@pytest.mark.parametrize("user, kind, runs_as", [
+    ("root", Kind.FALLBACK, (65534, 65534)),
+    ("app", Kind.IMAGE, (100000, 100001)),
+])
+def test_an_images_own_user_is_judged_from_its_files_without_docker(user, kind, runs_as):
+    found = policy.Policy("/p", rules()).check_image(inspected(user), Origin.IMAGE, NO_SECTION)
+
+    assert (found.kind, found.user, found.refused) == (kind, runs_as, False)
+
+
+def test_an_image_user_the_id_rules_refuse_with_host_mounts_is_refused():
+    found = policy.Policy("/p", rules()).check_image(inspected("app", mounts=True), Origin.IMAGE, NO_SECTION)
+    assert found.refused and found.reasons[0].startswith("the image's uid 100000")
+
+
+def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configured():
+    plain, configured = policy.Policy("/p", rules()), policy.Policy("/p", rules(), configured_user=(7, 7))
+
+    assert plain.needs_user_files(Origin.IMAGE)
+    assert not plain.needs_user_files(Origin.COMMAND_LINE)
+    assert not configured.needs_user_files(Origin.IMAGE)
+    found = configured.check_image(inspected("root")._replace(passwd=None), Origin.IMAGE, NO_SECTION)
+    assert (found.kind, found.user) == (Kind.CONFIGURED, (7, 7))

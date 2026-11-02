@@ -1,9 +1,8 @@
 import pytest
 
 from dockscreen.model.image import Image
-from dockscreen.screen import imagedecision
+from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Severity
-from dockscreen.screen.imagedecision import Kind
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
 
@@ -21,13 +20,13 @@ REFUSAL, FAILURE, NOTE = Finding("no"), Finding("lost", Severity.FAILED), Findin
     (Kind.IMAGE, (FAILURE,), True, False, False),   # must not run either: nothing was checked
 ])
 def test_assessment_predicates(kind, found, refused, pins_user, replaces_image_user):
-    assessment = imagedecision.Assessment(kind, IMAGE, found)
+    assessment = Assessment(kind, IMAGE, found)
     assert (assessment.refused, assessment.pins_user, assessment.replaces_image_user) == (
         refused, pins_user, replaces_image_user)
 
 
 def test_an_assessment_tells_reasons_from_notes_and_failures_from_refusals():
-    assessment = imagedecision.Assessment(Kind.IMAGE, IMAGE, (NOTE, REFUSAL))
+    assessment = Assessment(Kind.IMAGE, IMAGE, (NOTE, REFUSAL))
     assert (assessment.reasons, assessment.notes, assessment.failed) == ([REFUSAL], [NOTE], False)
-    failure = imagedecision.Assessment.failure(IMAGE, "lost")
+    failure = Assessment.failure(IMAGE, "lost")
     assert failure.failed and failure.reasons == ["lost"] and failure.image is IMAGE

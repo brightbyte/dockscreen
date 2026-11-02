@@ -2,8 +2,8 @@
 what the verdicts mean).
 """
 
+from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Report, Severity, Verdict
-from dockscreen.screen.imagedecision import Assessment, Kind
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
 

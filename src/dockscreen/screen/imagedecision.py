@@ -1,5 +1,6 @@
 """This module decides which user a container runs as and whether it may: the user chosen for it, or else
-one derived from its image under the id rules.
+one derived from its image under the id rules. It looks at the image as far as the policy needs, and the
+policy judges it (Policy.check_image); the rest of this module says what was decided.
 
 The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in
@@ -17,131 +18,40 @@ files and the runtime's can at worst refuse a good image, never run root.
 Used by `docker run` (docker_run) and by compose (serviceusers) alike.
 """
 
-import enum
 from collections.abc import Sequence
-from typing import Any, NamedTuple, Self
+from typing import Any
 
-from dockscreen.host import config, hostusers
-from dockscreen.model.container import Container
-from dockscreen.model.identity import Identity
-from dockscreen.model.image import Image
+from dockscreen.host import config, hostusers, inspection
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.findings import Finding
 from dockscreen.screen.scope import Scope
 from dockscreen.util import ids, images, messages
 
 CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 
 
-class Kind(enum.StrEnum):
-    """Source of the user a container runs as, as the decision about it found it."""
-    EXPLICIT = "explicit"      # the command line or dockscreen chose the user, not the image
-    CONFIGURED = "configured"  # the config file names the user, for this image, project or every one
-    IMAGE = "image"            # the image's own user, accepted or not (Assessment.refused)
-    FALLBACK = "fallback"      # the image would run as root: the default user instead
-
-
-class Assessment(NamedTuple):
-    """Judgement of the user a container would run as: where the user comes from, the image, what was found
-    (refusals, failures to look, and notable findings), the identity read from the image, and the user
-    dockscreen pins.
-    """
-    kind: Kind
-    image: Image
-    findings: tuple[Finding, ...] = ()
-    identity: Identity | None = None
-    user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
-    section: str | None = None     # the repository whose image section applied, if one did
-    home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
-
-    @classmethod
-    def failure(cls, image: Image, reason: object) -> Self:
-        """Returns the assessment of an image that could not be looked at, for reason."""
-        return cls(Kind.IMAGE, image, (Finding.of(reason, Severity.FAILED),))
-
-    @property
-    def reasons(self) -> list[Finding]:
-        """Returns the findings that forbid running the container: refusals, or failures to look."""
-        return [f for f in self.findings if f.fatal]
-
-    @property
-    def notes(self) -> list[Finding]:
-        """Returns what is worth a look but forbids nothing: an image section that does not apply, and why."""
-        return [f for f in self.findings if not f.fatal]
-
-    @property
-    def refused(self) -> bool:
-        """Tells whether the container must not run: refused, or not assessed at all."""
-        return bool(self.reasons)
-
-    @property
-    def failed(self) -> bool:
-        """Tells whether the image could not be assessed at all."""
-        return any(f.severity is Severity.FAILED for f in self.findings)
-
-    @property
-    def pins_user(self) -> bool:
-        """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers."""
-        return self.kind is not Kind.EXPLICIT and not self.refused
-
-    @property
-    def pinned_user(self) -> tuple[int, int]:
-        """Returns the (uid, gid) dockscreen decided; only for an assessment that pins_user."""
-        assert self.user is not None, f"a {self.kind} assessment pins no user"
-        return self.user
-
-    @property
-    def replaces_image_user(self) -> bool:
-        """Tells whether the user dockscreen decided differs from the one the image chose."""
-        return self.kind in (Kind.CONFIGURED, Kind.FALLBACK) and not self.refused
-
-
 def assess(ctx: Scope, directory: str, container: str, info: dict[str, Any], origin: Origin | None = None,
            mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
     """Decides which user the container's image may run as, by the rules in this module's docstring, for
-    the project in directory (the current one for what a command line runs).
+    the project in directory (the current one for what a command line runs): looks at the image
+    (inspection) as far as the policy needs, which then judges it (Policy.check_image).
 
     Returns an Assessment, of Kind.EXPLICIT if the container's user does not come from the image. Raises
     DockerError if the image cannot be inspected or its passwd or group file is too large.
-    origin: where the container's user comes from, if known. Otherwise a user that differs from the
-    image's own is taken to come from the command line.
+    origin: where the container's user comes from, if known (Inspected.user_origin if not).
     mounts: the container reaches host files or devices; worked out from info if not given.
     reference: the image name as the command line or the service gave it (the container's if None).
     built: the image is built from a Dockerfile by the service; the config file never applies then.
     """
-    image = Image(reference or info["Config"].get("Image") or "", info["Image"], built)
-    inspected = ctx.docker.inspect_image(info["Image"])
-    match = config.section_for(ctx.runtime.settings, image.reference, inspected.get("RepoDigests"), built)
-    notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
-    found: dict[str, Any] = {"section": match.repository}
-    spec = info["Config"].get("User") or ""
-    if origin is None:  # the container's user differs from the image's only if the command line set one
-        origin = Origin.IMAGE if spec == (inspected["Config"].get("User") or "") else Origin.COMMAND_LINE
-    if origin is not Origin.IMAGE:
-        return Assessment(Kind.EXPLICIT, image, notes, **found)
-
-    settings, rules = ctx.for_image(match.repository, directory)
-    if settings.user:
-        return Assessment(Kind.CONFIGURED, image, notes, Identity(*settings.user),
-                          user=settings.user, **found)
-
-    # a missing file has no names in it, for docker as for us
-    passwd = ctx.docker.read_file(container, "/etc/passwd") or ""
-    groups = ctx.docker.read_file(container, "/etc/group") or ""
-    try:
-        identity = imageuser.resolve(spec, passwd, groups)
-    except ValueError as e:
-        return Assessment(Kind.IMAGE, image, (*notes, Finding(str(e))), **found)
-    if identity.involves_root:
-        return Assessment(Kind.FALLBACK, image, notes, identity, user=settings.default_user,
-                          home=settings.default_home, **found)
-    if mounts is None:
-        mounts = Container(info).reaches_host
-    problems = rules.problems(identity.uid, identity.gid, identity.supplementary, mounts=mounts)
-    refusals = tuple(Finding(f"the image's {p}") for p in problems)
-    return Assessment(Kind.IMAGE, image, (*notes, *refusals), identity, user=(identity.uid, identity.gid),
-                      **found)
+    inspected = inspection.inspect(ctx.docker, info, reference, built, mounts)
+    match = config.section_for(ctx.runtime.settings, inspected.image.reference, inspected.digests, built)
+    image_policy = ctx.policy_for(directory, match.repository)
+    origin = origin or inspected.user_origin
+    if image_policy.needs_user_files(origin):
+        inspected = inspection.with_user_files(ctx.docker, container, inspected)
+    return image_policy.check_image(inspected, origin, match)
 
 
 # The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.

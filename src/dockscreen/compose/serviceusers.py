@@ -33,6 +33,7 @@ from dockscreen.model.image import Image
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import findings, imagedecision, substitutions, verdict
+from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 from dockscreen.screen.substitutions import Group, Substitution
@@ -49,7 +50,7 @@ class Prepared(NamedTuple):
     """
     project: Project
     ctx: Scope
-    decisions: dict   # service -> imagedecision.Assessment, for the started services that set no user
+    decisions: dict   # service -> Assessment, for the started services that set no user
     report: Report    # refusals, and failures to get or look at an image
     verified: Mapping[str, str] = MappingProxyType({})  # service -> the repository its image proved
 
@@ -86,12 +87,12 @@ class Prepared(NamedTuple):
                         f"default user ({default}) if it is started")
                 lines.append(messages.notable_change(text, USER_HELP))
                 continue
-            accepted = decision.kind in (imagedecision.Kind.IMAGE, imagedecision.Kind.CONFIGURED)
+            accepted = decision.kind in (Kind.IMAGE, Kind.CONFIGURED)
             if accepted and not decision.refused:
                 runs_as = imagedecision.runs_as(decision, self.ctx.local)
                 text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
                 lines.append(messages.Marked(verdict.dot(decision), text))
-            elif decision.kind is imagedecision.Kind.FALLBACK:
+            elif decision.kind is Kind.FALLBACK:
                 instead = imagedecision.instead_of_root(decision)
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
             for note in decision.notes:
@@ -116,17 +117,17 @@ def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, 
     return found
 
 
-def _pinned(name: str, service: dict[str, Any], assessment: imagedecision.Assessment) -> list[Substitution]:
+def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[Substitution]:
     """Returns the substitutions that pin a started service to what the assessment of its image checked:
     the user, as numbers, the image by id unless it is built, and pull_policy never.
     """
     # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot resolve
     # the image's user to anything but what was checked
-    if assessment.kind is imagedecision.Kind.FALLBACK:
+    if assessment.kind is Kind.FALLBACK:
         found = _user(name, service, assessment.pinned_user, assessment.home,
                       imagedecision.instead_of_root(assessment), PINNED)
     else:  # the image's user, or the one its image section configures
-        origin = Origin.IMAGE if assessment.kind is imagedecision.Kind.IMAGE else Origin.CONFIG
+        origin = Origin.IMAGE if assessment.kind is Kind.IMAGE else Origin.CONFIG
         found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,
                               origin=origin)]
     # the image checked is what runs
@@ -199,7 +200,7 @@ def _verify_sections(config: dict[str, Any], ctx: Scope) -> dict[str, str]:
     return verified
 
 
-def decision_problem(name: str, assessment: imagedecision.Assessment, config_file: str | None = None
+def decision_problem(name: str, assessment: Assessment, config_file: str | None = None
                      ) -> Finding:
     """Returns, as one finding, why the service must not run, for an assessment of its image that refused
     or failed.
@@ -269,7 +270,7 @@ def _image_exists(docker: Docker, image: str) -> bool:
 
 
 def _decide(project: Project, to_run: frozenset[str],
-            ctx: Scope) -> dict[str, imagedecision.Assessment]:
+            ctx: Scope) -> dict[str, Assessment]:
     """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
 
     Returns {service: Assessment}. An image that cannot be looked at gets a failed assessment.
@@ -282,7 +283,7 @@ def _decide(project: Project, to_run: frozenset[str],
         # a container that is never started shows the user docker would run, and its files can be copied out
         _, container = ctx.docker.create(["--pull=never", *platform, "--", image.reference])
         if container is None:
-            decisions[name] = imagedecision.Assessment.failure(image, "the image is not available locally")
+            decisions[name] = Assessment.failure(image, "the image is not available locally")
             continue
         try:
             info = ctx.docker.inspect_container(container)
@@ -292,7 +293,7 @@ def _decide(project: Project, to_run: frozenset[str],
                                                    reference=image.reference, built=image.built)
         except (DockerError, ValueError, KeyError) as e:
             failure = messages.with_output(e)
-            decisions[name] = imagedecision.Assessment.failure(image, failure)
+            decisions[name] = Assessment.failure(image, failure)
         finally:
             ctx.docker.remove(container)
     return decisions
