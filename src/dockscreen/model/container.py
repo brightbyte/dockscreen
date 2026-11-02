@@ -35,17 +35,21 @@ SERVICE_FIELDS = {
 
 class Container(NamedTuple):
     """Container as docker inspect shows it (info): its user, its image, its mounts and its host settings;
-    with where its user comes from (user_origin).
+    with the directory the command line that created it ran in, which its bind mounts are judged against
+    as a project's are against the project's, and where its user comes from (user_origin).
 
     Everything else it has comes from the command line that created it.
     """
     info: dict[str, Any]
+    directory: str
     user_origin: Origin = Origin.COMMAND_LINE
 
     @classmethod
-    def uninspected(cls, container: str) -> Self:
-        """Returns the container called container, which exists but could not be inspected."""
-        return cls({"Id": container})
+    def uninspected(cls, container: str, directory: str) -> Self:
+        """Returns the container called container, created in directory, which exists but could not be
+        inspected.
+        """
+        return cls({"Id": container}, directory)
 
     @property
     def id(self) -> str:

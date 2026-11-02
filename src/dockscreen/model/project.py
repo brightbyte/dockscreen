@@ -107,6 +107,11 @@ class Service(NamedTuple):
         return (self.project.definition.get("services") or {}).get(self.name) or {}
 
     @property
+    def directory(self) -> str:
+        """Returns the directory its relative paths and bind mounts are judged against: its project's."""
+        return self.project.directory
+
+    @property
     def reaches_host(self) -> bool:
         """Tells whether it reaches host files (mounts.service_reaches_host)."""
         return mounts.service_reaches_host(self.definition, self.project.volumes)

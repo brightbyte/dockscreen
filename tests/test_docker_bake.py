@@ -24,7 +24,7 @@ def project(tmp_path):
 
 def check(project, **target):
     definition = {"group": {"default": {"targets": ["app"]}}, "target": {"app": target}}
-    return policy.Policy(str(project), rules()).check_bake(BakeDefinition(definition))
+    return policy.Policy(rules()).check_bake(BakeDefinition(definition, str(project)))
 
 
 def test_a_definition_of_ordinary_builds_has_no_problems(project):
@@ -76,8 +76,8 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 
 
 def test_a_top_level_key_that_is_not_known_is_refused(project):
-    bake_policy = policy.Policy(str(project), rules())
-    found = bake_policy.check_bake(BakeDefinition({"target": {}, "variable": {}}))
+    bake_policy = policy.Policy(rules())
+    found = bake_policy.check_bake(BakeDefinition({"target": {}, "variable": {}}, str(project)))
     assert found == ["key 'variable' is not on the allow list"]
 
 
@@ -126,7 +126,7 @@ def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
         docker_bake._definition(docker, [])
     assert message in messages.with_output(raised.value)
-    [reason] = docker_bake.check(docker, [], policy.Policy(os.getcwd(), rules()))
+    [reason] = docker_bake.check(docker, [], policy.Policy(rules()), os.getcwd())
     assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
 
 
@@ -134,7 +134,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    [reason] = docker_bake.check(docker, [], policy.Policy(os.getcwd(), rules()))
+    [reason] = docker_bake.check(docker, [], policy.Policy(rules()), os.getcwd())
     assert reason == "target app: context '/etc' is outside " + str(project)
     assert reason.severity is Severity.REFUSED
 

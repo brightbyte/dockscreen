@@ -180,7 +180,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 6. Before anything is pulled or built (`composeproject.Compose.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
-`build` and `bake` get only `Policy.check_project_build`, with no runtime checks. A service's `build:` is a `build.Build`, as a bake target is, and the rules they share are `Policy.check_build`:
+`build` and `bake` get only `Policy.check_project_build`, with no runtime checks. A service's `build:` is a `build.Build`, as a bake target is, and the rules they share are `Policy.check_build`. Each build knows the directory its paths are relative to (its project's, or the one bake ran in), and what it reads is judged against that:
 
 - build contexts, Dockerfiles and secret files must be inside the project;
 - no `ssh`, no host network, no `privileged`;

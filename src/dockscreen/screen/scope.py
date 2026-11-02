@@ -57,7 +57,7 @@ class Scope(NamedTuple):
         in the project in directory, trusting the origins in trust.
         """
         settings, _ = self.for_image(repository, directory)
-        found = policy.Policy.for_settings(settings, directory, self.ids, self.runtime.config_file)
+        found = policy.Policy.for_settings(settings, self.ids, self.runtime.config_file)
         return found.with_trust(trust)
 
     def policy_here(self, repository: str | None = None, trust: frozenset[Origin] = TRUSTED) -> policy.Policy:

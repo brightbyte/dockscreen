@@ -61,3 +61,8 @@ def test_refused_and_failed_make_findings_about_one_subject():
     assert [(f, f.severity) for f in findings.refused(["a", "b"], "volume v")] == [
         ("volume v: a", Severity.REFUSED), ("volume v: b", Severity.REFUSED)]
     assert [f.severity for f in findings.failed(["a"])] == [Severity.FAILED]
+
+
+def test_failure_of_an_error_says_what_to_do_if_told():
+    failure = findings.failure_of(DockerError("bake --print failed", "no file"), help="fix the bake files")
+    assert (failure.help, failure.output) == ("fix the bake files", "no file")

@@ -170,9 +170,10 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     code, created = ctx.docker.create([*DEFAULTS, *extra, *parsed.create_args])
     if created is None:
         return code, None
-    container, image = Container.uninspected(created), Image(parsed.image)
+    here = ctx.runtime.cwd
+    container, image = Container.uninspected(created, here), Image(parsed.image)
     try:
-        container = Container(ctx.docker.inspect_container(created), _user_origin(parsed, extra))
+        container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, extra))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else assess(
             ctx, ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)

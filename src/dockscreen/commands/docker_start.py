@@ -63,7 +63,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
             if strict:
                 user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
                 strict_policy = ctx.policy_here(assessment.section, STRICT)
-                found = strict_policy.check_container(Container(info, user_origin))
+                found = strict_policy.check_container(Container(info, runtime.cwd, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
             problems.append(Finding(messages.with_output(e), subject=ref))

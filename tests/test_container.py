@@ -5,7 +5,7 @@ HARDENED = {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"]}
 
 
 def container(user="", **host):
-    return Container({"Config": {"User": user}, "HostConfig": {**HARDENED, **host}})
+    return Container({"Config": {"User": user}, "HostConfig": {**HARDENED, **host}}, "/work")
 
 
 def test_as_service_asks_for_what_the_container_has_in_compose_keys():

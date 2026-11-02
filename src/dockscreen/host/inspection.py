@@ -5,7 +5,7 @@ without judging any of it (model.image.Inspected).
 from typing import Any
 
 from dockscreen.host.dockerclient import Docker
-from dockscreen.model.container import Container
+from dockscreen.model import mounts
 from dockscreen.model.image import Image, Inspected
 
 
@@ -22,7 +22,7 @@ def inspect(docker: Docker, info: dict[str, Any], reference: str | None = None, 
     image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
                   tuple(inspected.get("RepoDigests") or ()))
     if reaches_host is None:
-        reaches_host = Container(info).reaches_host
+        reaches_host = mounts.container_reaches_host(info)
     return Inspected(image, inspected["Config"].get("User") or "", info["Config"].get("User") or "",
                      reaches_host)
 

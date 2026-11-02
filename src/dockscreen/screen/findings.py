@@ -67,11 +67,11 @@ class Finding(str):
         return self.severity.fatal
 
 
-def failure_of(error: BaseException, subject: str | None = None) -> Finding:
-    """Returns the failure to look that error reports, about subject if given, with what docker printed
-    about it if the error carries that (an `output`).
+def failure_of(error: BaseException, subject: str | None = None, help: str | None = None) -> Finding:
+    """Returns the failure to look that error reports, about subject if given, with what to do about it
+    (help) if given, and what docker printed about it if the error carries that (an `output`).
     """
-    return Finding(str(error), Severity.FAILED, subject, output=getattr(error, "output", None))
+    return Finding(str(error), Severity.FAILED, subject, help, getattr(error, "output", None))
 
 
 def about(found: Iterable[Finding], subject: str) -> list[Finding]:

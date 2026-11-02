@@ -18,7 +18,8 @@ A key is listed either as harmless (any value is fine) or as checked (it has an
 entry in SERVICE_CHECKS that validates the value). A Policy holds the settings the
 rules apply with, such as the id rules (idrules.Rules) that decide which uids and gids
 a project may choose; what is known about the thing judged belongs to it, not to the
-policy. Every rule is a method of Policy, whether it reads the settings or not.
+policy, down to the directory its paths are judged against. Every rule is a method of
+Policy, whether it reads the settings or not.
 
 Every check of a key returns a list of human-readable problems; an empty list means
 the value is acceptable. The checks of a whole project or container turn them into
@@ -137,6 +138,11 @@ class Subject(Protocol):
         ...
 
     @property
+    def directory(self) -> str:
+        """Returns the directory its relative paths and bind mounts are judged against."""
+        ...
+
+    @property
     def reaches_host(self) -> bool:
         """Tells whether it reaches host files (mounts.service_reaches_host)."""
         ...
@@ -162,10 +168,9 @@ SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option 
 
 
 class Policy(NamedTuple):
-    """Security policy for the projects in one directory: the rules, and the settings they apply with (the
-    project directory, the ids it may choose, and what else decides what a service may reach).
+    """Security policy: the rules, and the settings they apply with (the ids a project may choose, and what
+    else decides what a service may reach), as the config file sets them for one directory and image.
     """
-    project_dir: str
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
     # Whose values are taken as given: what the policy refuses in them is pointed out instead.
@@ -187,21 +192,22 @@ class Policy(NamedTuple):
     per_service: Callable[[str, dict[str, Any]], "Policy"] | None = None
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, project_dir: str, rules: idrules.Rules,
+    def for_settings(cls, settings: configuration.Config, rules: idrules.Rules,
                      config_file: str | None = None) -> Self:
-        """Returns the policy for a project in project_dir with these settings (config.effective).
+        """Returns the policy with these settings (config.effective).
 
         rules: the id rules with the caller's allow_me; the settings give them their nobody range and
         default user. config_file: named in hints, as in Policy.
         """
-        return cls(project_dir, rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
+        return cls(rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
                    security_opts=settings.security_opts, configured_user=settings.user,
                    default_user=settings.default_user, default_home=settings.default_home)
 
-    @property
-    def mount_roots(self) -> tuple[str, ...]:
-        """Returns where bind mounts may come from: the project directory, then the configured mount_dirs."""
-        return (self.project_dir, *self.extra_dirs)
+    def mount_roots(self, directory: str) -> tuple[str, ...]:
+        """Returns where bind mounts may come from for a project in directory: directory, then the configured
+        mount_dirs.
+        """
+        return (directory, *self.extra_dirs)
 
     def for_service(self, name: str, service: dict[str, Any]) -> "Policy":
         """Returns the policy to check the service called name with: per_service's for it, with this one's
@@ -239,10 +245,10 @@ class Policy(NamedTuple):
             found = self.for_service(service.name, service.definition).check_service(service)
             problems += about(found, f"service {service.name}")
         for key, volume in project.volumes.items():
-            problems += refused(self._check_volume(key, volume, name), f"volume {key}")
+            problems += refused(self._check_volume(key, volume, name, project.directory), f"volume {key}")
         for key, network in (config.get("networks") or {}).items():
             problems += refused(self._check_network(key, network, name), f"network {key}")
-        problems += self._check_file_sources(config)
+        problems += self._check_file_sources(config, project.directory)
         problems += self.check_location(project.location)
         if project.remote is not None:
             problems += self.check_daemon(project.remote)
@@ -265,7 +271,8 @@ class Policy(NamedTuple):
             if "build" in service.definition:
                 build = self._check_build(service.definition["build"], service)
                 problems += refused(build, f"service {service.name}")
-        return problems + self._check_file_sources(project.definition)  # build secrets refer to these
+        # build secrets refer to these
+        return problems + self._check_file_sources(project.definition, project.directory)
 
     def check_service(self, service: Subject) -> list[Finding]:
         """Checks one service; returns what it finds, empty if there is nothing.
@@ -421,8 +428,8 @@ class Policy(NamedTuple):
                 problems += unknown_keys(mount.get(sub) or {}, allowed, f"mount {sub} key")
             kind = mount.get("type")
             if kind == "bind":
-                if not is_inside_any(mount.get("source", ""), self.mount_roots):
-                    problems.append(self._outside(f"bind mount {mount.get('source')!r}"))
+                if not is_inside_any(mount.get("source", ""), self.mount_roots(service.directory)):
+                    problems.append(self._outside(f"bind mount {mount.get('source')!r}", service.directory))
             elif kind not in ("volume", "tmpfs", "image"):
                 problems.append(f"mount type {kind!r} is not allowed")
         return problems
@@ -431,7 +438,7 @@ class Policy(NamedTuple):
         """Checks a service's build; returns unknown keys, sources outside the project, and escapes from
         it.
         """
-        build = Build.from_compose(value)
+        build = Build.from_compose(value, service.directory)
         # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
         # set outputs and cache destinations on the host. Compose's own build does not pass it on.
         problems = unknown_keys(build.definition, BUILD_KEYS, "build key", extensions=False)
@@ -442,24 +449,24 @@ class Policy(NamedTuple):
 
     def check_build(self, build: Build, prefix: str = "") -> list[str]:
         """Checks what a build reaches on this host, however it is defined; returns the problems: its
-        context, Dockerfile and named contexts outside the project directory, a network, and the SSH agent.
+        context, Dockerfile and named contexts outside its directory, a network, and the SSH agent.
 
         Only sources that are paths on this host are checked, not URLs or services.
         prefix: before each key in the problems.
         """
         context_key, dockerfile_key, contexts_key = build.keys
-        project_dir = self.project_dir
+        directory = build.directory
         problems = []
         context, dockerfile = build.context, build.dockerfile
         if context and _is_host_path(context):
-            if not is_inside(context, project_dir):
-                problems.append(f"{prefix}{context_key} {context!r} is outside {project_dir}")
+            if not is_inside(context, directory):
+                problems.append(f"{prefix}{context_key} {context!r} is outside {directory}")
             # a relative dockerfile is read from the context, not the project directory
-            elif dockerfile and not is_inside(os.path.join(context, dockerfile), project_dir):
-                problems.append(f"{prefix}{dockerfile_key} {dockerfile!r} is outside {project_dir}")
+            elif dockerfile and not is_inside(os.path.join(context, dockerfile), directory):
+                problems.append(f"{prefix}{dockerfile_key} {dockerfile!r} is outside {directory}")
         for name, source in build.contexts.items():
-            if _is_host_path(source) and not is_inside(str(source), project_dir):
-                problems.append(f"{prefix}{contexts_key} {name!r}: {source!r} is outside {project_dir}")
+            if _is_host_path(source) and not is_inside(str(source), directory):
+                problems.append(f"{prefix}{contexts_key} {name!r}: {source!r} is outside {directory}")
         network = build.definition.get("network")
         if network not in (None, "", "none"):
             problems.append(f"{prefix}network {network!r} is not allowed")
@@ -486,26 +493,26 @@ class Policy(NamedTuple):
         if target.get("entitlements"):
             problems.append("entitlements ask for access beyond the build sandbox and are not allowed")
         problems += _check_outputs(target.get("output") or [], target.get("cache-to") or [])
-        problems += self._check_cache_from(target.get("cache-from") or [])
-        problems += self._check_build_secrets(target.get("secret") or [])
+        problems += self._check_cache_from(target.get("cache-from") or [], build.directory)
+        problems += self._check_build_secrets(target.get("secret") or [], build.directory)
         return problems
 
-    def _check_cache_from(self, entries: Sequence[Any]) -> list[str]:
-        """Returns the problems with cache-from entries: unreadable ones, and local caches outside the
-        project.
+    def _check_cache_from(self, entries: Sequence[Any], directory: str) -> list[str]:
+        """Returns the problems with cache-from entries: unreadable ones, and local caches outside
+        directory.
         """
         problems = []
         for entry in entries:
             found = fields(entry)
             if found is None:
                 problems.append(f"cache-from {entry!r} cannot be read")
-            elif found.get("type") == "local" and not is_inside(found.get("src", ""), self.project_dir):
-                problems.append(f"cache-from {entry!r} is outside {self.project_dir}")
+            elif found.get("type") == "local" and not is_inside(found.get("src", ""), directory):
+                problems.append(f"cache-from {entry!r} is outside {directory}")
         return problems
 
-    def _check_build_secrets(self, secrets: Sequence[Any]) -> list[str]:
-        """Returns the problems with bake secret entries: variables instead of files, and files outside the
-        project.
+    def _check_build_secrets(self, secrets: Sequence[Any], directory: str) -> list[str]:
+        """Returns the problems with bake secret entries: variables instead of files, and files outside
+        directory.
         """
         problems = []
         for entry in secrets:
@@ -513,8 +520,8 @@ class Policy(NamedTuple):
             source = (found or {}).get("src") or (found or {}).get("source")  # buildx takes either name
             if source is None:
                 problems.append(f"secret {entry!r} copies a variable or cannot be read, and is not allowed")
-            elif not is_inside(source, self.project_dir):
-                problems.append(f"secret {entry!r} is outside {self.project_dir}")
+            elif not is_inside(source, directory):
+                problems.append(f"secret {entry!r} is outside {directory}")
         return problems
 
     # --- other structured keys ------------------------------------------------
@@ -529,8 +536,8 @@ class Policy(NamedTuple):
             problems += unknown_keys(rule, WATCH_KEYS, "develop.watch key")
             if rule.get("action") not in WATCH_ACTIONS:
                 problems.append(f"develop.watch action {rule.get('action')!r} is not allowed")
-            if not is_inside(rule.get("path", ""), self.project_dir):
-                problems.append(f"develop.watch path {rule.get('path')!r} is outside {self.project_dir}")
+            if not is_inside(rule.get("path", ""), service.directory):
+                problems.append(f"develop.watch path {rule.get('path')!r} is outside {service.directory}")
         return problems
 
     def _check_deploy(self, value: Any, service: Subject) -> list[str]:
@@ -546,19 +553,21 @@ class Policy(NamedTuple):
 
     # --- top-level volumes, networks, secrets ---------------------------------
 
-    def _check_volume(self, key: str, volume: dict[str, Any] | None, project: str | None) -> list[str]:
-        """Checks the top-level volume called key; returns problems with its keys, scope, driver,
-        driver_opts.
+    def _check_volume(self, key: str, volume: dict[str, Any] | None, project: str | None,
+                      directory: str) -> list[str]:
+        """Checks the top-level volume called key of the project called project in directory; returns
+        problems with its keys, scope, driver, driver_opts.
         """
         volume = volume or {}
         problems = [*unknown_keys(volume, VOLUME_KEYS, "key"), *_check_scope(key, volume, project)]
         driver = volume.get("driver")
         if driver not in (None, "", "local"):
             return [*problems, f"driver {driver!r} is not allowed"]
-        return [*problems, *self._check_driver_opts(volume.get("driver_opts") or {})]
+        return [*problems, *self._check_driver_opts(volume.get("driver_opts") or {}, directory)]
 
-    def _check_driver_opts(self, opts: dict[str, Any]) -> list[str]:
-        """Checks a local volume's driver_opts; returns the problems with mounts from the host or the network.
+    def _check_driver_opts(self, opts: dict[str, Any], directory: str) -> list[str]:
+        """Checks a local volume's driver_opts for a project in directory; returns the problems with mounts
+        from the host or the network.
 
         A device must be an absolute path inside the mount roots.
         """
@@ -578,8 +587,8 @@ class Policy(NamedTuple):
             return [*problems, *(["bind needs a device"] if mount_flags(opts) & BIND_FLAGS else [])]
         if not os.path.isabs(device):  # the daemon would resolve it against its own working directory
             return [*problems, f"device {device!r} must be an absolute path"]
-        if not is_inside_any(device, self.mount_roots):
-            return [*problems, self._outside(f"device {device!r}")]
+        if not is_inside_any(device, self.mount_roots(directory)):
+            return [*problems, self._outside(f"device {device!r}", directory)]
         return problems
 
     def _check_network(self, key: str, network: dict[str, Any] | None, project: str | None) -> list[str]:
@@ -597,17 +606,19 @@ class Policy(NamedTuple):
             problems.append(f"ipam driver {ipam['driver']!r} is not allowed")
         return problems
 
-    def _check_file_sources(self, config: dict[str, Any]) -> list[Finding]:
-        """Checks the top-level secrets and configs, whose files building and running read from the host."""
+    def _check_file_sources(self, config: dict[str, Any], directory: str) -> list[Finding]:
+        """Checks the top-level secrets and configs of the project in directory, whose files building and
+        running read from the host.
+        """
         problems = []
         for kind in ("secrets", "configs"):
             for key, item in (config.get(kind) or {}).items():
-                problems += refused(self._check_file_source(item), f"{kind} {key}")
+                problems += refused(self._check_file_source(item, directory), f"{kind} {key}")
         return problems
 
-    def _check_file_source(self, item: dict[str, Any] | None) -> list[str]:
+    def _check_file_source(self, item: dict[str, Any] | None, directory: str) -> list[str]:
         """Checks one secret or config; returns its unknown keys, and a problem if it is external, copies a
-        variable, or names a file outside the project.
+        variable, or names a file outside directory.
         """
         item = item or {}
         problems = unknown_keys(item, SECRET_KEYS, "key")
@@ -617,18 +628,18 @@ class Policy(NamedTuple):
             problems.append(
                 f"environment {item['environment']!r} copies a variable from dockscreen's environment")
         source = item.get("file")
-        if source and not is_inside(source, self.project_dir):
-            problems.append(f"file {source!r} is outside {self.project_dir}")
+        if source and not is_inside(source, directory):
+            problems.append(f"file {source!r} is outside {directory}")
         return problems
 
-    def _outside(self, subject: str) -> str:
-        """Returns the problem that subject is outside the mount roots, with how the config file can allow
-        it.
+    def _outside(self, subject: str, directory: str) -> str:
+        """Returns the problem that subject is outside the mount roots of a project in directory, with how the
+        config file can allow it.
         """
-        text = f"{subject} is outside {_roots_text(self.mount_roots)}"
+        text = f"{subject} is outside {_roots_text(self.mount_roots(directory))}"
         if self.config_file:
             text += (f"; to allow it, add a directory that contains it to mount_dirs under "
-                     f"[projects.\"{self.project_dir}\"] in {self.config_file}")
+                     f"[projects.\"{directory}\"] in {self.config_file}")
         return text
 
     # --- what else the project and the command line choose ------------------------
@@ -750,8 +761,8 @@ def _check_host_files(key: str) -> Check:
         problems = []
         for entry in [value] if isinstance(value, (str, dict)) else value or []:
             path = entry.get("path") if isinstance(entry, dict) else entry
-            if path and not is_inside(path, policy.project_dir):
-                problems.append(f"{key} {path!r} is outside {policy.project_dir}")
+            if path and not is_inside(path, service.directory):
+                problems.append(f"{key} {path!r} is outside {service.directory}")
         return problems
     return check
 
@@ -877,8 +888,8 @@ def _check_scope(key: str, item: dict[str, Any], project: str | None) -> list[st
 
 def _roots_text(mount_roots: Sequence[str]) -> str:
     """Names mount_roots for a message."""
-    project_dir, *extra = mount_roots
-    return f"{project_dir}" + (" and the configured mount_dirs" if extra else "")
+    directory, *extra = mount_roots
+    return f"{directory}" + (" and the configured mount_dirs" if extra else "")
 
 
 def is_inside_any(path: str, roots: Iterable[str]) -> bool:

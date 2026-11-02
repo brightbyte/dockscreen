@@ -2,17 +2,17 @@ from dockscreen.model.build import BakeDefinition, Build, fields
 
 
 def test_compose_and_bake_name_the_sources_of_a_build_differently():
-    compose = Build.from_compose({"context": ".", "dockerfile": "D", "additional_contexts": {"a": "x"}})
-    bake = Build.from_bake({"context": ".", "dockerfile": "D", "contexts": {"a": "x"}})
+    compose = Build.from_compose({"context": ".", "dockerfile": "D", "additional_contexts": {"a": "x"}}, "/p")
+    bake = Build.from_bake({"context": ".", "dockerfile": "D", "contexts": {"a": "x"}}, "/p")
 
     assert (compose.context, compose.dockerfile, compose.contexts) == (".", "D", {"a": "x"})
     assert (bake.context, bake.dockerfile, bake.contexts) == (".", "D", {"a": "x"})
-    assert Build.from_compose("./app").context == "./app"  # `build: ./app` is a context alone
+    assert Build.from_compose("./app", "/p").context == "./app"  # `build: ./app` is a context alone
 
 
 def test_a_bake_definition_has_a_build_per_target():
     bake = BakeDefinition({"group": {"default": {"targets": ["a"]}},
-                           "target": {"a": {"context": "."}, "b": None}})
+                           "target": {"a": {"context": "."}, "b": None}}, "/p")
 
     found = {name: build.definition for name, build in bake.targets.items()}
     assert found == {"a": {"context": "."}, "b": {}}

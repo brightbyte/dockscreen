@@ -15,21 +15,25 @@ BAKE_KEYS = ("context", "dockerfile", "contexts")
 
 
 class Build(NamedTuple):
-    """Build of one image: its definition, as compose's `build:` or a bake target gives it, and what that
-    definition calls the context, the Dockerfile and the named contexts (keys).
+    """Build of one image: its definition, as compose's `build:` or a bake target gives it, what that
+    definition calls the context, the Dockerfile and the named contexts (keys), and the directory its
+    relative paths are relative to, which what it reads must stay inside.
     """
     definition: dict[str, Any]
     keys: tuple[str, str, str]
+    directory: str
 
     @classmethod
-    def from_compose(cls, value: Any) -> Self:
-        """Returns the build that a compose service's `build:` value defines: a context, or a section."""
-        return cls({"context": value} if isinstance(value, str) else value or {}, COMPOSE_KEYS)
+    def from_compose(cls, value: Any, directory: str) -> Self:
+        """Returns the build that a compose service's `build:` value defines, a context or a section, in the
+        project in directory.
+        """
+        return cls({"context": value} if isinstance(value, str) else value or {}, COMPOSE_KEYS, directory)
 
     @classmethod
-    def from_bake(cls, target: dict[str, Any] | None) -> Self:
-        """Returns the build that a bake target defines."""
-        return cls(target or {}, BAKE_KEYS)
+    def from_bake(cls, target: dict[str, Any] | None, directory: str) -> Self:
+        """Returns the build that a bake target defines, with directory as the one bake ran in."""
+        return cls(target or {}, BAKE_KEYS, directory)
 
     @property
     def context(self) -> Any:
@@ -48,14 +52,17 @@ class Build(NamedTuple):
 
 
 class BakeDefinition(NamedTuple):
-    """Definition that `docker buildx bake --print` gives: its targets and groups, as a JSON object."""
+    """Definition that `docker buildx bake --print` gives, its targets and groups as a JSON object, and the
+    directory bake ran in, which it reads the targets' relative paths from.
+    """
     definition: dict[str, Any]
+    directory: str
 
     @property
     def targets(self) -> dict[str, Build]:
         """Returns its targets' builds, by target name."""
         targets = self.definition.get("target") or {}
-        return {name: Build.from_bake(target) for name, target in targets.items()}
+        return {name: Build.from_bake(target, self.directory) for name, target in targets.items()}
 
 
 def fields(entry: Any) -> dict[str, str] | None:

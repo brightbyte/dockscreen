@@ -67,7 +67,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     fixed = _fix_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
-    resolved = _as_compose_reads(fixed, static)
+    resolved = _as_compose_reads(fixed, static, base.directory)
     remaining = [f for f in static.check_project(base.with_definition(resolved)) if f.fatal]
     notes = [hardening.defaults_note()]
     if remaining:
@@ -131,13 +131,13 @@ def _fix_config(project: Project, ctx: policy.Policy) -> dict[str, Any]:
             if not service["volumes_from"]:
                 del service["volumes_from"]
         if "volumes" in service:
-            service["volumes"] = [_fix_mount(m, service_ctx) for m in service["volumes"]]
+            service["volumes"] = [_fix_mount(m, service_ctx, project.directory) for m in service["volumes"]]
     return fixed
 
 
-def _as_compose_reads(config: dict[str, Any], ctx: policy.Policy) -> dict[str, Any]:
-    """Returns a copy of config as compose reads the patch, for checking it: _USER_TEMPLATE becomes the
-    caller's ids, and a relative placeholder mount source a path in the project directory.
+def _as_compose_reads(config: dict[str, Any], ctx: policy.Policy, directory: str) -> dict[str, Any]:
+    """Returns a copy of config, of the project in directory, as compose reads the patch, for checking it:
+    _USER_TEMPLATE becomes the caller's ids, and a relative placeholder mount source a path in directory.
     """
     resolved = copy.deepcopy(config)
     for service in resolved.get("services", {}).values():
@@ -145,15 +145,17 @@ def _as_compose_reads(config: dict[str, Any], ctx: policy.Policy) -> dict[str, A
             service["user"] = ids.format_user(ctx.ids.me)
         for mount in service.get("volumes", []):
             if mount.get("type") == "bind" and not os.path.isabs(mount["source"]):
-                mount["source"] = os.path.join(ctx.project_dir, mount["source"].removeprefix("./"))
+                mount["source"] = os.path.join(directory, mount["source"].removeprefix("./"))
     return resolved
 
 
-def _fix_mount(mount: dict[str, Any], ctx: policy.Policy) -> dict[str, Any]:
-    """Returns mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
-    if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
+def _fix_mount(mount: dict[str, Any], ctx: policy.Policy, directory: str) -> dict[str, Any]:
+    """Returns mount, with a bind source outside ctx's mount roots for a project in directory replaced by a
+    placeholder to edit.
+    """
+    if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots(directory)):
         return mount
-    return {**mount, "source": _placeholder_source(mount["source"], ctx.project_dir)}
+    return {**mount, "source": _placeholder_source(mount["source"], directory)}
 
 
 def _placeholder_source(source: str, project_dir: str) -> str:

@@ -17,8 +17,8 @@ from typing import Any
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.build import BakeDefinition
-from dockscreen.screen import policy, verdict
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen import findings, policy, verdict
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.scope import Scope
 
 NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
@@ -50,13 +50,14 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
     passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
     """
-    if not verdict.screened(Report.of(check(runtime.docker, args, Scope(runtime).policy_here()))):
+    bake_policy = Scope(runtime).policy_here()
+    if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
         return 1
     runtime.docker.exec([*lead, *args])
 
 
-def check(docker: Docker, args: Sequence[str], project_policy: policy.Policy) -> list[Finding]:
-    """Checks `bake` with these arguments by project_policy, whose project directory is the current one.
+def check(docker: Docker, args: Sequence[str], bake_policy: policy.Policy, directory: str) -> list[Finding]:
+    """Checks `bake` with these arguments, run in directory, by bake_policy.
 
     Returns why it may not run: refusals, or the failure to get the definition.
     """
@@ -64,5 +65,5 @@ def check(docker: Docker, args: Sequence[str], project_policy: policy.Policy) ->
         found = _definition(docker, args)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
-        return [Finding(str(e), Severity.FAILED, help=hint, output=e.output)]
-    return project_policy.check_bake(BakeDefinition(found))
+        return [findings.failure_of(e, help=hint)]
+    return bake_policy.check_bake(BakeDefinition(found, directory))
