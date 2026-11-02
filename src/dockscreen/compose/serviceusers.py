@@ -1,117 +1,37 @@
 """This module gets the images of a compose project's services as compose would, and looks at those that
 decide which user a service runs as, where the project leaves that to the image, so that the policy can
-decide by the rule `docker run` uses (Policy.assess_images).
+decide by the rule `docker run` uses (rules.image), and what follows from that (decisions).
 
 A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
 whatever its image says. The image is acquired first, following the project's own pull policy so that
-automatic updates keep happening (pull, or build if it is built from a Dockerfile), and then the same
-rule as `docker run` is applied to the identity it would run as (Policy.check_image):
+automatic updates keep happening (pull, or build if it is built from a Dockerfile), and then looked at
+through a container created from it and never started (Scope.look). The images of the services that an
+image section of the config file names are found too, with where they were pulled from, which shows
+whether the section applies (Project.found_images).
 
-- the config file names a user for the image's repository, and the image was pulled from there:
-  that user;
-- root: the configured default user instead (nobody unless configured otherwise), with a notice;
-- otherwise the image's own user if the id rules accept it, with the service's mounts; refused if not.
-
-Whatever is accepted is pinned in the generated config as `user: "uid:gid"`.
-
-In the generated config only, services that were looked at get `pull_policy: never` and, unless they are
-built, `image:` set to the id of the image that was checked, so that compose runs that image and neither
-pulls another one nor follows a tag that something else has moved in between. Neither is written to the files
-the project owns or to `harden` output, which would silently turn off the project's updates.
-
-A service that is not started by this command and sets no user is run as the default user if it does get
-started: a mistake in working out what starts must fail safe. So is a service whose user the command line
-chose (`run -u`), which the command line then overrides.
+What follows is the policy's and decisions': what is accepted is pinned in the generated config only,
+with the image that was checked, so that neither the files the project owns nor `harden` output turn off
+the project's updates; a service that is not started, or whose user the command line chose (`run -u`),
+gets the default user in case it does get started without it.
 """
 
 from collections.abc import Sequence
-from typing import Any, NamedTuple
+from typing import Any
 
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import findings, policy, substitutions, userchanges, verdict
-from dockscreen.screen.assessment import Assessment, Kind
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen import findings
+from dockscreen.screen.decisions import Decisions
+from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.scope import Scope
-from dockscreen.screen.substitutions import Substitution
-from dockscreen.screen.userchanges import USER_HELP
-from dockscreen.util import commandline, ids, messages
+from dockscreen.util import commandline, messages
 
 
 class ImageError(Exception):
     pass
-
-
-class Prepared(NamedTuple):
-    """Project whose services' images were acquired in a scope (ctx), with what was found of them
-    (Project.found_images, Project.inspected), and the failures to acquire them.
-
-    What the images decide is the policy's (Policy.assess_images); the rest follows from that.
-    """
-    project: Project
-    ctx: Scope
-    failures: tuple[Finding, ...] = ()  # pulling, building or listing the services failed
-
-    @property
-    def config(self) -> dict[str, Any]:
-        """Returns the project's definition."""
-        return self.project.definition
-
-    @property
-    def policy(self) -> policy.Policy:
-        """Returns the policy for the project, with the image sections its images were shown to have."""
-        return self.ctx.project_policy(self.project)
-
-    @property
-    def decisions(self) -> dict[str, Assessment]:
-        """Returns the decision about each started service that sets no user, by service."""
-        return self.policy.assess_images(self.project)
-
-    @property
-    def report(self) -> Report:
-        """Returns the failures to acquire the images, and the services whose image must not run."""
-        return Report.of([*self.failures, *self.policy.check_images(self.project)])
-
-    def changes(self) -> list[Substitution]:
-        """Returns the substitutions that make the project the one to run (userchanges.changes)."""
-        project_policy = self.policy
-        return userchanges.changes(self.project, self.decisions, project_policy.default_user,
-                                   project_policy.default_home)
-
-    def describe(self) -> list[messages.Marked]:
-        """Describes, in one line per service that sets no user, what dockscreen does about it."""
-        lines = []
-        for name in sorted(unset_user_services(self.config)):
-            decision = self.decisions.get(name)
-            if decision is None:
-                default = ids.format_user(self.policy.default_user)
-                text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
-                        f"default user ({default}) if it is started")
-                lines.append(messages.notable_change(text, USER_HELP))
-                continue
-            accepted = decision.kind in (Kind.IMAGE, Kind.CONFIGURED)
-            if accepted and not decision.refused:
-                runs_as = verdict.runs_as(decision, self.ctx.local)
-                text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
-                lines.append(messages.Marked(verdict.dot(decision), text))
-            elif decision.kind is Kind.FALLBACK:
-                instead = verdict.instead_of_root(decision)
-                lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
-            for note in decision.notes:
-                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {note}"))
-        return [*lines, *substitutions.grouped(self.changes())]
-
-    def notices(self) -> list[messages.Marked]:
-        """Lists, as marked lines, what a run does that the project did not ask for."""
-        return substitutions.describe(self.changes())
-
-
-def unset_user_services(config: dict[str, Any]) -> frozenset[str]:
-    """Returns the names of the services in config that set no user."""
-    return frozenset(n for n, s in (config.get("services") or {}).items() if not (s or {}).get("user"))
 
 
 def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
@@ -120,11 +40,12 @@ def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> s
 
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: Scope,
-            chosen: frozenset[str] = frozenset()) -> Prepared:
-    """Acquires the images of the services that start, and decides on those that set no user.
+            chosen: frozenset[str] = frozenset()) -> Decisions:
+    """Acquires the images of the services that start, and looks at those of the services that set no
+    user, for the policy to decide on.
 
-    Pulls and builds as `up` would. Returns a Prepared; its report passes if every image was acquired and
-    accepted.
+    Pulls and builds as `up` would. Returns the Decisions about the project with what was found of its
+    images; their report passes if every image was acquired and accepted.
 
     command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
@@ -136,14 +57,19 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: 
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(project, ctx, (Finding(str(e), Severity.FAILED),))
+        return decided(project, ctx, (Finding(str(e), Severity.FAILED),))
     if failures:
-        return Prepared(project, ctx, tuple(findings.failed(failures)))
+        return decided(project, ctx, tuple(findings.failed(failures)))
 
     inspected = _inspect(project, to_run - chosen, ctx)
     found = {**_find_section_images(config, ctx),
              **{name: image.image for name, image in inspected.items() if isinstance(image, Inspected)}}
-    return Prepared(project.with_images(found, inspected), ctx)
+    return decided(project.with_images(found, inspected), ctx)
+
+
+def decided(project: Project, ctx: Scope, failures: tuple[Finding, ...] = ()) -> Decisions:
+    """Returns the Decisions of the policy for project in ctx, with the failures to acquire its images."""
+    return Decisions(project, ctx.project_policy(project), ctx.local, failures)
 
 
 def _find_section_images(config: dict[str, Any], ctx: Scope) -> dict[str, Image]:
@@ -228,7 +154,7 @@ def _inspect(project: Project, to_run: frozenset[str], ctx: Scope) -> dict[str, 
     """
     config = project.definition
     found: dict[str, Inspected | Unseen] = {}
-    for name in sorted(to_run & unset_user_services(config)):
+    for name in sorted(to_run & project.services_without_user):
         service = config["services"][name]
         image = Image(_image_name(config, name, service), built="build" in service)
         platform = ["--platform", service["platform"]] if service.get("platform") else []

@@ -8,7 +8,7 @@ from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen import policy, substitutions, userchanges
+from dockscreen.screen import decisions, policy, substitutions
 from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.scope import Scope
@@ -19,7 +19,7 @@ NOBODY = "65534:65534"
 
 ROOT_FALLBACK = "running as 65534:65534 instead of root"
 PIN = "user, image id and pull_policy: never fixed to what was checked, in the generated file only"
-USER_HELP = userchanges.USER_HELP
+USER_HELP = decisions.USER_HELP
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # what prepare is given; only the tail matters
 
 
@@ -196,7 +196,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
     changes = prepared.changes()
-    return prepared, substitutions.apply(prepared.config, changes), substitutions.origins(changes)
+    return prepared, substitutions.apply(prepared.project.definition, changes), substitutions.origins(changes)
 
 
 def user_origins(origins):

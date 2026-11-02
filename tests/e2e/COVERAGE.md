@@ -33,7 +33,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `compose_lifecycle.check` for a project without a name.
 - `Policy.check_user` for a service without a user: the services that set none are left to their
   images, and those that start get a user before the final check.
-- `serviceusers.Prepared.changes` for a decision that pins no user: a refused or failed decision stops
+- `decisions.Decisions.changes` for a decision that pins no user: a refused or failed decision stops
   the run before finalize.
 - `docker_run._verify_split` refusing a command line whose image dockscreen misread: it knows every
   value-taking option of `docker run` that the daemon accepts on Linux. An option it does not know, such

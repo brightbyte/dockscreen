@@ -1,5 +1,6 @@
-"""This module provides the substitutions that follow from the decisions about the users of a compose
-project's services (Policy.assess_images), which make the project the one that runs.
+"""This module provides what the policy decided about the users of a compose project's services once their
+images were looked at (Decisions), and what follows: the substitutions that make the project the one that
+runs (changes), and how both are described.
 
 A user dockscreen decided is pinned as numbers, `user: "uid:gid"`: the runtime reads neither passwd nor
 group for that, so it cannot resolve the image's user to anything but what was checked. The image that was
@@ -9,19 +10,74 @@ in case it does get started: a mistake in working out what starts must fail safe
 """
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
+from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import verdict
+from dockscreen.screen import policy, substitutions, verdict
 from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.substitutions import Group, Substitution
-from dockscreen.util import ids
+from dockscreen.util import ids, messages
 
 PINNED = Group("services {services}: user, image id and pull_policy: never fixed to what was checked, "
                "in the generated file only")
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
              "volumes set up for root")
+
+
+class Decisions(NamedTuple):
+    """What the policy for a project (policy) decides about its services' users from what was found of their
+    images (Project.found_images, Project.inspected), with the failures to acquire the images; local: this
+    host's accounts, for naming users.
+    """
+    project: Project
+    policy: policy.Policy
+    local: hostusers.HostAccounts
+    failures: tuple[Finding, ...] = ()  # pulling, building or listing the services failed
+
+    @property
+    def decisions(self) -> dict[str, Assessment]:
+        """Returns the decision about each started service that sets no user, by service."""
+        return self.policy.assess_images(self.project)
+
+    @property
+    def report(self) -> Report:
+        """Returns the failures to acquire the images, and the services whose image must not run."""
+        return Report.of([*self.failures, *self.policy.check_images(self.project)])
+
+    def changes(self) -> list[Substitution]:
+        """Returns the substitutions that make the project the one to run (the function changes)."""
+        return changes(self.project, self.decisions, self.policy.default_user, self.policy.default_home)
+
+    def describe(self) -> list[messages.Marked]:
+        """Describes, in one line per service that sets no user, what dockscreen does about it."""
+        lines = []
+        decisions = self.decisions
+        for name in sorted(self.project.services_without_user):
+            decision = decisions.get(name)
+            if decision is None:
+                default = ids.format_user(self.policy.default_user)
+                text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
+                        f"default user ({default}) if it is started")
+                lines.append(messages.notable_change(text, USER_HELP))
+                continue
+            accepted = decision.kind in (Kind.IMAGE, Kind.CONFIGURED)
+            if accepted and not decision.refused:
+                runs_as = verdict.runs_as(decision, self.local)
+                text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
+                lines.append(messages.Marked(verdict.dot(decision), text))
+            elif decision.kind is Kind.FALLBACK:
+                instead = verdict.instead_of_root(decision)
+                lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
+            for note in decision.notes:
+                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {note}"))
+        return [*lines, *substitutions.grouped(self.changes())]
+
+    def notices(self) -> list[messages.Marked]:
+        """Lists, as marked lines, what a run does that the project did not ask for."""
+        return substitutions.describe(self.changes())
 
 
 def changes(project: Project, decisions: Mapping[str, Assessment], default_user: tuple[int, int],

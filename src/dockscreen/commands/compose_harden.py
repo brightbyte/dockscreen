@@ -93,11 +93,11 @@ def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], res
     with.
     """
     with project.generated() as command:
-        prepared = project.prepare(command(resolved), project.hardened.with_definition(resolved))
-    if not prepared.decisions:
-        return prepared.report.reasons, notes  # nothing could be looked at: pulling or building failed
+        decided = project.prepare(command(resolved), project.hardened.with_definition(resolved))
+    if not decided.decisions:
+        return decided.report.reasons, notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []
-    for name, assessment in prepared.decisions.items():
+    for name, assessment in decided.decisions.items():
         if assessment.failed:  # setting a user does not fix an image that could not be read
             remaining.append(image_problem(name, assessment))
         elif assessment.refused:

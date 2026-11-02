@@ -28,6 +28,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy, substitutions, verdict
+from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
@@ -38,11 +39,11 @@ REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p
 
 class Screened(NamedTuple):
     """Outcome of screening a compose project stage by stage (Compose.screen): what the last stage that ran
-    found, the images as they were prepared if it got that far, and the project that will run, which only a
+    found, what was decided about the images if it got that far, and the project that will run, which only a
     screening that passed every stage has.
     """
     report: Report
-    prepared: serviceusers.Prepared | None = None
+    decided: Decisions | None = None
     final: Project | None = None
 
 
@@ -79,7 +80,7 @@ class Compose(NamedTuple):
         users that the images decide to later.
         """
         hardened = self.hardened
-        unset = serviceusers.unset_user_services(hardened.definition)
+        unset = hardened.services_without_user
         return hardened.with_origins({name: {"user": Origin.IMAGE} for name in unset})
 
     def static_policy(self) -> policy.Policy:
@@ -108,15 +109,15 @@ class Compose(NamedTuple):
         announce()
         args, chosen = (parsed.args, _chosen(parsed)) if parsed else ([], frozenset())
         hardened = self.hardened
-        prepared = self.prepare(command(hardened.definition), hardened, args, chosen)
-        if not prepared.report.passed:
-            return Screened(prepared.report, prepared)
-        final = self.final(prepared)
+        decided = self.prepare(command(hardened.definition), hardened, args, chosen)
+        if not decided.report.passed:
+            return Screened(decided.report, decided)
+        final = self.final(decided)
         judged, trust = (final, TRUSTED)
         if strict and parsed:
             judged, trust = _as_run(final, parsed, self.scope.runtime), STRICT
-        checked = Report.of(self.final_policy(prepared).with_trust(trust).check_project(judged))
-        return Screened(checked, prepared, final if checked.passed else None)
+        checked = Report.of(self.final_policy(decided).with_trust(trust).check_project(judged))
+        return Screened(checked, decided, final if checked.passed else None)
 
     def _with_name_users(self, project: Project) -> tuple[Project, list[Finding]]:
         """Returns project with the directories its name's containers were made from (inspect.made_from),
@@ -133,30 +134,30 @@ class Compose(NamedTuple):
         except DockerError as e:
             return project, [inspect.name_lookup_failure(name, e)]
 
-    def final(self, prepared: serviceusers.Prepared) -> Project:
+    def final(self, decided: Decisions) -> Project:
         """Returns the project that will run: the resolved one with the hardening and then what the images
-        decided (Prepared.changes) made, with where the values dockscreen set come from.
+        decided (Decisions.changes) made, with where the values dockscreen set come from.
         """
-        return substitutions.applied(self.resolved, [*self.hardening, *prepared.changes()])
+        return substitutions.applied(self.resolved, [*self.hardening, *decided.changes()])
 
-    def final_policy(self, prepared: serviceusers.Prepared) -> policy.Policy:
+    def final_policy(self, decided: Decisions) -> policy.Policy:
         """Returns the policy for the project that will run, with image sections only where its images, as
-        prepared found them, proved them.
+        they were found, proved them.
         """
-        return prepared.policy
+        return decided.policy
 
     def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
-                chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
+                chosen: frozenset[str] = frozenset()) -> Decisions:
         """Gets the images of project's services and decides their users (serviceusers.prepare), once compose
         has been shown to read the generated file back as its definition.
 
-        Returns a failed Prepared, with nothing pulled or built, if compose reads it differently.
+        Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
         command: the compose command line on the generated file of project's definition (generated()).
         args and chosen: as serviceusers.prepare takes them.
         """
         problem = _read_back_problem(command, project.definition, self.scope.docker)
         if problem:
-            return serviceusers.Prepared(project, self.scope, (Finding(problem, Severity.FAILED),))
+            return serviceusers.decided(project, self.scope, (Finding(problem, Severity.FAILED),))
         return serviceusers.prepare(command, project, list(args), self.scope, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
@@ -208,10 +209,10 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     lines += shellenv.describe(project.hardened.definition, runtime.env)
     with project.generated() as command:
         screened = project.screen(command, parsed, strict)
-        if screened.final is None or screened.prepared is None:  # it did not pass every stage
+        if screened.final is None or screened.decided is None:  # it did not pass every stage
             verdict.screened(screened.report)
             return 1
-        for line in [*lines, *screened.prepared.notices()]:
+        for line in [*lines, *screened.decided.notices()]:
             if line:
                 messages.notice(line)
         verdict.screened(screened.report)

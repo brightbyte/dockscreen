@@ -456,4 +456,4 @@ def test_only_a_screening_that_passed_every_stage_has_a_project_to_run(tmp_path)
     with project.generated() as command:
         screened = project.screen(command)
 
-    assert not screened.report.passed and screened.prepared is None and screened.final is None
+    assert not screened.report.passed and screened.decided is None and screened.final is None

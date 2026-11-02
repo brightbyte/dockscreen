@@ -132,7 +132,7 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 ### Notices
 
-Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done. For compose, each change to a service's key is a `substitutions.Substitution`, whether hardening (`hardening.changes`) or the users and pins of the images (`Prepared.changes`) made it, and the definition that runs is the resolved one with all of them made, in that order (`Compose.final`); routine ones of the same kind share one line that names their services (`substitutions.Group`).
+Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done. For compose, each change to a service's key is a `substitutions.Substitution`, whether hardening (`hardening.changes`) or the users and pins of the images (`decisions.Decisions.changes`) made it, and the definition that runs is the resolved one with all of them made, in that order (`Compose.final`); routine ones of the same kind share one line that names their services (`substitutions.Group`).
 
 A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`findings.Finding`, which also names its subject and how much it matters), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
 
@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `scope`, `assessment`, `imageuser`, `hardening`, `substitutions`, `userchanges`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `scope`, `assessment`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
@@ -172,7 +172,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
    - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`Scope.look`), which the project then holds (`Project.inspected`); the policy decides from that as `docker run` does (below), as part of checking the project (`Policy.check_images`);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
-5. `Compose.final`, which makes the substitutions of `Prepared.changes`:
+5. `Compose.final`, which makes the substitutions of `decisions.Decisions.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
@@ -186,7 +186,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `Prepared.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### Origins and trust (`origin`, `findings`)
 

@@ -59,6 +59,11 @@ class Project(NamedTuple):
         """Returns its services, in the order of the definition."""
         return [Service(self, name) for name in self.definition.get("services") or {}]
 
+    @property
+    def services_without_user(self) -> frozenset[str]:
+        """Returns the names of the services that set no user, whose image's user is what docker runs."""
+        return frozenset(s.name for s in self.services if not s.definition.get("user"))
+
     def service(self, name: str) -> "Service":
         """Returns the service called name."""
         return Service(self, name)

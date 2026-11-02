@@ -28,9 +28,9 @@ from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import imageuser, verdict
 from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.scope import Scope
-from dockscreen.screen.userchanges import default_home
 from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice, runs_as
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable

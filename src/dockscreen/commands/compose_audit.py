@@ -61,7 +61,7 @@ def _audit_images(project: composeproject.Compose, brief: bool) -> tuple[Report,
     # the last stage is what `up` checks once more before it runs: image sections need proof then
     with project.generated() as command:
         screened = project.screen(command, announce=announce)
-    if screened.prepared is None:
+    if screened.decided is None:
         return screened.report, [
             "the images were not looked at because of the problems below: nothing was pulled or built"]
-    return screened.report, screened.prepared.describe()
+    return screened.report, screened.decided.describe()
