@@ -23,6 +23,9 @@ DOCKER_OPTS_WITH_VALUE = frozenset({
 })
 # Commands that start a container or run in one, and our audit: they go through the gate.
 SCREENED = frozenset({"run", "create", "start", "restart", "exec", "audit"})
+# The screened commands that --strict-screen applies to. create checks nothing itself: its container is
+# judged when it is started. exec starts a process in a running container at once, unjudged.
+STRICT_COMMANDS = SCREENED - {"exec"}
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 # dockscreen's own options before the docker command
 OWN_OPTIONS = frozenset({
@@ -74,9 +77,10 @@ class DockerCommand(commandline.CommandLine):
         """
         argv, sub = self.argv, self.sub
         messages.set_helpful(self.helpful or sub == "audit")
-        if self.strict and sub != "audit":
+        if self.strict and not self._supports_strict():
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            return messages.refuse([f"{commandline.STRICT_SCREEN} is only supported for audit so far"])
+            supported = f"{', '.join(sorted(STRICT_COMMANDS))} and buildx bake"
+            return messages.refuse([f"{commandline.STRICT_SCREEN} is only supported for {supported} so far"])
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
@@ -95,6 +99,15 @@ class DockerCommand(commandline.CommandLine):
         if sub not in SCREENED:
             return _passthrough(argv, self.runtime)
         return self._gated(sub, end)
+
+    def _supports_strict(self) -> bool:
+        """Tells whether the command can be screened with the command line untrusted (STRICT_COMMANDS).
+
+        buildx bake can: everything it builds is judged anyway, whatever the command line set.
+        """
+        if self._bake_arguments() is not None:
+            return True
+        return self.idx is not None and self._command(self.idx)[0] in STRICT_COMMANDS
 
     def _command(self, idx: int) -> tuple[str, int]:
         """Returns (name, index) of the command at idx: `docker container run` is `run`, at the index of
@@ -131,10 +144,11 @@ class DockerCommand(commandline.CommandLine):
         if sub == "exec":
             return docker_exec.gate(lead, args, runtime)
         if sub == "run":
-            return docker_run.gate(global_args, args, runtime, self.allow_me)
+            return docker_run.gate(global_args, args, runtime, self.allow_me, self.strict)
         if sub == "audit":
             return docker_run.audit(global_args, args, runtime, self.allow_me, self.strict)
-        return docker_start.gate(global_args, lead, args, runtime, self.allow_me)  # start, restart
+        # start, restart
+        return docker_start.gate(global_args, lead, args, runtime, self.allow_me, self.strict)
 
     def _help_request(self) -> str | None:
         """Determines what help the command line asks for: None for none, "" for the overview, else a command.

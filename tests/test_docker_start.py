@@ -58,3 +58,28 @@ def test_existing_containers_are_checked_by_the_same_rule():
     problems = docker_start.check([], ["web1"], runtime(bad))
     assert "web1: the image's uid 1000 exists on this host" in problems[0]
     assert "no such" in docker_start.check([], ["gone"], runtime(bad))[0].lower()
+
+
+HARDENED = {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"]}
+
+
+def test_strict_judges_what_the_command_line_that_made_the_container_asked_for():
+    docker = FakeDocker(image_user="nobody", info_extra={"HostConfig": {**HARDENED, "Privileged": True}})
+
+    assert docker_start.check([], ["c1"], runtime(docker)) == []  # the command line is trusted
+    assert docker_start.check([], ["c1"], runtime(docker), strict=True) == ["c1: privileged is not allowed"]
+
+
+def test_strict_refuses_a_container_without_the_defaults_since_it_cannot_be_rewritten():
+    docker = FakeDocker(image_user="nobody")
+
+    assert docker_start.check([], ["c1"], runtime(docker), strict=True) == [
+        "c1: cap_drop must include ALL", "c1: security_opt must include no-new-privileges:true"]
+
+
+def test_strict_judges_a_user_that_is_not_the_images_by_the_id_rules():
+    docker = FakeDocker(image_user="nobody", container_user="0:0", info_extra={"HostConfig": HARDENED})
+
+    assert docker_start.check([], ["c1"], runtime(docker)) == []
+    assert docker_start.check([], ["c1"], runtime(docker), strict=True) == [
+        "c1: user '0:0': uid 0 is root", "c1: user '0:0': gid 0 is root"]

@@ -253,7 +253,7 @@ Mount dirs and the project directory are checked against sensitive paths (system
 | Option, before the subcommand | Effect |
 |---|---|
 | `--allow-me` | the caller's own ids become allowed ids, for this run |
-| `--strict-screen` | `audit` treats the command line as untrusted too; refused before any other subcommand until it is supported there |
+| `--strict-screen` | the command line is untrusted too (`origin.STRICT`): `audit`, `run`, `start` and `restart` refuse what it asks for that a project could not have (`policy.check_container`); `create` and `buildx bake` accept it, since create's container is judged when it starts and bake judges its whole definition anyway; refused before any other subcommand until it is supported there |
 | `--skip-screening` | no checks, no defaults, and a warning on every use |
 
 Text from the project or the image is escaped (`messages.printable`) before it is printed or written into a `harden` patch, so it cannot forge output lines or send terminal control sequences.

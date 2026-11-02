@@ -202,11 +202,21 @@ def test_strict_screen_is_passed_to_the_audit():
     assert dispatch(["--strict-screen", "audit", "img"], privileged())[0] == 1
 
 
-@pytest.mark.parametrize("argv", [["--strict-screen", "run", "img"], ["--strict-screen", "compose", "up"],
-                                  ["--strict-screen", "ps"], ["--strict-screen"]])
+def test_strict_screen_refuses_what_a_run_command_line_asks_for():
+    def privileged():
+        return FakeDocker(image_user="nobody", info_extra={"HostConfig": {"Privileged": True}})
+
+    assert dispatch(["run", "img"], privileged())[0] == 42  # the command line is trusted
+    assert dispatch(["--strict-screen", "run", "img"], privileged()) == (1, [])
+
+
+@pytest.mark.parametrize("argv", [["--strict-screen", "exec", "c", "sh"],
+                                  ["--strict-screen", "compose", "up"], ["--strict-screen", "ps"],
+                                  ["--strict-screen"]])
 def test_strict_screen_is_refused_where_it_is_not_supported(argv, capsys):
     assert dispatch(argv) == (1, [])
-    assert "--strict-screen is only supported for audit so far" in capsys.readouterr().err
+    assert ("--strict-screen is only supported for audit, create, restart, run, start and buildx bake so far"
+            in capsys.readouterr().err)
 
 
 def test_docker_audit_without_an_image_prints_usage(capsys):

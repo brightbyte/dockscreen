@@ -11,8 +11,9 @@ Before the subcommand (CommandLine takes them out):
   The audit commands do that anyway. --verbose is taken here, not passed on, so that it does not
   make docker or compose noisy as well.
 - --strict-screen treats the command line as untrusted too: what it asks for that a project or an
-  image may not have (see policy.check_container) is refused. Only `audit` supports it so far;
-  everything else refuses to run with it, rather than ignore it.
+  image may not have (see policy.check_container) is refused. `audit`, `run`, `create`, `start`,
+  `restart` and `buildx bake` support it so far; everything else refuses to run with it, rather than
+  ignore it.
 
 After `audit`, for compose and docker alike: --brief prints only the verdict, in one line.
 

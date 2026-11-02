@@ -11,9 +11,11 @@ from typing import Any
 
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import imagedecision, verdict
+from dockscreen.model.container import Container
+from dockscreen.model.origin import STRICT, Origin
+from dockscreen.screen import findings, imagedecision, policy, verdict
 from dockscreen.screen.findings import Finding, Report
-from dockscreen.screen.imagedecision import Assessment, assess, explain
+from dockscreen.screen.imagedecision import Assessment, Kind, assess, explain
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -22,23 +24,24 @@ VALUE_SHORT = frozenset("st")
 
 
 def gate(global_args: Sequence[str], lead: list[str], args: list[str], runtime: Runtime,
-         allow_me: bool = False) -> int:
+         allow_me: bool = False, strict: bool = False) -> int:
     """Runs `lead args` (`docker start` or `restart`, with docker's options) if every container it names
     passes check; returns 1 if one does not, otherwise docker replaces this process.
     """
-    if not verdict.screened(Report.of(check(global_args, args, runtime, allow_me))):
+    if not verdict.screened(Report.of(check(global_args, args, runtime, allow_me, strict))):
         return 1
     runtime.docker.exec([*lead, *args])
 
 
-def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False
-          ) -> list[Finding]:
+def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False,
+          strict: bool = False) -> list[Finding]:
     """Returns the refusals that forbid starting the containers named in `docker global_args start args`
     (or `restart`).
 
     An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
     default user or a configured one) is refused like one whose user is not accepted, unless it
-    already runs as that user.
+    already runs as that user. strict: --strict-screen was given, so what the command line that created a
+    container asked for is judged as a project's would be, and refused (policy.check_container).
     """
     if is_remote(global_args, runtime.docker):
         return [Finding(REMOTE_MESSAGE)]
@@ -56,6 +59,11 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
             else:
                 image = info["Config"].get("Image") or ""
                 problems += [Finding(p, subject=ref, help=p.help) for p in explain(ctx, assessment, image)]
+            if strict:
+                user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
+                policy_ctx = ctx.policy_context(assessment.section, STRICT)
+                found = policy.check_container(Container(info), policy_ctx, user_origin)
+                problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
             problems.append(Finding(messages.with_output(messages.reason_of(e)), subject=ref))
     return problems

@@ -47,13 +47,16 @@ AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief]
                "IMAGE [COMMAND]")
 
 
-def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
+def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False,
+         strict: bool = False) -> int:
     """Runs `docker global_args run args` through the gate and returns the exit status.
 
     The container starts only if the user it would run as is accepted, given as numbers where the image
     or the config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it
     could not create the container.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
+    strict: --strict-screen was given, so what the command line asks for that a project or an image may
+    not have is refused too.
     """
     if is_remote(global_args, runtime.docker):
         return verdict.report(Report.refusal(REMOTE_MESSAGE))
@@ -76,6 +79,12 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     if isinstance(created, int):
         return created
     container, info, assessment = created
+    if strict:
+        found = Report.of(_command_line_findings(ctx, parsed, info, assessment, STRICT))
+        if not found.passed:
+            ctx.docker.remove(container)
+            verdict.screened(found)
+            return 1
 
     if assessment.pins_user:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
@@ -176,6 +185,19 @@ def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str
     return code, Created(container, info, assessment)
 
 
+def _command_line_findings(ctx: imagedecision.Context, parsed: runargs.ParsedRun, info: dict[str, Any],
+                           assessment: Assessment, trust: frozenset[Origin]) -> list[Finding]:
+    """Returns what the command line asks for, in the container it created (info), that a project or an
+    image may not have: refused, or notable where trust trusts the command line (policy.check_container).
+
+    Empty if the container could not be inspected.
+    """
+    if not info:
+        return []
+    policy_ctx = ctx.policy_context(assessment.section, trust)
+    return policy.check_container(Container(info), policy_ctx, _user_origin(parsed, []))
+
+
 def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
     """Returns where the user of the container comes from: dockscreen when it adds options of its own
     (extra, which re-create it with the user it decided), else the command line if it gives one, else the
@@ -238,10 +260,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         return verdict.report(Report.failure(reason), brief)
     container, info, assessment = created
     try:
-        settings, _ = ctx.for_image(assessment.section)
-        policy_ctx = policy.context_for(settings, ctx.directory, ctx.ids, ctx.runtime.config_file)
-        policy_ctx = policy_ctx.with_trust(STRICT if strict else TRUSTED)
-        found = policy.check_container(Container(info), policy_ctx, _user_origin(parsed, [])) if info else []
+        found = _command_line_findings(ctx, parsed, info, assessment, STRICT if strict else TRUSTED)
     finally:
         ctx.docker.remove(container)
 

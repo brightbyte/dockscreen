@@ -64,8 +64,8 @@ DOCKER_OPTIONS = (
     Option(commandline.HELPFUL,
            "Say what to do about a message too (also --verbose, which is not passed on)"),
     Option(commandline.SKIP_SCREENING, "Turn all checks off; warns every time"),
-    Option(commandline.STRICT_SCREEN, "For audit: also deny what the command line asks for that a project or "
-                                      "image may not have"),
+    Option(commandline.STRICT_SCREEN, "For audit, run, create, start, restart and buildx bake: also deny "
+                                      "what the command line asks for that a project or image may not have"),
 )
 COMPOSE_OPTIONS = (
     Option(commandline.ALLOW_ME, "Allow services to run as you"),

@@ -25,8 +25,8 @@ from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
-from dockscreen.model.origin import Origin
-from dockscreen.screen import idrules, imageuser
+from dockscreen.model.origin import TRUSTED, Origin
+from dockscreen.screen import idrules, imageuser, policy
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import ids, images, messages
 
@@ -68,6 +68,14 @@ class Context(NamedTuple):
         """Returns (settings, id rules) with the image section for repository applied (None: none applies)."""
         settings = config.effective(self.runtime.settings, repository, self.directory)
         return settings, self.ids.with_settings(settings)
+
+    def policy_context(self, repository: str | None, trust: frozenset[Origin] = TRUSTED) -> policy.Context:
+        """Returns the policy context for a container of an image from repository (None: no image section
+        applies), with this context's directory as the project's, trusting the origins in trust.
+        """
+        settings, _ = self.for_image(repository)
+        ctx = policy.context_for(settings, self.directory, self.ids, self.runtime.config_file)
+        return ctx.with_trust(trust)
 
     def with_allow_me(self, allow_me: bool) -> Self:
         """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
