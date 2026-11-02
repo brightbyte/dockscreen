@@ -4,6 +4,10 @@ that already exist.
 An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default
 user or a configured one) is refused like one whose user is not accepted, unless it already runs as
 that user.
+
+Docker does not record where a container was created, and its labels, which its image can set, prove
+nothing. So it is judged without a directory: no project section of the config file applies, and only
+the configured mount_dirs allow bind mounts.
 """
 
 from collections.abc import Sequence
@@ -52,7 +56,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
-            assessment = ctx.assess(runtime.cwd, info["Id"], info)
+            assessment = ctx.assess(None, info["Id"], info)
             replaces_image_user = assessment.pins_user and assessment.origin is not Origin.IMAGE
             if replaces_image_user and not _runs_as_pinned_user(info, assessment):
                 user = ids.format_user(assessment.pinned_user)
@@ -65,8 +69,8 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
             if strict:
                 chosen = assessment.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
-                strict_policy = ctx.policy_here(assessment.section, STRICT)
-                found = strict_policy.check_container(Container(info, runtime.cwd, user_origin))
+                strict_policy = ctx.policy_for(None, assessment.section, STRICT)
+                found = strict_policy.check_container(Container(info, None, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
             problems.append(Finding(messages.with_output(e), subject=ref))

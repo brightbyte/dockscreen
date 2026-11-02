@@ -97,7 +97,7 @@ Hook users follow step 1. Services that will not start get the default user, so 
 
 `docker run`, and `docker compose run` for the service it names: a user from the command line is used as given. Otherwise, steps 2 and 3 apply.
 
-`docker start` and `restart`: an existing container cannot be rewritten, so one whose user steps 2 and 3 would replace or refuse is refused. Compose `start` and `restart` take no user and are not checked: they start containers that `up` or `create` made.
+`docker start` and `restart`: an existing container cannot be rewritten, so one whose user steps 2 and 3 would replace or refuse is refused. Docker does not record where a container was created, and its labels, which its image can set, prove nothing, so it is judged without a directory: no project section of the config file applies, and under `--strict-screen` only the configured `mount_dirs` allow its bind mounts. Compose `start` and `restart` take no user and are not checked: they start containers that `up` or `create` made.
 
 `exec` (`docker exec`, `compose exec`): a user from the command line is used as given. Without one, the process runs as the container's own user, which was checked when the container started, if dockscreen started it.
 

@@ -10,7 +10,14 @@ means the value is acceptable.
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
-from dockscreen.screen.rules.base import RuleBase, Subject, is_inside, is_inside_any, unknown_keys
+from dockscreen.screen.rules.base import (
+    RuleBase,
+    Subject,
+    directory_of,
+    is_inside,
+    is_inside_any,
+    unknown_keys,
+)
 from dockscreen.screen.rules.build import BuildRules
 from dockscreen.util import ids
 
@@ -149,14 +156,14 @@ class ServiceRules(RuleBase):
         """Checks develop; returns unknown keys, and watch rules with bad actions or paths outside the
         project.
         """
-        value = value or {}
+        value, directory = value or {}, directory_of(service)
         problems = unknown_keys(value, DEVELOP_KEYS, "develop key")
         for rule in value.get("watch") or []:
             problems += unknown_keys(rule, WATCH_KEYS, "develop.watch key")
             if rule.get("action") not in WATCH_ACTIONS:
                 problems.append(f"develop.watch action {rule.get('action')!r} is not allowed")
-            if not is_inside(rule.get("path", ""), service.directory):
-                problems.append(f"develop.watch path {rule.get('path')!r} is outside {service.directory}")
+            if not is_inside(rule.get("path", ""), directory):
+                problems.append(f"develop.watch path {rule.get('path')!r} is outside {directory}")
         return problems
 
     def _check_deploy(self, value: Any, service: Subject) -> list[str]:
@@ -196,11 +203,11 @@ def _check_host_files(key: str) -> Check:
     These keys only show up in the definition when it is loaded without env resolution.
     """
     def check(policy: "Policy", value: Any, service: Subject) -> list[str]:
-        problems = []
+        problems, directory = [], directory_of(service)
         for entry in [value] if isinstance(value, (str, dict)) else value or []:
             path = entry.get("path") if isinstance(entry, dict) else entry
-            if path and not is_inside(path, service.directory):
-                problems.append(f"{key} {path!r} is outside {service.directory}")
+            if path and not is_inside(path, directory):
+                problems.append(f"{key} {path!r} is outside {directory}")
         return problems
     return check
 

@@ -39,14 +39,17 @@ class Container(NamedTuple):
     with the directory the command line that created it ran in, which its bind mounts are judged against
     as a project's are against the project's, and where its user comes from (user_origin).
 
+    directory is None for a container that existed before: docker does not record where it was created, and
+    its labels, which an image can set, prove nothing.
+
     Everything else it has comes from the command line that created it.
     """
     info: dict[str, Any]
-    directory: str
+    directory: str | None
     user_origin: Origin = Origin.COMMAND_LINE
 
     @classmethod
-    def uninspected(cls, container: str, directory: str) -> Self:
+    def uninspected(cls, container: str, directory: str | None) -> Self:
         """Returns the container called container, created in directory, which exists but could not be
         inspected.
         """

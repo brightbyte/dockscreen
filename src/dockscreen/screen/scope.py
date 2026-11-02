@@ -4,7 +4,8 @@ whether the caller's own ids are allowed.
 What the checks of one project, image or container need follows from it and from where that target is:
 the settings of the config file with the project and image sections that apply (config.effective), the
 id rules with those settings, and the policy (policy.Policy) built from them. The directory is the
-target's: a compose project's own, or for what a command line runs, the current one.
+target's: a compose project's own, for what a command line runs the current one, and none for a container
+that existed before, since docker does not record where it was created.
 """
 
 from typing import Any, NamedTuple, Self
@@ -41,21 +42,21 @@ class Scope(NamedTuple):
         """Returns the accounts of this host, for naming the users an image runs as."""
         return self.runtime.accounts
 
-    def settings_in(self, directory: str) -> config.Config:
+    def settings_in(self, directory: str | None) -> config.Config:
         """Returns the config file's settings for the project in directory, without any image section."""
         return config.effective(self.runtime.settings, None, directory)
 
-    def for_image(self, repository: str | None, directory: str) -> tuple[config.Config, idrules.Rules]:
+    def for_image(self, repository: str | None, directory: str | None) -> tuple[config.Config, idrules.Rules]:
         """Returns (settings, id rules) for the project in directory, with the image section for repository
         applied (None: none applies).
         """
         settings = config.effective(self.runtime.settings, repository, directory)
         return settings, self.ids.with_settings(settings)
 
-    def policy_for(self, directory: str, repository: str | None = None,
+    def policy_for(self, directory: str | None, repository: str | None = None,
                    trust: frozenset[Origin] = TRUSTED) -> policy.Policy:
         """Returns the policy for a container of an image from repository (None: no image section applies)
-        in the project in directory, trusting the origins in trust.
+        in the project in directory (None: no project section applies), trusting the origins in trust.
         """
         settings, _ = self.for_image(repository, directory)
         found = policy.Policy.for_settings(settings, self.ids, self.runtime.config_file)
@@ -65,7 +66,7 @@ class Scope(NamedTuple):
         """Returns the policy for what the command line runs (policy_for), in the current directory."""
         return self.policy_for(self.runtime.cwd, repository, trust)
 
-    def image_policy(self, directory: str, image: Image) -> policy.Policy:
+    def image_policy(self, directory: str | None, image: Image) -> policy.Policy:
         """Returns the policy for a container of image in the project in directory, with the image section
         that its name and where it was pulled from show to apply (config.section_for).
         """
@@ -93,11 +94,12 @@ class Scope(NamedTuple):
 
         return self.policy_for(directory).with_per_service(per_service)
 
-    def assess(self, directory: str, container: str, info: dict[str, Any], origin: Origin | None = None,
-               mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
+    def assess(self, directory: str | None, container: str, info: dict[str, Any],
+               origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,
+               built: bool = False) -> Assessment:
         """Decides which user the container's image may run as (rules.image), for the project in directory
-        (the current one for what a command line runs): looks at the image as far as the policy needs
-        (look), which then judges it (Policy.check_image).
+        (the current one for what a command line runs, None for a container that existed before): looks at
+        the image as far as the policy needs (look), which then judges it (Policy.check_image).
 
         Returns an Assessment, with the container's user's origin if it does not come from the image. Raises
         DockerError if the image cannot be inspected or its passwd or group file is too large.
@@ -110,7 +112,7 @@ class Scope(NamedTuple):
         inspected, image_policy = self.look(directory, container, info, origin, mounts, reference, built)
         return image_policy.check_image(inspected, origin or inspected.user_origin)
 
-    def look(self, directory: str, container: str, info: dict[str, Any], origin: Origin | None = None,
+    def look(self, directory: str | None, container: str, info: dict[str, Any], origin: Origin | None = None,
              mounts: bool | None = None, reference: str | None = None, built: bool = False
              ) -> tuple[Inspected, policy.Policy]:
         """Looks at the container's image as far as the policy for it needs (inspection), and returns what

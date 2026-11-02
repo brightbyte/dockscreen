@@ -83,3 +83,20 @@ def test_strict_judges_a_user_that_is_not_the_images_by_the_id_rules():
     assert docker_start.check([], ["c1"], runtime(docker)) == []
     assert docker_start.check([], ["c1"], runtime(docker), strict=True) == [
         "c1: user '0:0': uid 0 is root", "c1: user '0:0': gid 0 is root"]
+
+
+def test_an_existing_container_is_judged_without_the_current_directory_which_did_not_create_it(tmp_path):
+    here = str(tmp_path)
+    bind = {"HostConfig": HARDENED, "Mounts": [{"Type": "bind", "Source": here, "Destination": "/w"}]}
+    docker = FakeDocker(image_user="nobody", info_extra=bind)
+    settings = config.Config(projects={here: config.Section(user=(999, 999))})
+
+    # the project section of the current directory does not decide the user
+    assert docker_start.check([], ["c1"], make_runtime(docker=docker, settings=settings, cwd=here)) == []
+    # and the current directory does not allow bind mounts, only the configured mount_dirs do
+    [refusal] = docker_start.check([], ["c1"], make_runtime(docker=docker, cwd=here), strict=True)
+    assert refusal.startswith(f"c1: bind mount {here!r} is outside the configured mount_dirs, which are "
+                              "none; to allow it, add a directory that contains it to mount_dirs in ")
+    allowed = config.Config(mount_dirs=(here,))
+    assert docker_start.check([], ["c1"], make_runtime(docker=docker, settings=allowed, cwd=here),
+                              strict=True) == []

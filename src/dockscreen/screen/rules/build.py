@@ -8,7 +8,7 @@ from typing import Any
 
 from dockscreen.model.build import BakeDefinition, Build, fields
 from dockscreen.screen.findings import Finding, refused
-from dockscreen.screen.rules.base import RuleBase, Subject, is_inside, unknown_keys
+from dockscreen.screen.rules.base import RuleBase, Subject, directory_of, is_inside, unknown_keys
 
 BUILD_HARMLESS_KEYS = frozenset({
     "args", "dockerfile_inline", "extra_hosts", "isolation", "labels", "no_cache", "platforms",
@@ -37,7 +37,7 @@ class BuildRules(RuleBase):
         """Checks a service's build; returns unknown keys, sources outside the project, and escapes from
         it.
         """
-        build = Build.from_compose(value, service.directory)
+        build = Build.from_compose(value, directory_of(service))
         # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
         # set outputs and cache destinations on the host. Compose's own build does not pass it on.
         problems = unknown_keys(build.definition, BUILD_KEYS, "build key", extensions=False)
