@@ -36,40 +36,41 @@ REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p
 
 
 class Project(NamedTuple):
-    """Compose project as dockscreen runs it: its resolved config with the defaults added, and what the
-    policy needs to check it.
+    """Compose project as dockscreen runs it: its resolved config with the defaults added, and the scope it
+    is screened in.
     """
     global_args: list          # the compose options that select it
-    directory: str
     hardened: dict             # the resolved config with hardening applied
     hardening: list            # the substitutions that hardened it (substitutions.Substitution)
-    ctx: policy.Context        # with every user from the project
-    image_ctx: Scope  # to pull, build, decide and run with
+    scope: Scope               # with the project's directory; to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
-    docker_binary: str         # the real docker, to run `docker compose` with
-    runtime: Runtime           # the Runtime it was loaded with
-    allow_me: bool = False
+
+    @property
+    def directory(self) -> str:
+        """Returns the project directory."""
+        return self.scope.directory
 
     def static_ctx(self) -> policy.Context:
-        """Returns ctx for the checks before any image is looked at, which leave unset users to later."""
-        return self.ctx.with_user_origins(dict.fromkeys(serviceusers.unset_user_services(self.hardened),
-                                                        Origin.IMAGE))
+        """Returns the policy context for the checks before any image is looked at, which leave the users
+        that the images decide to later.
+        """
+        from_images = dict.fromkeys(serviceusers.unset_user_services(self.hardened), Origin.IMAGE)
+        return self.scope.project_policy().with_user_origins(from_images)
 
     def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
         problems = policy.check_config(self.hardened, self.static_ctx()) + policy.check_daemon(self.remote)
         # the name check asks the daemon, which must be this host's
-        if not problems and not inspect.names_project(self.global_args, self.runtime.env):
+        if not problems and not inspect.names_project(self.global_args, self.scope.runtime.env):
             problems += inspect.name_conflicts(self.hardened["name"], self.directory,
-                                              self.image_ctx.docker)
+                                              self.scope.docker)
         return problems
 
     def final_ctx(self, prepared: serviceusers.Prepared, user_origins: dict[str, Origin]) -> policy.Context:
         """Returns ctx for the config that will run, with user_origins as where the users that dockscreen
         set come from (Prepared.finalize), and image sections only where prepared proved them.
         """
-        verified = prepared.verified or {}
-        ctx = self.image_ctx.project_policy(verified)
+        ctx = self.scope.project_policy(prepared.verified)
         return ctx.with_user_origins(user_origins)
 
     def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
@@ -81,14 +82,14 @@ class Project(NamedTuple):
         command: the compose command line on config's generated file (generated()).
         args and chosen: as serviceusers.prepare takes them.
         """
-        problem = _read_back_problem(command, config, self.image_ctx.docker)
+        problem = _read_back_problem(command, config, self.scope.docker)
         if problem:
-            return serviceusers.Prepared(config, self.image_ctx, frozenset(), {}, Report.failure(problem))
-        return serviceusers.prepare(command, config, list(args), self.image_ctx, chosen)
+            return serviceusers.Prepared(config, self.scope, {}, Report.failure(problem))
+        return serviceusers.prepare(command, config, list(args), self.scope, chosen)
 
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
-        return _generated(self.global_args, self.directory, self.docker_binary)
+        return _generated(self.global_args, self.directory, self.scope.docker.binary)
 
 
 def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Project:
@@ -99,11 +100,8 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     """
     config, directory = inspect.project(global_args, runtime)
     hardened, changes = hardening.apply(config, runtime.accounts)
-    image_ctx = Scope(runtime, allow_me).with_project_dir(directory)
-    remote = is_remote(global_args, image_ctx.docker)
-    ctx = image_ctx.project_policy()
-    return Project(global_args, directory, hardened, changes, ctx, image_ctx, remote, runtime.docker.binary,
-                   runtime, allow_me)
+    scope = Scope(runtime, allow_me, directory)
+    return Project(global_args, hardened, changes, scope, is_remote(global_args, runtime.docker))
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,
@@ -129,9 +127,9 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         verdict.screened(Report.of(problems))
         return 1
 
-    hardened, image_ctx = project.hardened, project.image_ctx
+    hardened, scope = project.hardened, project.scope
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(image_ctx), *substitutions.describe(project.hardening)]
+             imagedecision.root_default_notice(scope), *substitutions.describe(project.hardening)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
         prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))
@@ -147,7 +145,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
             if line:
                 messages.notice(line)
         verdict.screened(checked)
-        return image_ctx.docker.run_child([*command(final), sub, *parsed.args])
+        return scope.docker.run_child([*command(final), sub, *parsed.args])
 
 
 def _chosen(parsed: userargs.Parsed) -> frozenset[str]:

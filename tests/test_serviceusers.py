@@ -72,7 +72,7 @@ def test_images_are_pulled_by_the_projects_pull_policy(policy_, present, pulled)
     prepared, recorder, _ = prepare(project(web=fields), images)
 
     assert subcommands(recorder) == ([["pull", "--", "web"]] if pulled else [])
-    assert prepared.to_run == {"web"}
+    assert set(prepared.decisions) == {"web"}
 
 
 def test_the_command_line_pull_policy_overrides_the_projects():

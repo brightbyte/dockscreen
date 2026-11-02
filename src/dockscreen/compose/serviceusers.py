@@ -23,7 +23,8 @@ started: a mistake in working out what starts must fail safe. So is a service wh
 chose (`run -u`), which the command line then overrides.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
@@ -43,15 +44,14 @@ class ImageError(Exception):
 
 
 class Prepared(NamedTuple):
-    """Project config whose services' images have been fetched and their users decided (with ctx, an
-    Scope), ready to become the config that runs.
+    """Project config whose services' images have been fetched and their users decided in a scope (ctx),
+    ready to become the config that runs.
     """
     config: dict
     ctx: Scope
-    to_run: frozenset
     decisions: dict   # service -> imagedecision.Assessment, for the started services that set no user
     report: Report    # refusals, and failures to get or look at an image
-    verified: dict | None = None  # service -> the repository whose image section its image proved
+    verified: Mapping[str, str] = MappingProxyType({})  # service -> the repository its image proved
 
     def finalize(self) -> tuple[dict[str, Any], dict[str, Origin]]:
         """Builds the config to run from config and the decisions, leaving config alone.
@@ -173,15 +173,15 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except ImageError as e:
-        return Prepared(config, ctx, frozenset(), {}, Report.failure(str(e)))
+        return Prepared(config, ctx, {}, Report.failure(str(e)))
     if failures:
-        return Prepared(config, ctx, to_run, {}, Report.of(findings.failed(failures)))
+        return Prepared(config, ctx, {}, Report.of(findings.failed(failures)))
 
     decisions = _decide(config, to_run - chosen, ctx)
     verified = _verify_sections(config, ctx)
     config_file = ctx.runtime.config_file
     found = [decision_problem(name, d, config_file) for name, d in decisions.items() if d.refused]
-    return Prepared(config, ctx, to_run, decisions, Report.of(found), verified=verified)
+    return Prepared(config, ctx, decisions, Report.of(found), verified)
 
 
 def _verify_sections(config: dict[str, Any], ctx: Scope) -> dict[str, str]:
