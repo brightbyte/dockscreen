@@ -16,7 +16,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
   back the same.
 - `inspect._load_config`: `docker compose config` printing something that is not JSON.
 - `docker_bake._definition`: `bake --print` printing something that is not a JSON object.
-- `docker_bake._fields` for entries given as text, and `_check_cache_from` for an entry it cannot read:
+- `build.fields` for entries given as text, and `Policy._check_cache_from` for an entry it cannot read:
   current buildx prints `output`, `cache-from`, `cache-to` and `secret` entries as objects. Older buildx
   prints text.
 - `serviceusers._services_to_run`: `docker compose config --services` failing after `config` worked.

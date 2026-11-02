@@ -8,6 +8,7 @@ from fakes import make_runtime, rules
 from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.model.build import BakeDefinition
 from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
 from dockscreen.util import messages
@@ -23,7 +24,7 @@ def project(tmp_path):
 
 def check(project, **target):
     definition = {"group": {"default": {"targets": ["app"]}}, "target": {"app": target}}
-    return docker_bake._check_definition(definition, policy.Policy(str(project), rules()))
+    return policy.Policy(str(project), rules()).check_bake(BakeDefinition(definition))
 
 
 def test_a_definition_of_ordinary_builds_has_no_problems(project):
@@ -76,7 +77,7 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 
 def test_a_top_level_key_that_is_not_known_is_refused(project):
     bake_policy = policy.Policy(str(project), rules())
-    found = docker_bake._check_definition({"target": {}, "variable": {}}, bake_policy)
+    found = bake_policy.check_bake(BakeDefinition({"target": {}, "variable": {}}))
     assert found == ["key 'variable' is not on the allow list"]
 
 

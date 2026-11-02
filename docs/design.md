@@ -149,7 +149,7 @@ A message has two parts: the facts, and an optional help part that says what to 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
 4. `screen`: the checks and their verdict: `policy`, `idrules`, `scope`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
@@ -180,7 +180,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 6. Before anything is pulled or built (`composeproject.Compose.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
-`build` and `bake` get only `Policy.check_project_build`, with no runtime checks:
+`build` and `bake` get only `Policy.check_project_build`, with no runtime checks. A service's `build:` is a `build.Build`, as a bake target is, and the rules they share are `Policy.check_build`:
 
 - build contexts, Dockerfiles and secret files must be inside the project;
 - no `ssh`, no host network, no `privileged`;
@@ -225,7 +225,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `create` (`docker_create`) gets the defaults and user resolution. Its container is checked when it is started.
 - `start` and `restart` (`docker_start`) check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` (`docker_exec`) checks only the form of the user (see [Forms](#forms)).
-- `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `docker_bake.check` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
+- `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and the policy judges it (`Policy.check_bake`, each target a `build.Build`, with the rules `Policy.check_build` shares with compose's builds): build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
 - `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets an assessment whose findings are failures (`Assessment.failure`): `run` refuses it like a refusal, the audit reports it as failed. `Policy.check_container` judges the inspected container as a service (`container.Container.definition`, read back into compose service keys) with `Policy.check_service`, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).

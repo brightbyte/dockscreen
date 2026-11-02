@@ -7,29 +7,20 @@ agent. Bake adds ways to write to the host (`output`, `cache-to`) and to read fi
 (`secret`).
 
 `docker buildx bake --print` gives the definition that would be built, with the command line applied
-(`--set`, `--push`, targets), and builds nothing. It is screened as such: a key that is not known is
-refused, because a new one may be a new way out.
+(`--set`, `--push`, targets), and builds nothing. The policy judges it as such (Policy.check_bake): a key
+that is not known is refused, because a new one may be a new way out.
 """
-import csv
 import json
 from collections.abc import Collection, Sequence
 from typing import Any
 
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.build import BakeDefinition
 from dockscreen.screen import policy, verdict
-from dockscreen.screen.findings import Finding, Report, Severity, refused
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 
-TOP_LEVEL_KEYS = frozenset({"group", "target"})
-TARGET_KEYS = frozenset({
-    "context", "contexts", "dockerfile", "dockerfile-inline", "args", "labels", "tags", "target",
-    "platforms", "pull", "no-cache", "no-cache-filter", "annotations", "attest", "call", "shm-size",
-    "ulimits", "output", "cache-from", "cache-to", "secret", "ssh", "network", "entitlements",
-})
-# Outputs that stay in the image store or a registry; the others write files to the host.
-OUTPUT_TYPES = frozenset({"image", "registry", "docker", "cacheonly"})
-CACHE_TO_TYPES = frozenset({"inline", "registry"})
 NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
 
 
@@ -55,94 +46,6 @@ def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
     return found
 
 
-def _check_definition(found: dict[str, Any], project_policy: policy.Policy) -> list[str]:
-    """Returns the problems that forbid building the definition, with sources judged against the project
-    directory of project_policy.
-    """
-    problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
-    for name, target in (found.get("target") or {}).items():
-        problems += [f"target {name}: {p}" for p in _check_target(target or {}, project_policy)]
-    return problems
-
-
-def _check_target(target: dict[str, Any], project_policy: policy.Policy) -> list[str]:
-    """Returns the problems with a target: unknown keys, sources outside the project, host access."""
-    project_dir = project_policy.project_dir
-    problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
-    problems += project_policy.check_build_sources(target, ("context", "dockerfile", "contexts"))
-    if target.get("network") not in (None, "", "none"):
-        problems.append(f"network {target['network']!r} is not allowed")
-    if target.get("entitlements"):
-        problems.append("entitlements ask for access beyond the build sandbox and are not allowed")
-    if target.get("ssh"):
-        problems.append("ssh forwards your SSH agent and is not allowed")
-    problems += _check_outputs(target.get("output") or [], target.get("cache-to") or [])
-    problems += _check_cache_from(target.get("cache-from") or [], project_dir)
-    problems += _check_secrets(target.get("secret") or [], project_dir)
-    return problems
-
-
-def _fields(entry: Any) -> dict[str, str] | None:
-    """Returns the {key: value} of a `key=value,key=value` entry, or None if it is not one.
-
-    Newer buildx prints some entries (cache-from, cache-to, secret) as objects of the same keys.
-    A bare word has no keys.
-    """
-    if isinstance(entry, dict):
-        if not all(isinstance(value, str) for value in entry.values()):
-            return None
-        return {str(key): value for key, value in entry.items()}
-    if not isinstance(entry, str):
-        return None
-    try:
-        # buildx reads these as CSV, so a quoted value may hold commas
-        parts = next(csv.reader([entry]), [])
-    except csv.Error:
-        return None
-    pairs = [part.partition("=") for part in parts]
-    return {key.strip(): value for key, equals, value in pairs if equals}
-
-
-def _check_outputs(outputs: Sequence[Any], cache_to: Sequence[Any]) -> list[str]:
-    """Returns the problems with a target's output and cache-to entries: any that write to the host."""
-    problems = []
-    for entry in outputs:
-        found = _fields(entry)
-        # a bare path is a local directory
-        if found is None or found.get("type") not in OUTPUT_TYPES or "dest" in found:
-            problems.append(f"output {entry!r} writes to the host and is not allowed")
-    for entry in cache_to:
-        found = _fields(entry)
-        if found is None or found.get("type") not in CACHE_TO_TYPES:
-            problems.append(f"cache-to {entry!r} writes to the host or an unknown store and is not allowed")
-    return problems
-
-
-def _check_cache_from(entries: Sequence[Any], project_dir: str) -> list[str]:
-    """Returns the problems with cache-from entries: unreadable ones, and local caches outside project_dir."""
-    problems = []
-    for entry in entries:
-        found = _fields(entry)
-        if found is None:
-            problems.append(f"cache-from {entry!r} cannot be read")
-        elif found.get("type") == "local" and not policy.is_inside(found.get("src", ""), project_dir):
-            problems.append(f"cache-from {entry!r} is outside {project_dir}")
-    return problems
-
-
-def _check_secrets(secrets: Sequence[Any], project_dir: str) -> list[str]:
-    """Returns the problems with secret entries: variables instead of files, and files outside project_dir."""
-    problems = []
-    for entry in secrets:
-        found = _fields(entry)
-        source = (found or {}).get("src") or (found or {}).get("source")  # buildx takes either name
-        if source is None:
-            problems.append(f"secret {entry!r} copies a variable or cannot be read, and is not allowed")
-        elif not policy.is_inside(source, project_dir):
-            problems.append(f"secret {entry!r} is outside {project_dir}")
-    return problems
-
-
 def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
     passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
@@ -162,4 +65,4 @@ def check(docker: Docker, args: Sequence[str], project_policy: policy.Policy) ->
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
         return [Finding(str(e), Severity.FAILED, help=hint, output=e.output)]
-    return refused(_check_definition(found, project_policy))
+    return project_policy.check_bake(BakeDefinition(found))
