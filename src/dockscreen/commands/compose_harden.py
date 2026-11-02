@@ -115,7 +115,7 @@ def _fix_config(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
     for name, service in fixed.get("services", {}).items():
         service_ctx = ctx.for_service(name, service).with_mounts(
             service_reaches_host(service, config.get("volumes")))
-        from_image = ctx.user_origin(name) is Origin.IMAGE and not service.get("user")
+        from_image = ctx.origins_of(name).get("user") is Origin.IMAGE and not service.get("user")
         if not from_image and policy.check_user(service.get("user"), service_ctx):
             service["user"] = _USER_TEMPLATE
         if policy.check_security_opt(service.get("security_opt"), service_ctx):

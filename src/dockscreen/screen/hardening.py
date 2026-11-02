@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 from dockscreen.host import hostusers
+from dockscreen.model.origin import Origin
 from dockscreen.screen import policy, substitutions
 from dockscreen.screen.policy import CAP_DROP, SECURITY_OPT
 from dockscreen.screen.substitutions import Group, Substitution
@@ -49,9 +50,11 @@ def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
 
 
 def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks: str) -> Substitution:
-    """Returns the substitution that adds value to the list the service declared for key, if any."""
+    """Returns the substitution that adds value to the list the service declared for key, if any; the key
+    then still holds what the project chose, and is judged as the project's.
+    """
     if not declared:
-        return Substitution(name, key, [value], group=DEFAULTS)
+        return Substitution(name, key, [value], group=DEFAULTS, origin=Origin.DOCKSCREEN)
     text = f"{key} {lacks}; added {json.dumps([value])}"
     return Substitution(name, key, [*declared, value], text, notable=True, help=NOT_REMOVABLE)
 

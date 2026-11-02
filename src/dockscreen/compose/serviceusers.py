@@ -53,23 +53,13 @@ class Prepared(NamedTuple):
     report: Report    # refusals, and failures to get or look at an image
     verified: Mapping[str, str] = MappingProxyType({})  # service -> the repository its image proved
 
-    def finalize(self) -> tuple[dict[str, Any], dict[str, Origin]]:
-        """Builds the config to run from config and the decisions, leaving config alone.
+    def finalize(self) -> dict[str, Any]:
+        """Returns the config to run, built from config and the decisions (changes), leaving config alone.
 
-        Returns (config to run, where the users it sets come from). Services that start and set no user get
-        the decided user, pinned to the image that was checked; those that do not start get the default
-        user. Users the project set itself are not in the second part.
+        Services that start and set no user get the decided user, pinned to the image that was checked;
+        those that do not start get the default user.
         """
-        origins = {}
-        for name, service in self.config["services"].items():
-            decision = self.decisions.get(name)
-            if service.get("user") or decision and not decision.pins_user:
-                continue
-            if decision is None or decision.kind is not imagedecision.Kind.IMAGE:
-                origins[name] = Origin.CONFIG  # the configured or the default user
-            else:
-                origins[name] = Origin.IMAGE
-        return substitutions.apply(self.config, self.changes()), origins
+        return substitutions.apply(self.config, self.changes())
 
     def changes(self) -> list[Substitution]:
         """Returns the substitutions that make config the config to run (finalize), by service name."""
@@ -115,11 +105,12 @@ class Prepared(NamedTuple):
 
 def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, text: str | None = None,
           group: Group | None = None) -> list[Substitution]:
-    """Returns the substitutions that set the service's user, reported by text if given, and the HOME that
-    comes with the default user (imagedecision.default_home) unless the service sets HOME.
+    """Returns the substitutions that set the service's user, the configured or the default one, reported
+    by text if given, and the HOME that comes with the default user (imagedecision.default_home) unless the
+    service sets HOME.
     """
     found = [Substitution(name, "user", ids.format_user(user), text, notable=bool(text),
-                          help=USER_HELP if text else None, group=group)]
+                          help=USER_HELP if text else None, group=group, origin=Origin.CONFIG)]
     if home := imagedecision.default_home(user, home):
         found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
     return found
@@ -134,12 +125,15 @@ def _pinned(name: str, service: dict[str, Any], assessment: imagedecision.Assess
     if assessment.kind is imagedecision.Kind.FALLBACK:
         found = _user(name, service, assessment.pinned_user, assessment.home,
                       imagedecision.instead_of_root(assessment), PINNED)
-    else:
-        found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED)]
-    found.append(Substitution(name, "pull_policy", "never", group=PINNED))  # the image checked is what runs
+    else:  # the image's user, or the one its image section configures
+        origin = Origin.IMAGE if assessment.kind is imagedecision.Kind.IMAGE else Origin.CONFIG
+        found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,
+                              origin=origin)]
+    # the image checked is what runs
+    found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
     if assessment.image.id and "build" not in service:
         # ... even if the name is moved to another image
-        found.append(Substitution(name, "image", assessment.image.id, group=PINNED))
+        found.append(Substitution(name, "image", assessment.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
     return found
 
 

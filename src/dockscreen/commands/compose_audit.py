@@ -64,6 +64,5 @@ def _audit_images(project: composeproject.Project, brief: bool) -> tuple[Report,
     if not prepared.report.passed:
         return prepared.report, prepared.describe()
     # what `up` checks once more before it runs: image sections need proof now
-    final, user_origins = prepared.finalize()
-    checked = policy.check_config(final, project.final_ctx(prepared, user_origins))
+    checked = policy.check_config(prepared.finalize(), project.final_ctx(prepared))
     return Report.of(checked), prepared.describe()

@@ -6,12 +6,16 @@ that alters what the project chose is notable, the others are routine, and routi
 kind are reported together in one line that names their services (Group), since the line would be the
 same for each. A change with no text and no group is part of another that is reported, such as the HOME
 that comes with the default user.
+
+A change that sets a value someone else chose names where that value comes from (origins), so the policy
+judges it as that origin's; one that only adds to, or respells, what the project chose names none.
 """
 
 import copy
 from collections.abc import Iterable
 from typing import Any, NamedTuple
 
+from dockscreen.model.origin import Origin
 from dockscreen.util import messages
 
 
@@ -32,6 +36,7 @@ class Substitution(NamedTuple):
     notable: bool = False     # it alters what the project chose
     help: str | None = None   # what the project can do about it
     group: Group | None = None  # reported together with the others of its group
+    origin: Origin | None = None  # where the value comes from; None: from where the key's own came from
 
 
 def apply(config: dict[str, Any], substitutions: Iterable[Substitution]) -> dict[str, Any]:
@@ -40,6 +45,17 @@ def apply(config: dict[str, Any], substitutions: Iterable[Substitution]) -> dict
     for s in substitutions:
         changed["services"][s.service][s.key] = copy.deepcopy(s.value)
     return changed
+
+
+def origins(substitutions: Iterable[Substitution]) -> dict[str, dict[str, Origin]]:
+    """Returns where the keys the substitutions set get their values from, by service and key: from the
+    origin of the last substitution of the key that names one. Keys that none names are left out.
+    """
+    found: dict[str, dict[str, Origin]] = {}
+    for s in substitutions:
+        if s.origin is not None:
+            found.setdefault(s.service, {})[s.key] = s.origin
+    return found
 
 
 def individual(substitutions: Iterable[Substitution]) -> list[messages.Marked]:

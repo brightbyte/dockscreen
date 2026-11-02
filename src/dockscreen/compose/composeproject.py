@@ -54,8 +54,10 @@ class Project(NamedTuple):
         """Returns the policy context for the checks before any image is looked at, which leave the users
         that the images decide to later.
         """
-        from_images = dict.fromkeys(serviceusers.unset_user_services(self.hardened), Origin.IMAGE)
-        return self.scope.project_policy().with_user_origins(from_images)
+        origins = substitutions.origins(self.hardening)
+        for name in serviceusers.unset_user_services(self.hardened):
+            origins.setdefault(name, {})["user"] = Origin.IMAGE
+        return self.scope.project_policy().with_origins(origins)
 
     def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
@@ -66,12 +68,12 @@ class Project(NamedTuple):
                                               self.scope.docker)
         return problems
 
-    def final_ctx(self, prepared: serviceusers.Prepared, user_origins: dict[str, Origin]) -> policy.Context:
-        """Returns ctx for the config that will run, with user_origins as where the users that dockscreen
-        set come from (Prepared.finalize), and image sections only where prepared proved them.
+    def final_ctx(self, prepared: serviceusers.Prepared) -> policy.Context:
+        """Returns ctx for the config that will run (Prepared.finalize), with where the values dockscreen
+        set come from, and image sections only where prepared proved them.
         """
         ctx = self.scope.project_policy(prepared.verified)
-        return ctx.with_user_origins(user_origins)
+        return ctx.with_origins(substitutions.origins([*self.hardening, *prepared.changes()]))
 
     def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
@@ -139,8 +141,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         if not prepared.report.passed:
             verdict.screened(prepared.report)
             return 1
-        final, user_origins = prepared.finalize()
-        checked = Report.of(policy.check_config(final, project.final_ctx(prepared, user_origins)))
+        final = prepared.finalize()
+        checked = Report.of(policy.check_config(final, project.final_ctx(prepared)))
         if not checked.passed:  # what will run
             verdict.screened(checked)
             return 1

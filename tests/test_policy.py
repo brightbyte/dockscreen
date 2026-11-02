@@ -531,6 +531,18 @@ def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not
     assert {f.severity for f in strict} == {Severity.REFUSED}
 
 
+def test_each_key_is_judged_as_where_its_value_comes_from():
+    service = {"user": "0:0", "cap_drop": [], "security_opt": ["no-new-privileges:true"]}
+    origins = {"user": Origin.CONFIG, "cap_drop": Origin.DOCKSCREEN}
+
+    found = policy.check_service(service, policy.Context("/p", rules()), Origin.PROJECT, origins)
+
+    # the config file is trusted, dockscreen is not: its values are checked once more
+    assert [(f, f.severity) for f in found] == [
+        ("user '0:0': uid 0 is root", Severity.NOTABLE), ("user '0:0': gid 0 is root", Severity.NOTABLE),
+        ("cap_drop must include ALL", Severity.REFUSED)]
+
+
 # --- the daemon, the project name, and the command line's users ----------------
 
 def test_a_daemon_that_may_not_be_this_hosts_is_refused():

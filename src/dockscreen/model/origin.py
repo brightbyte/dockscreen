@@ -19,7 +19,8 @@ class Origin(enum.Enum):
     DOCKSCREEN = "dockscreen"      # chosen by dockscreen from what it checked
 
 
-# Whose values are taken as given: what the policy refuses in them is pointed out, not refused.
-TRUSTED = frozenset({Origin.COMMAND_LINE, Origin.CONFIG, Origin.DOCKSCREEN})
+# Whose values are taken as given: what the policy refuses in them is pointed out, not refused. What
+# dockscreen sets is checked once more like the project's, so that a mistake in it stops the command.
+TRUSTED = frozenset({Origin.COMMAND_LINE, Origin.CONFIG})
 # --strict-screen: the command line is judged like a project.
 STRICT = TRUSTED - {Origin.COMMAND_LINE}

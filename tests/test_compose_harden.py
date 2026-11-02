@@ -208,7 +208,7 @@ def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path)
 
 def test_fix_config_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
     config = project(web={}, db={})
-    ctx = policy.Context("/p", rules()).with_user_origins({"web": Origin.IMAGE})
+    ctx = policy.Context("/p", rules()).with_origins({"web": {"user": Origin.IMAGE}})
     fixed = compose_harden._fix_config(config, ctx)
     assert "user" not in fixed["services"]["web"]
     assert fixed["services"]["db"]["user"] == compose_harden._USER_TEMPLATE

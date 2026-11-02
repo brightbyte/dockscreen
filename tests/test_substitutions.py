@@ -1,3 +1,4 @@
+from dockscreen.model.origin import Origin
 from dockscreen.screen import substitutions
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import messages
@@ -14,6 +15,17 @@ def test_apply_sets_each_key_on_a_copy():
 
     assert changed == {"services": {"web": {"user": "1:1"}, "db": {"env": {"A": 1}}}}
     assert config == {"services": {"web": {"user": "0:0"}, "db": {}}}
+
+
+def test_origins_are_those_of_the_last_substitution_of_a_key_that_names_one():
+    found = [
+        Substitution("web", "user", "1:1", origin=Origin.IMAGE),
+        Substitution("web", "user", "2:2", origin=Origin.CONFIG),
+        Substitution("web", "user", "3:3"),  # respelled: still the config file's
+        Substitution("db", "user", "4:4"),   # respelled only: the project's, so not listed
+    ]
+
+    assert substitutions.origins(found) == {"web": {"user": Origin.CONFIG}}
 
 
 def test_describe_gives_a_line_each_then_one_per_group_naming_its_services_once():

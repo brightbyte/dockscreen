@@ -3,6 +3,7 @@ from fakes import Accounts, compose_project, rules
 
 from dockscreen import compose_cli
 from dockscreen.commands import compose_audit, compose_harden
+from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy, substitutions
 from dockscreen.util import messages
 
@@ -47,6 +48,13 @@ def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
         ("cap_drop", 'cap_drop lacks ALL; added ["ALL"]'),
         ("security_opt", 'security_opt lacks no-new-privileges; added ["no-new-privileges:true"]'),
     ]
+
+
+def test_a_default_alone_is_dockscreens_and_one_added_to_the_projects_list_stays_the_projects():
+    _, changes = hardening.apply(config(security_opt=["seccomp=unconfined"]), Accounts())
+
+    # the project's own seccomp=unconfined is still in the list, and is judged as the project's
+    assert substitutions.origins(changes) == {"web": {"cap_drop": Origin.DOCKSCREEN}}
 
 
 def test_a_compliant_service_is_left_alone_and_the_input_is_not_modified():

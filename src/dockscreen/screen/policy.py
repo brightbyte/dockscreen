@@ -116,9 +116,9 @@ class Context(NamedTuple):
     project_dir: str
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
-    # Where each service's user comes from, if not from the project (see user_origin). Only dockscreen
-    # sets this, never the project.
-    user_origins: Mapping[str, Origin] = MappingProxyType({})
+    # Where the values of a service's keys come from, by service and key, where that is not the project
+    # (substitutions.origins). Only dockscreen sets this, never the project.
+    origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
     # Whose values are taken as given: what the policy refuses in them is pointed out instead.
     trust: frozenset[Origin] = TRUSTED
     # Whether the service being checked reaches host files (mounts.service_reaches_host); set per service.
@@ -142,18 +142,16 @@ class Context(NamedTuple):
         """Returns the context to check the service called name with: scope's for it, else this one."""
         return self.scope(name, service) if self.scope else self
 
-    def user_origin(self, name: str) -> Origin:
-        """Returns where the user of the service called name comes from: the project unless user_origins
-        says otherwise.
-
-        A user from the image, set or still to be decided, is checked by the image decision
-        (imagedecision.assess), not by check_user.
+    def origins_of(self, name: str) -> Mapping[str, Origin]:
+        """Returns where the values of the keys of the service called name come from, where that is not
+        the project.
         """
-        return self.user_origins.get(name, Origin.PROJECT)
+        return self.origins.get(name, MappingProxyType({}))
 
-    def with_user_origins(self, user_origins: Mapping[str, Origin]) -> Self:
-        """Returns this context with user_origins as where the services' users come from."""
-        return self._replace(user_origins=MappingProxyType(dict(user_origins)))
+    def with_origins(self, origins: Mapping[str, Mapping[str, Origin]]) -> Self:
+        """Returns this context with origins as where the values of the services' keys come from."""
+        frozen = {name: MappingProxyType(dict(keys)) for name, keys in origins.items()}
+        return self._replace(origins=MappingProxyType(frozen))
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
         """Returns this context with trust as the origins whose values are taken as given."""
@@ -195,7 +193,7 @@ def check_config(config: dict[str, Any], ctx: Context) -> list[Finding]:
         problems += refused(["config has no project name"])
     for name, service in (config.get("services") or {}).items():
         service_ctx = ctx.for_service(name, service or {})
-        found = check_service(service or {}, service_ctx, Origin.PROJECT, ctx.user_origin(name),
+        found = check_service(service or {}, service_ctx, Origin.PROJECT, ctx.origins_of(name),
                               config.get("volumes"))
         problems += about(found, f"service {name}")
     for key, volume in (config.get("volumes") or {}).items():
@@ -239,23 +237,24 @@ def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str
 
 
 def check_service(service: dict[str, Any], ctx: Context, origin: Origin,
-                  user_origin: Origin | None = None, volumes: dict[str, Any] | None = None) -> list[Finding]:
+                  origins: Mapping[str, Origin] = MappingProxyType({}),
+                  volumes: dict[str, Any] | None = None) -> list[Finding]:
     """Checks one service against the policy; returns what it finds, empty if there is nothing.
 
     A problem is refused, or notable if the value comes from an origin that ctx trusts (findings.judged).
-    origin: where the service's keys come from; user_origin: where its user comes from, if not from there.
-    A user from the image is left to the image decision. volumes: the config's top-level volumes, to tell
-    named volumes from host paths.
+    origin: where the service's keys come from; origins: where the values of some keys come from, if not
+    from there. A user from the image is left to the image decision. volumes: the config's top-level
+    volumes, to tell named volumes from host paths.
     """
-    user_origin = user_origin or origin
     unknown = unknown_keys(service, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
     found = judged(unknown, origin, ctx.trust)
     ctx = ctx.with_mounts(service_reaches_host(service, volumes))
     for key, check in SERVICE_CHECKS.items():
-        if key == "user" and user_origin is Origin.IMAGE:
+        key_origin = origins.get(key, origin)
+        if key == "user" and key_origin is Origin.IMAGE:
             continue
         if key in REQUIRED_SERVICE_KEYS or key in service:
-            found += judged(check(service.get(key), ctx), user_origin if key == "user" else origin, ctx.trust)
+            found += judged(check(service.get(key), ctx), key_origin, ctx.trust)
     return found
 
 
@@ -267,7 +266,7 @@ def check_container(container: Container, ctx: Context, user_origin: Origin) -> 
     project's (ctx). user_origin: where its user comes from, the command line or the image.
     """
     service = container.as_service(with_user=user_origin is not Origin.IMAGE)
-    return check_service(service, ctx, Origin.COMMAND_LINE, user_origin)
+    return check_service(service, ctx, Origin.COMMAND_LINE, {"user": user_origin})
 
 
 # --- users and privileges -------------------------------------------------

@@ -8,7 +8,7 @@ from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen import imagedecision, policy
+from dockscreen.screen import imagedecision, policy, substitutions
 from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.imagedecision import Kind
 from dockscreen.screen.scope import Scope
@@ -195,7 +195,11 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
-    return prepared, *prepared.finalize()
+    return prepared, prepared.finalize(), substitutions.origins(prepared.changes())
+
+
+def user_origins(origins):
+    return {name: keys["user"] for name, keys in origins.items() if "user" in keys}
 
 
 def test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own():
@@ -208,7 +212,9 @@ def test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own(
     assert services["web"]["user"] == NOBODY
     assert services["db"]["user"] == "100000:100001"  # pinned as numbers
     assert services["user_set"]["user"] == "7:7"
-    assert origins == {"web": Origin.CONFIG, "db": Origin.IMAGE}  # the project's own user is not in it
+    # the project's own user is not in it
+    assert user_origins(origins) == {"web": Origin.CONFIG, "db": Origin.IMAGE}
+    assert origins["db"]["pull_policy"] is Origin.DOCKSCREEN
 
 
 def test_looked_at_images_are_pinned_in_the_generated_config_only():
@@ -229,7 +235,7 @@ def test_a_service_that_is_not_started_runs_as_the_default_user_in_case_it_is():
     _, final, origins = decided(config, FakeImages(users={"web:1": "app"}), active=("web",))
     assert final["services"]["debug"]["user"] == NOBODY
     assert "pull_policy" not in final["services"]["debug"]
-    assert origins == {"debug": Origin.CONFIG, "web": Origin.IMAGE}
+    assert user_origins(origins) == {"debug": Origin.CONFIG, "web": Origin.IMAGE}
 
 
 def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from():
@@ -240,13 +246,13 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
                                 active=("web", "db"))
     ctx = policy.Context("/p", rules())
 
-    assert policy.check_config(final, ctx.with_user_origins(origins)) == []
+    assert policy.check_config(final, ctx.with_origins(origins)) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, origins = decided(config, images, active=("db",), settings=settings)
-    assert final["services"]["db"]["user"] == "1000:1000" and origins["db"] is Origin.CONFIG
-    found = policy.check_config(final, ctx.with_user_origins(origins))
+    assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
+    found = policy.check_config(final, ctx.with_origins(origins))
     assert found and {f.severity for f in found} == {Severity.NOTABLE}
     assert [p for p in policy.check_config(final, ctx) if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
@@ -317,7 +323,7 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     prepared, final, origins = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
 
     assert prepared.decisions["db"].kind is Kind.CONFIGURED
-    assert final["services"]["db"]["user"] == "999:999" and origins == {"db": Origin.CONFIG}
+    assert final["services"]["db"]["user"] == "999:999" and user_origins(origins) == {"db": Origin.CONFIG}
     assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
     assert prepared.describe() == [
