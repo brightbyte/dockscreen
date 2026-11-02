@@ -17,14 +17,12 @@ runtime's can at worst refuse a good image, never run root.
 
 from typing import Any
 
-from dockscreen.model.identity import Identity
-from dockscreen.model.image import Inspected
+from dockscreen.model.image import Identity, Inspected, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.rules.base import RuleBase
-from dockscreen.util import images
 
 
 class ImageRules(RuleBase):
@@ -78,6 +76,6 @@ def image_problem(name: str, assessment: Assessment, config_file: str | None = N
     text = f"image {image.reference}: {'; '.join(r.text for r in assessment.reasons)}"
     if assessment.failed:
         return Finding(text, Severity.FAILED, f"service {name}")
-    hint = images.section_hint(image.reference, config_file, image.built) if config_file else None
+    hint = section_hint(image.reference, config_file, image.built) if config_file else None
     return Finding(text, Severity.REFUSED, f"service {name}",
                    "set user: to choose one" + (f", or {hint}" if hint else ""))

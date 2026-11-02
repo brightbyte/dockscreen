@@ -2,11 +2,11 @@
 choose for the service.
 
 The command line is trusted: a user it gives is taken as numeric `uid:gid`, or `--as NAME` and
-`--as-me` are resolved to ids on this host (composeargs, userargs); that service's user is then not
+`--as-me` are resolved to ids on this host (userargs); that service's user is then not
 checked against the image.
 """
 
-from dockscreen.cli import composeargs
+from dockscreen.cli import userargs
 from dockscreen.compose import composeproject
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
@@ -22,7 +22,7 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     strict: --strict-screen was given, so what the command line changes in the service is judged too.
     """
-    parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
+    parsed = userargs.parse_compose("run", args, runtime.me, runtime.accounts)
     refusals = Scope(runtime).policy_here().check_user_options(parsed.users)
     if refusals:
         verdict.screened(Report.of(refusals))

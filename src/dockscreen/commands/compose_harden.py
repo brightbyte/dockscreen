@@ -21,6 +21,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from dockscreen.compose import composeproject, inspect
+from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
@@ -59,7 +60,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
         for refusal in e.findings:
             messages.notice(refusal)
         return 1
-    except (inspect.InspectError, ValueError) as e:
+    except (DockerError, ValueError) as e:
         messages.notice(failure_of(e))
         return 1
     for refusal in project.static_policy().check_daemon(project.remote):

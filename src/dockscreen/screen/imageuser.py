@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.host import hostusers
-from dockscreen.model.identity import Identity
+from dockscreen.model.image import Identity
 
 # What Go's unicode.IsSpace trims; Python's str.strip() differs (it also strips \x1c to \x1f).
 GO_SPACE = "\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009" \

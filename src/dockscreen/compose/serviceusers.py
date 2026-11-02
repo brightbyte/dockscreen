@@ -25,13 +25,9 @@ from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import findings
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
-
-
-class ImageError(Exception):
-    pass
 
 
 def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
@@ -56,8 +52,8 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: 
     try:
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
-    except ImageError as e:
-        return decided(project, ctx, (Finding(str(e), Severity.FAILED),))
+    except DockerError as e:
+        return decided(project, ctx, (failure_of(e),))
     if failures:
         return decided(project, ctx, tuple(findings.failed(failures)))
 
@@ -97,11 +93,11 @@ def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Seque
                      ctx: Scope) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
-    Raises ImageError if compose cannot list them.
+    Raises DockerError if compose cannot list them.
     """
     result = ctx.docker.capture([*command, "config", "--services"])
     if result.returncode != 0:
-        raise ImageError("docker compose config --services failed")
+        raise DockerError("docker compose config --services failed")
     services = config.get("services") or {}
     return frozenset(set(result.stdout.split()) | {a for a in args if a in services})
 

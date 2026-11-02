@@ -5,8 +5,7 @@ import subprocess
 
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
-from dockscreen.model.location import Location
-from dockscreen.model.project import Project
+from dockscreen.model.project import Location, Project
 from dockscreen.screen import idrules
 from dockscreen.screen.scope import Scope
 

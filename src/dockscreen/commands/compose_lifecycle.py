@@ -9,6 +9,7 @@ environment is the person's choice and is not checked.
 from collections.abc import Sequence
 
 from dockscreen.compose import inspect
+from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Finding, Report
@@ -36,7 +37,7 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     try:
         project = inspect.project(global_args, runtime)
-    except (inspect.Refused, inspect.InspectError):
+    except (inspect.Refused, DockerError):
         return []
     if not project.name:
         return []

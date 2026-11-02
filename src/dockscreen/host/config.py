@@ -28,7 +28,8 @@ from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
-from dockscreen.util import ids, images, messages
+from dockscreen.model.image import repository, split_reference
+from dockscreen.util import ids, messages
 
 SYSTEM_FILE = "/etc/dockscreen/config.toml"
 # What the top level, an image section and a project section may set.
@@ -117,12 +118,12 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
     repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
     built: the service builds the image from a Dockerfile.
     """
-    name = images.repository(reference)
+    name = repository(reference)
     if name not in config.images:
         return Match(None, None)
     if built:
         return Match(None, f"the config has a section for {name}, but the service builds its image")
-    if not any(images.repository(d) == name for d in repo_digests or []):
+    if not any(repository(d) == name for d in repo_digests or []):
         return Match(None, f"the config has a section for {name}, but this image was not pulled from there")
     return Match(name, None)
 
@@ -131,7 +132,7 @@ def name_matches(config: Config, reference: str, built: bool) -> str | None:
     """Returns the repository of the image section the name alone points to, or None if there is none or
     the image is built. The name proves nothing: this is for before the image is there.
     """
-    name = images.repository(reference)
+    name = repository(reference)
     return name if name in config.images and not built else None
 
 
@@ -316,7 +317,7 @@ def _id_range(path: str, value: Any) -> tuple[int, ...]:
 def _repository_key(path: str, name: str) -> str:
     """Returns the normalised repository an image section names; raises ConfigError for a tag or digest."""
     try:
-        repository, tag, digest = images.split_reference(name)
+        repository, tag, digest = split_reference(name)
     except ValueError as e:
         raise ConfigError(f"{path}: images {name!r}: {e}") from None
     if tag or digest:

@@ -22,6 +22,15 @@ from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
 
+# Options of `docker compose run` and `exec` that take a value in the next argument.
+COMPOSE_VALUE_FLAGS = {
+    "run": frozenset({
+        "--cap-add", "--cap-drop", "-e", "--env", "--env-from-file", "--entrypoint", "-l", "--label",
+        "--name", "-p", "--publish", "--pull", "-u", "--user", "-v", "--volume", "-w", "--workdir",
+    }),
+    "exec": frozenset({"-e", "--env", "--index", "-u", "--user", "-w", "--workdir"}),
+}
+
 
 class UserOptions:
     """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker, and of
@@ -117,6 +126,12 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
                           tuple(users.values))
     return Parsed(None, users.user_given, kept, users.notices, tuple(users.given), tuple(users.values))
 
+
+
+def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
+                  accounts: hostusers.HostAccounts) -> Parsed:
+    """Returns parse of the arguments of `docker compose run` or `exec` (subcommand)."""
+    return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
 def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime) -> list[str] | None:

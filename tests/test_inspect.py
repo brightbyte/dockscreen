@@ -6,8 +6,8 @@ from fakes import make_runtime
 
 from dockscreen.compose import inspect
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker
-from dockscreen.model.location import Location
+from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.model.project import Location
 from dockscreen.screen.findings import Severity
 from dockscreen.util import messages
 
@@ -38,12 +38,12 @@ def test_project_directory_searches_parents(tmp_path):
 
 
 def test_a_stdin_compose_file_cannot_be_inspected(tmp_path):
-    with pytest.raises(inspect.InspectError):
+    with pytest.raises(DockerError):
         inspect._project_location(["-f", "-"], str(tmp_path), make_runtime(env={}))
 
 
 def test_a_missing_compose_file_cannot_be_inspected(tmp_path):
-    with pytest.raises(inspect.InspectError):
+    with pytest.raises(DockerError):
         inspect._project_location([], str(tmp_path), make_runtime(env={}))
 
 
@@ -90,7 +90,7 @@ def test_the_walk_up_stops_at_the_home_directory(tmp_path):
 
 def test_the_walk_up_stops_at_a_directory_owned_by_someone_else(tmp_path):
     (tmp_path / "work").mkdir()
-    with pytest.raises(inspect.InspectError, match="no compose file found"):
+    with pytest.raises(DockerError, match="no compose file found"):
         # uid 12345 owns nothing here: the first parent already belongs to someone else
         inspect._find_compose_dir(str(tmp_path / "work"), (), home="/elsewhere", uid=12345)
 

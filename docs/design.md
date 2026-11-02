@@ -148,16 +148,16 @@ A message has two parts: the facts, and an optional help part that says what to 
 
 The code is in layers, one package each, and each imports only its own and the ones before it (`tests/test_layering.py` checks this):
 
-1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
-2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
+1. `util`: the shared vocabulary: `messages`, `ids`, `commandline`.
+2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `project` (a compose project, where it is, and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image` (an image, its reference as docker reads it, what was seen of it, and the identity its user resolves to). What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
 4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `scope`, `assessment`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `verdict`.
-5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
+5. `cli`: reading the command line: `userargs` (with compose's `run` and `exec`), `runargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
 8. The dispatchers, at the top of the package: `docker_cli` (the entry point), `compose_cli` and their `helptext`.
 
-The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `composeargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
+The `docker` and `docker compose` dispatchers are built alike. A command object (`docker_cli.DockerCommand`, `compose_cli.ComposeCommand`, both a `commandline.CommandLine`) takes out dockscreen's own options before the command, gives help (`_help_request`, `show_help`) and hands the command to its module in `commands`; `SCREENED` names the commands it screens, and everything else is handed to the real docker (`_passthrough`). A command's module has a `gate` that checks and then runs what it checked, never reading its input a second time; where the check stands on its own it is a `check` that returns what was checked and why it may not run, and where dockscreen has an audit of the command, an `audit` that checks and reports. Their command lines are read by `runargs` and `userargs`. The commands use `dockerclient.is_remote` to refuse a daemon that is not this host's, and `userargs` to resolve `--as` and `--as-me`.
 
 ### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `serviceusers`, `composeproject`)
 
@@ -186,7 +186,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `inspect.InspectError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `dockerclient.DockerError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
 
 ### Origins and trust (`origin`, `findings`)
 
@@ -210,7 +210,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 | `x-` keys | ignored, as compose does, except in `build` |
 | service names | no leading `-`, because names go to compose as arguments; `pull` and `build` of the images get `--` before them |
 
-### Users (`idrules`, `hostusers`, `images`, `imageuser`, `rules.image`)
+### Users (`idrules`, `hostusers`, `image`, `imageuser`, `rules.image`)
 
 `idrules.Rules` implements [the id rules](#ids-the-project-and-the-image-may-not-choose). It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 

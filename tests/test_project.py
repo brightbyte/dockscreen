@@ -1,6 +1,5 @@
-from dockscreen.model.location import Location
 from dockscreen.model.origin import Origin
-from dockscreen.model.project import Project
+from dockscreen.model.project import Location, Project
 
 
 def project(**services):

@@ -1,12 +1,12 @@
 import pytest
 from fakes import rules
 
-from dockscreen.cli import composeargs, runargs, userargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value
-VALUE_FLAGS = {**composeargs.VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE_FLAGS}
+VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE_FLAGS}
 
 
 def refusals(parsed):

@@ -16,7 +16,9 @@ FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class DockerError(Exception):
-    """Failure of a docker command, with what docker printed about it (output), if anything."""
+    """Failure to get from docker or compose what screening asked for (a project, an image, a definition),
+    with what docker printed about it (output), if anything.
+    """
 
     def __init__(self, message: str, output: str | None = None) -> None:
         super().__init__(message)

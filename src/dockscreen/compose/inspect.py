@@ -10,10 +10,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
+from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.location import Location
-from dockscreen.model.project import Project
+from dockscreen.model.project import Location, Project
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.rules.base import is_inside
@@ -35,20 +34,10 @@ class Refused(Exception):
         self.findings = list(findings)
 
 
-class InspectError(Exception):
-    """Failure to inspect a project's config: no compose file, one that cannot be looked at, or compose
-    could not read it; with what compose printed about it (output), if anything.
-    """
-
-    def __init__(self, message: str, output: str | None = None) -> None:
-        super().__init__(message)
-        self.output = output or None
-
-
 def project(global_args: Sequence[str], runtime: Runtime) -> Project:
     """Returns the project global_args select, with its definition as compose resolves it.
 
-    Raises Refused if the policy refuses where the project is (Policy.check_location); InspectError if
+    Raises Refused if the policy refuses where the project is (Policy.check_location); DockerError if
     compose cannot give the definition.
     """
     location = locate(global_args, runtime)
@@ -61,7 +50,7 @@ def project(global_args: Sequence[str], runtime: Runtime) -> Project:
 def locate(global_args: Sequence[str], runtime: Runtime) -> Location:
     """Returns where the project global_args select is, as compose would find it.
 
-    Raises InspectError if that cannot be found: the compose file is read from stdin, or there is none.
+    Raises DockerError if that cannot be found: the compose file is read from stdin, or there is none.
     """
     location = _project_location(global_args, runtime.cwd, runtime)
     return location._replace(sensitive=tuple(_sensitive_inside(location.directory, runtime)))
@@ -97,7 +86,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
     """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict."""
     try:
         found = project(global_args, runtime)
-    except InspectError as e:
+    except DockerError as e:
         return verdict.screened(Report.failure(e))
     except Refused as e:
         return verdict.screened(Report.of(e.findings))
@@ -109,7 +98,7 @@ def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
     """Returns the config compose resolves for global_args, with every profile active and env files
     not inlined.
 
-    Raises InspectError if compose cannot be run or its output cannot be read.
+    Raises DockerError if compose cannot be run or its output cannot be read.
     """
     # '*' activates all profiles: `up svc` enables the profile of a named
     # service, which a plain `config` would leave out of the inspected set.
@@ -117,16 +106,13 @@ def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
     # their contents, so the policy can see which files are read.
     cmd = [docker.binary, "compose", *global_args, "--profile", "*", "config", "--format", "json",
            "--no-env-resolution"]
-    try:
-        result = docker.capture(cmd)
-    except DockerNotFound:
-        raise InspectError("'docker' not found in PATH")
+    result = docker.capture(cmd)
     if result.returncode != 0:
-        raise InspectError("docker compose config failed", result.stderr.strip())
+        raise DockerError("docker compose config failed", result.stderr.strip())
     try:
         return json.loads(result.stdout)
     except ValueError as e:
-        raise InspectError(f"cannot parse docker compose config output: {e}")
+        raise DockerError(f"cannot parse docker compose config output: {e}")
 
 
 # compose labels each container with its project's name and the directory it was made from
@@ -170,7 +156,7 @@ def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:
 def _project_location(global_args: Sequence[str], cwd: str, runtime: Runtime) -> Location:
     """Determines the project directory as docker compose would from global_args and cwd.
 
-    Raises InspectError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
+    Raises DockerError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
     """
     env = runtime.env
     explicit = commandline.option_values(global_args, "--project-directory", None)
@@ -181,7 +167,7 @@ def _project_location(global_args: Sequence[str], cwd: str, runtime: Runtime) ->
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
-        raise InspectError("a compose file read from stdin cannot be inspected")
+        raise DockerError("a compose file read from stdin cannot be inspected")
     if files:  # compose takes the project directory from the first file
         return Location(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
 
@@ -195,7 +181,7 @@ def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int)
 
     The walk stops at home and at the first directory not owned by uid: a compose file found there was not
     put there for this project, and makes the location foreign. The starting directory is the caller's own
-    choice and is not subject to the ownership rule. Raises InspectError if there is no compose file.
+    choice and is not subject to the ownership rule. Raises DockerError if there is no compose file.
     """
     home = os.path.realpath(home)
     redirects = [path for path in (os.path.join(start, f) for f in env_files) if _sets_compose_vars(path)]
@@ -205,14 +191,14 @@ def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int)
         if directory != os.path.realpath(start) and (directory == home or os.stat(directory).st_uid != uid):
             if has_file:
                 return Location(directory, foreign=True, redirects=tuple(redirects))
-            raise InspectError("no compose file found")
+            raise DockerError("no compose file found")
         if _sets_compose_vars(env_file := os.path.join(directory, ".env")):
             redirects.append(env_file)
         if has_file:
             return Location(directory, redirects=tuple(redirects))
         parent = os.path.dirname(directory)
         if parent == directory:
-            raise InspectError("no compose file found")
+            raise DockerError("no compose file found")
         directory = parent
 
 

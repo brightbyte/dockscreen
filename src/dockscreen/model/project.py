@@ -1,4 +1,7 @@
-"""This module defines a compose project as screening sees it, and the services in it.
+"""This module defines a compose project as screening sees it, where it is, and the services in it.
+
+Every path below the project directory can be bind-mounted, so the directory must be the one compose
+uses, and must not hold anything that may not be mounted (Location).
 
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
@@ -16,8 +19,16 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
 from dockscreen.model.image import Image, Inspected, Unseen
-from dockscreen.model.location import Location
 from dockscreen.model.origin import Origin
+
+
+class Location(NamedTuple):
+    """Directory of a compose project, as compose would find it, with what makes it unfit to be one."""
+    directory: str
+    # found by walking up from the current directory into the home directory or one the caller does not own
+    foreign: bool = False
+    redirects: tuple[str, ...] = ()  # .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
+    sensitive: tuple[str, ...] = ()  # the sensitive paths it equals or contains ($HOME, /etc, ...)
 
 
 class Project(NamedTuple):

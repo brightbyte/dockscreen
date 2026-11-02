@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 from dockscreen.compose import composeproject, inspect
 from dockscreen.host import shellenv
-from dockscreen.host.dockerclient import DockerNotFound
+from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import substitutions, verdict
 from dockscreen.screen.findings import Report
@@ -30,7 +30,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
         return 2
     try:
         project = composeproject.load_project(global_args, runtime, allow_me)
-    except (inspect.InspectError, DockerNotFound) as e:
+    except DockerError as e:
         return verdict.report(Report.failure(e), brief)
     except inspect.Refused as e:
         return verdict.report(Report.of(e.findings), brief)

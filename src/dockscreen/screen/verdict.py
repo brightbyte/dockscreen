@@ -3,10 +3,11 @@ what the verdicts mean), and how the decision about a container's user is descri
 """
 
 from dockscreen.host import hostusers
+from dockscreen.model.image import section_hint
 from dockscreen.screen import imageuser
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report, Severity, Verdict
-from dockscreen.util import ids, images, messages
+from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
 CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
@@ -107,4 +108,4 @@ def explain(assessment: Assessment, config_file: str) -> list[Finding]:
 
 def config_hint(image: str, config_file: str) -> str:
     """Returns the hint how config_file can give image a user, for an image pulled from a registry."""
-    return f"or, for an image pulled from a registry, {images.section_hint(image, config_file)}"
+    return f"or, for an image pulled from a registry, {section_hint(image, config_file)}"

@@ -1,6 +1,6 @@
 import pytest
 
-from dockscreen.model.identity import Identity
+from dockscreen.model.image import Identity
 from dockscreen.screen import imageuser
 
 PASSWD = """root:x:0:0:root:/root:/bin/bash

@@ -23,7 +23,7 @@ from typing import Any, NamedTuple
 from dockscreen.cli import userargs
 from dockscreen.compose import inspect, runoptions, serviceusers
 from dockscreen.host import shellenv
-from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, is_remote
+from dockscreen.host.dockerclient import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
@@ -168,7 +168,7 @@ class Compose(NamedTuple):
 def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Compose:
     """Loads the project global_args select, hardened.
 
-    Raises inspect.Refused if the policy refuses where it is, inspect.InspectError if it cannot be inspected,
+    Raises inspect.Refused if the policy refuses where it is, DockerError if it cannot be inspected,
     ValueError if it cannot be hardened.
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
@@ -192,7 +192,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     """
     try:
         project = load_project(global_args, runtime, allow_me)
-    except (inspect.InspectError, DockerNotFound) as e:
+    except DockerError as e:
         verdict.screened(Report.failure(e))
         return 1
     except inspect.Refused as e:

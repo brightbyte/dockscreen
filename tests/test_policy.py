@@ -5,8 +5,8 @@ from fakes import project_of, rules
 
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image, Inspected, Unseen
-from dockscreen.model.location import Location
 from dockscreen.model.origin import STRICT, Origin
+from dockscreen.model.project import Location
 from dockscreen.screen import policy
 from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity

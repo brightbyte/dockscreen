@@ -6,8 +6,8 @@ import os
 from collections.abc import Iterable
 from typing import Any
 
-from dockscreen.model.location import Location
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
+from dockscreen.model.project import Location
 from dockscreen.screen.findings import Finding, refused
 from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 

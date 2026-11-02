@@ -5,8 +5,7 @@ makes (Policy.check_image), and where that user comes from (Kind).
 import enum
 from typing import NamedTuple, Self
 
-from dockscreen.model.identity import Identity
-from dockscreen.model.image import Image
+from dockscreen.model.image import Identity, Image
 from dockscreen.screen.findings import Finding, Severity
 
 
