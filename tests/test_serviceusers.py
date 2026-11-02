@@ -11,6 +11,7 @@ from dockscreen.model.origin import Origin
 from dockscreen.screen import imagedecision, policy
 from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.imagedecision import Kind
+from dockscreen.screen.scope import Scope
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
 
@@ -36,7 +37,7 @@ def prepare(config, images, args=(), active=("web",), codes=None, settings=None,
 
 def gate_context(images, settings=None):
     settings = settings or configuration.Config()
-    return imagedecision.Context(images, rules(settings=settings), make_runtime(settings=settings))
+    return Scope(make_runtime(settings=settings, docker=images))
 
 
 def subcommands(recorder):

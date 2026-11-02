@@ -13,9 +13,10 @@ from dockscreen.host.dockerclient import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
-from dockscreen.screen import findings, imagedecision, policy, verdict
+from dockscreen.screen import findings, policy, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import Assessment, Kind, assess, explain
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -45,7 +46,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     """
     if is_remote(global_args, runtime.docker):
         return policy.check_daemon(True)
-    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
+    ctx = Scope(runtime, allow_me)
     problems: list[Finding] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:

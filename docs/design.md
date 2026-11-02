@@ -115,7 +115,7 @@ The policy checks run before the images are pulled, so they apply the section th
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
-`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. The policy gets per-service settings through `policy.Context.scope`, the image decision through `imagedecision.Context.for_image`.
+`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. Both come from the scope a command is screened in (`scope.Scope`): the policy gets per-service settings through `Scope.project_policy`, a container's through `Scope.policy_context`, and the image decision through `Scope.for_image`.
 
 ### Command-line options
 
@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`, `image`, `identity`.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, `idrules`, `scope`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.

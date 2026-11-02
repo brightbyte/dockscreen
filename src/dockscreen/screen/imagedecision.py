@@ -22,70 +22,16 @@ from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config, hostusers
-from dockscreen.host.dockerclient import Docker
-from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.identity import Identity
 from dockscreen.model.image import Image
-from dockscreen.model.origin import TRUSTED, Origin
-from dockscreen.screen import idrules, imageuser, policy
+from dockscreen.model.origin import Origin
+from dockscreen.screen import imageuser
 from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.scope import Scope
 from dockscreen.util import ids, images, messages
 
 CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
-
-
-class Context(NamedTuple):
-    """Context for deciding the user of an image: the docker that gets and inspects it, the id rules, the
-    runtime, and the directory mounts are judged against.
-    """
-    docker: Docker
-    ids: idrules.Rules
-    runtime: Runtime               # the config file, the caller's ids, the host's accounts
-    project_dir: str | None = None  # the compose project's; for docker run, the current directory
-
-    @classmethod
-    def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:
-        """Returns the context to pull, build, create, decide and start with, with runtime's docker and
-        id rules; allow_me: the caller's own ids are allowed.
-        """
-        return cls(runtime.docker, idrules.Rules.for_runtime(runtime, allow_me), runtime)
-
-    @property
-    def local(self) -> hostusers.HostAccounts:
-        """Returns the host accounts of the id rules, for naming the users an image runs as."""
-        return self.ids.local
-
-    @property
-    def directory(self) -> str:
-        """Returns the directory a bind mount is judged against: the project's, else the current one."""
-        return self.project_dir or self.runtime.cwd
-
-    @property
-    def settings(self) -> config.Config:
-        """Returns the config file's settings for this directory's project, without any image section."""
-        return config.effective(self.runtime.settings, None, self.directory)
-
-    def for_image(self, repository: str | None) -> tuple[config.Config, idrules.Rules]:
-        """Returns (settings, id rules) with the image section for repository applied (None: none applies)."""
-        settings = config.effective(self.runtime.settings, repository, self.directory)
-        return settings, self.ids.with_settings(settings)
-
-    def policy_context(self, repository: str | None, trust: frozenset[Origin] = TRUSTED) -> policy.Context:
-        """Returns the policy context for a container of an image from repository (None: no image section
-        applies), with this context's directory as the project's, trusting the origins in trust.
-        """
-        settings, _ = self.for_image(repository)
-        ctx = policy.context_for(settings, self.directory, self.ids, self.runtime.config_file)
-        return ctx.with_trust(trust)
-
-    def with_allow_me(self, allow_me: bool) -> Self:
-        """Returns this context with the caller's own ids allowed if allow_me, for --allow-me and --as-me."""
-        return self._replace(ids=self.ids.with_allow_me(True)) if allow_me else self
-
-    def with_project_dir(self, project_dir: str) -> Self:
-        """Returns this context for the compose project in project_dir."""
-        return self._replace(project_dir=project_dir)
 
 
 class Kind(enum.StrEnum):
@@ -151,7 +97,7 @@ class Assessment(NamedTuple):
         return self.kind in (Kind.CONFIGURED, Kind.FALLBACK) and not self.refused
 
 
-def assess(ctx: Context, container: str, info: dict[str, Any], origin: Origin | None = None,
+def assess(ctx: Scope, container: str, info: dict[str, Any], origin: Origin | None = None,
            mounts: bool | None = None, reference: str | None = None, built: bool = False) -> Assessment:
     """Decides which user the container's image may run as, by the rules in this module's docstring.
 
@@ -228,7 +174,7 @@ def instead_of_root(assessment: Assessment) -> str:
     return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
 
 
-def root_default_notice(ctx: Context) -> messages.Marked | None:
+def root_default_notice(ctx: Scope) -> messages.Marked | None:
     """Returns the warning to give on every run if the configured default user is root, else None."""
     if 0 in ctx.settings.default_user:
         default = ids.format_user(ctx.settings.default_user)
@@ -239,7 +185,7 @@ def root_default_notice(ctx: Context) -> messages.Marked | None:
     return None
 
 
-def explain(ctx: Context, assessment: Assessment) -> list[Finding]:
+def explain(ctx: Scope, assessment: Assessment) -> list[Finding]:
     """Returns the assessment's reasons, with how to get past them if they come from the image's user."""
     if not assessment.identity:
         return assessment.reasons
@@ -247,6 +193,6 @@ def explain(ctx: Context, assessment: Assessment) -> list[Finding]:
     return [Finding(r.text, r.severity, r.subject, help, r.output) for r in assessment.reasons]
 
 
-def config_hint(ctx: Context, image: str) -> str:
+def config_hint(ctx: Scope, image: str) -> str:
     """Returns the hint how the config file can give image a user, for an image pulled from a registry."""
     return f"or, for an image pulled from a registry, {images.section_hint(image, ctx.runtime.config_file)}"

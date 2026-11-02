@@ -12,8 +12,9 @@ from typing import Any
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import idrules, policy, verdict
+from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -53,30 +54,6 @@ def project(global_args: Sequence[str], runtime: Runtime) -> tuple[dict[str, Any
 
 
 
-def context(project_dir: str, runtime: Runtime, allow_me: bool = False,
-            verified: Mapping[str, str] | None = None) -> policy.Context:
-    """Builds the policy context for project_dir from the config file.
-
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
-    Each service is checked with the settings of its image section, if one applies. Before the images are
-    there, that is the section the image name points to; verified, once they are, maps each service to the
-    section its image was proven to have been pulled for (config.section_for).
-    """
-    def settings_context(settings: config.Config) -> policy.Context:
-        rules = idrules.Rules.for_runtime(runtime, allow_me)
-        return policy.context_for(settings, project_dir, rules, runtime.config_file)
-
-    def scope(name: str, service: dict[str, Any]) -> policy.Context:
-        if verified is None:
-            repository = config.name_matches(runtime.settings, str(service.get("image") or ""),
-                                             "build" in service)
-        else:
-            repository = verified.get(name)
-        return settings_context(config.effective(runtime.settings, repository, project_dir))
-
-    return settings_context(config.effective(runtime.settings, None, project_dir)).with_scope(scope)
-
-
 def _sensitive_paths(runtime: Runtime) -> list[str]:
     """Returns the paths whose directories must not be mountable: system directories, the home
     directory, the config files and the docker socket.
@@ -111,7 +88,8 @@ def passes(global_args: Sequence[str], runtime: Runtime,
         return verdict.screened(Report.failure(e))
     except ScreenError as e:
         return verdict.screened(Report.refusal(str(e)))
-    return verdict.screened(Report.of(rules(config, context(project_dir, runtime))))
+    ctx = Scope(runtime, project_dir=project_dir).project_policy()
+    return verdict.screened(Report.of(rules(config, ctx)))
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:

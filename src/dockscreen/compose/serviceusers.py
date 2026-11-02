@@ -33,6 +33,7 @@ from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, imagedecision, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.scope import Scope
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import commandline, ids, images, messages
 
@@ -43,10 +44,10 @@ class ImageError(Exception):
 
 class Prepared(NamedTuple):
     """Project config whose services' images have been fetched and their users decided (with ctx, an
-    imagedecision.Context), ready to become the config that runs.
+    Scope), ready to become the config that runs.
     """
     config: dict
-    ctx: imagedecision.Context
+    ctx: Scope
     to_run: frozenset
     decisions: dict   # service -> imagedecision.Assessment, for the started services that set no user
     report: Report    # refusals, and failures to get or look at an image
@@ -156,7 +157,7 @@ def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> s
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
-def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str], ctx: imagedecision.Context,
+def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str], ctx: Scope,
             chosen: frozenset[str] = frozenset()) -> Prepared:
     """Acquires the images of the services that start, and decides on those that set no user.
 
@@ -165,7 +166,7 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
 
     command: the compose command line (up to the subcommand) on the config to run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
-    ctx: the imagedecision.Context to pull, build, decide and run with.
+    ctx: the Scope to pull, build, decide and run with.
     chosen: services whose user the command line chooses (`run -u`); their images are not decided.
     """
     try:
@@ -183,7 +184,7 @@ def prepare(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
     return Prepared(config, ctx, to_run, decisions, Report.of(found), verified=verified)
 
 
-def _verify_sections(config: dict[str, Any], ctx: imagedecision.Context) -> dict[str, str]:
+def _verify_sections(config: dict[str, Any], ctx: Scope) -> dict[str, str]:
     """Determines which services' images were proven pulled from the repository of their image section.
 
     Returns {service: repository}. The checks before the images were there trusted the name alone.
@@ -220,7 +221,7 @@ def decision_problem(name: str, assessment: imagedecision.Assessment, config_fil
 
 
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
-                     ctx: imagedecision.Context) -> frozenset[str]:
+                     ctx: Scope) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
     Raises ImageError if compose cannot list them.
@@ -233,7 +234,7 @@ def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Seque
 
 
 def _acquire(command: Sequence[str], config: dict[str, Any], to_run: frozenset[str], args: Sequence[str],
-             ctx: imagedecision.Context) -> list[str]:
+             ctx: Scope) -> list[str]:
     """Pulls and builds the images of to_run that `up` would, by each service's pull policy and args.
 
     Returns the failures, empty if everything was acquired.
@@ -273,7 +274,7 @@ def _image_exists(docker: Docker, image: str) -> bool:
 
 
 def _decide(config: dict[str, Any], to_run: frozenset[str],
-            ctx: imagedecision.Context) -> dict[str, imagedecision.Assessment]:
+            ctx: Scope) -> dict[str, imagedecision.Assessment]:
     """Decides, for each service in to_run that sets no user, what its image would be allowed to run as.
 
     Returns {service: Assessment}. An image that cannot be looked at gets a failed assessment.

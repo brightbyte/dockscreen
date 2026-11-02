@@ -28,6 +28,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.screen import findings, hardening, imagedecision, policy, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
@@ -43,7 +44,7 @@ class Project(NamedTuple):
     hardened: dict             # the resolved config with hardening applied
     hardening: list            # the substitutions that hardened it (substitutions.Substitution)
     ctx: policy.Context        # with every user from the project
-    image_ctx: imagedecision.Context  # to pull, build, decide and run with
+    image_ctx: Scope  # to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
     docker_binary: str         # the real docker, to run `docker compose` with
     runtime: Runtime           # the Runtime it was loaded with
@@ -68,7 +69,7 @@ class Project(NamedTuple):
         set come from (Prepared.finalize), and image sections only where prepared proved them.
         """
         verified = prepared.verified or {}
-        ctx = inspect.context(self.directory, self.runtime, self.allow_me, verified)
+        ctx = self.image_ctx.project_policy(verified)
         return ctx.with_user_origins(user_origins)
 
     def prepare(self, command: Sequence[str], config: dict[str, Any], args: Sequence[str] = (),
@@ -98,9 +99,9 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     """
     config, directory = inspect.project(global_args, runtime)
     hardened, changes = hardening.apply(config, runtime.accounts)
-    image_ctx = imagedecision.Context.for_runtime(runtime, allow_me).with_project_dir(directory)
+    image_ctx = Scope(runtime, allow_me).with_project_dir(directory)
     remote = is_remote(global_args, image_ctx.docker)
-    ctx = inspect.context(directory, runtime, allow_me)
+    ctx = image_ctx.project_policy()
     return Project(global_args, directory, hardened, changes, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
 

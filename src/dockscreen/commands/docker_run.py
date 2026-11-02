@@ -40,6 +40,7 @@ from dockscreen.screen.imagedecision import (
     root_default_notice,
     runs_as,
 )
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -61,7 +62,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon)
-    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
+    ctx = Scope(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
@@ -115,7 +116,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     )
 
 
-def _home_args(ctx: imagedecision.Context, container: Container, assessment: Assessment) -> list[str]:
+def _home_args(ctx: Scope, container: Container, assessment: Assessment) -> list[str]:
     """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
 
     The container as created has the merged environment: a HOME that differs from the image's own
@@ -139,7 +140,7 @@ def _fallback_notice(assessment: Assessment) -> messages.Marked:
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
-def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
+def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
                     ) -> tuple[Container, Assessment] | int:
     """Creates the container; returns it with the assessment of its user, or the exit status if it may not
     start.
@@ -159,7 +160,7 @@ def _create_checked(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra
     return created
 
 
-def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str]
+def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
           ) -> tuple[int, tuple[Container, Assessment] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, assessment of its
     user)), or (exit status, None) if docker could not create it; it said why.
@@ -180,7 +181,7 @@ def check(ctx: imagedecision.Context, parsed: runargs.ParsedRun, extra: list[str
     return code, (container, assessment)
 
 
-def _command_line_findings(ctx: imagedecision.Context, parsed: runargs.ParsedRun, container: Container,
+def _command_line_findings(ctx: Scope, parsed: runargs.ParsedRun, container: Container,
                            assessment: Assessment, trust: frozenset[Origin]) -> list[Finding]:
     """Returns what the command line asks for, in the container it created, that a project or an image may
     not have: refused, or notable where trust trusts the command line (policy.check_container).
@@ -233,7 +234,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon, brief)
-    ctx = imagedecision.Context.for_runtime(runtime, allow_me)
+    ctx = Scope(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
@@ -271,7 +272,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     return int(outcome.verdict)
 
 
-def _report_assessment(ctx: imagedecision.Context, image: str, assessment: Assessment) -> None:
+def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.kind is Kind.EXPLICIT:
@@ -304,7 +305,7 @@ def _report_findings(found: list[Finding]) -> None:
                                                    "--strict-screen makes them fail the audit"))
 
 
-def _describe_outcome(ctx: imagedecision.Context, assessment: Assessment) -> str:
+def _describe_outcome(ctx: Scope, assessment: Assessment) -> str:
     """Returns, as text, what the assessment means for running the image."""
     if assessment.kind in (Kind.IMAGE, Kind.CONFIGURED) and not assessment.refused:
         return runs_as(assessment, ctx.local)
