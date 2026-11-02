@@ -9,15 +9,16 @@ nor a moved tag changes what runs. A service that does not start and sets no use
 in case it does get started: a mistake in working out what starts must fail safe.
 """
 
-from collections.abc import Mapping
-from typing import Any, NamedTuple
+from collections.abc import Mapping, Sequence
+from typing import Any, NamedTuple, Self
 
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import policy, substitutions, verdict
+from dockscreen.screen import substitutions, verdict
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.policy import Policy
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids, messages
 
@@ -28,28 +29,29 @@ USER_HELP = ("set user: on the service to choose one; the default user may not b
 
 
 class Decisions(NamedTuple):
-    """What the policy for a project (policy) decides about its services' users from what was found of their
-    images (Project.found_images, Project.inspected), with the failures to acquire the images; local: this
-    host's accounts, for naming users.
+    """What the policy for a project (policy) decided about its services' users from what was found of their
+    images (Project.found_images, Project.inspected): the decision about each started service that sets no
+    user (decisions), the report (the failures to acquire the images, and the services whose image must not
+    run), and the substitutions that make the project the one to run (changes); local: this host's
+    accounts, for naming users.
     """
     project: Project
-    policy: policy.Policy
+    policy: Policy
     local: hostusers.HostAccounts
-    failures: tuple[Finding, ...] = ()  # pulling, building or listing the services failed
+    decisions: dict[str, Assessment]
+    report: Report
+    changes: tuple[Substitution, ...]
 
-    @property
-    def decisions(self) -> dict[str, Assessment]:
-        """Returns the decision about each started service that sets no user, by service."""
-        return self.policy.assess_images(self.project)
-
-    @property
-    def report(self) -> Report:
-        """Returns the failures to acquire the images, and the services whose image must not run."""
-        return Report.of([*self.failures, *self.policy.check_images(self.project)])
-
-    def changes(self) -> list[Substitution]:
-        """Returns the substitutions that make the project the one to run (the function changes)."""
-        return changes(self.project, self.decisions, self.policy)
+    @classmethod
+    def of(cls, project: Project, project_policy: Policy, local: hostusers.HostAccounts,
+           failures: Sequence[Finding] = ()) -> Self:
+        """Returns what project_policy decides about project, with the failures to pull, build or list its
+        services (failures).
+        """
+        decided = project_policy.assess_images(project)
+        report = Report.of([*failures, *project_policy.check_images(project)])
+        return cls(project, project_policy, local, decided, report,
+                   tuple(changes(project, decided, project_policy)))
 
     def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
@@ -73,14 +75,14 @@ class Decisions(NamedTuple):
                                      USER_HELP))
             for note in decision.notes:
                 lines.append(Finding(f"note: {note}", Severity.NOTABLE, f"service {name}"))
-        return [*lines, *substitutions.grouped(self.changes())]
+        return [*lines, *substitutions.grouped(self.changes)]
 
     def notices(self) -> list[Finding]:
         """Lists, as routine and notable findings, what a run does that the project did not ask for."""
-        return substitutions.describe(self.changes())
+        return substitutions.describe(self.changes)
 
 
-def changes(project: Project, decisions: Mapping[str, Assessment], project_policy: policy.Policy
+def changes(project: Project, decisions: Mapping[str, Assessment], project_policy: Policy
             ) -> list[Substitution]:
     """Returns the substitutions that make project the one to run, by service name: services that start
     and set no user get the decided user (decisions), pinned to the image that was checked; those that do

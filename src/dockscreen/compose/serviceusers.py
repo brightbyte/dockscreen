@@ -24,7 +24,6 @@ from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import findings
-from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
@@ -36,12 +35,12 @@ def _image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> s
 
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: Scope,
-            chosen: frozenset[str] = frozenset()) -> Decisions:
+            chosen: frozenset[str] = frozenset()) -> tuple[Project, list[Finding]]:
     """Acquires the images of the services that start, and looks at those of the services that set no
-    user, for the policy to decide on.
+    user, for the policy to decide on (Scope.decide).
 
-    Pulls and builds as `up` would. Returns the Decisions about the project with what was found of its
-    images; their report passes if every image was acquired and accepted.
+    Pulls and builds as `up` would. Returns (the project with what was found of its images, the failures
+    to acquire them), with nothing found if one failed.
 
     command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
@@ -53,19 +52,14 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: 
         to_run = _services_to_run(command, config, args, ctx)
         failures = _acquire(command, config, to_run, args, ctx)
     except DockerError as e:
-        return decided(project, ctx, (failure_of(e),))
+        return project, [failure_of(e)]
     if failures:
-        return decided(project, ctx, tuple(findings.failed(failures)))
+        return project, findings.failed(failures)
 
     inspected = _inspect(project, to_run - chosen, ctx)
     found = {**_find_section_images(config, ctx),
              **{name: image.image for name, image in inspected.items() if isinstance(image, Inspected)}}
-    return decided(project.with_images(found, inspected), ctx)
-
-
-def decided(project: Project, ctx: Scope, failures: tuple[Finding, ...] = ()) -> Decisions:
-    """Returns the Decisions of the policy for project in ctx, with the failures to acquire its images."""
-    return Decisions(project, ctx.project_policy(project), ctx.local, failures)
+    return project.with_images(found, inspected), []
 
 
 def _find_section_images(config: dict[str, Any], ctx: Scope) -> dict[str, Image]:

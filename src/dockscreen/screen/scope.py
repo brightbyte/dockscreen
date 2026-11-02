@@ -8,6 +8,7 @@ target's: a compose project's own, for what a command line runs the current one,
 that existed before, since docker does not record where it was created.
 """
 
+from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config, hostusers, inspection
@@ -18,6 +19,8 @@ from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules
 from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.decisions import Decisions
+from dockscreen.screen.findings import Finding
 from dockscreen.screen.policy import Policy
 
 
@@ -78,6 +81,12 @@ class Scope(NamedTuple):
                 section = self.section_for(found[name]) if name in found else config.NO_SECTION
             per_service[name] = self.policy(directory, section)
         return self.policy(directory).with_per_service(per_service)
+
+    def decide(self, project: Project, failures: Sequence[Finding] = ()) -> Decisions:
+        """Returns what the policy for project (project_policy) decides about its services' users from what
+        was found of their images, with the failures to acquire them.
+        """
+        return Decisions.of(project, self.project_policy(project), self.local, failures)
 
     def assess(self, directory: str | None, container: str, info: dict[str, Any],
                origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,

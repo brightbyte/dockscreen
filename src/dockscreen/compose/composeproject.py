@@ -116,7 +116,8 @@ class Compose(NamedTuple):
         judged, trust = (final, TRUSTED)
         if strict and parsed:
             judged, trust = _as_run(final, parsed, self.scope.runtime), STRICT
-        checked = Report.of(self.final_policy(decided).with_trust(trust).check_project(judged))
+        # image sections apply only where the images, as they were found, proved them
+        checked = Report.of(decided.policy.with_trust(trust).check_project(judged))
         return Screened(checked, decided, final if checked.passed else None)
 
     def _with_name_users(self, project: Project) -> tuple[Project, list[Finding]]:
@@ -138,18 +139,12 @@ class Compose(NamedTuple):
         """Returns the project that will run: the resolved one with the hardening and then what the images
         decided (Decisions.changes) made, with where the values dockscreen set come from.
         """
-        return substitutions.applied(self.resolved, [*self.hardening, *decided.changes()])
-
-    def final_policy(self, decided: Decisions) -> policy.Policy:
-        """Returns the policy for the project that will run, with image sections only where its images, as
-        they were found, proved them.
-        """
-        return decided.policy
+        return substitutions.applied(self.resolved, [*self.hardening, *decided.changes])
 
     def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> Decisions:
-        """Gets the images of project's services and decides their users (serviceusers.prepare), once compose
-        has been shown to read the generated file back as its definition.
+        """Gets the images of project's services (serviceusers.prepare) and decides their users
+        (Scope.decide), once compose has been shown to read the generated file back as its definition.
 
         Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
         command: the compose command line on the generated file of project's definition (generated()).
@@ -157,8 +152,8 @@ class Compose(NamedTuple):
         """
         problem = _read_back_problem(command, project.definition, self.scope.docker)
         if problem:
-            return serviceusers.decided(project, self.scope, (Finding(problem, Severity.FAILED),))
-        return serviceusers.prepare(command, project, list(args), self.scope, chosen)
+            return self.scope.decide(project, [Finding(problem, Severity.FAILED)])
+        return self.scope.decide(*serviceusers.prepare(command, project, list(args), self.scope, chosen))
 
     def surroundings(self) -> list[Finding]:
         """Returns what the policy finds in what the project gets from around it: configured mount dirs that

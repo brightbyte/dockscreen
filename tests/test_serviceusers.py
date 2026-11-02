@@ -31,7 +31,8 @@ def project(**services):
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
                                          ctx=gate_context(images, settings))
-    return serviceusers.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen), recorder, images
+    found = serviceusers.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
+    return image_ctx.decide(*found), recorder, images
 
 
 def gate_context(images, settings=None):
@@ -125,8 +126,8 @@ def test_listing_the_services_can_fail_closed():
         return capture(cmd)
 
     image_ctx.docker.capture = failing_listing
-    prepared = serviceusers.prepare(COMMAND, project_of(config), [], image_ctx)
-    assert prepared.report.reasons == ["docker compose config --services failed"]
+    _, failures = serviceusers.prepare(COMMAND, project_of(config), [], image_ctx)
+    assert failures == ["docker compose config --services failed"]
 
 
 # --- deciding about the images ---------------------------------------------------
@@ -194,7 +195,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
-    changes = prepared.changes()
+    changes = prepared.changes
     return prepared, substitutions.apply(prepared.project.definition, changes), substitutions.origins(changes)
 
 
