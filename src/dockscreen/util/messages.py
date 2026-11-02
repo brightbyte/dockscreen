@@ -55,8 +55,13 @@ class Marked(str):
 
     @property
     def shown(self) -> str:
-        """Returns the text, followed by the help if there is one and helpful mode is on."""
-        return f"{self.text} - {self.help}" if self.help and _helpful else self.text
+        """Returns the text, followed by the help if there is one and helpful mode is on (with_help)."""
+        return with_help(self.text, self.help)
+
+
+def with_help(text: str, help: str | None) -> str:
+    """Returns text followed by help, if there is help and helpful mode is on (set_helpful)."""
+    return f"{text} - {help}" if help and _helpful else text
 
 
 def help_of(text: object) -> str | None:
@@ -104,16 +109,6 @@ MAX_WIDTH, MIN_WIDTH, TAB_WIDTH = 120, 20, 8
 CONTINUATION = "  "
 # Where the lines of a message's output start: past PREFIX and a mark, so that none starts like a message.
 OUTPUT_INDENT = " " * (len(PREFIX) + 1) + "  "
-
-
-def routine_change(text: str, help: str | None = None) -> Marked:
-    """Builds a line about something dockscreen changes that rarely affects how the thing runs."""
-    return Marked(ROUTINE, text, help)
-
-
-def notable_change(text: str, help: str | None = None) -> Marked:
-    """Builds a line about something dockscreen changes that can alter how the thing runs."""
-    return Marked(WARN, text, help)
 
 
 def notice(text: object) -> None:

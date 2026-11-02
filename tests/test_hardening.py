@@ -1,5 +1,5 @@
 import pytest
-from fakes import Accounts, compose_project, project_of, rules
+from fakes import Accounts, compose_project, marked, project_of, rules
 
 from dockscreen import compose_cli
 from dockscreen.commands import compose_audit, compose_harden
@@ -25,10 +25,9 @@ def test_missing_defaults_are_added_and_described():
 
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
-    assert substitutions.describe(changes) == [
-        messages.routine_change(
-            'added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where missing, '
-            "in services web", hardening.DEFAULTS_HELP),
+    assert marked(substitutions.describe(changes)) == [
+        (f'{messages.ROUTINE} added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where '
+         "missing, in services web"),
     ]
 
 
@@ -38,9 +37,8 @@ def test_a_default_that_overrides_what_the_project_set_is_marked_check_this():
 
     lines = substitutions.describe(changes)
 
-    assert lines[0] == messages.notable_change(
-        'service web: cap_drop lacks ALL; added ["ALL"]')
-    assert lines[1].startswith(f"{messages.ROUTINE} added cap_drop")  # security_opt: unset
+    assert marked(lines)[0] == f'{messages.WARN} service web: cap_drop lacks ALL; added ["ALL"]'
+    assert marked(lines)[1].startswith(f"{messages.ROUTINE} added cap_drop")  # security_opt: unset
 
 
 def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
@@ -177,8 +175,8 @@ def test_names_are_resolved_on_this_host(spec, resolved):
     assert hardened["services"]["web"]["user"] == resolved
     assert original["services"]["web"]["user"] == spec  # the input is left alone
     # the first line: the same service also lacks the other defaults
-    assert substitutions.describe(changes)[0] == messages.routine_change(
-        f'service web: user "{spec}" resolved to "{resolved}" on this host')
+    assert marked(substitutions.describe(changes))[0] == (
+        f'{messages.ROUTINE} service web: user "{spec}" resolved to "{resolved}" on this host')
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "65534:65534", "app", "app:app", "1000", "1000:staff"])

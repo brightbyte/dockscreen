@@ -1,3 +1,5 @@
+from fakes import marked
+
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Location, Project
 from dockscreen.screen import substitutions
@@ -39,13 +41,13 @@ def test_describe_gives_a_line_each_then_one_per_group_naming_its_services_once(
         Substitution("db", "environment", {"HOME": "/tmp"}),  # part of another change: not reported
     ]
 
-    assert substitutions.describe(found) == [
-        messages.notable_change("service web: running as 1:1 instead of root", "set user:"),
-        messages.routine_change("service db: user 'db' resolved to 2:2"),
-        messages.routine_change("services web, db: pinned", "nothing to do"),
+    assert marked(substitutions.describe(found)) == [
+        f"{messages.WARN} service web: running as 1:1 instead of root",
+        f"{messages.ROUTINE} service db: user 'db' resolved to 2:2",
+        f"{messages.ROUTINE} services web, db: pinned",
     ]
-    assert substitutions.grouped(found) == [
-        messages.routine_change("services web, db: pinned", "nothing to do")]
+    assert marked(substitutions.grouped(found)) == [
+        f"{messages.ROUTINE} services web, db: pinned"]
 
 
 def test_applied_makes_them_in_a_projects_definition_with_their_origins():

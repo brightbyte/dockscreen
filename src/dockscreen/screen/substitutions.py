@@ -17,7 +17,7 @@ from typing import Any, NamedTuple
 
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.util import messages
+from dockscreen.screen.findings import Finding, Severity
 
 
 class Group(NamedTuple):
@@ -67,14 +67,16 @@ def origins(substitutions: Iterable[Substitution]) -> dict[str, dict[str, Origin
     return found
 
 
-def individual(substitutions: Iterable[Substitution]) -> list[messages.Marked]:
-    """Describes the substitutions that are reported on their own line, one line each, in their order."""
-    return [(messages.notable_change if s.notable else messages.routine_change)(
-                f"service {s.service}: {s.text}", s.help)
+def individual(substitutions: Iterable[Substitution]) -> list[Finding]:
+    """Describes the substitutions that are reported on their own line, one finding each, in their order:
+    notable if it alters what the project chose, else routine.
+    """
+    return [Finding(s.text, Severity.NOTABLE if s.notable else Severity.ROUTINE, f"service {s.service}",
+                    s.help)
             for s in substitutions if s.text]
 
 
-def grouped(substitutions: Iterable[Substitution]) -> list[messages.Marked]:
+def grouped(substitutions: Iterable[Substitution]) -> list[Finding]:
     """Describes the groups of the substitutions, one line each naming its services, in the order the groups
     first appear.
     """
@@ -82,11 +84,12 @@ def grouped(substitutions: Iterable[Substitution]) -> list[messages.Marked]:
     for s in substitutions:
         if s.group:
             services.setdefault(s.group, []).append(s.service)
-    return [messages.routine_change(group.text.format(services=", ".join(dict.fromkeys(names))), group.help)
+    return [Finding(group.text.format(services=", ".join(dict.fromkeys(names))), Severity.ROUTINE,
+                    help=group.help)
             for group, names in services.items()]
 
 
-def describe(substitutions: Iterable[Substitution]) -> list[messages.Marked]:
+def describe(substitutions: Iterable[Substitution]) -> list[Finding]:
     """Describes the substitutions for an audit or a run: the individual lines, then one per group."""
     found = list(substitutions)
     return [*individual(found), *grouped(found)]

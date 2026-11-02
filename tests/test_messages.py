@@ -152,7 +152,7 @@ def test_brief_lines_are_not_wrapped(monkeypatch, capsys):
 
 
 def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
-    line = messages.notable_change("a changed", "do this about it")
+    line = messages.Marked(messages.WARN, "a changed", "do this about it")
     assert str(line) == "● a changed"  # the facts, whatever the mode
 
     messages.notice(line)

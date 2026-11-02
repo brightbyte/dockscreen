@@ -2,6 +2,8 @@
 
 A finding says one thing about one subject (a service, an image, a container, the command line) and how
 much it matters: routine and notable findings are reported, refused and failed ones stop the command.
+Everything screening reports is one, also what dockscreen changes in what it runs: routine if it rarely
+matters, notable if it can change how something runs.
 Refused means the policy says no. Failed means screening could not get far enough to judge: docker, the
 image or the compose config was not there, or pulling or building failed. A refusal is about the project,
 image or command line; a failure is about getting to them, and may go away when retried.
@@ -30,25 +32,33 @@ class Severity(enum.Enum):
         return self in (Severity.REFUSED, Severity.FAILED)
 
 
-class Finding(str):
-    """Statement about one subject of screening, with how much it matters, what to do about it (help) and
-    what docker printed about it (output), which may span lines.
+# The mark a finding is shown with, by its severity.
+MARKS = {Severity.ROUTINE: messages.ROUTINE, Severity.NOTABLE: messages.WARN, Severity.REFUSED: messages.BAD,
+         Severity.FAILED: messages.BAD}
 
-    Its string value is the text, after the subject and a colon if there is a subject.
+
+class Finding(messages.Marked):
+    """Statement about one subject of screening, with how much it matters, what to do about it (help) and
+    what docker printed about it (output), which may span lines; a line marked by its severity (MARKS).
+
+    Its string value is the text, after the subject and a colon if there is a subject, without the mark.
     """
 
-    text: str
     severity: Severity
     subject: str | None
-    help: str | None
-    output: str | None
 
     def __new__(cls, text: str, severity: Severity = Severity.REFUSED, subject: str | None = None,
                 help: str | None = None, output: str | None = None) -> Self:
-        finding = super().__new__(cls, f"{subject}: {text}" if subject else text)
-        finding.text, finding.severity, finding.subject = text, severity, subject
+        finding = str.__new__(cls, f"{subject}: {text}" if subject else text)
+        finding.mark, finding.text = MARKS[severity], text
+        finding.severity, finding.subject = severity, subject
         finding.help, finding.output = help, output or None
         return finding
+
+    @property
+    def shown(self) -> str:
+        """Returns the subject and text, followed by the help if there is one and helpful mode is on."""
+        return messages.with_help(str(self), self.help)
 
     @classmethod
     def of(cls, reason: object, severity: Severity | None = None, subject: str | None = None) -> Self:

@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_image_ctx, make_runtime, project_of, rules
+from fakes import FakeImages, make_image_ctx, make_runtime, marked, project_of, rules
 
 from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
@@ -264,17 +264,17 @@ def test_descriptions_and_notices():
     images = FakeImages(users={"web:1": "", "db:1": "app"})
     prepared, _, _ = prepare(config, images, active=("web", "db", "set_"))
 
-    assert prepared.describe() == [
+    assert marked(prepared.describe()) == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), gid 100001 "
          "(no local group); accepted"),
-        messages.notable_change("service debug: no user set and not started by default; dockscreen runs it "
-                                "as the default user (65534:65534) if it is started", USER_HELP),
-        messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
-        messages.routine_change(f"services db, web: {PIN}"),
+        (f"{messages.WARN} service debug: no user set and not started by default; dockscreen runs it "
+         "as the default user (65534:65534) if it is started"),
+        f"{messages.WARN} service web: no user set; {ROOT_FALLBACK}",
+        f"{messages.ROUTINE} services db, web: {PIN}",
     ]
-    assert prepared.notices() == [
-        messages.notable_change(f"service web: {ROOT_FALLBACK}", USER_HELP),
-        messages.routine_change(f"services db, web: {PIN}")]
+    assert marked(prepared.notices()) == [
+        f"{messages.WARN} service web: {ROOT_FALLBACK}",
+        f"{messages.ROUTINE} services db, web: {PIN}"]
 
 
 def test_a_refusal_names_the_local_account_that_the_images_id_would_be():
@@ -324,12 +324,12 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
 
     assert prepared.decisions["db"].origin is Origin.CONFIG and not prepared.decisions["db"].replaces_root
     assert final["services"]["db"]["user"] == "999:999" and user_origins(origins) == {"db": Origin.CONFIG}
-    assert prepared.notices() == [  # configured: routine only, no surprise
-        messages.routine_change(f"services db: {PIN}")]
-    assert prepared.describe() == [
+    assert marked(prepared.notices()) == [  # configured: routine only, no surprise
+        f"{messages.ROUTINE} services db: {PIN}"]
+    assert marked(prepared.describe()) == [
         (f"{GOOD} service db: no user set; image mariadb:11 runs as 999:999, "
          "the user the config file sets for it"),
-        messages.routine_change(f"services db: {PIN}")]
+        f"{messages.ROUTINE} services db: {PIN}"]
 
 
 @pytest.mark.parametrize("fields, digests, why", [
@@ -344,7 +344,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
 
     assessment = prepared.decisions["db"]
     assert assessment.replaces_root  # the normal rules: root runs as the default user
-    lines = prepared.describe()
+    lines = marked(prepared.describe())
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
             f"but {why}") in lines
 

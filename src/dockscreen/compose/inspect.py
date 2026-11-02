@@ -17,7 +17,7 @@ from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.scope import Scope
-from dockscreen.util import commandline, messages
+from dockscreen.util import commandline
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
@@ -69,13 +69,11 @@ def _sensitive_inside(directory: str, runtime: Runtime) -> list[str]:
     return [path for path in _sensitive_paths(runtime) if is_inside(os.path.realpath(path), root)]
 
 
-def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:
-    """Returns one warning per configured mount dir that equals or contains a sensitive path."""
+def mount_dir_warnings(runtime: Runtime) -> list[Finding]:
+    """Returns one notable finding per configured mount dir that equals or contains a sensitive path."""
     return [
-        messages.Marked(
-            messages.WARN,
-            f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
-            "narrow mount_dirs in the config file")
+        Finding(f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
+                Severity.NOTABLE, help="narrow mount_dirs in the config file")
         for directory in config.all_mount_dirs(runtime.settings)
         if (found := _sensitive_inside(directory, runtime))
     ]

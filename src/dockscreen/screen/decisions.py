@@ -17,7 +17,7 @@ from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import policy, substitutions, verdict
 from dockscreen.screen.assessment import Assessment
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids, messages
 
@@ -53,15 +53,15 @@ class Decisions(NamedTuple):
 
     def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
-        lines = []
+        lines: list[messages.Marked] = []
         decisions = self.decisions
         for name in sorted(self.project.services_without_user):
             decision = decisions.get(name)
             if decision is None:
                 default = ids.format_user(self.policy.default_user)
-                text = (f"service {name}: no user set and not started by default; dockscreen runs it as the "
-                        f"default user ({default}) if it is started")
-                lines.append(messages.notable_change(text, USER_HELP))
+                text = (f"no user set and not started by default; dockscreen runs it as the default user "
+                        f"({default}) if it is started")
+                lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
                 continue
             if decision.accepted:
                 runs_as = verdict.runs_as(decision, self.local)
@@ -69,13 +69,14 @@ class Decisions(NamedTuple):
                 lines.append(messages.Marked(verdict.dot(decision), text))
             elif decision.replaces_root and not decision.refused:
                 instead = verdict.instead_of_root(decision)
-                lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
+                lines.append(Finding(f"no user set; {instead}", Severity.NOTABLE, f"service {name}",
+                                     USER_HELP))
             for note in decision.notes:
-                lines.append(messages.Marked(messages.WARN, f"service {name}: note: {note}"))
+                lines.append(Finding(f"note: {note}", Severity.NOTABLE, f"service {name}"))
         return [*lines, *substitutions.grouped(self.changes())]
 
-    def notices(self) -> list[messages.Marked]:
-        """Lists, as marked lines, what a run does that the project did not ask for."""
+    def notices(self) -> list[Finding]:
+        """Lists, as routine and notable findings, what a run does that the project did not ask for."""
         return substitutions.describe(self.changes())
 
 

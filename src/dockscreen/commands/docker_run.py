@@ -29,7 +29,7 @@ from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import imageuser, verdict
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import default_home
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice, runs_as
 from dockscreen.util import commandline, ids, messages
@@ -88,8 +88,8 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         if assessment.replaces_root:
             messages.notice(_fallback_notice(assessment))
         else:
-            messages.notice(messages.routine_change(
-                f"image {parsed.image} runs as {user}, passed to docker as numbers"))
+            messages.notice(Finding(f"image {parsed.image} runs as {user}, passed to docker as numbers",
+                                    Severity.ROUTINE))
         extra = [f"--user={user}"]
         if assessment.replaces_root:
             extra += _home_args(ctx, container, assessment)
@@ -123,12 +123,14 @@ def _home_args(ctx: Scope, container: Container, assessment: Assessment) -> list
     return ["-e", f"HOME={home}"]
 
 
-def _fallback_notice(assessment: Assessment) -> messages.Marked:
-    """Returns the notice that the default user replaces the image's root, and what to do about it."""
+def _fallback_notice(assessment: Assessment) -> Finding:
+    """Returns the notable finding that the default user replaces the image's root, and what to do about
+    it.
+    """
     home = default_home(assessment.pinned_user, assessment.home)
-    return messages.notable_change(
-        instead_of_root(assessment),
-        f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
+    return Finding(
+        instead_of_root(assessment), Severity.NOTABLE,
+        help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
@@ -275,7 +277,7 @@ def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
     else:
         messages.out(messages.Marked(dot, f"image {name}: {_describe_outcome(ctx, assessment)}"))
         for note in assessment.notes:
-            messages.out(messages.Marked(messages.WARN, f"note: {note}"))
+            messages.out(Finding(f"note: {note}", Severity.NOTABLE))
     if assessment.refused:
         if not assessment.failed:
             messages.out(messages.Marked(messages.HINT, CHOOSE_HINT))

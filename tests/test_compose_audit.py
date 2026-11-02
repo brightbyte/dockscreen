@@ -3,7 +3,6 @@
 from fakes import ME, FakeImages, compose_project, make_runtime
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.screen.decisions import USER_HELP
 from dockscreen.util import messages
 from dockscreen.util.messages import BAD, GOOD
 
@@ -53,8 +52,8 @@ def test_audit_pulls_and_says_what_happens_to_each_service_without_a_user(capsys
     assert report(captured.out) == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), "
          "gid 100001 (no local group); accepted"),
-        messages.notable_change(f"service web: no user set; {ROOT_FALLBACK}", USER_HELP),
-        messages.routine_change(f"services db, web: {PIN}"),
+        f"{messages.WARN} service web: no user set; {ROOT_FALLBACK}",
+        f"{messages.ROUTINE} services db, web: {PIN}",
     ]
     assert [cmd[-4:] for cmd in recorder.children] == [["pull", "--", "cache", "web"]]  # db is already local
 

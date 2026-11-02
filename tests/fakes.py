@@ -7,6 +7,7 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Location, Project
 from dockscreen.screen import idrules
+from dockscreen.screen.findings import Finding
 from dockscreen.screen.scope import Scope
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"
@@ -15,6 +16,11 @@ GROUP = "app:x:100001:\npg:x:998:\n"
 
 
 SUBCOMMANDS = ("pull", "build", "up", "run", "create", "watch", "scale")
+
+
+def marked(lines):
+    """Each line as it is shown with its mark, `MARK text`: a finding as a marked line."""
+    return [f"{line.mark} {line}" if isinstance(line, Finding) else str(line) for line in lines]
 
 
 def project_of(definition, directory="/p", origins=None):

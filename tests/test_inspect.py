@@ -64,9 +64,9 @@ def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeyp
     monkeypatch.setenv("HOME", str(home))
     settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
-    assert inspect.mount_dir_warnings(make_runtime(env={}, settings=settings)) == [
-        messages.Marked(messages.WARN, f"the configured mount dir {tmp_path} contains {home}, so containers "
-                                       "can mount it")]
+    [warning] = inspect.mount_dir_warnings(make_runtime(env={}, settings=settings))
+    assert warning == f"the configured mount dir {tmp_path} contains {home}, so containers can mount it"
+    assert warning.severity is Severity.NOTABLE and warning.mark is messages.WARN
 
 
 def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, monkeypatch):

@@ -11,7 +11,8 @@ from typing import NamedTuple
 
 from dockscreen.cli import userargs
 from dockscreen.host import hostusers
-from dockscreen.util import commandline, messages
+from dockscreen.screen.findings import Finding, Severity
+from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.
 LONG_VALUE_FLAGS = frozenset({
@@ -181,9 +182,9 @@ def _value_at(args: list[str], index: int, flag: str) -> str:
     return args[index]
 
 
-def defaults_notice() -> messages.Marked:
-    """Returns the notice of the defaults `run` and `create` add to every container, as a marked line."""
-    return messages.routine_change(
-        f"added {' '.join(DEFAULTS)}",
-        "a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
-        "which override these")
+def defaults_notice() -> Finding:
+    """Returns the routine finding that `run` and `create` add their defaults to every container."""
+    return Finding(
+        f"added {' '.join(DEFAULTS)}", Severity.ROUTINE,
+        help="a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
+             "which override these")

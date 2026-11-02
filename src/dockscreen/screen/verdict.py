@@ -56,8 +56,7 @@ def report(found: Report, brief_mode: bool = False) -> int:
         return int(verdict)
     for finding in found.findings:
         if not finding.fatal:
-            mark = messages.WARN if finding.severity is Severity.NOTABLE else messages.ROUTINE
-            messages.notice(messages.Marked(mark, finding, finding.help, finding.output))
+            messages.notice(finding)
     for reason in found.reasons:
         text = f"refusing: {reason}" if verdict is Verdict.REFUSED else reason
         messages.notice(messages.Marked(messages.BAD, text, reason.help, reason.output))
@@ -86,14 +85,12 @@ def instead_of_root(assessment: Assessment) -> str:
     return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
 
 
-def root_default_notice(default_user: tuple[int, int]) -> messages.Marked | None:
-    """Returns the warning to give on every run if the configured default user is root, else None."""
+def root_default_notice(default_user: tuple[int, int]) -> Finding | None:
+    """Returns the notable finding to give on every run if the configured default user is root, else None."""
     if 0 in default_user:
         default = ids.format_user(default_user)
-        return messages.Marked(
-            messages.WARN,
-            f"the configured default user is {default}: images that would run as root run as root",
-            "set default_user in the config file to change it")
+        return Finding(f"the configured default user is {default}: images that would run as root run as root",
+                       Severity.NOTABLE, help="set default_user in the config file to change it")
     return None
 
 
