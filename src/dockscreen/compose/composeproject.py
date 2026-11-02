@@ -165,7 +165,7 @@ class Compose(NamedTuple):
         contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
         (Policy.check_shell_env).
         """
-        runtime, here = self.scope.runtime, self.scope.policy_for(self.directory)
+        runtime, here = self.scope.runtime, self.scope.policy(self.directory)
         return [*here.check_mount_dirs(inspect.sensitive_mount_dirs(runtime)),
                 *here.check_shell_env(shellenv.copied(self.hardened.definition, runtime.env))]
 
@@ -213,7 +213,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     scope = project.scope
     lines = [*parsed.notices, *project.surroundings(),
-             verdict.root_default_notice(scope.settings_in(project.directory).default_user),
+             verdict.root_default_notice(scope.policy(project.directory).default_user),
              *substitutions.describe(project.hardening)]
     with project.generated() as command:
         screened = project.screen(command, parsed, strict)

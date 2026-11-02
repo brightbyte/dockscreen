@@ -45,7 +45,7 @@ class ImageRules(RuleBase):
         """
         image, match = inspected.image, self.section
         notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
-        found: dict[str, Any] = {"section": match.repository}
+        found: dict[str, Any] = {"section": match}
         if origin is not Origin.IMAGE:
             return Assessment(origin, image, notes, **found)
         if self.configured_user:

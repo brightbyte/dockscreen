@@ -119,7 +119,7 @@ def _fix_config(project: Project, ctx: policy.Policy) -> dict[str, Any]:
     fixed = copy.deepcopy(project.definition)
     for original in project.services:
         service = fixed["services"][original.name]
-        service_ctx = ctx.for_service(original.name, original.definition)
+        service_ctx = ctx.for_service(original.name)
         from_image = original.origin_of("user") is Origin.IMAGE and not service.get("user")
         if not from_image and service_ctx.check_user(service.get("user"), original):
             service["user"] = _USER_TEMPLATE

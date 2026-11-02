@@ -22,8 +22,9 @@ the filesystem for realpath resolution.
 """
 
 import dataclasses
-from collections.abc import Callable
-from typing import Any, Self
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Self
 
 from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
@@ -44,9 +45,6 @@ from dockscreen.screen.rules.service import (
     SERVICE_CHECKS,
     ServiceRules,
 )
-
-# The image section of a policy that is not for an image: none applies, and nothing needs saying.
-NO_SECTION = configuration.Match(None, None)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,10 +69,10 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     default_origin: Origin = Origin.DOCKSCREEN
     # Which image section of the config file applies to the image this policy is for, and why the one for
     # its repository does not (config.section_for); none for a policy that is not for an image.
-    section: configuration.Match = NO_SECTION
-    # (name, service) -> this policy for that service, with the settings of its image section if one
-    # applies; None if every service gets this one.
-    per_service: Callable[[str, dict[str, Any]], "Policy"] | None = None
+    section: configuration.Match = configuration.NO_SECTION
+    # The policy for each service of the project this one is for, with the settings of its image section
+    # if one applies, by service name; a service that is not in it gets this one.
+    per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
     def for_settings(cls, settings: configuration.Config, rules: idrules.Rules,
@@ -89,11 +87,12 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
                    default_user=settings.default_user, default_home=settings.default_home,
                    default_origin=_origin_of(settings, "default_user"))
 
-    def for_service(self, name: str, service: dict[str, Any]) -> "Policy":
+    def for_service(self, name: str) -> "Policy":
         """Returns the policy to check the service called name with: per_service's for it, with this one's
         trust, else this one.
         """
-        return self.per_service(name, service).with_trust(self.trust) if self.per_service else self
+        found = self.per_service.get(name)
+        return found.with_trust(self.trust) if found else self
 
     def with_section(self, section: configuration.Match) -> Self:
         """Returns this policy for an image that section says which image section applies to."""
@@ -103,9 +102,9 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         """Returns this policy with trust as the origins whose values are taken as given."""
         return dataclasses.replace(self, trust=trust)
 
-    def with_per_service(self, per_service: Callable[[str, dict[str, Any]], "Policy"]) -> Self:
-        """Returns this policy with per_service giving the policy of each service (for_service)."""
-        return dataclasses.replace(self, per_service=per_service)
+    def with_per_service(self, per_service: Mapping[str, "Policy"]) -> Self:
+        """Returns this policy with per_service as the policy of each service (for_service)."""
+        return dataclasses.replace(self, per_service=MappingProxyType(dict(per_service)))
 
     def check_project(self, project: Project) -> list[Finding]:
         """Checks what is known about a compose project: its definition, where it is, and, once they have
@@ -120,7 +119,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         if not name:  # volumes and networks are scoped to the project by its name
             problems += refused(["config has no project name"])
         for service in project.services:
-            found = self.for_service(service.name, service.definition).check_service(service)
+            found = self.for_service(service.name).check_service(service)
             problems += about(found, f"service {service.name}")
         for key, volume in project.volumes.items():
             problems += refused(self._check_volume(key, volume, name, project.directory), f"volume {key}")
@@ -197,7 +196,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
             if isinstance(image, Unseen):
                 found[name] = Assessment.failure(image.image, image.reason)
             else:
-                service_policy = self.for_service(name, project.service(name).definition)
+                service_policy = self.for_service(name)
                 found[name] = service_policy.check_image(image, Origin.IMAGE)
         return found
 

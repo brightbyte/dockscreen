@@ -51,7 +51,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     """
     ctx = Scope(runtime, allow_me)
     if is_remote(global_args, runtime.docker):
-        return ctx.policy_here().check_daemon(True)
+        return ctx.policy(None).check_daemon(True)
     problems: list[Finding] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
@@ -69,7 +69,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
             if strict:
                 chosen = assessment.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
-                strict_policy = ctx.policy_for(None, assessment.section, STRICT)
+                strict_policy = ctx.policy(None, assessment.section, STRICT)
                 found = strict_policy.check_container(Container(info, None, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:

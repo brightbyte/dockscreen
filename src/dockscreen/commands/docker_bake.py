@@ -50,7 +50,7 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
     passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
     """
-    bake_policy = Scope(runtime).policy_here()
+    bake_policy = Scope(runtime).policy(runtime.cwd)
     if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
         return 1
     runtime.docker.exec([*lead, *args])

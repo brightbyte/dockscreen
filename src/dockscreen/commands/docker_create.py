@@ -19,7 +19,7 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     except runargs.ParseError:  # docker will report what is wrong with them
         resolved = args
     else:
-        refusals = Scope(runtime).policy_here().check_user_options(parsed.users)
+        refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users)
         if refusals:
             return messages.refuse(refusals)
         for message in parsed.notices:

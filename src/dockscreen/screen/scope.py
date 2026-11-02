@@ -3,7 +3,7 @@ whether the caller's own ids are allowed.
 
 What the checks of one project, image or container need follows from it and from where that target is:
 the settings of the config file with the project and image sections that apply (config.effective), the
-id rules with those settings, and the policy (policy.Policy) built from them. The directory is the
+id rules with those settings, and the policy (Policy) built from them. The directory is the
 target's: a compose project's own, for what a command line runs the current one, and none for a container
 that existed before, since docker does not record where it was created.
 """
@@ -16,8 +16,9 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import idrules, policy
+from dockscreen.screen import idrules
 from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.policy import Policy
 
 
 class Scope(NamedTuple):
@@ -42,57 +43,41 @@ class Scope(NamedTuple):
         """Returns the accounts of this host, for naming the users an image runs as."""
         return self.runtime.accounts
 
-    def settings_in(self, directory: str | None) -> config.Config:
-        """Returns the config file's settings for the project in directory, without any image section."""
-        return config.effective(self.runtime.settings, None, directory)
-
-    def for_image(self, repository: str | None, directory: str | None) -> tuple[config.Config, idrules.Rules]:
-        """Returns (settings, id rules) for the project in directory, with the image section for repository
-        applied (None: none applies).
+    def policy(self, directory: str | None, section: config.Match = config.NO_SECTION,
+               trust: frozenset[Origin] = TRUSTED) -> Policy:
+        """Returns the policy for the project in directory (None: no project section applies), with the image
+        section that section says applies, trusting the origins in trust.
         """
-        settings = config.effective(self.runtime.settings, repository, directory)
-        return settings, self.ids.with_settings(settings)
+        settings = config.effective(self.runtime.settings, section.repository, directory)
+        found = Policy.for_settings(settings, self.ids, self.runtime.config_file)
+        return found.with_section(section).with_trust(trust)
 
-    def policy_for(self, directory: str | None, repository: str | None = None,
-                   trust: frozenset[Origin] = TRUSTED) -> policy.Policy:
-        """Returns the policy for a container of an image from repository (None: no image section applies)
-        in the project in directory (None: no project section applies), trusting the origins in trust.
+    def section_for(self, image: Image) -> config.Match:
+        """Returns which image section applies to image, by its name and where it was pulled from
+        (config.section_for).
         """
-        settings, _ = self.for_image(repository, directory)
-        found = policy.Policy.for_settings(settings, self.ids, self.runtime.config_file)
-        return found.with_trust(trust)
+        return config.section_for(self.runtime.settings, image.reference, image.digests, image.built)
 
-    def policy_here(self, repository: str | None = None, trust: frozenset[Origin] = TRUSTED) -> policy.Policy:
-        """Returns the policy for what the command line runs (policy_for), in the current directory."""
-        return self.policy_for(self.runtime.cwd, repository, trust)
-
-    def image_policy(self, directory: str | None, image: Image) -> policy.Policy:
-        """Returns the policy for a container of image in the project in directory, with the image section
-        that its name and where it was pulled from show to apply (config.section_for).
-        """
-        match = config.section_for(self.runtime.settings, image.reference, image.digests, image.built)
-        return self.policy_for(directory, match.repository).with_section(match)
-
-    def project_policy(self, project: Project) -> policy.Policy:
+    def project_policy(self, project: Project) -> Policy:
         """Returns the policy for project, which gives each service the settings of its image section, if one
-        applies (policy.Policy.for_service).
+        applies (Policy.for_service).
 
         Before the images were found (Project.found_images), that is the section the image name points to;
-        once they were, the section its image was proven to have been pulled for (image_policy), and none
+        once they were, the section its image was proven to have been pulled for (section_for), and none
         for an image that was not found.
         """
         directory, found = project.directory, project.found_images
-
-        def per_service(name: str, service: dict[str, Any]) -> policy.Policy:
+        per_service = {}
+        for name, service in (project.definition.get("services") or {}).items():
+            service = service or {}
             if found is None:
-                image = str(service.get("image") or "")
-                repository = config.name_matches(self.runtime.settings, image, "build" in service)
-                return self.policy_for(directory, repository)
-            if name in found:
-                return self.image_policy(directory, found[name])
-            return self.policy_for(directory)
-
-        return self.policy_for(directory).with_per_service(per_service)
+                repository = config.name_matches(self.runtime.settings, str(service.get("image") or ""),
+                                                 "build" in service)
+                section = config.Match(repository, None)
+            else:
+                section = self.section_for(found[name]) if name in found else config.NO_SECTION
+            per_service[name] = self.policy(directory, section)
+        return self.policy(directory).with_per_service(per_service)
 
     def assess(self, directory: str | None, container: str, info: dict[str, Any],
                origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,
@@ -114,14 +99,14 @@ class Scope(NamedTuple):
 
     def look(self, directory: str | None, container: str, info: dict[str, Any], origin: Origin | None = None,
              mounts: bool | None = None, reference: str | None = None, built: bool = False
-             ) -> tuple[Inspected, policy.Policy]:
+             ) -> tuple[Inspected, Policy]:
         """Looks at the container's image as far as the policy for it needs (inspection), and returns what
-        was found, with that policy (image_policy); the arguments are assess's.
+        was found, with that policy (the one for its image section, section_for); the arguments are assess's.
 
         Raises DockerError if the image cannot be inspected or its passwd or group file is too large.
         """
         inspected = inspection.inspect(self.docker, info, reference, built, mounts)
-        image_policy = self.image_policy(directory, inspected.image)
+        image_policy = self.policy(directory, self.section_for(inspected.image))
         if image_policy.needs_user_files(origin or inspected.user_origin):
             inspected = inspection.with_user_files(self.docker, container, inspected)
         return inspected, image_policy

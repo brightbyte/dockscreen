@@ -111,11 +111,11 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._find_section_images` records where each image was pulled from (`Project.found_images`), the policy for the project takes the section each image proves from that (`Scope.project_policy`, `Scope.image_policy`), and the check of the config that will run (`Compose.final_policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._find_section_images` records where each image was pulled from (`Project.found_images`), the policy for the project takes the section each image proves from that (`Scope.project_policy`, `Scope.section_for`), and the check of the config that will run (`Compose.final_policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
-`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. Both come from the scope a command is screened in (`scope.Scope`: the caller, this host and `--allow-me`) and from where the target is: a project's directory, or the current one for what a command line runs. The policy gets per-service settings through `Scope.project_policy(project)` (`Policy.per_service`), a container's through `Scope.policy_here`, and the image decision through `Scope.for_image`.
+`config.effective` applies the top level, the image section, then the project sections, outermost first: a single value replaces, a list is added to. Both come from the scope a command is screened in (`scope.Scope`: the caller, this host and `--allow-me`) and from where the target is: a project's directory, or the current one for what a command line runs. `Scope.policy(directory, section)` is the one way to a policy with those settings; `Scope.project_policy(project)` gives one per service besides (`Policy.per_service`).
 
 ### Command-line options
 

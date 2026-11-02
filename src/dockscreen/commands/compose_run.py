@@ -23,7 +23,7 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     strict: --strict-screen was given, so what the command line changes in the service is judged too.
     """
     parsed = userargs.parse_compose("run", args, runtime.me, runtime.accounts)
-    refusals = Scope(runtime).policy_here().check_user_options(parsed.users)
+    refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1

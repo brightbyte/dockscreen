@@ -77,6 +77,9 @@ class Match(NamedTuple):
     problem: str | None     # why a section for the image's repository does not apply, for audit
 
 
+NO_SECTION = Match(None, None)  # for what is not an image, or an image no section is for
+
+
 def effective(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
     """Returns the settings for an image pulled from repository, in a project in directory.
 

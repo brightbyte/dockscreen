@@ -10,6 +10,7 @@ has no user, and so no origin.
 
 from typing import NamedTuple, Self
 
+from dockscreen.host.config import NO_SECTION, Match
 from dockscreen.model.image import Identity, Image
 from dockscreen.model.origin import Origin
 from dockscreen.screen.findings import Finding, Severity
@@ -26,7 +27,7 @@ class Assessment(NamedTuple):
     findings: tuple[Finding, ...] = ()
     identity: Identity | None = None
     user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
-    section: str | None = None     # the repository whose image section applied, if one did
+    section: Match = NO_SECTION    # which image section applied, if one did
     home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
     replaces_root: bool = False    # the image would run as root: the default user instead
 
