@@ -143,19 +143,18 @@ class ComposeCommand(commandline.CommandLine):
 
     def show_help(self, target: str) -> int:
         """Prints dockscreen's help for target, then forwards to compose's own help if it has one."""
-        argv = self.argv
         if target == "":
             helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
-            return _passthrough(argv, self.runtime)
-        if target in COMMANDS:
+        elif target in COMMANDS:
             topic = _own_commands()[ALIASES.get(target, target)]
             helptext.show(lambda width: helptext.topic(topic, "", width))
             return 0
-        if target in helptext.COMPOSE:
+        elif target in helptext.COMPOSE:
             topic = helptext.COMPOSE[target]
             helptext.show(lambda width: helptext.topic(topic, "Docker Compose's own", width))
-        if self.sub == "help":
-            argv = [*self.global_args, target, "--help"]
+        argv = self.argv
+        if self.sub == "help":  # compose has no help command of its own
+            argv = [*self.global_args, *([target] if target else []), "--help"]
         return _passthrough(argv, self.runtime)
 
 

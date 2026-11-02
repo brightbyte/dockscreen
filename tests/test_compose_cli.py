@@ -43,10 +43,16 @@ def test_our_command_name_as_an_option_value_is_not_dispatched(runtime, forwarde
     assert forwarded == [["-p", "audit", "ps"]]
 
 
-@pytest.mark.parametrize("argv", [[], ["help"], ["--help"], ["-h"], ["-f", "a.yml", "help"]])
-def test_the_overview_precedes_composes_own_help(runtime, forwarded, capsys, argv):
+@pytest.mark.parametrize("argv, forwarded_argv", [
+    ([], []),
+    (["--help"], ["--help"]),
+    (["-h"], ["-h"]),
+    (["help"], ["--help"]),  # compose has no help command
+    (["-f", "a.yml", "help"], ["-f", "a.yml", "--help"]),
+])
+def test_the_overview_precedes_composes_own_help(runtime, forwarded, capsys, argv, forwarded_argv):
     compose_cli.main(argv, runtime, ())
-    assert forwarded == [argv]
+    assert forwarded == [forwarded_argv]
     out = capsys.readouterr().out
     assert out.startswith("Usage:  dockscreen compose [OPTIONS] COMMAND")
     assert "Commands dockscreen audits:" in out and "  up " in out
