@@ -11,7 +11,7 @@ from dockscreen.compose import composeproject, inspect
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import hardening, policy, verdict
+from dockscreen.screen import policy, substitutions, verdict
 from dockscreen.screen.findings import Report
 from dockscreen.util import commandline, messages
 
@@ -38,9 +38,9 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     outcome, lines = _audit_images(project, brief)
     if not brief:
         warnings = [*inspect.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
-        for line in [*hardening.describe(project.additions), *warnings, *lines]:
+        for line in [*substitutions.describe(project.hardening), *warnings, *lines]:
             messages.out(line)
-        if outcome.reasons or project.additions:
+        if outcome.reasons or project.hardening:
             messages.out(messages.Marked(messages.HINT, HARDEN_HINT))
     return verdict.report(outcome, brief)
 

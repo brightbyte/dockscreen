@@ -6,75 +6,83 @@ or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
 to ids on this host, so the generated file never asks the image to resolve a name; the policy
 then checks the ids, and refuses a name that does not exist here. A project cannot weaken them, because adding
 `cap_add` or `no-new-privileges:false` is still refused by the policy. The
-additions are reported by `audit` and written out by `harden`.
+changes are substitutions (see substitutions), reported by `audit` and before a run.
 """
 
-import copy
 import json
-from typing import Any, NamedTuple
+from typing import Any
 
 from dockscreen.host import hostusers
-from dockscreen.screen import policy
+from dockscreen.screen import policy, substitutions
 from dockscreen.screen.policy import CAP_DROP, SECURITY_OPT
-from dockscreen.util import ids, messages
+from dockscreen.screen.substitutions import Group, Substitution
+from dockscreen.util import ids
 
 
-class Addition(NamedTuple):
-    """Change that dockscreen's defaults make to one key of a service, with the message that reports it."""
-    service: str
-    key: str
-    message: str  # what was missing or a name, and what dockscreen does about it
-    notable: bool = False  # the project set the key itself, so dockscreen changes what it chose
-    help: str | None = None  # what the project can do about it
-
-
-def apply(config: dict[str, Any], accounts: hostusers.HostAccounts) -> tuple[dict[str, Any], list[Addition]]:
+def apply(config: dict[str, Any], accounts: hostusers.HostAccounts
+          ) -> tuple[dict[str, Any], list[Substitution]]:
     """Adds dockscreen's defaults to every service of config and resolves user names to ids.
 
-    Returns (a hardened copy of config, the list of additions).
+    Returns (a hardened copy of config, the substitutions that made it).
     accounts: the users and groups to resolve names with (hostusers.HostAccounts).
     """
-    hardened = copy.deepcopy(config)
-    additions = []
-    for name, service in (hardened.get("services") or {}).items():
-        additions += _resolve_user_names(name, service, accounts)
-        if not policy.drops_all(service.get("cap_drop")):
-            declared = service.get("cap_drop")
-            reason = f"lacks {CAP_DROP}" if declared else "is not set"
-            service["cap_drop"] = [*(declared or []), CAP_DROP]
-            additions.append(Addition(
-                name, "cap_drop", f"cap_drop {reason}; added {json.dumps([CAP_DROP])}",
-                notable=bool(declared), help=NOT_REMOVABLE))
-        if not policy.has_no_new_privileges(service.get("security_opt")):
-            declared = service.get("security_opt")
-            reason = "lacks no-new-privileges" if declared else "is not set"
-            service["security_opt"] = [*(declared or []), SECURITY_OPT]
-            additions.append(Addition(
-                name, "security_opt",
-                f"security_opt {reason}; added {json.dumps([SECURITY_OPT])}",
-                notable=bool(declared), help=NOT_REMOVABLE))
-    return hardened, additions
+    found = []
+    for name, service in (config.get("services") or {}).items():
+        found += _resolve_user_names(name, service or {}, accounts)
+        found += _defaults(name, service or {})
+    return substitutions.apply(config, found), found
+
+
+def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
+    """Returns the substitutions that add cap_drop ALL and no-new-privileges where the service lacks them.
+
+    Where the service sets nothing, they are routine and reported for all services in one line; where it
+    sets the key itself, dockscreen extends its choice, which is notable.
+    """
+    found = []
+    if not policy.drops_all(service.get("cap_drop")):
+        found.append(_default(name, "cap_drop", service.get("cap_drop"), CAP_DROP, f"lacks {CAP_DROP}"))
+    if not policy.has_no_new_privileges(service.get("security_opt")):
+        found.append(_default(name, "security_opt", service.get("security_opt"), SECURITY_OPT,
+                              "lacks no-new-privileges"))
+    return found
+
+
+def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks: str) -> Substitution:
+    """Returns the substitution that adds value to the list the service declared for key, if any."""
+    if not declared:
+        return Substitution(name, key, [value], group=DEFAULTS)
+    text = f"{key} {lacks}; added {json.dumps([value])}"
+    return Substitution(name, key, [*declared, value], text, notable=True, help=NOT_REMOVABLE)
 
 
 def _resolve_user_names(name: str, service: dict[str, Any],
-                        accounts: hostusers.HostAccounts) -> list[Addition]:
-    """Replaces names in the service's user and hook users by their ids, and returns the additions."""
-    additions = []
+                        accounts: hostusers.HostAccounts) -> list[Substitution]:
+    """Returns the substitutions that replace names in the service's user and hook users by their ids."""
+    found = []
     if service.get("user"):
         resolved = _resolve_spec(service["user"], accounts)
         if resolved != service["user"]:
-            additions.append(Addition(name, "user", _resolved_message("user", service["user"], resolved),
-                                      help=RESOLVE_HELP))
-            service["user"] = resolved
+            message = _resolved_message("user", service["user"], resolved)
+            found.append(Substitution(name, "user", resolved, message, help=RESOLVE_HELP))
     for key in ("post_start", "pre_stop"):
-        for hook in service.get(key) or []:
-            if isinstance(hook, dict) and hook.get("user"):
-                resolved = _resolve_spec(hook["user"], accounts)
-                if resolved != hook["user"]:
-                    message = _resolved_message(f"{key} user", hook["user"], resolved)
-                    additions.append(Addition(name, key, message, help=RESOLVE_HELP))
-                    hook["user"] = resolved
-    return additions
+        hooks = service.get(key) or []
+        resolved_hooks = [_with_resolved_user(hook, accounts) for hook in hooks]
+        for hook, resolved_hook in zip(hooks, resolved_hooks):
+            if resolved_hook is not hook:
+                message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
+                found.append(Substitution(name, key, resolved_hooks, message, help=RESOLVE_HELP))
+    return found
+
+
+def _with_resolved_user(hook: Any, accounts: hostusers.HostAccounts) -> Any:
+    """Returns hook with the names in its user resolved to ids, or hook itself if there is nothing to
+    resolve.
+    """
+    if not (isinstance(hook, dict) and hook.get("user")):
+        return hook
+    resolved = _resolve_spec(hook["user"], accounts)
+    return hook if resolved == hook["user"] else {**hook, "user": resolved}
 
 
 def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
@@ -107,31 +115,14 @@ def _resolved_message(what: str, before: object, after: str) -> str:
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
 
 
-DEFAULT_KEYS = ("cap_drop", "security_opt")
 NOT_REMOVABLE = "dockscreen always adds it, and cap_add is refused: a service that needs more cannot run"
 DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, and cap_add is refused: "
                  "it cannot run under dockscreen")
 RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
-def describe(additions: list[Addition]) -> list[messages.Marked]:
-    """Describes the additions as marked lines for an audit or a run, by how much each deserves a look.
-
-    A default added where the project set nothing is routine, and one line names the services, since it is
-    the same for all. A key the project set itself, and a name resolved on this host, get a line each.
-    """
-    lines = []
-    for a in additions:
-        if a.key in DEFAULT_KEYS and not a.notable:
-            continue
-        make = messages.notable_change if a.notable else messages.routine_change
-        lines.append(make(f"service {a.service}: {a.message}", a.help))
-    services = list(dict.fromkeys(a.service for a in additions if a.key in DEFAULT_KEYS and not a.notable))
-    if services:
-        lines.append(messages.routine_change(
-            f'added cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where missing, '
-            f"in services {', '.join(services)}", DEFAULTS_HELP))
-    return lines
+DEFAULTS = Group(f'added cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where missing, '
+                 "in services {services}", DEFAULTS_HELP)
 
 
 def defaults_note() -> str:

@@ -23,7 +23,6 @@ started: a mistake in working out what starts must fail safe. So is a service wh
 chose (`run -u`), which the command line then overrides.
 """
 
-import copy
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
@@ -31,8 +30,9 @@ from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.mounts import service_reaches_host
 from dockscreen.model.origin import Origin
-from dockscreen.screen import findings, imagedecision, verdict
+from dockscreen.screen import findings, imagedecision, substitutions, verdict
 from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import commandline, ids, images, messages
 
 
@@ -73,31 +73,30 @@ class Prepared(NamedTuple):
         the decided user, pinned to the image that was checked; those that do not start get the default
         user. Users the project set itself are not in the second part.
         """
-        settings = self.ctx.settings
-        final = copy.deepcopy(self.config)
         origins = {}
-        for name, service in final["services"].items():
+        for name, service in self.config["services"].items():
+            decision = self.decisions.get(name)
+            if service.get("user") or decision and not decision.assessment.pins_user:
+                continue
+            if decision is None or decision.assessment.kind is not imagedecision.Kind.OK:
+                origins[name] = Origin.CONFIG  # the configured or the default user
+            else:
+                origins[name] = Origin.IMAGE
+        return substitutions.apply(self.config, self.changes()), origins
+
+    def changes(self) -> list[Substitution]:
+        """Returns the substitutions that make config the config to run (finalize), by service name."""
+        found = []
+        settings = self.ctx.settings
+        for name, service in sorted(self.config["services"].items()):
             if service.get("user"):
                 continue
             decision = self.decisions.get(name)
             if decision is None:  # not started by this command
-                service["user"] = ids.format_user(settings.default_user)
-                _give_default_home(service, settings.default_user, settings.default_home)
-                origins[name] = Origin.CONFIG
-                continue
-            if not decision.assessment.pins_user:
-                continue
-            # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot
-            # resolve the image's user to anything but what was checked
-            service["user"] = ids.format_user(decision.assessment.pinned_user)
-            if decision.assessment.kind is imagedecision.Kind.FALLBACK:
-                _give_default_home(service, decision.assessment.pinned_user, decision.assessment.home)
-            from_image = decision.assessment.kind is imagedecision.Kind.OK
-            origins[name] = Origin.IMAGE if from_image else Origin.CONFIG  # the configured or default user
-            service["pull_policy"] = "never"  # the image that was checked is the one that runs
-            if decision.image_id and "build" not in service:
-                service["image"] = decision.image_id  # ... even if the name is moved to another image
-        return final, origins
+                found += _user(name, service, settings.default_user, settings.default_home)
+            elif decision.assessment.pins_user:
+                found += _pinned(name, service, decision)
+        return found
 
     def describe(self) -> list[messages.Marked]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
@@ -120,24 +119,46 @@ class Prepared(NamedTuple):
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
             if assessment.note:
                 lines.append(messages.Marked(messages.WARN, f"service {name}: note: {assessment.note}"))
-        return [*lines, *self._pin_notices()]
+        return [*lines, *substitutions.grouped(self.changes())]
 
     def notices(self) -> list[messages.Marked]:
         """Lists, as marked lines, what a run does that the project did not ask for."""
-        return [
-            messages.notable_change(
-                f"service {name}: {imagedecision.instead_of_root(d.assessment)}", USER_HELP)
-            for name, d in self.decisions.items() if d.assessment.kind is imagedecision.Kind.FALLBACK
-        ] + self._pin_notices()
+        return substitutions.describe(self.changes())
 
-    def _pin_notices(self) -> list[messages.Marked]:
-        """Returns one line naming the services whose checked user and image are pinned, if any."""
-        names = [name for name, d in self.decisions.items() if d.assessment.pins_user]
-        if not names:
-            return []
-        return [messages.routine_change(
-            f"services {', '.join(names)}: user, image id and pull_policy: never fixed to what was checked, "
-            "in the generated file only")]
+
+def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, text: str | None = None,
+          group: Group | None = None) -> list[Substitution]:
+    """Returns the substitutions that set the service's user, reported by text if given, and the HOME that
+    comes with the default user (imagedecision.default_home) unless the service sets HOME.
+    """
+    found = [Substitution(name, "user", ids.format_user(user), text, notable=bool(text),
+                          help=USER_HELP if text else None, group=group)]
+    if home := imagedecision.default_home(user, home):
+        found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
+    return found
+
+
+def _pinned(name: str, service: dict[str, Any], decision: Decision) -> list[Substitution]:
+    """Returns the substitutions that pin a started service to what its decision checked: the user, as
+    numbers, the image by id unless it is built, and pull_policy never.
+    """
+    assessment = decision.assessment
+    # pinned as numbers: the runtime reads neither passwd nor group for `uid:gid`, so it cannot resolve
+    # the image's user to anything but what was checked
+    if assessment.kind is imagedecision.Kind.FALLBACK:
+        found = _user(name, service, assessment.pinned_user, assessment.home,
+                      imagedecision.instead_of_root(assessment), PINNED)
+    else:
+        found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED)]
+    found.append(Substitution(name, "pull_policy", "never", group=PINNED))  # the image checked is what runs
+    if decision.image_id and "build" not in service:
+        # ... even if the name is moved to another image
+        found.append(Substitution(name, "image", decision.image_id, group=PINNED))
+    return found
+
+
+PINNED = Group("services {services}: user, image id and pull_policy: never fixed to what was checked, "
+               "in the generated file only")
 
 
 def unset_user_services(config: dict[str, Any]) -> frozenset[str]:
@@ -296,12 +317,6 @@ def _decide(config: dict[str, Any], to_run: frozenset[str],
                 ctx.docker.remove(container)
         decisions[name] = Decision(image, assessment, image_id, built="build" in service)
     return decisions
-
-
-def _give_default_home(service: dict[str, Any], user: tuple[int, int], home: str) -> None:
-    """Sets HOME in service for the default user that replaces root, unless the service sets HOME."""
-    if home := imagedecision.default_home(user, home):
-        service["environment"] = {"HOME": home, **(service.get("environment") or {})}
 
 
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "

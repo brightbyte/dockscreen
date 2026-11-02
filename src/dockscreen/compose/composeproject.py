@@ -26,7 +26,7 @@ from dockscreen.host import hostusers, shellenv
 from dockscreen.host.dockerclient import REMOTE_MESSAGE, Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
-from dockscreen.screen import findings, hardening, imagedecision, policy, verdict
+from dockscreen.screen import findings, hardening, imagedecision, policy, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.util import commandline, messages
 
@@ -41,7 +41,7 @@ class Project(NamedTuple):
     global_args: list          # the compose options that select it
     directory: str
     hardened: dict             # the resolved config with hardening applied
-    additions: list            # what hardening added (hardening.Addition)
+    hardening: list            # the substitutions that hardened it (substitutions.Substitution)
     ctx: policy.Context        # with every user from the project
     image_ctx: imagedecision.Context  # to pull, build, decide and run with
     remote: bool               # the daemon may not be this host's own
@@ -98,11 +98,11 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Pr
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     config, directory = inspect.project(global_args, runtime)
-    hardened, additions = hardening.apply(config, runtime.accounts)
+    hardened, changes = hardening.apply(config, runtime.accounts)
     image_ctx = imagedecision.Context.for_runtime(runtime, allow_me).with_project_dir(directory)
     remote = is_remote(global_args, image_ctx.docker)
     ctx = inspect.context(directory, runtime, allow_me)
-    return Project(global_args, directory, hardened, additions, ctx, image_ctx, remote, runtime.docker.binary,
+    return Project(global_args, directory, hardened, changes, ctx, image_ctx, remote, runtime.docker.binary,
                    runtime, allow_me)
 
 
@@ -131,7 +131,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     hardened, image_ctx = project.hardened, project.image_ctx
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(image_ctx), *hardening.describe(project.additions)]
+             imagedecision.root_default_notice(image_ctx), *substitutions.describe(project.hardening)]
     lines += shellenv.describe(hardened, runtime.env)
     with project.generated() as command:
         prepared = project.prepare(command(hardened), hardened, parsed.args, _chosen(parsed))

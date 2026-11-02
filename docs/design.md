@@ -132,7 +132,7 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 ### Notices
 
-Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done.
+Everything dockscreen changes in what it runs is said, in a line whose mark says how much attention it deserves: cyan for routine, yellow for check this. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done. For compose, each change to a service's key is a `substitutions.Substitution`, whether hardening (`hardening.apply`) or the users and pins of the images (`Prepared.changes`) made it; routine ones of the same kind share one line that names their services (`substitutions.Group`).
 
 A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`messages.Reason`, and `findings.Finding`, which also names its subject and how much it matters), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
 
@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `container`.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `hardening`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, `idrules`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
@@ -172,7 +172,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
    - for each one without `user:`, creates a container with `--pull=never`, reads its passwd and group files, and decides as `docker run` does (below);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
-5. `serviceusers.Prepared.finalize`:
+5. `serviceusers.Prepared.finalize`, which makes the substitutions of `Prepared.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
