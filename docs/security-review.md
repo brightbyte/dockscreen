@@ -14,6 +14,14 @@ Host file contents can flow into values such as `image:` and be sent at pull tim
 
 Fix: refuse them in the raw config, or document as out of scope.
 
+### 1a. With the containerd image store, a local name proves a pull
+
+`config.section_for` takes an entry in `RepoDigests` for the repository as proof that the image was pulled from there. With docker's containerd image store, `RepoDigests` lists a digest under every name the image has, so `docker tag` or a build with `image: mariadb:x` gives it one. A project can build an image under the name of a repository the config file has a section for, and have a second service, which does not build, run it as the section's user, with host mounts.
+
+Seen in the end-to-end tests, for a tagged and for a built image: `test_e2e_compose_images.py` and `test_e2e_docker_audit.py` have the scenarios, marked as expected failures until this is fixed. The classic image store does not do this, unverified.
+
+Fix: a proof that a local name cannot fake, for example that the digest is known to the registry, or not trusting `RepoDigests` with the containerd store.
+
 ## Low
 
 Ordered by how likely the problem is to matter, then by how cheap the fix is.

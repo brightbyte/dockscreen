@@ -7,25 +7,40 @@ directory; a system config file (/etc/dockscreen/config.toml) skips them all, be
 the results.
 """
 
+import importlib.util
 import os
 import shutil
 import stat
+import subprocess
+import sys
 import tempfile
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from realdocker import (
+    ALPINE,
     BUILT_IMAGES,
+    COVERAGE_DIR,
+    COVERAGE_RC,
     HOST_ENV,
+    ODD_IMAGES,
+    OWN_IDS_IMAGE,
     PROJECTS,
+    STRANGER_IMAGE,
+    SUBORDINATE_IMAGE,
     SYSTEM_CONFIG,
+    PreconditionWarning,
     RealDocker,
-    Result,
     find_docker,
+    first_subordinate_id,
+    free_id,
     require,
-    run_dockscreen,
+    write_handoff_script,
 )
+from steps import LABEL, World
 
 
 @pytest.fixture(scope="session")
@@ -42,13 +57,16 @@ def docker() -> Iterator[RealDocker]:
     host = HOST_ENV.get("DOCKER_HOST", "")
     require(not host or host.startswith("unix://"),
             f"DOCKER_HOST={host} is not a local socket, and dockscreen refuses remote daemons")
+    _start_coverage()
     real = RealDocker(binary)
     require(real("info").status == 0, "docker info failed: no daemon is reachable")
     context = real("context", "show").stdout.strip()
     require(context == "default", f"docker's context is {context!r}; dockscreen only screens the default one")
     require(real("compose", "version").status == 0, "docker compose is not installed")
     real.remove_images(*BUILT_IMAGES)  # built anew with the current ids and fixtures
+    _remove_labelled_containers(real)
     yield real
+    _remove_labelled_containers(real)
     real.remove_images(*BUILT_IMAGES)
 
 
@@ -80,6 +98,61 @@ def ordinary_ids(me: tuple[int, int]) -> tuple[int, int]:
     return me
 
 
+def _build_app(docker, pulled, tag, uid, gid):
+    """Builds the webapp's app image as tag, with its user's ids uid and gid."""
+    pulled(ALPINE)
+    built = docker("build", "--quiet", "--build-arg", f"UID={uid}", "--build-arg", f"GID={gid}", "--tag", tag,
+                   str(PROJECTS / "webapp"))
+    assert built.status == 0, built.stderr
+    return tag
+
+
+@pytest.fixture(scope="session")
+def own_ids_image(docker, pulled, ordinary_ids):
+    return _build_app(docker, pulled, OWN_IDS_IMAGE, *ordinary_ids)
+
+
+@pytest.fixture(scope="session")
+def subordinate_image(docker, pulled):
+    first = first_subordinate_id()
+    require(first is not None, "/etc/subuid has no range")
+    return _build_app(docker, pulled, SUBORDINATE_IMAGE, first, first)
+
+
+@pytest.fixture(scope="session")
+def stranger_image(docker, pulled, me):
+    """The app image, run as an id that is no account, group or subordinate id here, nor yours."""
+    free = free_id(me)
+    require(free is not None, "no id between 20000 and 60000 is free of users, groups and subordinate ranges")
+    return _build_app(docker, pulled, STRANGER_IMAGE, free, free), free
+
+
+@pytest.fixture(scope="session")
+def odd_image(docker: RealDocker, pulled: Callable[[str], str], me: tuple[int, int],
+              tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], tuple[str, int]]:
+    """Returns build(tag), which builds the image of ODD_IMAGES with that tag once and returns (tag, the id
+    that stands for FREE in it).
+    """
+    free = free_id(me)
+    built: set[str] = set()
+
+    def build(tag: str) -> tuple[str, int]:
+        require(free is not None,
+                "no id between 20000 and 60000 is free of users, groups and subordinate ranges")
+        if tag not in built:
+            if ALPINE in ODD_IMAGES[tag]:
+                pulled(ALPINE)
+            context = tmp_path_factory.mktemp("odd-image")
+            (context / "marker").write_text("")
+            (context / "Dockerfile").write_text(ODD_IMAGES[tag].replace("FREE", str(free)))
+            result = docker("build", "--quiet", "--tag", tag, str(context))
+            assert result.status == 0, result.stderr
+            built.add(tag)
+        return tag, free
+
+    return build
+
+
 @pytest.fixture(scope="session")
 def config_root() -> Iterator[Path]:
     """A directory for the tests' config files, which dockscreen trusts only where nobody else can write.
@@ -101,24 +174,71 @@ def _writable_by_others(path: Path) -> bool:
     return info.st_uid not in (os.getuid(), 0) or bool(info.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
 
 
-@pytest.fixture
-def dockscreen(docker: RealDocker, config_root: Path) -> Callable[..., Result]:
-    """Returns run(*args, cwd, config="", env=None), which runs dockscreen with a config file of its own.
-
-    config: TOML for the config file, which also names the real docker. env: variables to set.
-    """
-    def run(*args: str, cwd: Path, config: str = "", env: dict[str, str] | None = None) -> Result:
-        config_home = Path(tempfile.mkdtemp(dir=config_root))
-        return run_dockscreen(docker.binary, config_home, args, cwd, config, env)
-
-    return run
+@pytest.fixture(scope="session")
+def handoff(config_root: Path) -> Path:
+    """The docker that dockscreen runs: handoff.py, which holds back the hand-off (see there)."""
+    directory = config_root / "bin"
+    directory.mkdir(mode=0o700)
+    return write_handoff_script(directory)
 
 
 @pytest.fixture
-def project(tmp_path: Path) -> Callable[[str], Path]:
-    """Returns copy(name), which copies the project of that name to a directory of the test's own."""
-    def copy(name: str) -> Path:
-        return Path(shutil.copytree(PROJECTS / name, tmp_path / name, symlinks=True))
+def world(request: pytest.FixtureRequest, docker: RealDocker, handoff: Path, config_root: Path,
+          tmp_path: Path,
+          pulled: Callable[[str], str]) -> Iterator[World]:
+    """The World of one scenario (steps.World), whose containers are removed after it."""
+    config_home = Path(tempfile.mkdtemp(dir=config_root))
+    scenario = World(docker, handoff, tmp_path, config_home, pulled, request.node.nodeid)
+    yield scenario
+    scenario.remove_containers()
 
-    return copy
 
+def _remove_labelled_containers(docker: RealDocker) -> None:
+    """Removes the containers that scenarios created (steps.LABEL), left over if a run was interrupted."""
+    found = docker("ps", "--all", "--quiet", "--filter", f"label={LABEL}").stdout.split()
+    if found:
+        docker("rm", "--force", *found)
+
+
+_measuring = False  # whether coverage is measured in this session
+
+
+def _start_coverage() -> None:
+    """Sets up coverage.py for the dockscreen processes, if DOCKSCREEN_E2E_COVERAGE asks for it."""
+    global _measuring
+    shutil.rmtree(COVERAGE_DIR, ignore_errors=True)
+    if HOST_ENV.get("DOCKSCREEN_E2E_COVERAGE") != "1":
+        return
+    if importlib.util.find_spec("coverage") is None:
+        warnings.warn(PreconditionWarning("DOCKSCREEN_E2E_COVERAGE is set, but coverage is not installed"))
+        return
+    COVERAGE_DIR.mkdir()
+    _measuring = True
+    # execv: dockscreen hands many commands to docker by replacing itself, and coverage has to save first
+    COVERAGE_RC.write_text(f"""[run]
+branch = true
+parallel = true
+data_file = {COVERAGE_DIR / "data"}
+source_pkgs = dockscreen
+patch = execv
+
+[report]
+show_missing = true
+skip_covered = true
+omit = */dockscreen/helptext.py
+""")
+
+
+def pytest_terminal_summary(terminalreporter: Any) -> None:
+    """Reports the coverage of dockscreen by the scenarios, when it was measured."""
+    if not _measuring:
+        return
+    coverage = [sys.executable, "-m", "coverage"]
+    subprocess.run([*coverage, "combine", f"--rcfile={COVERAGE_RC}"], capture_output=True, check=False)
+    report = subprocess.run([*coverage, "report", f"--rcfile={COVERAGE_RC}"], capture_output=True, text=True,
+                            check=False)
+    subprocess.run([*coverage, "html", f"--rcfile={COVERAGE_RC}", f"--directory={COVERAGE_DIR / 'html'}"],
+                   capture_output=True, check=False)
+    terminalreporter.section("dockscreen coverage by the end-to-end tests")
+    terminalreporter.write(report.stdout + report.stderr)
+    terminalreporter.write_line(f"HTML report: {COVERAGE_DIR / 'html' / 'index.html'}")

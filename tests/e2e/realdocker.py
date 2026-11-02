@@ -1,8 +1,10 @@
 """What the end-to-end tests share: the real docker, the images they use, skipping on unmet preconditions."""
 
 import grp
+import json
 import os
 import pwd
+import shlex
 import subprocess
 import sys
 import warnings
@@ -15,6 +17,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = Path(__file__).resolve().parent / "projects"
 DOCKSCREEN = ROOT / "bin" / "docker"
+HANDOFF = Path(__file__).resolve().parent / "handoff.py"
+# DOCKSCREEN_E2E_COVERAGE=1 runs dockscreen under coverage.py, with its data and settings here.
+COVERAGE_DIR = ROOT / ".coverage-e2e"
+COVERAGE_RC = COVERAGE_DIR / "coveragerc"
 SYSTEM_CONFIG = "/etc/dockscreen/config.toml"
 
 # The images the projects and tests use, pinned so that their users do not change under the tests.
@@ -28,7 +34,26 @@ WEBAPP_APP = "dockscreen-e2e-webapp-app"  # what compose names the webapp's buil
 OWN_IDS_IMAGE = "dockscreen-e2e/app:own-ids"
 SUBORDINATE_IMAGE = "dockscreen-e2e/app:subordinate"
 STRANGER_IMAGE = "dockscreen-e2e/app:stranger"  # runs as an id that means nothing on this host
-BUILT_IMAGES = (WEBAPP_APP, OWN_IDS_IMAGE, SUBORDINATE_IMAGE, STRANGER_IMAGE)
+# Images whose passwd and group files, or USER, are out of the ordinary: tag -> Dockerfile. FREE stands for
+# an id that is no user, group or subordinate id here.
+ODD_IMAGES = {
+    # no passwd or group file at all, as in an image built FROM scratch
+    "dockscreen-e2e/odd:named-user": "FROM scratch\nCOPY marker /marker\nUSER app\nCMD [\"/marker\"]\n",
+    "dockscreen-e2e/odd:named-group": "FROM scratch\nCOPY marker /marker\nUSER FREE:staff\n"
+                                      "CMD [\"/marker\"]\n",
+    "dockscreen-e2e/odd:numeric": "FROM scratch\nCOPY marker /marker\nUSER FREE:FREE\nCMD [\"/marker\"]\n",
+    "dockscreen-e2e/odd:negative": "FROM scratch\nCOPY marker /marker\nUSER -5:-5\nCMD [\"/marker\"]\n",
+    # a passwd file too large to read
+    "dockscreen-e2e/odd:big-passwd": f"FROM {ALPINE}\n"
+                                     "RUN yes 'x:x:FREE:FREE::/:/bin/sh' | head -c 1100000 >> /etc/passwd\n",
+    # a uid that is not a number, which docker reads as 0
+    "dockscreen-e2e/odd:garbled-uid": f"FROM {ALPINE}\nRUN echo 'app:x:abc:abc::/:/bin/sh' >> /etc/passwd\n"
+                                      "USER app\n",
+    # a user that is a member of the root group
+    "dockscreen-e2e/odd:root-group": f"FROM {ALPINE}\nRUN adduser -D -u FREE app && addgroup app root\n"
+                                     "USER app\n",
+}
+BUILT_IMAGES = (WEBAPP_APP, OWN_IDS_IMAGE, SUBORDINATE_IMAGE, STRANGER_IMAGE, *ODD_IMAGES)
 
 # The environment pytest was started in. The unit tests' fixtures change os.environ for each test
 # (DOCKER_HOST, COLUMNS), and docker has to be reached the way the developer's shell reaches it.
@@ -99,27 +124,78 @@ class RealDocker:
             self("image", "rm", "--force", image)
 
 
-def run_dockscreen(binary: str, config_home: Path, args: tuple[str, ...], cwd: Path, config: str,
-                   env: dict[str, str] | None) -> Result:
+class Call(NamedTuple):
+    """Call that dockscreen made to docker, as handoff.py recorded it."""
+    argv: list
+    held: bool                # a hand-off: recorded, and answered with success instead of run
+    files: dict               # for a hand-off: path -> content of the files given with -f
+    env: dict                 # for a hand-off: the variables handoff.RECORDED_ENV names
+    created: str | None       # for `create`: the container docker made
+
+    @property
+    def compose_file(self) -> dict:
+        """Returns the one compose file the call names, as dockscreen generated it (JSON)."""
+        assert len(self.files) == 1, f"expected one compose file in {self.argv}"
+        return json.loads(next(iter(self.files.values())))
+
+    @property
+    def last(self) -> str:
+        """Returns the last argument: the container of `start` or `exec`."""
+        return self.argv[-1]
+
+
+def read_calls(path: Path) -> list[Call]:
+    """Returns the calls handoff.py recorded in path, in order; none if it recorded nothing."""
+    if not path.exists():
+        return []
+    calls = []
+    for line in path.read_text().splitlines():
+        entry = json.loads(line)
+        calls.append(Call(entry["argv"], entry["held"], entry.get("files", {}), entry.get("env", {}),
+                          entry.get("created")))
+    return calls
+
+
+def write_handoff_script(directory: Path) -> Path:
+    """Writes the executable that dockscreen runs as docker: handoff.py, run by this Python."""
+    script = directory / "docker"
+    python, handoff = shlex.quote(sys.executable), shlex.quote(str(HANDOFF))
+    script.write_text(f"#!/bin/sh\nexec {python} -I {handoff} \"$@\"\n")
+    script.chmod(0o755)
+    return script
+
+
+def run_dockscreen(args: tuple[str, ...], cwd: Path, config_file: Path, config: str | None,
+                   env: dict[str, str], real: str, calls: Path) -> Result:
     """Runs bin/docker with args in cwd, with config (TOML) as the user's config file, and returns the Result.
 
-    The config file always names binary as the real docker. env: variables to set on top of HOST_ENV.
+    config_file: where the config file goes; config None leaves no file there. env: variables to set on top
+    of HOST_ENV. real: the real docker, which handoff.py runs; calls: where it records the calls.
     """
-    (config_home / "dockscreen").mkdir(mode=0o700)
-    config_file = config_home / "dockscreen" / "config.toml"
-    config_file.write_text(f"docker = {toml_string(binary)}\n{config}")
-    config_file.chmod(0o600)
+    if config is not None:
+        config_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        config_file.write_text(config)
+        config_file.chmod(0o600)
     run_env = {
         **HOST_ENV,
-        "XDG_CONFIG_HOME": str(config_home),
+        "XDG_CONFIG_HOME": str(config_file.parent.parent),
         "NO_COLOR": "1",
         "COLUMNS": "10",  # below the minimum width: report lines stay whole
         "PYTHONIOENCODING": "utf-8",
-        **(env or {}),
+        "DOCKSCREEN_E2E_REAL_DOCKER": real,
+        "DOCKSCREEN_E2E_CALLS": str(calls),
+        **env,
     }
-    done = subprocess.run([sys.executable, str(DOCKSCREEN), *args], check=False, cwd=cwd, env=run_env,
+    done = subprocess.run([*python_command(), str(DOCKSCREEN), *args], check=False, cwd=cwd, env=run_env,
                           capture_output=True, text=True, encoding="utf-8", timeout=900)
     return Result(done.returncode, done.stdout, done.stderr)
+
+
+def python_command() -> list[str]:
+    """Returns how to start a Python script: under coverage, if the session measures it."""
+    if COVERAGE_RC.exists():
+        return [sys.executable, "-m", "coverage", "run", f"--rcfile={COVERAGE_RC}"]
+    return [sys.executable]
 
 
 def toml_string(text: str) -> str:

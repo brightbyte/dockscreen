@@ -1,11 +1,16 @@
 # End-to-end tests
 
-These tests run dockscreen's audits against the real docker of your host. They are for developers who
-change dockscreen's checks or messages and want to see them hold up against real compose, buildx and
-images, which the unit tests only simulate.
+These tests characterize dockscreen against the real docker of your host: every check it makes, written
+as a scenario of what a project, an image or a command line asks for and what dockscreen does about it.
+They are for developers who change dockscreen, and for whoever reviews its security: the unit tests
+simulate docker and compose, and these show that the checks hold up against the real ones.
 
-They pull a few small images and build the example app image, but they only audit: no container is
-started and no bake output is written. The images they build are removed before and after the run.
+Nothing starts. dockscreen runs the real docker through `handoff.py`, which passes every call on except
+the hand-off: the call that would start, stop or change containers, or write a build's output, once the
+checks have passed. That call is recorded and answered with success, so a scenario sees exactly what
+dockscreen would have run (the arguments, the compose file it generated), and can inspect the container
+it created for `docker run`. The tests pull a few small images, build the example app image, and create
+containers that are never started; all of these are removed after the run.
 
 ## Running
 
@@ -15,10 +20,10 @@ From the repository root, as your ordinary user:
 pytest -m e2e -rs
 ```
 
-`pytest` alone deselects them. `-rs` lists the skipped tests and why. To run one file or test:
+`pytest` alone deselects them. `-rs` lists the skipped tests and why. To run one feature or scenario:
 
 ```
-pytest -m e2e -rs tests/e2e/test_e2e_run.py
+pytest -m e2e -rs tests/e2e/test_e2e_docker_run.py
 pytest -m e2e -rs -k allow_me
 ```
 
@@ -28,6 +33,16 @@ The tests find the real docker as the first `docker` on `PATH` that is not a scr
 ```
 DOCKSCREEN_E2E_DOCKER=/usr/bin/docker pytest -m e2e -rs
 ```
+
+### Coverage
+
+```
+DOCKSCREEN_E2E_COVERAGE=1 pytest -m e2e -rs
+```
+
+runs dockscreen under coverage.py, if it is installed, and ends with a report of the lines and branches of
+dockscreen the scenarios did not reach, and an HTML report in `.coverage-e2e/html`. `COVERAGE.md` says
+which of those cannot be reached from here, and why.
 
 ## Preconditions
 
@@ -47,35 +62,55 @@ Some need more:
 - a registry to pull from: `alpine`, `redis`, `nginx` and `nginx-unprivileged`, at pinned tags
 - uid and gid between 1000 and 60000, for the app image built with your ids
 - a range in `/etc/subuid`, for the image whose user is a subordinate id
-- a local user 101, for the test that nginx-unprivileged (which runs as 101) is refused for it
+- a local user 101, for the scenarios where nginx-unprivileged (which runs as 101) is refused for it, or no
+  user 101, for the one where it is refused only with a host mount
+- a local user 1, for the scenario that refuses an account of this host
 - an id between 20000 and 60000 that is no user, group or subordinate id, for the app image built to run
-  as a stranger to the host
-- `docker buildx` for the bake tests, and `bake --call` for the one that passes
-- compose 2.24 or newer for the harden test, whose patch uses `!reset` and `!override`
+  as a stranger to the host, and for the scenarios that need an id that means nothing here
+- `docker buildx` for the bake scenarios, and `bake --call` for the one that passes
+- compose 2.24 or newer for the harden scenarios, whose patch uses `!reset` and `!override`
 
 ## Layout
 
+Each `test_e2e_*.py` is a feature: its docstring states the rules, and each test is a scenario of them,
+written in the steps of `steps.py`:
+
+```python
+def test_a_privileged_service_is_refused(world):
+    given_service(world, "app", privileged=True)
+    when_dockscreen(world, "compose", "up")
+    then_refused(world, "service app: privileged is not allowed")
+    then_nothing_handed_off(world)
+```
+
+A scenario outline is a scenario with `@pytest.mark.parametrize`, whose examples have ids that read as
+their names.
+
+- `steps.py`: the `World` a scenario builds up and runs dockscreen in, and the Given, When and Then steps.
+  A failing Then step shows what dockscreen printed and the calls it made to docker.
+- `handoff.py`: the docker that dockscreen runs, which holds back the hand-off and records every call.
+- `conftest.py`: the fixtures, which check the preconditions, pull and build images, and measure coverage.
+- `realdocker.py`: what the fixtures and steps share: the image names, running dockscreen with a config
+  file of its own, `require()`.
 - `projects/webapp`: a compose project of the usual kind: an app built from the `Dockerfile` with your
   ids, redis, nginx and a mail catcher behind a profile. `compose.debug.yaml` is an override that asks
   for too much, `docker-bake.hcl` has a target that writes to the host and one that uses the host's
   cache, secrets and SSH agent.
 - `projects/monitoring`: cAdvisor and the node exporter, set up as their documentation says, which reach
   into the host in most of the ways dockscreen refuses.
-- `test_e2e_compose.py`: `compose audit` and `compose harden` on those projects.
-- `test_e2e_run.py`: `audit` of what `docker run` would do, for images with various users.
-- `test_e2e_bake.py`: `buildx bake` on the webapp's bake file.
-- `conftest.py`: the fixtures, which check the preconditions.
-- `realdocker.py`: what the fixtures and tests share: the image names, running dockscreen with a config
-  file of its own, `require()`.
 
-Each test copies the project it uses to a temporary directory, so a test may change it.
+Each scenario has a project directory, a config file and a compose project name of its own, so a scenario
+may change them.
 
-## Writing a test
+## Writing a scenario
 
-- Audit, never run: a test that starts a container or writes a bake output does not belong here.
+- Nothing may start: a call that starts or changes containers must be one that `handoff.py` holds back.
+  Add it to `HELD_DOCKER` or `HELD_COMPOSE` before a scenario makes dockscreen hand it on.
+- State the rule in the feature's docstring first, then write the scenario against it: what dockscreen
+  prints and hands on, not how it gets there.
 - Check an assumption about the host with `require(condition, reason)` before relying on it, rather
-  than letting the test fail.
-- Prefer the existing projects and images. Change them only in ways a real project might look.
-- Pin new images to a tag, so their users don't change under the tests.
-- Pass dockscreen's config as TOML through the `dockscreen` fixture's `config`; never rely on the
-  developer's own config file.
+  than letting the scenario fail.
+- Give the compose file as data (`given_service`, `given_compose`); it is written as JSON, which is YAML.
+- Prefer the existing projects and images. Pin new images to a tag, so their users don't change under
+  the tests.
+- Give dockscreen's config as TOML through the Given steps; never rely on the developer's own config file.
