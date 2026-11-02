@@ -14,24 +14,23 @@ from typing import Any
 
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
-from dockscreen.screen import policy, substitutions
+from dockscreen.screen import policy
 from dockscreen.screen.policy import CAP_DROP, SECURITY_OPT
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids
 
 
-def apply(config: dict[str, Any], accounts: hostusers.HostAccounts
-          ) -> tuple[dict[str, Any], list[Substitution]]:
-    """Adds dockscreen's defaults to every service of config and resolves user names to ids.
+def changes(config: dict[str, Any], accounts: hostusers.HostAccounts) -> list[Substitution]:
+    """Returns the substitutions that add dockscreen's defaults to every service of config and resolve user
+    names to ids.
 
-    Returns (a hardened copy of config, the substitutions that made it).
     accounts: the users and groups to resolve names with (hostusers.HostAccounts).
     """
     found = []
     for name, service in (config.get("services") or {}).items():
         found += _resolve_user_names(name, service or {}, accounts)
         found += _defaults(name, service or {})
-    return substitutions.apply(config, found), found
+    return found
 
 
 def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:

@@ -10,12 +10,18 @@ from dockscreen.util import messages
 NOBODY = "65534:65534"
 
 
+def harden(config, accounts):
+    """(config hardened, the substitutions that hardened it)."""
+    found = hardening.changes(config, accounts)
+    return substitutions.apply(config, found), found
+
+
 def config(**service):
     return {"name": "p", "services": {"web": {"user": NOBODY, **service}}}
 
 
 def test_missing_defaults_are_added_and_described():
-    hardened, changes = hardening.apply(config(), Accounts())
+    hardened, changes = harden(config(), Accounts())
 
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
@@ -28,7 +34,7 @@ def test_missing_defaults_are_added_and_described():
 
 def test_a_default_that_overrides_what_the_project_set_is_marked_check_this():
     original = config(cap_drop=["NET_RAW"])
-    _, changes = hardening.apply(original, Accounts())
+    _, changes = harden(original, Accounts())
 
     lines = substitutions.describe(changes)
 
@@ -39,7 +45,7 @@ def test_a_default_that_overrides_what_the_project_set_is_marked_check_this():
 
 def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
     original = config(cap_drop=["NET_RAW"], security_opt=["seccomp=unconfined"])
-    hardened, changes = hardening.apply(original, Accounts())
+    hardened, changes = harden(original, Accounts())
 
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["NET_RAW", "ALL"]
@@ -51,7 +57,7 @@ def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
 
 
 def test_a_default_alone_is_dockscreens_and_one_added_to_the_projects_list_stays_the_projects():
-    _, changes = hardening.apply(config(security_opt=["seccomp=unconfined"]), Accounts())
+    _, changes = harden(config(security_opt=["seccomp=unconfined"]), Accounts())
 
     # the project's own seccomp=unconfined is still in the list, and is judged as the project's
     assert substitutions.origins(changes) == {"web": {"cap_drop": Origin.DOCKSCREEN}}
@@ -59,25 +65,25 @@ def test_a_default_alone_is_dockscreens_and_one_added_to_the_projects_list_stays
 
 def test_a_compliant_service_is_left_alone_and_the_input_is_not_modified():
     original = config(cap_drop=["all"], security_opt=["no-new-privileges"])
-    hardened, changes = hardening.apply(original, Accounts())
+    hardened, changes = harden(original, Accounts())
     assert hardened == original and changes == []
 
     bare = config()
-    hardening.apply(bare, Accounts())
+    harden(bare, Accounts())
     assert "cap_drop" not in bare["services"]["web"]
 
 
 def test_a_project_cannot_weaken_the_defaults():
     # Appending true does not undo false: the policy still refuses the config.
     original = config(security_opt=["no-new-privileges:false"], cap_add=["SYS_ADMIN"])
-    hardened, _ = hardening.apply(original, Accounts())
+    hardened, _ = harden(original, Accounts())
     problems = policy.Policy("/p", rules()).check_project(project_of(hardened))
     assert "service web: security_opt 'no-new-privileges:false' is not allowed" in problems
     assert "service web: cap_add is not allowed" in problems
 
 
 def test_a_config_without_the_keys_passes_the_policy_once_hardened():
-    hardened, _ = hardening.apply(config(), Accounts())
+    hardened, _ = harden(config(), Accounts())
     assert policy.Policy("/p", rules()).check_project(project_of(hardened)) == []
     assert policy.Policy("/p", rules()).check_project(project_of(config()))  # but not as it stands
 
@@ -166,7 +172,7 @@ def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():
 def test_names_are_resolved_on_this_host(spec, resolved):
     original = config(user=spec)
 
-    hardened, changes = hardening.apply(original, Accounts())
+    hardened, changes = harden(original, Accounts())
 
     assert hardened["services"]["web"]["user"] == resolved
     assert original["services"]["web"]["user"] == spec  # the input is left alone
@@ -177,7 +183,7 @@ def test_names_are_resolved_on_this_host(spec, resolved):
 
 @pytest.mark.parametrize("spec", ["1000:1000", "65534:65534", "app", "app:app", "1000", "1000:staff"])
 def test_numbers_and_unknown_names_are_left_for_the_policy(spec):
-    hardened, changes = hardening.apply(config(user=spec), Accounts())
+    hardened, changes = harden(config(user=spec), Accounts())
     assert hardened["services"]["web"]["user"] == spec
     assert not any(a.key == "user" for a in changes)
 
@@ -186,7 +192,7 @@ def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them()
     ctx = policy.Policy("/p", rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     for spec, part in (("app", "user 'app'"), ("app:app", "user 'app'"), ("1000:staff", "group 'staff'")):
-        hardened, _ = hardening.apply(config(user=spec, **keep), Accounts())
+        hardened, _ = harden(config(user=spec, **keep), Accounts())
         problems = ctx.check_project(project_of(hardened))
         assert any(f"{part} does not exist on this host" in p for p in problems), spec
 
@@ -194,8 +200,8 @@ def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them()
 def test_nobody_passes_and_root_is_refused_once_resolved():
     ctx = policy.Policy("/p", rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
-    nobody, _ = hardening.apply(config(user="nobody", **keep), Accounts())
-    root, _ = hardening.apply(config(user="root", **keep), Accounts())
+    nobody, _ = harden(config(user="nobody", **keep), Accounts())
+    root, _ = harden(config(user="root", **keep), Accounts())
     assert ctx.check_project(project_of(nobody)) == []
     assert ctx.check_project(project_of(root)) == ["service web: user '0:0': uid 0 is root",
                                               "service web: user '0:0': gid 0 is root"]
@@ -204,7 +210,7 @@ def test_nobody_passes_and_root_is_refused_once_resolved():
 def test_hook_users_are_resolved_too():
     original = config(post_start=[{"command": "x", "user": "alice"}])
 
-    hardened, changes = hardening.apply(original, Accounts())
+    hardened, changes = harden(original, Accounts())
 
     web = hardened["services"]["web"]
     assert web["post_start"] == [{"command": "x", "user": "4242:4343"}]

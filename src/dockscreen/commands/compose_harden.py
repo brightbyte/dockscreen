@@ -90,7 +90,7 @@ def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], res
     with.
     """
     with project.generated() as command:
-        prepared = project.prepare(command(resolved), project.project.with_definition(resolved))
+        prepared = project.prepare(command(resolved), project.hardened.with_definition(resolved))
     if not prepared.decisions:
         return prepared.report.reasons, notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []

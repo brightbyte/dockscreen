@@ -48,39 +48,43 @@ class Screened(NamedTuple):
 
 class Compose(NamedTuple):
     """Docker compose on one project, as dockscreen drives it: the options that select the project, the
-    project with the defaults added (hardened), the substitutions that added them, and the scope it is
-    screened in.
+    project as compose resolved it, the substitutions that add the defaults to it (hardening), and the
+    scope it is screened in.
+
+    What runs is the resolved project with every substitution made, in order: the hardening, then what
+    the images decided (final). Nothing else changes the definition that compose gets.
     """
     global_args: list          # the compose options that select it
-    project: Project           # hardened, with remote looked up
-    hardening: list            # the substitutions that hardened it (substitutions.Substitution)
-    scope: Scope               # with the project's directory; to pull, build, decide and run with
+    resolved: Project          # as compose resolved it, with remote looked up
+    hardening: list            # the substitutions that add the defaults (substitutions.Substitution)
+    scope: Scope               # to pull, build, decide and run with
 
     @property
-    def hardened(self) -> dict[str, Any]:
-        """Returns the project's definition with the defaults added."""
-        return self.project.definition
+    def hardened(self) -> Project:
+        """Returns the project with the defaults added, which is what the images are acquired for."""
+        return substitutions.applied(self.resolved, self.hardening)
 
     @property
     def directory(self) -> str:
         """Returns the project directory."""
-        return self.project.directory
+        return self.resolved.directory
 
     @property
     def remote(self) -> bool:
         """Tells whether the daemon may not be this host's own."""
-        return bool(self.project.remote)
+        return bool(self.resolved.remote)
 
     def static(self) -> Project:
-        """Returns the project as the checks before any image is looked at see it, which leave the users
-        that the images decide to later.
+        """Returns the hardened project as the checks before any image is looked at see it, which leave the
+        users that the images decide to later.
         """
-        unset = serviceusers.unset_user_services(self.hardened)
-        return self.project.with_origins({name: {"user": Origin.IMAGE} for name in unset})
+        hardened = self.hardened
+        unset = serviceusers.unset_user_services(hardened.definition)
+        return hardened.with_origins({name: {"user": Origin.IMAGE} for name in unset})
 
     def static_policy(self) -> policy.Policy:
-        """Returns the policy context for the checks before any image is looked at."""
-        return self.scope.project_policy(self.project)
+        """Returns the policy for the checks before any image is looked at."""
+        return self.scope.project_policy(self.resolved)
 
     def screen(self, command: Callable[[dict[str, Any]], list[str]], parsed: userargs.Parsed | None = None,
                strict: bool = False, announce: Callable[[], None] = lambda: None) -> Screened:
@@ -103,7 +107,8 @@ class Compose(NamedTuple):
             return Screened(found)
         announce()
         args, chosen = (parsed.args, _chosen(parsed)) if parsed else ([], frozenset())
-        prepared = self.prepare(command(self.hardened), self.project, args, chosen)
+        hardened = self.hardened
+        prepared = self.prepare(command(hardened.definition), hardened, args, chosen)
         if not prepared.report.passed:
             return Screened(prepared.report, prepared)
         final = self.final(prepared)
@@ -129,16 +134,16 @@ class Compose(NamedTuple):
             return project, [inspect.name_lookup_failure(name, e)]
 
     def final(self, prepared: serviceusers.Prepared) -> Project:
-        """Returns the project that will run (Prepared.changes applied), with where the values dockscreen set
-        come from.
+        """Returns the project that will run: the resolved one with the hardening and then what the images
+        decided (Prepared.changes) made, with where the values dockscreen set come from.
         """
-        return substitutions.applied(self.project, prepared.changes())
+        return substitutions.applied(self.resolved, [*self.hardening, *prepared.changes()])
 
     def final_policy(self, prepared: serviceusers.Prepared) -> policy.Policy:
         """Returns the policy context for the project that will run, with image sections only where prepared
         proved them.
         """
-        return self.scope.project_policy(self.project, prepared.verified)
+        return self.scope.project_policy(self.resolved, prepared.verified)
 
     def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> serviceusers.Prepared:
@@ -167,9 +172,8 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Co
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     found = inspect.project(global_args, runtime).with_remote(is_remote(global_args, runtime.docker))
-    _, changes = hardening.apply(found.definition, runtime.accounts)
-    scope = Scope(runtime, allow_me)
-    return Compose(global_args, substitutions.applied(found, changes), changes, scope)
+    changes = hardening.changes(found.definition, runtime.accounts)
+    return Compose(global_args, found, changes, Scope(runtime, allow_me))
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,
@@ -201,7 +205,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
              imagedecision.root_default_notice(scope, project.directory),
              *substitutions.describe(project.hardening)]
-    lines += shellenv.describe(project.hardened, runtime.env)
+    lines += shellenv.describe(project.hardened.definition, runtime.env)
     with project.generated() as command:
         screened = project.screen(command, parsed, strict)
         if screened.final is None or screened.prepared is None:  # it did not pass every stage

@@ -39,7 +39,8 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
 
     outcome, lines = _audit_images(project, brief)
     if not brief:
-        warnings = [*inspect.mount_dir_warnings(runtime), *shellenv.describe(project.hardened, runtime.env)]
+        warnings = [*inspect.mount_dir_warnings(runtime),
+                    *shellenv.describe(project.hardened.definition, runtime.env)]
         for line in [*substitutions.describe(project.hardening), *warnings, *lines]:
             messages.out(line)
         if outcome.reasons or project.hardening:
