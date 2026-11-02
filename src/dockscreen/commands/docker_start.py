@@ -16,8 +16,8 @@ from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings, verdict
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report
-from dockscreen.screen.imagedecision import assess, explain
 from dockscreen.screen.scope import Scope
+from dockscreen.screen.verdict import explain
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -52,14 +52,15 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
             info = ctx.docker.inspect_container(ref)
-            assessment = assess(ctx, runtime.cwd, info["Id"], info)
+            assessment = ctx.assess(runtime.cwd, info["Id"], info)
             if assessment.replaces_image_user and not _runs_as_pinned_user(info, assessment):
                 user = ids.format_user(assessment.pinned_user)
                 problems.append(Finding(
                     f"cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
             else:
-                problems += [Finding(p.text, subject=ref, help=p.help) for p in explain(ctx, assessment)]
+                explained = explain(assessment, runtime.config_file)
+                problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
             if strict:
                 user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
                 strict_policy = ctx.policy_here(assessment.section, STRICT)

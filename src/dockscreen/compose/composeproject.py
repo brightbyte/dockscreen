@@ -27,7 +27,7 @@ from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, is
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import hardening, imagedecision, policy, substitutions, verdict
+from dockscreen.screen import hardening, policy, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
@@ -203,7 +203,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     scope = project.scope
     lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
-             imagedecision.root_default_notice(scope, project.directory),
+             verdict.root_default_notice(scope.settings_in(project.directory).default_user),
              *substitutions.describe(project.hardening)]
     lines += shellenv.describe(project.hardened.definition, runtime.env)
     with project.generated() as command:

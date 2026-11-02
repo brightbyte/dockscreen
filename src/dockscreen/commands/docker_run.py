@@ -6,9 +6,9 @@ that cannot change between check and start. The one image-derived fact checked
 is the identity the container would run as (see imageuser), unless the command
 line sets a user: the person typing the command is trusted, the image is not.
 
-With no user chosen on the command line, imagedecision decides it. Whatever it accepts is not left
-for the runtime to resolve a second time: the container is re-created with `--user uid:gid` as the
-checked numbers.
+With no user chosen on the command line, the policy decides it from the image (rules.image). Whatever
+it accepts is not left for the runtime to resolve a second time: the container is re-created with
+`--user uid:gid` as the checked numbers.
 
 check creates the container and assesses it; gate starts it if it may run; audit creates it in the
 same way, reports what `run` would do and removes it. The command line is trusted, so what it asks for
@@ -23,23 +23,15 @@ from dockscreen.cli import runargs
 from dockscreen.cli.runargs import DEFAULTS, defaults_notice
 from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.container import Container
+from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import imagedecision, imageuser, verdict
+from dockscreen.screen import imageuser, verdict
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report
-from dockscreen.screen.imagedecision import (
-    CHOOSE_HINT,
-    assess,
-    default_home,
-    env_value,
-    explain,
-    instead_of_root,
-    root_default_notice,
-    runs_as,
-)
 from dockscreen.screen.scope import Scope
+from dockscreen.screen.userchanges import default_home
+from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice, runs_as
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -72,7 +64,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    for message in [*parsed.notices, root_default_notice(ctx, runtime.cwd), defaults_notice()]:
+    for message in [*parsed.notices, root_default_notice(ctx.policy_here().default_user), defaults_notice()]:
         if message:
             messages.notice(message)
     ctx = ctx.with_allow_me(parsed.allow_me)
@@ -155,7 +147,7 @@ def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     container, assessment = created
     if assessment.refused:
         ctx.docker.remove(container.id)
-        verdict.screened(Report.of(explain(ctx, assessment)))
+        verdict.screened(Report.of(explain(assessment, ctx.runtime.config_file)))
         return 1
     return created
 
@@ -175,8 +167,8 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     try:
         container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, extra))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
-        assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else assess(
-            ctx, ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
+        assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else ctx.assess(
+            ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
@@ -263,7 +255,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     finally:
         ctx.docker.remove(container.id)
 
-    refused = imagedecision.explain(ctx, assessment)
+    refused = explain(assessment, ctx.runtime.config_file)
     outcome = Report.of([*refused, *found])
     if brief:
         messages.out(verdict.brief(outcome), indent=False)
@@ -286,8 +278,8 @@ def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
             messages.out(messages.Marked(messages.WARN, f"note: {note}"))
     if assessment.refused:
         if not assessment.failed:
-            messages.out(messages.Marked(messages.HINT, imagedecision.CHOOSE_HINT))
-            messages.out(messages.Marked(messages.HINT, imagedecision.config_hint(ctx, image)))
+            messages.out(messages.Marked(messages.HINT, CHOOSE_HINT))
+            messages.out(messages.Marked(messages.HINT, verdict.config_hint(image, ctx.runtime.config_file)))
         return
     if assessment.pins_user:
         user = ids.format_user(assessment.pinned_user)

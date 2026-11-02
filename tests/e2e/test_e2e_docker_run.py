@@ -1,7 +1,7 @@
 """Feature: `docker run` starts the container it checked, as a user decided from the image, pinned as
 numbers
 
-Rules (docker_run, runargs, imagedecision):
+Rules (docker_run, runargs, rules.image):
 - run becomes create, inspect, check, start: the daemon reads the command line, and dockscreen checks the
   container it created;
 - with no user on the command line the image's user is decided as for compose: the default user instead

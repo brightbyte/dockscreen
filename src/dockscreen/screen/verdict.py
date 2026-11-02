@@ -1,11 +1,15 @@
 """This module defines how the verdict of screening a command or of an audit is reported (see findings for
-what the verdicts mean).
+what the verdicts mean), and how the decision about a container's user is described.
 """
 
+from dockscreen.host import hostusers
+from dockscreen.screen import imageuser
 from dockscreen.screen.assessment import Assessment, Kind
-from dockscreen.screen.findings import Report, Severity, Verdict
-from dockscreen.util import messages
+from dockscreen.screen.findings import Finding, Report, Severity, Verdict
+from dockscreen.util import ids, images, messages
 from dockscreen.util.messages import printable
+
+CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
 
@@ -63,3 +67,44 @@ def screened(found: Report) -> bool:
     """Prints the verdict of screening a command and returns whether it may run."""
     report(found)
     return found.passed
+
+
+# --- the user a container runs as ---------------------------------------------------
+
+def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
+    """Describes what an accepted image (Kind.IMAGE or Kind.CONFIGURED) runs as; local: HostAccounts."""
+    if assessment.kind is Kind.CONFIGURED:
+        return f"runs as {ids.format_user(assessment.pinned_user)}, the user the config file sets for it"
+    assert assessment.identity is not None, "an accepted image was looked at"
+    return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
+
+
+def instead_of_root(assessment: Assessment) -> str:
+    """Describes what a Kind.FALLBACK assessment does instead of running as root."""
+    return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
+
+
+def root_default_notice(default_user: tuple[int, int]) -> messages.Marked | None:
+    """Returns the warning to give on every run if the configured default user is root, else None."""
+    if 0 in default_user:
+        default = ids.format_user(default_user)
+        return messages.Marked(
+            messages.WARN,
+            f"the configured default user is {default}: images that would run as root run as root",
+            "set default_user in the config file to change it")
+    return None
+
+
+def explain(assessment: Assessment, config_file: str) -> list[Finding]:
+    """Returns the assessment's reasons, with how to get past them if they come from the image's user;
+    config_file: where an image section can give the image a user.
+    """
+    if not assessment.identity:
+        return assessment.reasons
+    help = f"{CHOOSE_HINT}, {config_hint(assessment.image.reference, config_file)}"
+    return [Finding(r.text, r.severity, r.subject, help, r.output) for r in assessment.reasons]
+
+
+def config_hint(image: str, config_file: str) -> str:
+    """Returns the hint how config_file can give image a user, for an image pulled from a registry."""
+    return f"or, for an image pulled from a registry, {images.section_hint(image, config_file)}"

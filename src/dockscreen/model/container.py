@@ -6,6 +6,7 @@ back into the compose service keys of the same meaning (Container.as_service), i
 policy for compose services, with the same wording.
 """
 
+from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
@@ -106,3 +107,12 @@ class Container(NamedTuple):
         if with_user:
             service["user"] = self.user
         return service
+
+
+def env_value(env: Sequence[str] | None, name: str) -> str | None:
+    """Returns the value the last `name=` entry of an `Env` list of `NAME=value` strings sets, or None."""
+    for entry in reversed(env or []):
+        key, equals, value = entry.partition("=")
+        if equals and key == name:
+            return value
+    return None

@@ -1,5 +1,18 @@
-"""This module defines the policy's rules for the user an image runs a container as, by the rules in
-imagedecision's docstring, from what was seen of the image (model.image.Inspected).
+"""This module defines the policy's rules for the user an image runs a container as, decided from what was
+seen of the image (model.image.Inspected), for `docker run` and compose alike.
+
+The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
+imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in
+this order:
+- the config file names a user for the image's repository, and the image was pulled from there:
+  that user, whatever it is (config.section_for, config.effective);
+- the image would run as root (uid, gid or a supplementary gid of 0): the configured default user
+  instead, nobody unless configured otherwise, with a notice;
+- otherwise the image's own user, if the id rules accept it; refused if not.
+
+Whatever is accepted is not left for the runtime to resolve a second time: it runs as `uid:gid`, the
+checked numbers, so a difference between our reading of the image's passwd and group files and the
+runtime's can at worst refuse a good image, never run root.
 """
 
 from typing import Any
@@ -25,8 +38,8 @@ class ImageRules(RuleBase):
         return origin is Origin.IMAGE and not self.configured_user
 
     def check_image(self, inspected: Inspected, origin: Origin) -> Assessment:
-        """Decides which user the container that inspected looked through may run as, by the rules in
-        imagedecision's docstring; returns the Assessment.
+        """Decides which user the container that inspected looked through may run as, by the rules in this
+        module's docstring; returns the Assessment.
 
         origin: where the container's user comes from; one that is not the image's is not judged here
         (Kind.EXPLICIT). The image section that applies is this policy's (section). The passwd and group

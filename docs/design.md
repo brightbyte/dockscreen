@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `images`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `location`, `project` (a compose project and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image`, `identity`. What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `scope`, `assessment`, `imagedecision`, `imageuser`, `hardening`, `substitutions`, `userchanges`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `scope`, `assessment`, `imageuser`, `hardening`, `substitutions`, `userchanges`, `findings`, `verdict`.
 5. `cli`: reading the command line: `userargs`, `runargs`, `composeargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`composeproject`), the users its images decide (`serviceusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`). None imports another.
@@ -170,7 +170,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
-   - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`imagedecision.look`), which the project then holds (`Project.inspected`); the policy decides from that as `docker run` does (below), as part of checking the project (`Policy.check_images`);
+   - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`Scope.look`), which the project then holds (`Project.inspected`); the policy decides from that as `docker run` does (below), as part of checking the project (`Policy.check_images`);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
 5. `Compose.final`, which makes the substitutions of `Prepared.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
@@ -210,11 +210,11 @@ Every structure has its own key list: service, mount, build, volume, network, se
 | `x-` keys | ignored, as compose does, except in `build` |
 | service names | no leading `-`, because names go to compose as arguments; `pull` and `build` of the images get `--` before them |
 
-### Users (`idrules`, `hostusers`, `images`, `imageuser`, `imagedecision`)
+### Users (`idrules`, `hostusers`, `images`, `imageuser`, `rules.image`)
 
 `idrules.Rules` implements [the id rules](#ids-the-project-and-the-image-may-not-choose). It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 
-`imagedecision.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike, in two parts: `inspection` (in `host`) reads the image as far as the policy needs (`image.Inspected`: where it was pulled from, its own user, the container's user, and its passwd and group files only if the decision needs them, `Policy.needs_user_files`), and `Policy.check_image` decides from those facts alone. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image. The `Assessment` says where the user comes from (`Kind`: the command line, the config file, the image, or the default user instead of root), the image (`image.Image`: the name, and the id that is pinned), and what was found: refusals, failures to look, and a notable finding for an image section that does not apply.
+`Scope.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike, in two parts: `inspection` (in `host`) reads the image as far as the policy needs (`image.Inspected`: where it was pulled from, its own user, the container's user, and its passwd and group files only if the decision needs them, `Policy.needs_user_files`), and `Policy.check_image` (`rules.image`) decides from those facts alone; `verdict` says what was decided. `config.section_for` decides which image section applies, and `config.effective` whether a `user` is configured. Otherwise the image's identity is resolved from its `/etc/passwd` and `/etc/group`, the way moby does it, which are copied out of a container that is created but never started (`docker cp`, capped at 1 MiB). Because the result is pinned as numbers, docker reads neither file at run time, so a difference between this reading and docker's can at worst refuse a good image. The `Assessment` says where the user comes from (`Kind`: the command line, the config file, the image, or the default user instead of root), the image (`image.Image`: the name, and the id that is pinned), and what was found: refusals, failures to look, and a notable finding for an image section that does not apply.
 
 ### The `docker` wrapper (`docker_cli`, `runargs`, `commands`, `hostusers`)
 

@@ -13,7 +13,7 @@ from typing import Any
 
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import imagedecision
+from dockscreen.screen import verdict
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids
@@ -28,7 +28,7 @@ def changes(project: Project, decisions: Mapping[str, Assessment], default_user:
             default_home: str) -> list[Substitution]:
     """Returns the substitutions that make project the one to run, by service name: services that start
     and set no user get the decided user (decisions), pinned to the image that was checked; those that do
-    not start get default_user, with default_home as HOME (imagedecision.default_home).
+    not start get default_user, with default_home as HOME (the function default_home).
     """
     found = []
     for name, service in sorted((project.definition.get("services") or {}).items()):
@@ -46,12 +46,12 @@ def changes(project: Project, decisions: Mapping[str, Assessment], default_user:
 def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, text: str | None = None,
           group: Group | None = None) -> list[Substitution]:
     """Returns the substitutions that set the service's user, the configured or the default one, reported
-    by text if given, and the HOME that comes with the default user (imagedecision.default_home) unless the
-    service sets HOME.
+    by text if given, and the HOME that comes with the default user (default_home) unless the service sets
+    HOME.
     """
     found = [Substitution(name, "user", ids.format_user(user), text, notable=bool(text),
                           help=USER_HELP if text else None, group=group, origin=Origin.CONFIG)]
-    if home := imagedecision.default_home(user, home):
+    if home := default_home(user, home):
         found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
     return found
 
@@ -62,7 +62,7 @@ def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[
     """
     if assessment.kind is Kind.FALLBACK:
         found = _user(name, service, assessment.pinned_user, assessment.home,
-                      imagedecision.instead_of_root(assessment), PINNED)
+                      verdict.instead_of_root(assessment), PINNED)
     else:  # the image's user, or the one its image section configures
         origin = Origin.IMAGE if assessment.kind is Kind.IMAGE else Origin.CONFIG
         found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,
@@ -73,3 +73,12 @@ def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[
         # ... even if the name is moved to another image
         found.append(Substitution(name, "image", assessment.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
     return found
+
+
+# The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
+def default_home(user: tuple[int, int], home: str) -> str:
+    """Returns the HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
+
+    home: the configured default_home. Root keeps its own.
+    """
+    return "" if 0 in user else home

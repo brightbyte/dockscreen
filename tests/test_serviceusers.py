@@ -8,7 +8,7 @@ from dockscreen.compose import serviceusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen import imagedecision, policy, substitutions, userchanges
+from dockscreen.screen import policy, substitutions, userchanges
 from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.scope import Scope
@@ -364,9 +364,11 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     assert "service web: user is not set, the image default may be root" in problems
 
 
-def test_gate_assessment_is_what_decides():
-    # the decision is imagedecision.assess's: nothing here duplicates the rule
-    assert serviceusers.imagedecision is imagedecision
+def test_the_policy_decides_from_what_serviceusers_saw():
+    # serviceusers looks at the images; the decision is the policy's: nothing here duplicates the rule
+    images = FakeImages(users={"web:1": ""})
+    prepared, _, _ = prepare(project(), images)
+    assert prepared.decisions == prepared.policy.assess_images(prepared.project)
 
 
 def test_an_image_name_that_looks_like_an_option_is_not_read_as_one():

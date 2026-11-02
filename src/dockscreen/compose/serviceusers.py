@@ -32,7 +32,7 @@ from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import findings, imagedecision, policy, substitutions, userchanges, verdict
+from dockscreen.screen import findings, policy, substitutions, userchanges, verdict
 from dockscreen.screen.assessment import Assessment, Kind
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
@@ -94,11 +94,11 @@ class Prepared(NamedTuple):
                 continue
             accepted = decision.kind in (Kind.IMAGE, Kind.CONFIGURED)
             if accepted and not decision.refused:
-                runs_as = imagedecision.runs_as(decision, self.ctx.local)
+                runs_as = verdict.runs_as(decision, self.ctx.local)
                 text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
                 lines.append(messages.Marked(verdict.dot(decision), text))
             elif decision.kind is Kind.FALLBACK:
-                instead = imagedecision.instead_of_root(decision)
+                instead = verdict.instead_of_root(decision)
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
             for note in decision.notes:
                 lines.append(messages.Marked(messages.WARN, f"service {name}: note: {note}"))
@@ -222,7 +222,7 @@ def _image_exists(docker: Docker, image: str) -> bool:
 
 def _inspect(project: Project, to_run: frozenset[str], ctx: Scope) -> dict[str, Inspected | Unseen]:
     """Looks at the image of each service in to_run that sets no user, as far as the policy needs to decide
-    what it may run as (imagedecision.look), through a container created from it and removed again.
+    what it may run as (Scope.look), through a container created from it and removed again.
 
     Returns {service: what was found}, Unseen for an image that could not be looked at.
     """
@@ -240,7 +240,7 @@ def _inspect(project: Project, to_run: frozenset[str], ctx: Scope) -> dict[str, 
         try:
             info = ctx.docker.inspect_container(container)
             mounts = project.service(name).reaches_host
-            found[name], _ = imagedecision.look(ctx, project.directory, container, info, Origin.IMAGE,
+            found[name], _ = ctx.look(project.directory, container, info, Origin.IMAGE,
                                                mounts=mounts, reference=image.reference, built=image.built)
         except (DockerError, ValueError, KeyError) as e:
             found[name] = Unseen(image, messages.with_output(e))
