@@ -11,10 +11,11 @@ that existed before, since docker does not record where it was created.
 from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen.host import config, hostusers, inspection
+from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.image import Image, Inspected
+from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules
@@ -109,15 +110,26 @@ class Scope(NamedTuple):
     def look(self, directory: str | None, container: str, info: dict[str, Any], origin: Origin | None = None,
              mounts: bool | None = None, reference: str | None = None, built: bool = False
              ) -> tuple[Inspected, Policy]:
-        """Looks at the container's image as far as the policy for it needs (inspection), and returns what
-        was found, with that policy (the one for its image section, section_for); the arguments are assess's.
+        """Looks at the container's image as far as the policy for it needs, without judging any of it, and
+        returns what was found, with that policy (the one for its image section, section_for); the
+        arguments are assess's.
 
-        Raises DockerError if the image cannot be inspected or its passwd or group file is too large.
+        What docker inspect shows of the image comes first; the passwd and group files are read from the
+        container only if the policy needs them (Policy.needs_user_files). A missing file has no names in
+        it, for docker as for us. Raises DockerError if the image cannot be inspected or its passwd or
+        group file is too large.
         """
-        inspected = inspection.inspect(self.docker, info, reference, built, mounts)
-        image_policy = self.policy(directory, self.section_for(inspected.image))
+        shown = self.docker.inspect_image(info["Image"])
+        image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
+                      tuple(shown.get("RepoDigests") or ()))
+        reaches_host = mounts if mounts is not None else container_reaches_host(info)
+        inspected = Inspected(image, shown["Config"].get("User") or "", info["Config"].get("User") or "",
+                              reaches_host)
+        image_policy = self.policy(directory, self.section_for(image))
         if image_policy.needs_user_files(origin or inspected.user_origin):
-            inspected = inspection.with_user_files(self.docker, container, inspected)
+            passwd = self.docker.read_file(container, "/etc/passwd") or ""
+            group = self.docker.read_file(container, "/etc/group") or ""
+            inspected = inspected.with_user_files(passwd, group)
         return inspected, image_policy
 
     def with_allow_me(self, allow_me: bool) -> Self:
