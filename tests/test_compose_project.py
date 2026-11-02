@@ -427,3 +427,23 @@ def test_a_config_that_cannot_be_read_back_is_refused():
 ])
 def test_first_difference_names_the_path(expected, actual, where):
     assert composeproject._first_difference(expected, actual) == where
+
+
+def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path, capsys):
+    def run(*args, strict):
+        runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}))
+        code = compose_run.gate([], [*args, "web"], runtime, strict=strict)
+        return code, recorder
+
+    code, recorder = run("-v", "/etc:/e", strict=False)
+    assert code == 0 and recorder.children  # the command line is trusted, as for docker run
+    capsys.readouterr()
+
+    code, recorder = run("-v", "/etc:/e", strict=True)
+    assert code == 1 and not recorder.children
+    assert "service web: bind mount '/etc' is outside" in capsys.readouterr().err
+
+    code, recorder = run("-v", f"{tmp_path}/data:/d", strict=True)
+    assert code == 0
+    _, config = last(recorder)
+    assert "volumes" not in config["services"]["web"]  # compose applies run's options itself

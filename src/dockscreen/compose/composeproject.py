@@ -21,11 +21,11 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen.cli import userargs
-from dockscreen.compose import inspect, serviceusers
+from dockscreen.compose import inspect, runoptions, serviceusers
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import Docker, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.origin import Origin
+from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import findings, hardening, imagedecision, policy, substitutions, verdict
 from dockscreen.screen.findings import Finding, Report
@@ -127,7 +127,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Co
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,
-                  allow_me: bool = False) -> int:
+                  allow_me: bool = False, strict: bool = False) -> int:
     """Runs `docker compose global_args sub` with parsed's arguments, sub a subcommand that starts
     containers, on the project global_args select if it passes the checks.
 
@@ -136,6 +136,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     and decided on (serviceusers); the config that runs is the one that was checked, with the result.
     parsed: the subcommand's arguments, with the user the command line chose (compose_run).
     allow_me: --allow-me was given, so the caller's own ids are allowed.
+    strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
+    with the command line untrusted; otherwise those options are taken as given, as for `docker run`.
     """
     try:
         project = load_project(global_args, runtime, allow_me)
@@ -161,7 +163,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
             verdict.screened(prepared.report)
             return 1
         final = project.final(prepared)
-        checked = Report.of(project.final_policy(prepared).check_project(final))
+        judged, trust = (_as_run(final, parsed, runtime), STRICT) if strict else (final, TRUSTED)
+        checked = Report.of(project.final_policy(prepared).with_trust(trust).check_project(judged))
         if not checked.passed:  # what will run
             verdict.screened(checked)
             return 1
@@ -170,6 +173,14 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
                 messages.notice(line)
         verdict.screened(checked)
         return scope.docker.run_child([*command(final.definition), sub, *parsed.args])
+
+
+def _as_run(final: Project, parsed: userargs.Parsed, runtime: Runtime) -> Project:
+    """Returns the final project with the service that `run` runs changed by its options (runoptions)."""
+    name = parsed.service
+    if name is None or name not in (final.definition.get("services") or {}):
+        return final  # compose refuses to run it
+    return substitutions.applied(final, runoptions.substitutions(parsed, final.service(name), runtime))
 
 
 def _chosen(parsed: userargs.Parsed) -> frozenset[str]:

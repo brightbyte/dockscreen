@@ -34,6 +34,9 @@ ALLOW_ME = "--allow-me"
 AS = "--as"
 AS_ME = "--as-me"
 STRICT_SCREEN = "--strict-screen"
+# What --strict-screen is refused with before a command that does not support it.
+STRICT_REFUSAL = (f"{STRICT_SCREEN} is only supported for audit, create, restart, run, start, buildx bake "
+                  "and compose run so far")
 HELPFUL = "--helpful"
 VERBOSE = "--verbose"
 BRIEF = "--brief"

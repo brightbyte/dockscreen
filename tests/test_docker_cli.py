@@ -2,6 +2,7 @@ import pytest
 from fakes import FakeDocker, compose_project, make_runtime
 
 from dockscreen import docker_cli
+from dockscreen.commands import compose_run
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
 
@@ -215,8 +216,8 @@ def test_strict_screen_refuses_what_a_run_command_line_asks_for():
                                   ["--strict-screen"]])
 def test_strict_screen_is_refused_where_it_is_not_supported(argv, capsys):
     assert dispatch(argv) == (1, [])
-    assert ("--strict-screen is only supported for audit, create, restart, run, start and buildx bake so far"
-            in capsys.readouterr().err)
+    assert ("--strict-screen is only supported for audit, create, restart, run, start, buildx bake and "
+            "compose run so far" in capsys.readouterr().err)
 
 
 def test_docker_audit_without_an_image_prints_usage(capsys):
@@ -232,3 +233,11 @@ def test_docker_audit_needs_a_local_daemon(monkeypatch, capsys):
 
 def test_container_audit_is_not_a_thing():
     assert dispatch(["container", "audit"])[1] == [["container", "audit"]]
+
+
+def test_strict_screen_reaches_compose_run_and_no_other_compose_subcommand(monkeypatch):
+    seen = []
+    monkeypatch.setattr(compose_run, "gate", lambda *args: seen.append(args) or 0)
+
+    assert dispatch(["--strict-screen", "compose", "run", "web"])[0] == 0
+    assert seen[0][-1] is True  # strict

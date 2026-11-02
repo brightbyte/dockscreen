@@ -183,8 +183,10 @@ class Policy(NamedTuple):
         return (self.project_dir, *self.extra_dirs)
 
     def for_service(self, name: str, service: dict[str, Any]) -> "Policy":
-        """Returns the policy to check the service called name with: scope's for it, else this one."""
-        return self.scope(name, service) if self.scope else self
+        """Returns the policy to check the service called name with: scope's for it, with this one's trust,
+        else this one.
+        """
+        return self.scope(name, service).with_trust(self.trust) if self.scope else self
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
         """Returns this policy with trust as the origins whose values are taken as given."""

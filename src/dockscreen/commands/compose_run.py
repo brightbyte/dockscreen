@@ -14,15 +14,17 @@ from dockscreen.screen.findings import Report
 from dockscreen.screen.scope import Scope
 
 
-def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
+def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False,
+         strict: bool = False) -> int:
     """Runs `docker compose global_args run args` if the project passes the checks, and returns the exit
     status: 1 for a user on the command line that cannot be used.
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
+    strict: --strict-screen was given, so what the command line changes in the service is judged too.
     """
     parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
     refusals = Scope(runtime).policy_context(None).check_user_options(parsed.users)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me)
+    return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me, strict)

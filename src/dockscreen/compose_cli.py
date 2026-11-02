@@ -110,9 +110,12 @@ class ComposeCommand(commandline.CommandLine):
                                  allow_me=self.allow_me)
 
         global_args, args, allow_me = self.global_args, self.args, self.allow_me
+        if self.strict and not supports_strict(sub):
+            # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
+            return messages.refuse([commandline.STRICT_REFUSAL])
         if self._is_screened():
             if sub == "run":
-                return compose_run.gate(global_args, args, runtime, allow_me)
+                return compose_run.gate(global_args, args, runtime, allow_me, self.strict)
             if sub == "create":
                 return compose_create.gate(global_args, args, runtime, allow_me)
             if sub in BUILD_SUBCOMMANDS:
@@ -156,6 +159,11 @@ class ComposeCommand(commandline.CommandLine):
         if self.sub == "help":  # compose has no help command of its own
             argv = [*self.global_args, *([target] if target else []), "--help"]
         return _passthrough(argv, self.runtime)
+
+
+def supports_strict(sub: str | None) -> bool:
+    """Tells whether the compose subcommand sub can be screened with the command line untrusted."""
+    return sub == "run"
 
 
 def _own_commands() -> dict[str, helptext.Topic]:

@@ -108,7 +108,7 @@ Before the subcommand, such as `dockscreen --allow-me compose up` or `dockscreen
 |---|---|
 | `--allow-me` | containers may run as you: in `user:`, and as an image's own user |
 | `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. `--verbose` is taken by dockscreen, not passed on, so docker and compose stay quiet |
-| `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten. `create` and `buildx bake` accept it: create's container is judged when it starts, and bake judges the whole definition anyway. Refused before any other subcommand |
+| `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten; for `compose run` (`dockscreen --strict-screen compose run …`), in the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept it: create's container is judged when it starts, and bake judges the whole definition anyway. Refused before any other subcommand |
 | `--skip-screening` | turns off all checks and defaults, and prints a warning each time |
 
 After `run` or `exec` (compose or docker, and `create` and `audit`), before the service, image or container:

@@ -79,8 +79,7 @@ class DockerCommand(commandline.CommandLine):
         messages.set_helpful(self.helpful or sub == "audit")
         if self.strict and not self._supports_strict():
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            supported = f"{', '.join(sorted(STRICT_COMMANDS))} and buildx bake"
-            return messages.refuse([f"{commandline.STRICT_SCREEN} is only supported for {supported} so far"])
+            return messages.refuse([commandline.STRICT_REFUSAL])
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
@@ -103,11 +102,18 @@ class DockerCommand(commandline.CommandLine):
     def _supports_strict(self) -> bool:
         """Tells whether the command can be screened with the command line untrusted (STRICT_COMMANDS).
 
-        buildx bake can: everything it builds is judged anyway, whatever the command line set.
+        buildx bake can: everything it builds is judged anyway, whatever the command line set. So can the
+        compose subcommands that compose_cli.supports_strict names.
         """
         if self._bake_arguments() is not None:
             return True
-        return self.idx is not None and self._command(self.idx)[0] in STRICT_COMMANDS
+        if self.idx is None:
+            return False
+        name, end = self._command(self.idx)
+        if name == "compose":
+            compose = compose_cli.ComposeCommand(self.argv[end + 1:], self.runtime)
+            return compose_cli.supports_strict(compose.sub)
+        return name in STRICT_COMMANDS
 
     def _command(self, idx: int) -> tuple[str, int]:
         """Returns (name, index) of the command at idx: `docker container run` is `run`, at the index of

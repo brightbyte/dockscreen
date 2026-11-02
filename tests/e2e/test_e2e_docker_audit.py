@@ -97,8 +97,8 @@ def test_volumes_of_another_container_are_a_finding(world):
 def test_strict_screening_is_refused_for_the_commands_that_do_not_support_it(world):
     when_dockscreen(world, "--strict-screen", "exec", "dockscreen-e2e-none", "true")
     then_status(world, 1)
-    then_said(world, "--strict-screen is only supported for audit, create, restart, run, start and buildx "
-                     "bake so far")
+    then_said(world, "--strict-screen is only supported for audit, create, restart, run, start, buildx bake "
+                     "and compose run so far")
     then_nothing_handed_off(world)
 
 

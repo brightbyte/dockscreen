@@ -4,6 +4,8 @@ Rules (compose_cli and the compose commands):
 - up, create, run, scale, watch and alpha get every check, and compose runs the config that was checked;
 - run takes a user from the command line, as numbers or as a name of this host (--as, --as-me), and that
   service's image is then not decided; --as-me before the subcommand is refused;
+- with --strict-screen, run judges the service as its options change it (--user, -v, --cap-add,
+  --cap-drop, --env-from-file); without it, the command line is trusted;
 - build and bake get the checks of what a build can reach: sources inside the project, no host network,
   no privileged build, no SSH agent, no x- keys that buildx bake reads;
 - exec takes a user from the command line, as for run, and checks nothing else;
@@ -115,6 +117,15 @@ def test_run_checks_the_service_it_names_even_behind_a_profile(world):
     when_dockscreen(world, "compose", "run", "debug", "true")
     then_refused(world, "service debug: cap_add is not allowed")
     then_nothing_handed_off(world)
+
+
+def test_strict_screening_judges_the_service_as_runs_options_change_it(world):
+    given_image(world, ALPINE)
+    given_service(world, "app")
+    when_dockscreen(world, "compose", "run", "--rm", "-v", "/etc:/e:ro", "app", "true")
+    then_passed(world)  # the command line is trusted
+    when_dockscreen(world, "--strict-screen", "compose", "run", "--rm", "-v", "/etc:/e:ro", "app", "true")
+    then_refused(world, "service app: bind mount '/etc' is outside")
 
 
 def test_as_me_before_the_subcommand_is_refused(world):

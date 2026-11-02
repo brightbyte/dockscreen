@@ -24,11 +24,12 @@ from dockscreen.util import commandline, ids, messages
 
 
 class UserOptions:
-    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker.
+    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker, and of
+    the values of its other options.
 
     Records whether a user was given, whether the caller's own ids are allowed (--as-me), the notices that
-    resolving names produced, and the users given (given), for the policy to judge
-    (Policy.check_user_options).
+    resolving names produced, the users given (given), for the policy to judge
+    (Policy.check_user_options), and each option with its value (values), as docker gets it.
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -39,6 +40,11 @@ class UserOptions:
         self.allow_me = False
         self.notices: list[str] = []
         self.given: list[UserOption] = []
+        self.values: list[tuple[str, str]] = []
+
+    def value(self, option: str, value: str) -> None:
+        """Records that option takes value, as docker gets it."""
+        self.values.append((option, value))
 
     def numeric(self, spec: str) -> str:
         """Returns `--user=` for spec (--user or -u), and records it."""
@@ -57,11 +63,13 @@ class UserOptions:
             return f"{commandline.AS}={name}"
         uid, gid = account
         self.notices.append(f"Resolving user {name} to uid {uid}, gid {gid}")
+        self.value("--user", ids.format_user(account))
         return f"--user={ids.format_user(account)}"
 
     def me(self) -> str:
         """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
         self.user_given = self.allow_me = True
+        self.value("--user", ids.format_user(self.callers_ids))
         return f"--user={ids.format_user(self.callers_ids)}"
 
 
@@ -74,6 +82,9 @@ class Parsed(NamedTuple):
     args: list        # args with --as NAME replaced by --user=uid:gid
     notices: list     # what resolving user names on this host did, for the caller to print
     users: tuple = ()     # the users it gives (policy.UserOption), for the policy to judge
+    # (option, value) for each option before the service that takes a value, as docker gets it: --as and
+    # --as-me as --user with the ids
+    values: tuple = ()
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
@@ -92,7 +103,8 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         token = args[i]
         if token == "--":
             service = args[i + 1] if i + 1 < len(args) else None
-            return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given))
+            return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given),
+                          tuple(users.values))
         if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
@@ -101,8 +113,9 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         elif token.startswith("-") and token != "-":
             i = _parse_short(args, i, value_flags, users, kept)
         else:
-            return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given))
-    return Parsed(None, users.user_given, kept, users.notices, tuple(users.given))
+            return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given),
+                          tuple(users.values))
+    return Parsed(None, users.user_given, kept, users.notices, tuple(users.given), tuple(users.values))
 
 
 
@@ -134,6 +147,8 @@ def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users
         return end + 1
     if name == "--user":
         users.numeric(value)
+    if name in value_flags:
+        users.value(name, value)
     kept += args[i:end + 1]
     return end + 1
 
@@ -153,6 +168,7 @@ def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], user
             value = args[end] if end < len(args) else ""
         if char == "u":
             users.numeric(value)
+        users.value(f"-{char}", value)
         break  # a flag that takes a value ends the cluster: the rest of it is the value
     kept += args[i:end + 1]
     return end + 1
