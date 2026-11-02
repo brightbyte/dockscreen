@@ -16,5 +16,5 @@ def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime, al
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    return composeproject.check_and_run(global_args, sub, userargs.Parsed(None, False, args, []), runtime,
+    return composeproject.check_and_run(global_args, sub, userargs.Parsed.unread(args, runtime), runtime,
                                         allow_me)

@@ -60,15 +60,15 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
         return 1
-    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users)
+    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
     root_default = root_default_notice(ctx.policy(runtime.cwd).default_user)
-    for message in [*parsed.notices, root_default, defaults_notice()]:
+    for message in [*parsed.users.notices, root_default, defaults_notice()]:
         if message:
             messages.notice(message)
-    ctx = ctx.with_allow_me(parsed.allow_me)
+    ctx = ctx.with_allow_me(parsed.users.allow_me)
 
     created = _create_checked(ctx, parsed, [])
     if isinstance(created, int):
@@ -202,7 +202,7 @@ def _user_origin(parsed: runargs.ParsedRun, decided: Assessment | None) -> Origi
     """
     if decided is not None and decided.origin is not None:
         return decided.origin
-    return Origin.COMMAND_LINE if parsed.user_given else Origin.IMAGE
+    return Origin.COMMAND_LINE if parsed.users.chosen else Origin.IMAGE
 
 
 def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[Finding]:
@@ -242,13 +242,13 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users)
+    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         return verdict.report(Report.of(refusals), brief)
     if not brief:
-        for message in parsed.notices:
+        for message in parsed.users.notices:
             messages.notice(message)
-    ctx = ctx.with_allow_me(parsed.allow_me)
+    ctx = ctx.with_allow_me(parsed.users.allow_me)
 
     try:
         _, created = check(ctx, parsed, [])

@@ -9,7 +9,7 @@ ME = (4242, 4343)
 
 def refusals(parsed):
     """What the policy says about the users parsed gives."""
-    return policy.Policy(fakes.rules()).check_user_options(parsed.users)
+    return policy.Policy(fakes.rules()).check_user_options(parsed.users.given)
 
 
 def parse(*args):
@@ -81,20 +81,21 @@ def test_incomplete_command_lines_are_errors(args):
 def test_as_me_means_the_callers_ids_and_resolves_nothing():
     parsed = runargs.parse(["--as-me", "img"], ME, accounts=None)  # looking anything up would fail
     assert parsed.create_args == ["--user=4242:4343", "img"]
-    assert parsed.user_given and parsed.notices == []
+    assert parsed.users.chosen and parsed.users.notices == []
 
 
 def test_current_user_is_no_longer_a_flag_of_ours():
     parsed = parse("--current-user", "img")
-    assert parsed.create_args == ["--current-user", "img"] and not parsed.user_given  # docker will reject it
+    assert parsed.create_args == ["--current-user", "img"]  # docker will reject it
+    assert not parsed.users.chosen
 
 
 @pytest.mark.parametrize("flags", [["--as", "alice"], ["--as=alice"]])
 def test_as_resolves_a_local_account_on_the_host(flags):
     parsed = runargs.parse([*flags, "img"], ME, fakes.Accounts())
     assert parsed.create_args == ["--user=4242:4343", "img"]
-    assert parsed.notices == ["Resolving user alice to uid 4242, gid 4343"]
-    assert parsed.user_given
+    assert parsed.users.notices == ["Resolving user alice to uid 4242, gid 4343"]
+    assert parsed.users.chosen
 
 
 def test_as_with_an_unknown_account_or_an_id_is_refused():
@@ -116,7 +117,7 @@ def test_as_with_an_unknown_account_or_an_id_is_refused():
 def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
     parsed = parse(*flags, "img")
     assert f"--user={user}" in parsed.create_args
-    assert parsed.user_given and parsed.notices == []
+    assert parsed.users.chosen and parsed.users.notices == []
 
 
 @pytest.mark.parametrize("flags", [
@@ -135,9 +136,9 @@ def test_a_user_flag_in_a_cluster_keeps_its_neighbours():
 
 def test_user_flags_after_the_image_belong_to_the_command():
     parsed = parse("img", "id", "-u", "--as-me", "--as", "alice")
-    assert not parsed.user_given
+    assert not parsed.users.chosen
     assert parsed.create_args == ["img", "id", "-u", "--as-me", "--as", "alice"]
 
 
 def test_no_user_flag_means_not_given():
-    assert not parse("-it", "img").user_given
+    assert not parse("-it", "img").users.chosen

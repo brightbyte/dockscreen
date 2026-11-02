@@ -34,20 +34,21 @@ COMPOSE_VALUE_FLAGS = {
 }
 
 
-class UserOptions:
-    """Collector of the users a command line gives, which turns each into `--user=uid:gid` for docker, and of
-    the values of its other options.
+class GivenUsers:
+    """What a command line says about the user to run as, gathered while it is read: each user option turned
+    into `--user=uid:gid` for docker, and recorded.
 
-    Records whether a user was given, whether the caller's own ids are allowed (--as-me), the notices that
-    resolving names produced, the users given (given), for the policy to judge
-    (Policy.check_user_options), and each option with its value (values), as docker gets it.
+    Records whether it chooses a user (chosen: --user, -u, --as or --as-me), whether the caller's own ids
+    are allowed (allow_me: --as-me, or --allow-me for `docker run`), the notices that resolving names
+    produced, the users given (given), for the policy to judge (Policy.check_user_options), and each option
+    that takes a value, with it (values), as docker gets it.
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
         """Starts with no user given; me: the (uid, gid) --as-me stands for; accounts: where --as looks."""
         self.callers_ids = me
         self.accounts = accounts
-        self.user_given = False
+        self.chosen = False
         self.allow_me = False
         self.notices: list[str] = []
         self.given: list[UserOption] = []
@@ -59,7 +60,7 @@ class UserOptions:
 
     def numeric(self, spec: str) -> str:
         """Returns `--user=` for spec (--user or -u), and records it."""
-        self.user_given = True
+        self.chosen = True
         self.given.append(UserOption("--user", spec))
         return f"--user={spec}"
 
@@ -67,7 +68,7 @@ class UserOptions:
         """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice;
         or returns --as as given if there is no such account. Records it either way.
         """
-        self.user_given = True
+        self.chosen = True
         account = self.accounts.user(name) if name else None
         self.given.append(UserOption(commandline.AS, name, account))
         if account is None:
@@ -79,23 +80,26 @@ class UserOptions:
 
     def me(self) -> str:
         """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
-        self.user_given = self.allow_me = True
+        self.chosen = self.allow_me = True
         self.value("--user", ids.format_user(self.callers_ids))
         return f"--user={ids.format_user(self.callers_ids)}"
 
 
 class Parsed(NamedTuple):
-    """Reading of a command line that runs something in a container: the service or container it names,
-    whether it chooses a user, and its arguments with --as and --as-me replaced by ids.
+    """Reading of a command line that runs something in a container: the service or container it names, its
+    arguments with --as and --as-me replaced by ids, and what it says about the user before the service
+    (users).
     """
     service: str | None
-    user_given: bool  # --user, -u or --as before the service
-    args: list        # args with --as NAME replaced by --user=uid:gid
-    notices: list     # what resolving user names on this host did, for the caller to print
-    users: tuple = ()     # the users it gives (policy.UserOption), for the policy to judge
-    # (option, value) for each option before the service that takes a value, as docker gets it: --as and
-    # --as-me as --user with the ids
-    values: tuple = ()
+    args: list
+    users: GivenUsers
+
+    @classmethod
+    def unread(cls, args: list[str], runtime: Runtime) -> "Parsed":
+        """Returns args as a command line that names no service and gives no user, for a subcommand that
+        takes neither (`up`, `create`).
+        """
+        return cls(None, args, GivenUsers(runtime.me, runtime.accounts))
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
@@ -107,15 +111,13 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     """
-    users = UserOptions(me, accounts)
+    users = GivenUsers(me, accounts)
     kept: list[str] = []
     i = 0
     while i < len(args):
         token = args[i]
         if token == "--":
-            service = args[i + 1] if i + 1 < len(args) else None
-            return Parsed(service, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given),
-                          tuple(users.values))
+            return Parsed(args[i + 1] if i + 1 < len(args) else None, [*kept, *args[i:]], users)
         if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
@@ -124,9 +126,8 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         elif token.startswith("-") and token != "-":
             i = _parse_short(args, i, value_flags, users, kept)
         else:
-            return Parsed(token, users.user_given, [*kept, *args[i:]], users.notices, tuple(users.given),
-                          tuple(users.values))
-    return Parsed(None, users.user_given, kept, users.notices, tuple(users.given), tuple(users.values))
+            return Parsed(token, [*kept, *args[i:]], users)
+    return Parsed(None, kept, users)
 
 
 
@@ -143,15 +144,15 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
     parse takes them.
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users)
+    refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return None
-    for notice in parsed.notices:
+    for notice in parsed.users.notices:
         messages.notice(notice)
     return parsed.args
 
-def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: UserOptions,
+def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: GivenUsers,
                 kept: list[str]) -> int:
     """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
@@ -170,7 +171,7 @@ def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users
     return end + 1
 
 
-def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: UserOptions,
+def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: GivenUsers,
                  kept: list[str]) -> int:
     """Reads the cluster at args[i] (such as -it or -u0:0) into kept, and returns the index after it."""
     token = args[i]

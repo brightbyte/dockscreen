@@ -48,22 +48,19 @@ class ParseError(Exception):
 
 
 class ParsedRun(NamedTuple):
-    """Reading of a `docker run` command line: the arguments for `docker create`, the image and command, and
-    what only `run` does with them.
+    """Reading of a `docker run` command line: the arguments for `docker create`, the image and command, what
+    only `run` does with them, and what it says about the user (users).
     """
     create_args: list
     image: str
     command: list
     detach: bool
     detach_keys: str | None
-    user_given: bool  # --user, -u, --as or --as-me before the image
-    notices: list     # what resolving user names on this host did, for the caller to print
-    allow_me: bool = False  # --allow-me or --as-me before the image
-    users: tuple = ()       # the users it gives (policy.UserOption), for the policy to judge
+    users: userargs.GivenUsers  # what it says about the user before the image
 
 
 class _State:
-    def __init__(self, users: userargs.UserOptions) -> None:
+    def __init__(self, users: userargs.GivenUsers) -> None:
         self.users = users
         self.kept: list[str] = []
         self.detach = False
@@ -79,7 +76,7 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
     Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
     the policy to judge.
     """
-    users = userargs.UserOptions(me, accounts)
+    users = userargs.GivenUsers(me, accounts)
     state = _State(users)
     i = 0
     while i < len(args):
@@ -96,8 +93,7 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
             break
     if i >= len(args):
         raise ParseError("no image found in the command line")
-    return ParsedRun([*state.kept, *args[i:]], args[i], args[i + 1:], state.detach, state.detach_keys,
-                     users.user_given, users.notices, users.allow_me, tuple(users.given))
+    return ParsedRun([*state.kept, *args[i:]], args[i], args[i + 1:], state.detach, state.detach_keys, users)
 
 
 def _parse_long(args: list[str], i: int, state: _State) -> int:

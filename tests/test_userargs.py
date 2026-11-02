@@ -11,7 +11,7 @@ VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE
 
 def refusals(parsed):
     """What the policy says about the users parsed gives."""
-    return policy.Policy(rules()).check_user_options(parsed.users)
+    return policy.Policy(rules()).check_user_options(parsed.users.given)
 
 
 
@@ -33,7 +33,7 @@ def parse(command, args):
 ])
 def test_run_arguments(args, service, user_given):
     parsed = parse("run", args)
-    assert (parsed.service, parsed.user_given, parsed.args) == (service, user_given, args)
+    assert (parsed.service, parsed.users.chosen, parsed.args) == (service, user_given, args)
 
 
 @pytest.mark.parametrize("args", [
@@ -47,8 +47,10 @@ def test_users_must_be_numeric_uid_gid(args):
 
 def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
-    assert parse("exec", exec_args)[:2] == ("web", True)
-    assert parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])[:2] == ("c", False)
+    parsed = parse("exec", exec_args)
+    assert (parsed.service, parsed.users.chosen) == ("web", True)
+    parsed = parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])
+    assert (parsed.service, parsed.users.chosen) == ("c", False)
     assert refusals(parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"]))
 
 
@@ -73,8 +75,9 @@ ACCOUNTS = Accounts()
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
     parsed = parse(subcommand, args)
     assert parsed.args == rewritten
-    assert parsed.user_given == ("--as" not in rewritten)
-    assert parsed.notices == ([] if "--as" in rewritten else ["Resolving user alice to uid 1001, gid 1002"])
+    assert parsed.users.chosen == ("--as" not in rewritten)
+    resolving = ["Resolving user alice to uid 1001, gid 1002"]
+    assert parsed.users.notices == ([] if "--as" in rewritten else resolving)
 
 
 def test_as_with_an_unknown_name_is_refused():
@@ -90,4 +93,4 @@ def test_a_name_given_to_user_points_to_as():
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
     parsed = parse(subcommand, ["-it", "--as-me", "c", "sh"])
-    assert parsed.args == ["-it", "--user=1000:1001", "c", "sh"] and parsed.user_given
+    assert parsed.args == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.chosen

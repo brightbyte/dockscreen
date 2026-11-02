@@ -207,7 +207,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         return 1
 
     scope = project.scope
-    lines = [*parsed.notices, *project.surroundings(),
+    lines = [*parsed.users.notices, *project.surroundings(),
              verdict.root_default_notice(scope.policy(project.directory).default_user),
              *substitutions.describe(project.hardening)]
     with project.generated() as command:
@@ -232,7 +232,7 @@ def _as_run(final: Project, parsed: userargs.Parsed, runtime: Runtime) -> Projec
 
 def _chosen(parsed: userargs.Parsed) -> frozenset[str]:
     """Returns the services whose user the command line chooses: `run -u uid:gid` or `run --as NAME`."""
-    return frozenset({parsed.service}) if parsed.user_given and parsed.service else frozenset()
+    return frozenset({parsed.service}) if parsed.users.chosen and parsed.service else frozenset()
 
 
 @contextlib.contextmanager
