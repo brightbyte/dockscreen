@@ -27,7 +27,7 @@ from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import imageuser, verdict
-from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.scope import Scope
@@ -85,13 +85,13 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         # image's to resolve, whatever its passwd and group files say.
         ctx.docker.remove(container.id)
         user = ids.format_user(assessment.pinned_user)
-        if assessment.kind is Kind.FALLBACK:
+        if assessment.replaces_root:
             messages.notice(_fallback_notice(assessment))
         else:
             messages.notice(messages.routine_change(
                 f"image {parsed.image} runs as {user}, passed to docker as numbers"))
         extra = [f"--user={user}"]
-        if assessment.kind is Kind.FALLBACK:
+        if assessment.replaces_root:
             extra += _home_args(ctx, container, assessment)
         created = _create_checked(ctx, parsed, extra)
         if isinstance(created, int):
@@ -167,7 +167,7 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str]
     try:
         container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, extra))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
-        assessment = Assessment(Kind.IMAGE, image, tuple(problems)) if problems else ctx.assess(
+        assessment = Assessment(Origin.IMAGE, image, tuple(problems)) if problems else ctx.assess(
             ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
@@ -269,7 +269,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
 def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
-    if assessment.kind is Kind.EXPLICIT:
+    if not assessment.decided:
         messages.out(messages.Marked(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
@@ -301,10 +301,10 @@ def _report_findings(found: list[Finding]) -> None:
 
 def _describe_outcome(ctx: Scope, assessment: Assessment) -> str:
     """Returns, as text, what the assessment means for running the image."""
-    if assessment.kind in (Kind.IMAGE, Kind.CONFIGURED) and not assessment.refused:
+    if assessment.accepted:
         return runs_as(assessment, ctx.local)
     who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
-    if assessment.kind is Kind.FALLBACK:
+    if assessment.replaces_root:
         return (f"would run as {who}; docker run would run it as the default user "
                 f"({ids.format_user(assessment.pinned_user)}) instead")
     reasons = "; ".join(printable(r.text) for r in assessment.reasons)

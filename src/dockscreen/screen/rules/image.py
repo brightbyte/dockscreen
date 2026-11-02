@@ -20,7 +20,7 @@ from typing import Any
 from dockscreen.model.image import Identity, Inspected, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.rules.base import RuleBase
 
@@ -39,30 +39,30 @@ class ImageRules(RuleBase):
         """Decides which user the container that inspected looked through may run as, by the rules in this
         module's docstring; returns the Assessment.
 
-        origin: where the container's user comes from; one that is not the image's is not judged here
-        (Kind.EXPLICIT). The image section that applies is this policy's (section). The passwd and group
-        files must have been read if needs_user_files says so.
+        origin: where the container's user comes from; one that is not the image's is not judged here, and
+        is the assessment's origin. The image section that applies is this policy's (section). The passwd
+        and group files must have been read if needs_user_files says so.
         """
         image, match = inspected.image, self.section
         notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
         found: dict[str, Any] = {"section": match.repository}
         if origin is not Origin.IMAGE:
-            return Assessment(Kind.EXPLICIT, image, notes, **found)
+            return Assessment(origin, image, notes, **found)
         if self.configured_user:
-            return Assessment(Kind.CONFIGURED, image, notes, Identity(*self.configured_user),
+            return Assessment(Origin.CONFIG, image, notes, Identity(*self.configured_user),
                               user=self.configured_user, **found)
         assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
         try:
             identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
         except ValueError as e:
-            return Assessment(Kind.IMAGE, image, (*notes, Finding(str(e))), **found)
+            return Assessment(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
         if identity.involves_root:
-            return Assessment(Kind.FALLBACK, image, notes, identity, user=self.default_user,
-                              home=self.default_home, **found)
+            return Assessment(Origin.CONFIG, image, notes, identity, user=self.default_user,
+                              home=self.default_home, replaces_root=True, **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
-        return Assessment(Kind.IMAGE, image, (*notes, *refusals), identity,
+        return Assessment(Origin.IMAGE, image, (*notes, *refusals), identity,
                           user=(identity.uid, identity.gid), **found)
 
 

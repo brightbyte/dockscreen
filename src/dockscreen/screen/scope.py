@@ -99,7 +99,7 @@ class Scope(NamedTuple):
         (the current one for what a command line runs): looks at the image as far as the policy needs
         (look), which then judges it (Policy.check_image).
 
-        Returns an Assessment, of Kind.EXPLICIT if the container's user does not come from the image. Raises
+        Returns an Assessment, with the container's user's origin if it does not come from the image. Raises
         DockerError if the image cannot be inspected or its passwd or group file is too large.
         container and info: the container created from the image, and what docker inspect shows of it.
         origin: where the container's user comes from, if known (Inspected.user_origin if not).

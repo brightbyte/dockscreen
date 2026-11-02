@@ -4,8 +4,9 @@ what the verdicts mean), and how the decision about a container's user is descri
 
 from dockscreen.host import hostusers
 from dockscreen.model.image import section_hint
+from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.findings import Finding, Report, Severity, Verdict
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
@@ -19,7 +20,7 @@ def dot(assessment: Assessment) -> messages.Mark:
     """Returns the mark for an assessment of an image's user: BAD if refused, GOOD if accepted, else WARN."""
     if assessment.refused:
         return messages.BAD
-    return messages.GOOD if assessment.kind in (Kind.IMAGE, Kind.CONFIGURED) else messages.WARN
+    return messages.GOOD if assessment.accepted else messages.WARN
 
 
 # The closing line, the same for an audit, for --brief and for the check before a command runs.
@@ -73,15 +74,15 @@ def screened(found: Report) -> bool:
 # --- the user a container runs as ---------------------------------------------------
 
 def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
-    """Describes what an accepted image (Kind.IMAGE or Kind.CONFIGURED) runs as; local: HostAccounts."""
-    if assessment.kind is Kind.CONFIGURED:
+    """Describes what an accepted image (Assessment.accepted) runs as; local: HostAccounts."""
+    if assessment.origin is Origin.CONFIG:
         return f"runs as {ids.format_user(assessment.pinned_user)}, the user the config file sets for it"
     assert assessment.identity is not None, "an accepted image was looked at"
     return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
 
 
 def instead_of_root(assessment: Assessment) -> str:
-    """Describes what a Kind.FALLBACK assessment does instead of running as root."""
+    """Describes what an assessment that replaces_root does instead of running as root."""
     return f"running as {ids.format_user(assessment.pinned_user)} instead of root"
 
 

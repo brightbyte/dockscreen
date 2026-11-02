@@ -8,7 +8,6 @@ from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import Location
 from dockscreen.screen import policy
-from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity
 from dockscreen.screen.rules import project as project_rules
 from dockscreen.screen.rules import service as service_rules
@@ -626,14 +625,14 @@ def inspected(user, mounts=False):
     return Inspected(Image("app:1", "sha256:1"), user, user, mounts).with_user_files(PASSWD, "")
 
 
-@pytest.mark.parametrize("user, kind, runs_as", [
-    ("root", Kind.FALLBACK, (65534, 65534)),
-    ("app", Kind.IMAGE, (100000, 100001)),
+@pytest.mark.parametrize("user, origin, root, runs_as", [
+    ("root", Origin.CONFIG, True, (65534, 65534)),  # the default user instead
+    ("app", Origin.IMAGE, False, (100000, 100001)),
 ])
-def test_an_images_own_user_is_judged_from_its_files_without_docker(user, kind, runs_as):
+def test_an_images_own_user_is_judged_from_its_files_without_docker(user, origin, root, runs_as):
     found = policy.Policy(rules()).check_image(inspected(user), Origin.IMAGE)
 
-    assert (found.kind, found.user, found.refused) == (kind, runs_as, False)
+    assert (found.origin, found.replaces_root, found.user, found.refused) == (origin, root, runs_as, False)
 
 
 def test_an_image_user_the_id_rules_refuse_with_host_mounts_is_refused():
@@ -648,7 +647,7 @@ def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configur
     assert not plain.needs_user_files(Origin.COMMAND_LINE)
     assert not configured.needs_user_files(Origin.IMAGE)
     found = configured.check_image(inspected("root")._replace(passwd=None), Origin.IMAGE)
-    assert (found.kind, found.user) == (Kind.CONFIGURED, (7, 7))
+    assert (found.origin, found.replaces_root, found.user) == (Origin.CONFIG, False, (7, 7))
 
 
 def test_a_projects_images_are_judged_once_they_were_looked_at(project):

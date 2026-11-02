@@ -14,7 +14,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings, verdict
-from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.scope import Scope
 from dockscreen.screen.verdict import explain
@@ -62,7 +62,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                 explained = explain(assessment, runtime.config_file)
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
             if strict:
-                user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
+                user_origin = Origin.IMAGE if assessment.decided else Origin.COMMAND_LINE
                 strict_policy = ctx.policy_here(assessment.section, STRICT)
                 found = strict_policy.check_container(Container(info, runtime.cwd, user_origin))
                 problems += findings.about(found, ref)

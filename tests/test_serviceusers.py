@@ -9,7 +9,6 @@ from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
 from dockscreen.screen import decisions, policy, substitutions
-from dockscreen.screen.assessment import Kind
 from dockscreen.screen.findings import Severity, Verdict
 from dockscreen.screen.scope import Scope
 from dockscreen.util import messages
@@ -132,19 +131,19 @@ def test_listing_the_services_can_fail_closed():
 
 # --- deciding about the images ---------------------------------------------------
 
-@pytest.mark.parametrize("image_user, kind, refused", [
-    ("app", Kind.IMAGE, False),       # 100000:100001, high and unknown to the host
-    ("", Kind.FALLBACK, False),       # no USER: root
-    ("root", Kind.FALLBACK, False),
-    ("0:0", Kind.FALLBACK, False),
-    ("web", Kind.IMAGE, True),        # 1000: low, and the host has it
-    ("ghost", Kind.IMAGE, True),      # not defined in the image
+@pytest.mark.parametrize("image_user, replaces_root, refused", [
+    ("app", False, False),       # 100000:100001, high and unknown to the host
+    ("", True, False),           # no USER: root
+    ("root", True, False),
+    ("0:0", True, False),
+    ("web", False, True),        # 1000: low, and the host has it
+    ("ghost", False, True),      # not defined in the image
 ])
-def test_the_images_own_user_is_judged_as_docker_run_does(image_user, kind, refused):
+def test_the_images_own_user_is_judged_as_docker_run_does(image_user, replaces_root, refused):
     prepared, _, images = prepare(project(), FakeImages(users={"web:1": image_user}))
 
     assessment = prepared.decisions["web"]
-    assert (assessment.kind, assessment.refused) == (kind, refused)
+    assert (assessment.replaces_root, assessment.refused) == (replaces_root, refused)
     assert prepared.report.passed is not refused
     assert [call for call in images.calls if call[0] == "remove"] == [("remove", "c1")]  # nothing is left
 
@@ -300,7 +299,7 @@ def test_without_mounts_a_low_unknown_id_is_accepted_and_with_mounts_it_is_not()
     images = FakeImages(users={"web:1": "pg"})
     plain, _, _ = prepare(project(web={}), images)
     mounted, _, _ = prepare(project(web=BIND), images)
-    assert plain.decisions["web"].kind is Kind.IMAGE and not plain.decisions["web"].refused
+    assert plain.decisions["web"].origin is Origin.IMAGE and not plain.decisions["web"].refused
     assert mounted.decisions["web"].refused
 
 
@@ -323,7 +322,7 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     images = FakeImages(users={"mariadb:11": ""}, digests={"mariadb:11": ["mariadb@sha256:abc"]})
     prepared, final, origins = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
 
-    assert prepared.decisions["db"].kind is Kind.CONFIGURED
+    assert prepared.decisions["db"].origin is Origin.CONFIG and not prepared.decisions["db"].replaces_root
     assert final["services"]["db"]["user"] == "999:999" and user_origins(origins) == {"db": Origin.CONFIG}
     assert prepared.notices() == [  # configured: routine only, no surprise
         messages.routine_change(f"services db: {PIN}")]
@@ -344,7 +343,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
     prepared, _, _ = prepare(config, images, active=("db",), settings=MARIADB)
 
     assessment = prepared.decisions["db"]
-    assert assessment.kind is Kind.FALLBACK  # the normal rules: root runs as the default user
+    assert assessment.replaces_root  # the normal rules: root runs as the default user
     lines = prepared.describe()
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
             f"but {why}") in lines

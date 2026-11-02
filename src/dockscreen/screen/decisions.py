@@ -16,7 +16,7 @@ from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import policy, substitutions, verdict
-from dockscreen.screen.assessment import Assessment, Kind
+from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.substitutions import Group, Substitution
 from dockscreen.util import ids, messages
@@ -63,12 +63,11 @@ class Decisions(NamedTuple):
                         f"default user ({default}) if it is started")
                 lines.append(messages.notable_change(text, USER_HELP))
                 continue
-            accepted = decision.kind in (Kind.IMAGE, Kind.CONFIGURED)
-            if accepted and not decision.refused:
+            if decision.accepted:
                 runs_as = verdict.runs_as(decision, self.local)
                 text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
                 lines.append(messages.Marked(verdict.dot(decision), text))
-            elif decision.kind is Kind.FALLBACK:
+            elif decision.replaces_root and not decision.refused:
                 instead = verdict.instead_of_root(decision)
                 lines.append(messages.notable_change(f"service {name}: no user set; {instead}", USER_HELP))
             for note in decision.notes:
@@ -116,13 +115,12 @@ def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[
     """Returns the substitutions that pin a started service to what the assessment of its image checked:
     the user, as numbers, the image by id unless it is built, and pull_policy never.
     """
-    if assessment.kind is Kind.FALLBACK:
+    if assessment.replaces_root:
         found = _user(name, service, assessment.pinned_user, assessment.home,
                       verdict.instead_of_root(assessment), PINNED)
     else:  # the image's user, or the one its image section configures
-        origin = Origin.IMAGE if assessment.kind is Kind.IMAGE else Origin.CONFIG
         found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,
-                              origin=origin)]
+                              origin=assessment.origin)]
     # the image checked is what runs
     found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
     if assessment.image.id and "build" not in service:
