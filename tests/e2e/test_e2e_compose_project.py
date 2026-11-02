@@ -2,7 +2,7 @@
 
 Rules (inspect, composeproject):
 - the project directory is found as compose finds it, and a project that could send compose elsewhere is
-  refused: COMPOSE_FILE in a .env, a compose file from stdin;
+  refused: COMPOSE_FILE in a .env; a compose file from stdin cannot be screened;
 - a project directory that is or contains a sensitive path (/, the home directory, the config file) is
   refused, because everything in it can be mounted;
 - the project's name decides which containers, volumes and networks compose uses and removes, so a name
@@ -55,9 +55,9 @@ def test_an_env_file_given_on_the_command_line_is_checked_the_same_way(world):
     then_refused(world, "other.env sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR")
 
 
-def test_a_compose_file_from_stdin_is_refused(world):
+def test_a_compose_file_from_stdin_cannot_be_screened(world):
     when_dockscreen(world, "compose", "-f", "-", "up")
-    then_refused(world, "a compose file read from stdin cannot be inspected")
+    then_failed(world, "a compose file read from stdin cannot be inspected", status=1)
     then_nothing_handed_off(world)
 
 

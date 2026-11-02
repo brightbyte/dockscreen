@@ -4,8 +4,8 @@ could have written
 Rules (docker_cli, compose_cli, runtime, config):
 - the commands that start containers or build are screened; everything else goes to the real docker as
   typed, and so does everything after --skip-screening, with a warning;
-- dockscreen's own options go before the command; --strict-screen is refused for anything but audit,
-  docker options before `compose` are refused;
+- dockscreen's own options go before the command; --strict-screen is refused for the commands that do not
+  support it; docker options before `compose` are refused;
 - the real docker is the one the config file names, or the first on PATH that is not dockscreen; empty
   and relative PATH entries are skipped and warned about, and without a docker dockscreen stops;
 - the config file is read only if it and every directory above it are owned by the caller or root and

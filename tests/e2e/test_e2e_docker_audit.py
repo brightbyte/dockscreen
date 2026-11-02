@@ -1,6 +1,6 @@
 """Feature: `dockscreen audit` says what `docker run` would do with the same arguments, starting nothing
 
-Rules (docker_run.audit, runpolicy):
+Rules (docker_run.audit, policy.check_container):
 - the container is created as run would create it, looked at as run would, and removed;
 - the verdict is the exit status: 0 passed, 1 refused, 3 failed (the image could not be looked at),
   2 a command line that cannot be read;
@@ -94,10 +94,11 @@ def test_volumes_of_another_container_are_a_finding(world):
     then_refused(world, f"volumes_from 'container:{other}' reaches a container outside the project")
 
 
-def test_strict_screening_is_refused_for_any_other_command(world):
-    when_dockscreen(world, "--strict-screen", "run", ALPINE)
+def test_strict_screening_is_refused_for_the_commands_that_do_not_support_it(world):
+    when_dockscreen(world, "--strict-screen", "exec", "dockscreen-e2e-none", "true")
     then_status(world, 1)
-    then_said(world, "--strict-screen is only supported for audit so far")
+    then_said(world, "--strict-screen is only supported for audit, create, restart, run, start and buildx "
+                     "bake so far")
     then_nothing_handed_off(world)
 
 
