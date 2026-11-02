@@ -1,14 +1,15 @@
 """This module defines the policy's rules for what a compose project has besides its services: its top-level
-volumes, networks, secrets and configs, where it is, the daemon it runs on, and its name.
+volumes, networks, secrets and configs, where it is, the daemon it runs on, and its name; and for what it
+gets from around it: the configured mount dirs, and variables from the shell.
 """
 
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.project import Location
-from dockscreen.screen.findings import Finding, refused
+from dockscreen.screen.findings import Finding, Severity, refused
 from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 
 TOP_LEVEL_KEYS = frozenset({"name", "services", "volumes", "networks", "secrets", "configs", "version"})
@@ -139,6 +140,23 @@ class ProjectRules(RuleBase):
                                  f"{location.sensitive[0]}; move the compose file into a directory of its "
                                  "own"))
         return found
+
+    def check_mount_dirs(self, sensitive: Mapping[str, Sequence[str]]) -> list[Finding]:
+        """Checks the configured mount dirs, by the sensitive paths that each contains (sensitive: by mount
+        dir); returns a notable finding for each that contains one, since its containers can mount it.
+        """
+        return [Finding(f"the configured mount dir {directory} contains {paths[0]}, so containers can "
+                        "mount it", Severity.NOTABLE, help="narrow mount_dirs in the config file")
+                for directory, paths in sensitive.items() if paths]
+
+    def check_shell_env(self, copied: Mapping[str, Sequence[str]]) -> list[Finding]:
+        """Checks what the project's services take from the shell (copied: the names of the variables, by
+        service); returns a notable finding for each service that takes any, without their values.
+        """
+        return [Finding(f"environment variables taken from your shell: {', '.join(names)}", Severity.NOTABLE,
+                        f"service {name}",
+                        "unset them in your shell, or give the project literal values, to keep them out")
+                for name, names in copied.items() if names]
 
     def check_project_name(self, name: str, directory: str, made_from: Iterable[str]) -> list[Finding]:
         """Checks that the project in directory may use its name; returns a refusal if containers with that

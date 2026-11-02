@@ -9,7 +9,6 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.project import Location
 from dockscreen.screen.findings import Severity
-from dockscreen.util import messages
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
@@ -58,15 +57,15 @@ def test_sensitive_paths_are_found_inside_a_directory_after_resolving_symlinks(t
     assert "/etc" in inspect._sensitive_inside("/", make_runtime(env={}))
 
 
-def test_mount_dirs_that_contain_sensitive_paths_get_a_warning(tmp_path, monkeypatch):
+def test_the_sensitive_paths_in_each_configured_mount_dir_are_found(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / "code").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
     settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
-    [warning] = inspect.mount_dir_warnings(make_runtime(env={}, settings=settings))
-    assert warning == f"the configured mount dir {tmp_path} contains {home}, so containers can mount it"
-    assert warning.severity is Severity.NOTABLE and warning.mark is messages.WARN
+    found = inspect.sensitive_mount_dirs(make_runtime(env={}, settings=settings))
+    assert found[str(home / "code")] == []
+    assert found[str(tmp_path)][0] == str(home)  # the config file in it is too
 
 
 def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, monkeypatch):

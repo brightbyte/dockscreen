@@ -12,6 +12,7 @@ from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
 from dockscreen.screen.rules import project as project_rules
 from dockscreen.screen.rules import service as service_rules
+from dockscreen.util import messages
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
 # for the rest of the host).
@@ -576,6 +577,21 @@ def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
     assert found[0].startswith("the nearest compose file is in /home/me, which is your home directory")
     assert found[1].startswith("/home/me/.env sets COMPOSE_FILE")
     assert found[2].startswith("the project directory /home/me contains /home/me;")
+
+
+def test_a_mount_dir_that_contains_a_sensitive_path_is_pointed_out():
+    [warning] = policy.Policy(rules()).check_mount_dirs({"/srv": [], "/home": ["/home/me", "/home/me/.x"]})
+
+    assert warning == "the configured mount dir /home contains /home/me, so containers can mount it"
+    assert warning.severity is Severity.NOTABLE and warning.mark is messages.WARN
+
+
+def test_what_services_take_from_the_shell_is_pointed_out_by_name_per_service():
+    found = policy.Policy(rules()).check_shell_env({"db": ["HOME"], "web": ["A", "TOKEN"], "job": []})
+
+    assert [(f.subject, f.severity) for f in found] == [("service db", Severity.NOTABLE)] + [
+        ("service web", Severity.NOTABLE)]
+    assert found[1].shown == "service web: environment variables taken from your shell: A, TOKEN"
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])

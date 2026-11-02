@@ -8,7 +8,6 @@ select the project.
 from collections.abc import Sequence
 
 from dockscreen.compose import composeproject, inspect
-from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import substitutions, verdict
@@ -39,9 +38,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
 
     outcome, lines = _audit_images(project, brief)
     if not brief:
-        warnings = [*inspect.mount_dir_warnings(runtime),
-                    *shellenv.describe(project.hardened.definition, runtime.env)]
-        for line in [*substitutions.describe(project.hardening), *warnings, *lines]:
+        for line in [*substitutions.describe(project.hardening), *project.surroundings(), *lines]:
             messages.out(line)
         if outcome.reasons or project.hardening:
             messages.out(messages.Marked(messages.HINT, HARDEN_HINT))

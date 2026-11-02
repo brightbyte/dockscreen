@@ -69,14 +69,12 @@ def _sensitive_inside(directory: str, runtime: Runtime) -> list[str]:
     return [path for path in _sensitive_paths(runtime) if is_inside(os.path.realpath(path), root)]
 
 
-def mount_dir_warnings(runtime: Runtime) -> list[Finding]:
-    """Returns one notable finding per configured mount dir that equals or contains a sensitive path."""
-    return [
-        Finding(f"the configured mount dir {directory} contains {found[0]}, so containers can mount it",
-                Severity.NOTABLE, help="narrow mount_dirs in the config file")
-        for directory in config.all_mount_dirs(runtime.settings)
-        if (found := _sensitive_inside(directory, runtime))
-    ]
+def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
+    """Returns the sensitive paths that each configured mount dir equals or contains, by mount dir, for
+    Policy.check_mount_dirs.
+    """
+    return {directory: _sensitive_inside(directory, runtime)
+            for directory in config.all_mount_dirs(runtime.settings)}
 
 
 def passes(global_args: Sequence[str], runtime: Runtime,

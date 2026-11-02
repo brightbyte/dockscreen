@@ -7,23 +7,17 @@ from fakes import make_runtime
 from dockscreen import compose_cli
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import Docker
-from dockscreen.util import messages
 
 
 def config(**services):
     return {"name": "p", "services": {name: {"environment": env} for name, env in services.items()}}
 
 
-def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_values():
+def test_variables_that_are_the_shells_own_are_listed_per_service_by_name():
     shell = {"TOKEN": "s3cret", "HOME": "/home/me", "UID": "1000"}
     cfg = config(web={"TOKEN": "s3cret", "OWN": "x", "UID": "1000"}, db={"HOME": "/home/me"}, job={"A": "b"})
 
-    assert shellenv._copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
-    lines = shellenv.describe(cfg, shell)
-    assert lines == [
-        messages.Marked(messages.WARN, "service db: environment variables taken from your shell: HOME"),
-        messages.Marked(messages.WARN, "service web: environment variables taken from your shell: TOKEN")]
-    assert all("s3cret" not in line for line in lines)
+    assert shellenv.copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
 
 
 @pytest.mark.parametrize("environment, shell", [
@@ -35,11 +29,11 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_without_their_
     ({"UID": "1000"}, {"UID": "1000"}),   # dockscreen's own export
 ])
 def test_nothing_is_reported_for_these(environment, shell):
-    assert shellenv._copied(config(web=environment), shell) == {}
+    assert shellenv.copied(config(web=environment), shell) == {}
 
 
 def test_services_without_an_environment_are_fine():
-    assert shellenv._copied({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}
+    assert shellenv.copied({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}
 
 
 def test_exported_names_the_ids():

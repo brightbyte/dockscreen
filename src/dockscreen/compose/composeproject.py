@@ -160,6 +160,15 @@ class Compose(NamedTuple):
             return serviceusers.decided(project, self.scope, (Finding(problem, Severity.FAILED),))
         return serviceusers.prepare(command, project, list(args), self.scope, chosen)
 
+    def surroundings(self) -> list[Finding]:
+        """Returns what the policy finds in what the project gets from around it: configured mount dirs that
+        contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
+        (Policy.check_shell_env).
+        """
+        runtime, here = self.scope.runtime, self.scope.policy_for(self.directory)
+        return [*here.check_mount_dirs(inspect.sensitive_mount_dirs(runtime)),
+                *here.check_shell_env(shellenv.copied(self.hardened.definition, runtime.env))]
+
     def generated(self) -> contextlib.AbstractContextManager[Callable[[dict[str, Any]], list[str]]]:
         """Returns _generated() for this project."""
         return _generated(self.global_args, self.directory, self.scope.docker.binary)
@@ -203,10 +212,9 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         return 1
 
     scope = project.scope
-    lines = [*parsed.notices, *inspect.mount_dir_warnings(runtime),
+    lines = [*parsed.notices, *project.surroundings(),
              verdict.root_default_notice(scope.settings_in(project.directory).default_user),
              *substitutions.describe(project.hardening)]
-    lines += shellenv.describe(project.hardened.definition, runtime.env)
     with project.generated() as command:
         screened = project.screen(command, parsed, strict)
         if screened.final is None or screened.decided is None:  # it did not pass every stage
