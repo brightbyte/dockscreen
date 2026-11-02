@@ -68,16 +68,17 @@ class Compose(NamedTuple):
         unset = serviceusers.unset_user_services(self.hardened)
         return self.project.with_origins({name: {"user": Origin.IMAGE} for name in unset})
 
-    def static_ctx(self) -> policy.Context:
+    def static_policy(self) -> policy.Policy:
         """Returns the policy context for the checks before any image is looked at."""
         return self.scope.project_policy()
 
     def problems(self) -> list[Finding]:
         """Returns what is refused before any image is looked at; empty if nothing is."""
-        problems = policy.check_config(self.static(), self.static_ctx()) + policy.check_daemon(self.remote)
+        static = self.static_policy()
+        problems = static.check_project(self.static()) + static.check_daemon(self.remote)
         # the name check asks the daemon, which must be this host's
         if not problems and not inspect.names_project(self.global_args, self.scope.runtime.env):
-            problems += inspect.name_conflicts(self.hardened["name"], self.directory,
+            problems += inspect.name_conflicts(static, self.hardened["name"], self.directory,
                                               self.scope.docker)
         return problems
 
@@ -87,7 +88,7 @@ class Compose(NamedTuple):
         """
         return substitutions.applied(self.project, prepared.changes())
 
-    def final_ctx(self, prepared: serviceusers.Prepared) -> policy.Context:
+    def final_policy(self, prepared: serviceusers.Prepared) -> policy.Policy:
         """Returns the policy context for the project that will run, with image sections only where prepared
         proved them.
         """
@@ -160,7 +161,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
             verdict.screened(prepared.report)
             return 1
         final = project.final(prepared)
-        checked = Report.of(policy.check_config(final, project.final_ctx(prepared)))
+        checked = Report.of(project.final_policy(prepared).check_project(final))
         if not checked.passed:  # what will run
             verdict.screened(checked)
             return 1

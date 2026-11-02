@@ -3,7 +3,7 @@ the caller's own ids are allowed, and the directory the project is in.
 
 Everything the checks of one image, service or container need follows from it: the settings of the
 config file with the image and project sections that apply (config.effective), the id rules with those
-settings, and the policy context (policy.Context) built from them.
+settings, and the policy context (policy.Policy) built from them.
 """
 
 from collections.abc import Mapping
@@ -54,22 +54,22 @@ class Scope(NamedTuple):
         settings = config.effective(self.runtime.settings, repository, self.directory)
         return settings, self.ids.with_settings(settings)
 
-    def policy_context(self, repository: str | None, trust: frozenset[Origin] = TRUSTED) -> policy.Context:
+    def policy_context(self, repository: str | None, trust: frozenset[Origin] = TRUSTED) -> policy.Policy:
         """Returns the policy context for a container of an image from repository (None: no image section
         applies), with this scope's directory as the project's, trusting the origins in trust.
         """
         settings, _ = self.for_image(repository)
-        ctx = policy.context_for(settings, self.directory, self.ids, self.runtime.config_file)
-        return ctx.with_trust(trust)
+        found = policy.Policy.for_settings(settings, self.directory, self.ids, self.runtime.config_file)
+        return found.with_trust(trust)
 
-    def project_policy(self, verified: Mapping[str, str] | None = None) -> policy.Context:
+    def project_policy(self, verified: Mapping[str, str] | None = None) -> policy.Policy:
         """Returns the policy context for the project, which gives each service the settings of its image
-        section, if one applies (policy.Context.for_service).
+        section, if one applies (policy.Policy.for_service).
 
         Before the images are there, that is the section the image name points to; verified, once they are,
         maps each service to the section its image was proven to have been pulled for (config.section_for).
         """
-        def scope(name: str, service: dict[str, Any]) -> policy.Context:
+        def scope(name: str, service: dict[str, Any]) -> policy.Policy:
             if verified is None:
                 image = str(service.get("image") or "")
                 repository = config.name_matches(self.runtime.settings, image, "build" in service)

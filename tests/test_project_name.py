@@ -1,10 +1,11 @@
 import pytest
-from fakes import FakeImages, compose_project
+from fakes import FakeImages, compose_project, rules
 
 from dockscreen import compose_cli
 from dockscreen.commands import compose_up
 from dockscreen.compose import inspect
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
 
 
@@ -16,14 +17,14 @@ def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_w
             asked.append((label, value, wanted))
             return []
 
-    inspect.name_conflicts("proj", "/p", Labels())
+    inspect.name_conflicts(policy.Policy("/p", rules()), "proj", "/p", Labels())
     assert asked == [("com.docker.compose.project", "proj", "com.docker.compose.project.working_dir")]
 
 
 def conflicts(found, directory="/p"):
     docker = FakeImages()
     docker.project_dirs = found
-    return inspect.name_conflicts("proj", directory, docker)
+    return inspect.name_conflicts(policy.Policy(directory, rules()), "proj", directory, docker)
 
 
 def test_a_name_is_free_when_no_container_or_only_ones_of_this_directory_have_it(tmp_path):
@@ -48,7 +49,7 @@ def test_not_being_able_to_ask_is_a_failure_to_look():
         def label_values(self, label, value, wanted):
             raise DockerError("daemon down")
 
-    [failure] = inspect.name_conflicts("proj", "/p", Broken())
+    [failure] = inspect.name_conflicts(policy.Policy("/p", rules()), "proj", "/p", Broken())
     assert failure == "cannot tell whether another project is called 'proj': daemon down"
     assert failure.severity is Severity.FAILED
 

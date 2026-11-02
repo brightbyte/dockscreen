@@ -13,7 +13,7 @@ from dockscreen.host.dockerclient import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
-from dockscreen.screen import findings, policy, verdict
+from dockscreen.screen import findings, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import Assessment, Kind, assess, explain
 from dockscreen.screen.scope import Scope
@@ -42,11 +42,11 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
     default user or a configured one) is refused like one whose user is not accepted, unless it
     already runs as that user. strict: --strict-screen was given, so what the command line that created a
-    container asked for is judged as a project's would be, and refused (policy.check_container).
+    container asked for is judged as a project's would be, and refused (Policy.check_container).
     """
-    if is_remote(global_args, runtime.docker):
-        return policy.check_daemon(True)
     ctx = Scope(runtime, allow_me)
+    if is_remote(global_args, runtime.docker):
+        return ctx.policy_context(None).check_daemon(True)
     problems: list[Finding] = []
     for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
         try:
@@ -61,8 +61,8 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explain(ctx, assessment)]
             if strict:
                 user_origin = Origin.COMMAND_LINE if assessment.kind is Kind.EXPLICIT else Origin.IMAGE
-                policy_ctx = ctx.policy_context(assessment.section, STRICT)
-                found = policy.check_container(Container(info, user_origin), policy_ctx)
+                strict_policy = ctx.policy_context(assessment.section, STRICT)
+                found = strict_policy.check_container(Container(info, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
             problems.append(Finding(messages.with_output(e), subject=ref))

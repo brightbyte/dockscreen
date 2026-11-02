@@ -12,7 +12,7 @@ checked numbers.
 
 check creates the container and assesses it; gate starts it if it may run; audit creates it in the
 same way, reports what `run` would do and removes it. The command line is trusted, so what it asks for
-that a project or an image may not is pointed out (policy.check_container), and fails the audit only with
+that a project or an image may not is pointed out (Policy.check_container), and fails the audit only with
 --strict-screen.
 """
 
@@ -26,7 +26,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import imagedecision, imageuser, policy, verdict
+from dockscreen.screen import imagedecision, imageuser, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.imagedecision import (
     CHOOSE_HINT,
@@ -59,18 +59,19 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     strict: --strict-screen was given, so what the command line asks for that a project or an image may
     not have is refused too.
     """
-    daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
+    ctx = Scope(runtime, allow_me)
+    daemon = Report.of(ctx.policy_context(None).check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon)
-    ctx = Scope(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
         return 1
-    if parsed.refusals:
-        verdict.screened(Report.of(parsed.refusals))
+    refusals = ctx.policy_context(None).check_user_options(parsed.users)
+    if refusals:
+        verdict.screened(Report.of(refusals))
         return 1
     for message in [*parsed.notices, root_default_notice(ctx), defaults_notice()]:
         if message:
@@ -185,14 +186,13 @@ def _command_line_findings(ctx: Scope, container: Container, assessment: Assessm
                            trust: frozenset[Origin]) -> list[Finding]:
     """Returns what the command line asks for, in the container it created (check, with no options of
     dockscreen's own), that a project or an image may not have: refused, or notable where trust trusts the
-    command line (policy.check_container).
+    command line (Policy.check_container).
 
     Empty if the container could not be inspected.
     """
     if not container.inspected:
         return []
-    policy_ctx = ctx.policy_context(assessment.section, trust)
-    return policy.check_container(container, policy_ctx)
+    return ctx.policy_context(assessment.section, trust).check_container(container)
 
 
 def _user_origin(parsed: runargs.ParsedRun, extra: Sequence[str]) -> Origin:
@@ -232,18 +232,19 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     """
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
-    daemon = Report.of(policy.check_daemon(is_remote(global_args, runtime.docker)))
+    ctx = Scope(runtime, allow_me)
+    daemon = Report.of(ctx.policy_context(None).check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon, brief)
-    ctx = Scope(runtime, allow_me)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    if parsed.refusals:
-        return verdict.report(Report.of(parsed.refusals), brief)
+    refusals = ctx.policy_context(None).check_user_options(parsed.users)
+    if refusals:
+        return verdict.report(Report.of(refusals), brief)
     if not brief:
         for message in parsed.notices:
             messages.notice(message)

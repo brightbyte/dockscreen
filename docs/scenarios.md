@@ -235,7 +235,7 @@ services:
 The compose spec allows a name that starts with `-`. Passed as an argument, `--ssh` becomes `docker compose build --ssh default`, which forwards your SSH agent (a `build.ssh` key is refused by the policy).
 
 - Expected: refused, for `up`, `build` and `bake` alike.
-- Check: a service name that starts with `-` is refused in `check_config` and `check_build_config`; the pulls and builds of images put `--` before the service names. `docker compose --dry-run pull -- -dash` was tried against a real compose.
+- Check: a service name that starts with `-` is refused in `Policy.check_project` and `Policy.check_project_build`; the pulls and builds of images put `--` before the service names. `docker compose --dry-run pull -- -dash` was tried against a real compose.
 - Status: tested (`tests/test_policy.py::test_a_service_name_that_compose_would_read_as_an_option_is_refused`, and the pull and build commands in `tests/test_serviceusers.py`).
 
 ## Priorities

@@ -3,11 +3,12 @@ import os
 import subprocess
 
 import pytest
-from fakes import make_runtime
+from fakes import make_runtime, rules
 
 from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
+from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
 from dockscreen.util import messages
 
@@ -22,7 +23,7 @@ def project(tmp_path):
 
 def check(project, **target):
     definition = {"group": {"default": {"targets": ["app"]}}, "target": {"app": target}}
-    return docker_bake._check_definition(definition, str(project))
+    return docker_bake._check_definition(definition, policy.Policy(str(project), rules()))
 
 
 def test_a_definition_of_ordinary_builds_has_no_problems(project):
@@ -74,8 +75,9 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 
 
 def test_a_top_level_key_that_is_not_known_is_refused(project):
-    assert docker_bake._check_definition({"target": {}, "variable": {}}, str(project)) == [
-        "key 'variable' is not on the allow list"]
+    bake_policy = policy.Policy(str(project), rules())
+    found = docker_bake._check_definition({"target": {}, "variable": {}}, bake_policy)
+    assert found == ["key 'variable' is not on the allow list"]
 
 
 @pytest.mark.parametrize("args, screened", [
@@ -123,7 +125,7 @@ def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
         docker_bake._definition(docker, [])
     assert message in messages.with_output(raised.value)
-    [reason] = docker_bake.check(docker, [])
+    [reason] = docker_bake.check(docker, [], policy.Policy(os.getcwd(), rules()))
     assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
 
 
@@ -131,7 +133,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    [reason] = docker_bake.check(docker, [])
+    [reason] = docker_bake.check(docker, [], policy.Policy(os.getcwd(), rules()))
     assert reason == "target app: context '/etc' is outside " + str(project)
     assert reason.severity is Severity.REFUSED
 

@@ -2,8 +2,14 @@ import fakes
 import pytest
 
 from dockscreen.cli import runargs
+from dockscreen.screen import policy
 
 ME = (4242, 4343)
+
+
+def refusals(parsed):
+    """What the policy says about the users parsed gives."""
+    return policy.Policy("/p", fakes.rules()).check_user_options(parsed.users)
 
 
 def parse(*args):
@@ -92,10 +98,10 @@ def test_as_resolves_a_local_account_on_the_host(flags):
 
 
 def test_as_with_an_unknown_account_or_an_id_is_refused():
-    assert runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts()).refusals == (
-        "user 'ghost' does not exist on this host; use --user with a numeric id",)
-    assert runargs.parse(["--as", "1000", "img"], ME, fakes.Accounts()).refusals == (
-        "--as takes the name of a local user, not '1000'; use --user for ids",)
+    assert refusals(runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())) == [
+        "user 'ghost' does not exist on this host; use --user with a numeric id"]
+    assert refusals(runargs.parse(["--as", "1000", "img"], ME, fakes.Accounts())) == [
+        "--as takes the name of a local user, not '1000'; use --user for ids"]
     with pytest.raises(runargs.ParseError):
         runargs.parse(["--as"], ME, fakes.Accounts())
 
@@ -119,7 +125,7 @@ def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
     ["--user", "1000"], ["--user=0"], ["-u", "7"],  # a uid alone leaves the group to the image
 ])
 def test_user_names_are_refused_with_a_pointer_to_as(flags):
-    [refusal] = parse(*flags, "img").refusals
+    [refusal] = refusals(parse(*flags, "img"))
     assert "--user takes numeric ids as uid:gid" in refusal
 
 

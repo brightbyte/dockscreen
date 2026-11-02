@@ -12,7 +12,6 @@ refused, because a new one may be a new way out.
 """
 import csv
 import json
-import os
 from collections.abc import Collection, Sequence
 from typing import Any
 
@@ -20,6 +19,7 @@ from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity, refused
+from dockscreen.screen.scope import Scope
 
 TOP_LEVEL_KEYS = frozenset({"group", "target"})
 TARGET_KEYS = frozenset({
@@ -55,18 +55,21 @@ def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
     return found
 
 
-def _check_definition(found: dict[str, Any], project_dir: str) -> list[str]:
-    """Returns the problems that forbid building the definition, with sources judged against project_dir."""
+def _check_definition(found: dict[str, Any], project_policy: policy.Policy) -> list[str]:
+    """Returns the problems that forbid building the definition, with sources judged against the project
+    directory of project_policy.
+    """
     problems = policy.unknown_keys(found, TOP_LEVEL_KEYS, "key", extensions=False)
     for name, target in (found.get("target") or {}).items():
-        problems += [f"target {name}: {p}" for p in _check_target(target or {}, project_dir)]
+        problems += [f"target {name}: {p}" for p in _check_target(target or {}, project_policy)]
     return problems
 
 
-def _check_target(target: dict[str, Any], project_dir: str) -> list[str]:
-    """Returns the problems with a target: unknown keys, sources outside project_dir, host access."""
+def _check_target(target: dict[str, Any], project_policy: policy.Policy) -> list[str]:
+    """Returns the problems with a target: unknown keys, sources outside the project, host access."""
+    project_dir = project_policy.project_dir
     problems = policy.unknown_keys(target, TARGET_KEYS, "key", extensions=False)
-    problems += policy.check_build_sources(target, project_dir, ("context", "dockerfile", "contexts"))
+    problems += project_policy.check_build_sources(target, ("context", "dockerfile", "contexts"))
     if target.get("network") not in (None, "", "none"):
         problems.append(f"network {target['network']!r} is not allowed")
     if target.get("entitlements"):
@@ -144,13 +147,13 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
     passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
     """
-    if not verdict.screened(Report.of(check(runtime.docker, args))):
+    if not verdict.screened(Report.of(check(runtime.docker, args, Scope(runtime).policy_context(None)))):
         return 1
     runtime.docker.exec([*lead, *args])
 
 
-def check(docker: Docker, args: Sequence[str]) -> list[Finding]:
-    """Checks `bake` with these arguments against the current directory as the project directory.
+def check(docker: Docker, args: Sequence[str], project_policy: policy.Policy) -> list[Finding]:
+    """Checks `bake` with these arguments by project_policy, whose project directory is the current one.
 
     Returns why it may not run: refusals, or the failure to get the definition.
     """
@@ -159,4 +162,4 @@ def check(docker: Docker, args: Sequence[str]) -> list[Finding]:
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
         return [Finding(str(e), Severity.FAILED, help=hint, output=e.output)]
-    return refused(_check_definition(found, os.getcwd()))
+    return refused(_check_definition(found, project_policy))

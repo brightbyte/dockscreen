@@ -47,11 +47,11 @@ class InspectError(Exception):
 def project(global_args: Sequence[str], runtime: Runtime) -> Project:
     """Returns the project global_args select, with its definition as compose resolves it.
 
-    Raises Refused if the policy refuses where the project is (policy.check_location); InspectError if
+    Raises Refused if the policy refuses where the project is (Policy.check_location); InspectError if
     compose cannot give the definition.
     """
     location = locate(global_args, runtime)
-    refusals = policy.check_location(location)
+    refusals = Scope(runtime, project_dir=location.directory).project_policy().check_location(location)
     if refusals:
         raise Refused(refusals)
     return Project(_load_config(global_args, runtime.docker), location)
@@ -92,16 +92,16 @@ def mount_dir_warnings(runtime: Runtime) -> list[messages.Marked]:
 
 
 def passes(global_args: Sequence[str], runtime: Runtime,
-           rules: Callable[[Project, policy.Context], list[Finding]] = policy.check_config) -> bool:
-    """Tells whether rules(project, ctx) finds nothing in the selected project, printing the verdict."""
+           rules: Callable[[policy.Policy, Project], list[Finding]] = policy.Policy.check_project) -> bool:
+    """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict."""
     try:
         found = project(global_args, runtime)
     except InspectError as e:
         return verdict.screened(Report.failure(e))
     except Refused as e:
         return verdict.screened(Report.of(e.findings))
-    ctx = Scope(runtime, project_dir=found.directory).project_policy()
-    return verdict.screened(Report.of(rules(found, ctx)))
+    project_policy = Scope(runtime, project_dir=found.directory).project_policy()
+    return verdict.screened(Report.of(rules(project_policy, found)))
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:
@@ -133,9 +133,9 @@ PROJECT_LABEL = "com.docker.compose.project"
 WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
-def name_conflicts(name: str, directory: str, docker: Docker) -> list[Finding]:
-    """Checks the name of the project in directory against the containers that have it
-    (policy.check_project_name); returns what it finds, or the failure to look.
+def name_conflicts(project_policy: policy.Policy, name: str, directory: str, docker: Docker) -> list[Finding]:
+    """Checks the name of the project in directory against the containers that have it, by project_policy
+    (Policy.check_project_name); returns what it finds, or the failure to look.
 
     Volumes and networks say nothing about where they came from, so only containers count.
     """
@@ -144,7 +144,7 @@ def name_conflicts(name: str, directory: str, docker: Docker) -> list[Finding]:
     except DockerError as e:
         return [Finding(f"cannot tell whether another project is called {name!r}: {e}", Severity.FAILED,
                         output=e.output)]
-    return policy.check_project_name(name, directory, made_from)
+    return project_policy.check_project_name(name, directory, made_from)
 
 
 def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:

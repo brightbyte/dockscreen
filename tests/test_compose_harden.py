@@ -148,12 +148,12 @@ def compliant(**fields):
 
 
 def context(directory, extra_dirs=()):
-    return policy.Context(str(directory), rules(me=(UID, GID), allow_me=True),
+    return policy.Policy(str(directory), rules(me=(UID, GID), allow_me=True),
                           tuple(str(d) for d in extra_dirs))
 
 
 def check(directory, config):
-    return policy.check_config(project_of({"name": "proj", **config}, directory), context(directory))
+    return context(directory).check_project(project_of({"name": "proj", **config}, directory))
 
 
 def bind(source):
@@ -209,7 +209,7 @@ def test_patch_replaces_mount_list_and_tells_user_to_edit_placeholders(tmp_path)
 def test_fix_config_leaves_a_vetted_unset_user_alone_and_fixes_the_rest():
     config = project(web={}, db={})
     fixed = compose_harden._fix_config(project_of(config, origins={"web": {"user": Origin.IMAGE}}),
-                                       policy.Context("/p", rules()))
+                                       policy.Policy("/p", rules()))
     assert "user" not in fixed["services"]["web"]
     assert fixed["services"]["db"]["user"] == compose_harden._USER_TEMPLATE
 

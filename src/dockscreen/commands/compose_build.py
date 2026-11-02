@@ -2,7 +2,7 @@
 compose builds the project.
 
 Builds start no containers of the project, so only what a build can reach is checked
-(policy.check_build_config): build sources inside the project, no host network, no `x-` keys that
+(policy.Policy.check_project_build): build sources inside the project, no host network, no `x-` keys that
 `buildx bake` would read.
 """
 
@@ -15,6 +15,6 @@ def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) ->
     """Runs `docker compose global_args sub args` (`build` or `bake`) if the project's builds pass the
     checks; returns 1 if they do not, otherwise docker replaces this process.
     """
-    if not inspect.passes(global_args, runtime, policy.check_build_config):
+    if not inspect.passes(global_args, runtime, policy.Policy.check_project_build):
         return 1
     runtime.docker.exec(["compose", *global_args, sub, *args])

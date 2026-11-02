@@ -11,7 +11,7 @@ from dockscreen.compose import composeproject, inspect
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy, substitutions, verdict
+from dockscreen.screen import substitutions, verdict
 from dockscreen.screen.findings import Report
 from dockscreen.util import commandline, messages
 
@@ -64,5 +64,5 @@ def _audit_images(project: composeproject.Compose, brief: bool) -> tuple[Report,
     if not prepared.report.passed:
         return prepared.report, prepared.describe()
     # what `up` checks once more before it runs: image sections need proof now
-    checked = policy.check_config(project.final(prepared), project.final_ctx(prepared))
+    checked = project.final_policy(prepared).check_project(project.final(prepared))
     return Report.of(checked), prepared.describe()

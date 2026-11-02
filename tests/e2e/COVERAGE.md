@@ -22,16 +22,16 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `serviceusers._services_to_run`: `docker compose config --services` failing after `config` worked.
 - `dockerclient.label_values` and `inspect.name_conflicts`: `docker ps` failing.
 - `dockerclient._first_file_of_tar`: `docker cp` sending something that is not a tar archive.
-- `policy.check_config`: a config without a project name; compose always gives one. `_check_scope`
+- `Policy.check_project`: a config without a project name; compose always gives one. `_check_scope`
   without a project name, likewise.
 - `policy.unknown_keys` for top-level keys: compose refuses unknown top-level keys itself, and leaves
   out the ones it knows but does not use (`models`).
-- `policy.check_cap_drop` and `check_security_opt` refusing a missing ALL or no-new-privileges, and
+- `Policy.check_cap_drop` and `check_security_opt` refusing a missing ALL or no-new-privileges, and
   `compose_harden._fix_config` adding them: hardening adds both to every service before the policy sees
   it.
 - `policy._check_host_files` for an `env_file` entry without a path: compose gives every entry one.
 - `compose_lifecycle.check` for a project without a name.
-- `policy.check_user` for a service without a user: the services that set none are left to their
+- `Policy.check_user` for a service without a user: the services that set none are left to their
   images, and those that start get a user before the final check.
 - `serviceusers.Prepared.finalize` for a decision that pins no user: a refused or failed decision stops
   the run before finalize.

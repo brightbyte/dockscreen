@@ -58,7 +58,7 @@ class ParsedRun(NamedTuple):
     user_given: bool  # --user, -u, --as or --as-me before the image
     notices: list     # what resolving user names on this host did, for the caller to print
     allow_me: bool = False  # --allow-me or --as-me before the image
-    refusals: tuple = ()    # the users it gives that cannot be used (findings.Finding)
+    users: tuple = ()       # the users it gives (policy.UserOption), for the policy to judge
 
 
 class _State:
@@ -75,8 +75,8 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
 
     me: the (uid, gid) that --as-me stands for.
     accounts: where the name given to --as is looked up (hostusers.HostAccounts).
-    Raises ParseError if there is no image or an option lacks its value. A --user that is not numeric, or
-    an --as that does not name a local user, is in the refusals.
+    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
+    the policy to judge.
     """
     users = userargs.UserOptions(me, accounts)
     state = _State(users)
@@ -96,7 +96,7 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
     if i >= len(args):
         raise ParseError("no image found in the command line")
     return ParsedRun([*state.kept, *args[i:]], args[i], args[i + 1:], state.detach, state.detach_keys,
-                     users.user_given, users.notices, users.allow_me, tuple(users.refusals))
+                     users.user_given, users.notices, users.allow_me, tuple(users.given))
 
 
 def _parse_long(args: list[str], i: int, state: _State) -> int:

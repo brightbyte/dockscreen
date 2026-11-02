@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_ctx`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceusers._verify_sections` records which sections each image proves, and the check of the config that will run (`Project.final_policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -163,9 +163,9 @@ The `docker` and `docker compose` dispatchers are built alike. A command object 
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
-1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it (`inspect.locate`), and the policy judges it before the config is read (`policy.check_location`). A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
+1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it (`inspect.locate`), and the policy judges it before the config is read (`Policy.check_location`). A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
 2. `hardening.apply` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
-3. `policy.check_config` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their user comes from the image (`origin.Origin.IMAGE`), which decides it.
+3. `Policy.check_project` applies the allowlist (below), and the id rules (`idrules`) to every id the project gives. Services that set no `user:` are exempt for now: their user comes from the image (`origin.Origin.IMAGE`), which decides it.
    The project's name is checked too (`policy.check_project_name`, with the labels `inspect.name_conflicts` asks docker for; a failure to ask is a failure, not a refusal). It is the project's choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`) and decides which volumes, networks and containers compose uses, replaces and removes, so a name that other projects' containers already have is refused. Containers of that project name, running or not, say where they were made from in their `com.docker.compose.project.working_dir` label; one made from another directory, or without the label, is a conflict. `-p` and `COMPOSE_PROJECT_NAME` in the environment are the person's choice and are not checked. `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause` get only this check, before compose runs.
 4. `serviceusers.prepare`:
    - asks compose which services will start (`config --services`);
@@ -180,7 +180,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 6. Before anything is pulled or built (`composeproject.Project.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `composeproject.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
-`build` and `bake` get only `policy.check_build_config`, with no runtime checks:
+`build` and `bake` get only `Policy.check_project_build`, with no runtime checks:
 
 - build contexts, Dockerfiles and secret files must be inside the project;
 - no `ssh`, no host network, no `privileged`;
@@ -190,7 +190,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`:
 
 ### Origins and trust (`origin`, `findings`)
 
-Findings come only from `screen`: the policy and the image decision judge, and a failure to look is turned into a finding there (`findings.failure_of`). The host layer only raises errors, with what docker printed (`DockerError.output`). The rules for the users the command line gives (`policy.check_user_option`, `policy.check_as_option`), the daemon (`policy.check_daemon`) and the project name are policy rules like the others; the command line's reading (`userargs.UserOptions`) collects their refusals.
+Findings come only from `screen`: the policy and the image decision judge, and a failure to look is turned into a finding there (`findings.failure_of`). The host layer only raises errors, with what docker printed (`DockerError.output`). Every rule is a method of `policy.Policy`, which holds the settings the rules apply with, whether a rule reads them or not. The rules for the users the command line gives (`Policy.check_user_options`), the daemon (`Policy.check_daemon`) and the project name are policy rules like the others; the command line's reading (`userargs.UserOptions`) only records the users given, for the command to have the policy judge them.
 
 Every value the policy judges has an origin (`Origin`): the command line, the config file, the project, the image, or dockscreen itself. What the policy finds in a value from a trusted origin (`origin.TRUSTED`: the command line and the config file) is a notable finding, not a refusal (`findings.judged`); `--strict-screen` drops the command line from the trusted origins. The origins are as coarse as what docker shows: everything in `compose config` comes from the project, and everything in a container that `docker run` created comes from the command line, except a user equal to its image's. A key dockscreen sets takes the origin its substitution names (`substitutions.Substitution.origin`): the config file for a configured or default user, the image for the image's own user pinned as numbers, dockscreen for the defaults and pins it chose. A substitution that only adds to the project's list or respells its value (a user name resolved to ids) names none, and the key stays the project's.
 
@@ -226,7 +226,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 - `start` and `restart` (`docker_start`) check existing containers. These can't be rewritten, so a container whose user would be replaced (default or configured user) is refused.
 - `exec` (`docker_exec`) checks only the form of the user (see [Forms](#forms)).
 - `buildx bake` runs `docker buildx bake --print` with the same arguments, which builds nothing and gives the definition with the command line applied, and `docker_bake.check` screens that: build sources and secret files inside the current directory, no host network, `entitlements` or SSH agent, no `output` or `cache-to` that writes files, no secret copied from a variable, no target key it does not know. `--print` and `--help` pass through. `buildx build` and `docker build` are not screened: their Dockerfile cannot reach the host without options, and the command line is trusted.
-- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets an assessment whose findings are failures (`Assessment.failure`): `run` refuses it like a refusal, the audit reports it as failed. `policy.check_container` reads the inspected container back into compose service keys (`container.Container.as_service`) and runs `policy.check_service` on them, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
+- `audit` (`docker_run.audit`) takes a `run` command line, creates the container as `run` would (pulling if `run` would), reports what `run` would do and removes it. An image that could not be looked at gets an assessment whose findings are failures (`Assessment.failure`): `run` refuses it like a refusal, the audit reports it as failed. `Policy.check_container` judges the inspected container as a service (`container.Container.definition`, read back into compose service keys) with `Policy.check_service`, with the current directory as the project: what the command line asks for that a project could not is reported, and refused with `--strict-screen`.
 - Every `create` gets `--cap-drop=ALL --security-opt=no-new-privileges:true` placed before the user's arguments, so the command line can override them.
 - Users chosen on the command line: see [Command-line options](#command-line-options).
 - A daemon that is not the local default is refused (`-H`, `--context`, a non-unix `DOCKER_HOST`, a non-default context): host ids and paths mean nothing there.
@@ -255,7 +255,7 @@ Mount dirs and the project directory are checked against sensitive paths (system
 | Option, before the subcommand | Effect |
 |---|---|
 | `--allow-me` | the caller's own ids become allowed ids, for this run |
-| `--strict-screen` | the command line is untrusted too (`origin.STRICT`): `audit`, `run`, `start` and `restart` refuse what it asks for that a project could not have (`policy.check_container`); `create` and `buildx bake` accept it, since create's container is judged when it starts and bake judges its whole definition anyway; refused before any other subcommand until it is supported there |
+| `--strict-screen` | the command line is untrusted too (`origin.STRICT`): `audit`, `run`, `start` and `restart` refuse what it asks for that a project could not have (`Policy.check_container`); `create` and `buildx bake` accept it, since create's container is judged when it starts and bake judges its whole definition anyway; refused before any other subcommand until it is supported there |
 | `--skip-screening` | no checks, no defaults, and a warning on every use |
 
 Text from the project or the image is escaped (`messages.printable`) before it is printed or written into a `harden` patch, so it cannot forge output lines or send terminal control sequences.

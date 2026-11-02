@@ -11,6 +11,7 @@ from dockscreen.compose import composeproject
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
+from dockscreen.screen.scope import Scope
 
 
 def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
@@ -20,7 +21,8 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
     parsed = composeargs.parse("run", args, runtime.me, runtime.accounts)
-    if parsed.refusals:
-        verdict.screened(Report.of(parsed.refusals))
+    refusals = Scope(runtime).policy_context(None).check_user_options(parsed.users)
+    if refusals:
+        verdict.screened(Report.of(refusals))
         return 1
     return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me)

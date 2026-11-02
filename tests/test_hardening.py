@@ -71,15 +71,15 @@ def test_a_project_cannot_weaken_the_defaults():
     # Appending true does not undo false: the policy still refuses the config.
     original = config(security_opt=["no-new-privileges:false"], cap_add=["SYS_ADMIN"])
     hardened, _ = hardening.apply(original, Accounts())
-    problems = policy.check_config(project_of(hardened), policy.Context("/p", rules()))
+    problems = policy.Policy("/p", rules()).check_project(project_of(hardened))
     assert "service web: security_opt 'no-new-privileges:false' is not allowed" in problems
     assert "service web: cap_add is not allowed" in problems
 
 
 def test_a_config_without_the_keys_passes_the_policy_once_hardened():
     hardened, _ = hardening.apply(config(), Accounts())
-    assert policy.check_config(project_of(hardened), policy.Context("/p", rules())) == []
-    assert policy.check_config(project_of(config()), policy.Context("/p", rules()))  # but not as it stands
+    assert policy.Policy("/p", rules()).check_project(project_of(hardened)) == []
+    assert policy.Policy("/p", rules()).check_project(project_of(config()))  # but not as it stands
 
 
 def test_audit_reports_the_additions_and_hints_at_harden(capsys, tmp_path):
@@ -183,21 +183,21 @@ def test_numbers_and_unknown_names_are_left_for_the_policy(spec):
 
 
 def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them():
-    ctx = policy.Context("/p", rules())
+    ctx = policy.Policy("/p", rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     for spec, part in (("app", "user 'app'"), ("app:app", "user 'app'"), ("1000:staff", "group 'staff'")):
         hardened, _ = hardening.apply(config(user=spec, **keep), Accounts())
-        problems = policy.check_config(project_of(hardened), ctx)
+        problems = ctx.check_project(project_of(hardened))
         assert any(f"{part} does not exist on this host" in p for p in problems), spec
 
 
 def test_nobody_passes_and_root_is_refused_once_resolved():
-    ctx = policy.Context("/p", rules())
+    ctx = policy.Policy("/p", rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     nobody, _ = hardening.apply(config(user="nobody", **keep), Accounts())
     root, _ = hardening.apply(config(user="root", **keep), Accounts())
-    assert policy.check_config(project_of(nobody), ctx) == []
-    assert policy.check_config(project_of(root), ctx) == ["service web: user '0:0': uid 0 is root",
+    assert ctx.check_project(project_of(nobody)) == []
+    assert ctx.check_project(project_of(root)) == ["service web: user '0:0': uid 0 is root",
                                               "service web: user '0:0': gid 0 is root"]
 
 

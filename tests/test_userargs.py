@@ -1,10 +1,18 @@
 import pytest
+from fakes import rules
 
 from dockscreen.cli import composeargs, runargs, userargs
+from dockscreen.screen import policy
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value
 VALUE_FLAGS = {**composeargs.VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE_FLAGS}
+
+
+def refusals(parsed):
+    """What the policy says about the users parsed gives."""
+    return policy.Policy("/p", rules()).check_user_options(parsed.users)
+
 
 
 def parse(command, args):
@@ -33,7 +41,7 @@ def test_run_arguments(args, service, user_given):
     ["--user", "1000:staff", "web"],
 ])
 def test_users_must_be_numeric_uid_gid(args):
-    [refusal] = parse("run", args).refusals
+    [refusal] = refusals(parse("run", args))
     assert "--user takes numeric ids as uid:gid" in refusal
 
 
@@ -41,7 +49,7 @@ def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
     assert parse("exec", exec_args)[:2] == ("web", True)
     assert parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])[:2] == ("c", False)
-    assert parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"]).refusals
+    assert refusals(parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"]))
 
 
 class Accounts:
@@ -70,12 +78,12 @@ def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, arg
 
 
 def test_as_with_an_unknown_name_is_refused():
-    assert parse("exec", ["--as", "bob", "web", "sh"]).refusals == (
-        "user 'bob' does not exist on this host; use --user with a numeric id",)
+    assert refusals(parse("exec", ["--as", "bob", "web", "sh"])) == [
+        "user 'bob' does not exist on this host; use --user with a numeric id"]
 
 
 def test_a_name_given_to_user_points_to_as():
-    [refusal] = parse("exec", ["-u", "postgres", "web", "sh"]).refusals
+    [refusal] = refusals(parse("exec", ["-u", "postgres", "web", "sh"]))
     assert "--as NAME runs as a local user" in refusal
 
 

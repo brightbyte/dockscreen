@@ -245,17 +245,17 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
         config["services"][name].update(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
     _, final, origins = decided(config, FakeImages(users={"web:1": "", "db:1": "app"}),
                                 active=("web", "db"))
-    ctx = policy.Context("/p", rules())
+    ctx = policy.Policy("/p", rules())
 
-    assert policy.check_config(project_of(final, origins=origins), ctx) == []
+    assert ctx.check_project(project_of(final, origins=origins)) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
     settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, origins = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
-    found = policy.check_config(project_of(final, origins=origins), ctx)
+    found = ctx.check_project(project_of(final, origins=origins))
     assert found and {f.severity for f in found} == {Severity.NOTABLE}
-    assert [p for p in policy.check_config(project_of(final), ctx) if p.startswith("service db: user")] == [
+    assert [p for p in ctx.check_project(project_of(final)) if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
         "service db: user '1000:1000': gid 1000 exists on this host (local group daniel)"]
 
@@ -359,7 +359,7 @@ def test_services_whose_user_the_command_line_chooses_are_not_decided():
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     # No key in a compose file can mark a service as vetted: it lives in the Context only.
     config = project(web={"x-vetted": True, "vetted": True})
-    problems = policy.check_config(project_of(config), policy.Context("/p", rules()))
+    problems = policy.Policy("/p", rules()).check_project(project_of(config))
     assert "service web: key 'vetted' is not on the allow list" in problems
     assert "service web: user is not set, the image default may be root" in problems
 

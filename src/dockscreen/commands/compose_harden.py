@@ -5,7 +5,7 @@ compose override that fixes what can be fixed.
 select the project.
 
 _fix_config removes or replaces only what has a safe automatic fix; checking the result with
-policy.check_config reports what is left.
+Policy.check_project reports what is left.
 
 _render writes the difference between a config and its fixed copy as a compose override file. Compose
 merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset` tag
@@ -59,16 +59,16 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     except (inspect.InspectError, ValueError) as e:
         messages.notice(failure_of(e))
         return 1
-    for refusal in policy.check_daemon(project.remote):
+    for refusal in project.static_policy().check_daemon(project.remote):
         messages.notice(refusal)
         return 1
 
-    base, static = project.static(), project.static_ctx()
+    base, static = project.static(), project.static_policy()
     fixed = _fix_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
     resolved = _as_compose_reads(fixed, static)
-    remaining = [f for f in policy.check_config(base.with_definition(resolved), static) if f.fatal]
+    remaining = [f for f in static.check_project(base.with_definition(resolved)) if f.fatal]
     notes = [hardening.defaults_note()]
     if remaining:
         messages.notice("the images were not looked at because of the problems below: "
@@ -104,23 +104,24 @@ def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], res
     return remaining, notes
 
 
-def _fix_config(project: Project, ctx: policy.Context) -> dict[str, Any]:
+def _fix_config(project: Project, ctx: policy.Policy) -> dict[str, Any]:
     """Returns a copy of the project's definition with the problems that have a mechanical fix fixed.
 
     Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
     become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
-    and env files have no safe automatic fix; they stay and are reported by check_config on the result.
+    and env files have no safe automatic fix; they stay and are reported by Policy.check_project on the
+    result.
     """
     fixed = copy.deepcopy(project.definition)
     for original in project.services:
         service = fixed["services"][original.name]
         service_ctx = ctx.for_service(original.name, original.definition)
         from_image = original.origin_of("user") is Origin.IMAGE and not service.get("user")
-        if not from_image and policy.check_user(service.get("user"), service_ctx, original):
+        if not from_image and service_ctx.check_user(service.get("user"), original):
             service["user"] = _USER_TEMPLATE
-        if policy.check_security_opt(service.get("security_opt"), service_ctx, original):
+        if service_ctx.check_security_opt(service.get("security_opt"), original):
             service["security_opt"] = [policy.SECURITY_OPT]
-        if policy.check_cap_drop(service.get("cap_drop"), ctx, original):
+        if service_ctx.check_cap_drop(service.get("cap_drop"), original):
             service["cap_drop"] = [policy.CAP_DROP]
         for key in _REMOVABLE_SERVICE_KEYS:
             service.pop(key, None)
@@ -134,7 +135,7 @@ def _fix_config(project: Project, ctx: policy.Context) -> dict[str, Any]:
     return fixed
 
 
-def _as_compose_reads(config: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+def _as_compose_reads(config: dict[str, Any], ctx: policy.Policy) -> dict[str, Any]:
     """Returns a copy of config as compose reads the patch, for checking it: _USER_TEMPLATE becomes the
     caller's ids, and a relative placeholder mount source a path in the project directory.
     """
@@ -148,7 +149,7 @@ def _as_compose_reads(config: dict[str, Any], ctx: policy.Context) -> dict[str, 
     return resolved
 
 
-def _fix_mount(mount: dict[str, Any], ctx: policy.Context) -> dict[str, Any]:
+def _fix_mount(mount: dict[str, Any], ctx: policy.Policy) -> dict[str, Any]:
     """Returns mount, with a bind source outside ctx's mount roots replaced by a placeholder to edit."""
     if mount.get("type") != "bind" or policy.is_inside_any(mount["source"], ctx.mount_roots):
         return mount

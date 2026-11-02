@@ -1,6 +1,6 @@
 """Feature: `dockscreen audit` says what `docker run` would do with the same arguments, starting nothing
 
-Rules (docker_run.audit, policy.check_container):
+Rules (docker_run.audit, Policy.check_container):
 - the container is created as run would create it, looked at as run would, and removed;
 - the verdict is the exit status: 0 passed, 1 refused, 3 failed (the image could not be looked at),
   2 a command line that cannot be read;

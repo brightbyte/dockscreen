@@ -21,7 +21,7 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
-    ctx = policy.Context("/proj", rules(me=(UID, GID), allow_me=True))
+    ctx = policy.Policy("/proj", rules(me=(UID, GID), allow_me=True))
     fixed = compose_harden._fix_config(project_of(original), ctx)
 
     text = compose_harden._render(original, fixed, ["bind mount " + evil])
