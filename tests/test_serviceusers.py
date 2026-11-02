@@ -271,7 +271,8 @@ def test_descriptions_and_notices():
          "(no local group); accepted"),
         (f"{messages.WARN} service debug: no user set and not started by default; dockscreen runs it "
          "as the default user (65534:65534) if it is started"),
-        f"{messages.WARN} service web: no user set; {ROOT_FALLBACK}",
+        (f"{messages.WARN} service web: no user set; image web:1 would run as uid 0 (local user root), "
+         f"gid 0 (local group root); {ROOT_FALLBACK}"),
         f"{messages.ROUTINE} services db, web: {PIN}",
     ]
     assert marked(prepared.notices()) == [

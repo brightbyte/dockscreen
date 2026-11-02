@@ -421,7 +421,7 @@ def test_audit_of_a_root_image_says_it_runs_as_the_default_user(capsys):
     assert audited(FakeDocker(image_user=""), "img") == 0
     out = report(capsys.readouterr().out)
     assert out[0] == (f"{WARN} image img: would run as uid 0 (local user root), gid 0 (local group root); "
-                      "docker run would run it as the default user (65534:65534) instead")
+                      "running as 65534:65534 instead of root")
     assert out[1] == "  docker run would create it again with --user=65534:65534, as numbers"
 
 

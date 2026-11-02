@@ -72,12 +72,22 @@ def screened(found: Report) -> bool:
 
 # --- the user a container runs as ---------------------------------------------------
 
-def runs_as(assessment: Assessment, local: hostusers.HostAccounts) -> str:
-    """Describes what an accepted image (Assessment.accepted) runs as; local: HostAccounts."""
-    if assessment.origin is Origin.CONFIG:
+def outcome(assessment: Assessment, local: hostusers.HostAccounts) -> str:
+    """Describes what an assessment of an image's user means for running it, after the image's name: what
+    it runs as if accepted, what runs instead of its root, or why it may not run; local: this host's
+    accounts, for naming the image's user.
+    """
+    who = imageuser.describe(assessment.identity, local) if assessment.identity else None
+    if assessment.accepted and assessment.origin is Origin.CONFIG:
         return f"runs as {ids.format_user(assessment.pinned_user)}, the user the config file sets for it"
-    assert assessment.identity is not None, "an accepted image was looked at"
-    return f"runs as {imageuser.describe(assessment.identity, local)}; accepted"
+    if assessment.accepted:
+        return f"runs as {who}; accepted"
+    if assessment.replaces_root and not assessment.refused:
+        return f"would run as {who}; {instead_of_root(assessment)}"
+    reasons = "; ".join(printable(r.text) for r in assessment.reasons)
+    if assessment.failed:
+        return f"could not be assessed: {reasons}"
+    return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"
 
 
 def instead_of_root(assessment: Assessment) -> str:

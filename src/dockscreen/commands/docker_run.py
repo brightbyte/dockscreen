@@ -26,12 +26,12 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, imageuser, verdict
+from dockscreen.screen import findings, verdict
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
-from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice, runs_as
+from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -281,7 +281,7 @@ def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
         messages.out(messages.Marked(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        messages.out(messages.Marked(dot, f"image {name}: {_describe_outcome(ctx, assessment)}"))
+        messages.out(messages.Marked(dot, f"image {name}: {verdict.outcome(assessment, ctx.local)}"))
         for note in assessment.notes:
             messages.out(Finding(f"note: {note}", Severity.NOTABLE))
     if assessment.refused:
@@ -304,17 +304,3 @@ def _report_findings(found: list[Finding]) -> None:
     if any(not finding.fatal for finding in found):
         messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
-
-
-def _describe_outcome(ctx: Scope, assessment: Assessment) -> str:
-    """Returns, as text, what the assessment means for running the image."""
-    if assessment.accepted:
-        return runs_as(assessment, ctx.local)
-    who = imageuser.describe(assessment.identity, ctx.local) if assessment.identity else None
-    if assessment.replaces_root:
-        return (f"would run as {who}; docker run would run it as the default user "
-                f"({ids.format_user(assessment.pinned_user)}) instead")
-    reasons = "; ".join(printable(r.text) for r in assessment.reasons)
-    if assessment.failed:
-        return f"could not be assessed: {reasons}"
-    return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"

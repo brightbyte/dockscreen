@@ -39,7 +39,7 @@ def test_a_root_image_runs_as_the_default_user(world):
     when_dockscreen(world, "audit", ALPINE)
     then_passed(world)
     then_said(world, f"image {ALPINE}: would run as uid 0 ",
-              "docker run would run it as the default user (65534:65534) instead",
+              "; running as 65534:65534 instead of root",
               "docker run would create it again with --user=65534:65534, as numbers",
               "docker run also adds --cap-drop=ALL --security-opt=no-new-privileges:true")
     then_nothing_handed_off(world)

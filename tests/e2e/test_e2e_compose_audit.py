@@ -55,8 +55,8 @@ def test_the_webapp_passes_with_allow_me_and_says_what_it_changes(world, webapp)
     then_passed(world)
     then_said(world,
               f"service app: no user set; image {WEBAPP_APP} runs as uid {me_user().split(':')[0]} ",
-              "service cache: no user set; running as 65534:65534 instead of root",
-              "service web: no user set; running as 65534:65534 instead of root",
+              "service cache: no user set; image ", "service web: no user set; image ",
+              "; running as 65534:65534 instead of root",
               "service mailpit: no user set and not started by default",
               "service app: environment variables taken from your shell: TZ",
               "cap_drop", "no-new-privileges",

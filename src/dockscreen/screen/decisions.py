@@ -65,14 +65,11 @@ class Decisions(NamedTuple):
                         f"({default}) if it is started")
                 lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
                 continue
+            text = f"no user set; image {decision.image.reference} {verdict.outcome(decision, self.local)}"
             if decision.accepted:
-                runs_as = verdict.runs_as(decision, self.local)
-                text = f"service {name}: no user set; image {decision.image.reference} {runs_as}"
-                lines.append(messages.Marked(verdict.dot(decision), text))
+                lines.append(messages.Marked(verdict.dot(decision), f"service {name}: {text}"))
             elif decision.replaces_root and not decision.refused:
-                instead = verdict.instead_of_root(decision)
-                lines.append(Finding(f"no user set; {instead}", Severity.NOTABLE, f"service {name}",
-                                     USER_HELP))
+                lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
             for note in decision.notes:
                 lines.append(Finding(f"note: {note}", Severity.NOTABLE, f"service {name}"))
         return [*lines, *substitutions.grouped(self.changes)]

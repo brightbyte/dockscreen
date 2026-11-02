@@ -63,7 +63,7 @@ def test_a_uid_that_is_not_a_number_counts_as_root(world, odd_image):
     when_dockscreen(world, "audit", image)
     then_passed(world)
     then_said(world, "would run as uid 0 ",
-              "docker run would run it as the default user (65534:65534) instead")
+              "; running as 65534:65534 instead of root")
 
 
 def test_a_member_of_the_root_group_counts_as_root(world, odd_image):
@@ -71,7 +71,7 @@ def test_a_member_of_the_root_group_counts_as_root(world, odd_image):
     when_dockscreen(world, "audit", image)
     then_passed(world)
     then_said(world, f"would run as uid {free} ", "supplementary gids 0 ",
-              "docker run would run it as the default user (65534:65534) instead")
+              "; running as 65534:65534 instead of root")
 
     given_service(world, "app", image=image)
     when_dockscreen(world, "compose", "up")

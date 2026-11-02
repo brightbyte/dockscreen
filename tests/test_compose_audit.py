@@ -52,7 +52,8 @@ def test_audit_pulls_and_says_what_happens_to_each_service_without_a_user(capsys
     assert report(captured.out) == [
         (f"{GOOD} service db: no user set; image db:1 runs as uid 100000 (no local user), "
          "gid 100001 (no local group); accepted"),
-        f"{messages.WARN} service web: no user set; {ROOT_FALLBACK}",
+        (f"{messages.WARN} service web: no user set; image web:1 would run as uid 0 (local user root), "
+         f"gid 0 (local group root); {ROOT_FALLBACK}"),
         f"{messages.ROUTINE} services db, web: {PIN}",
     ]
     assert [cmd[-4:] for cmd in recorder.children] == [["pull", "--", "cache", "web"]]  # db is already local
