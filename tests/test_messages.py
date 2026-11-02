@@ -17,11 +17,11 @@ def test_notice_is_one_prefixed_escaped_line(capsys):
 def test_the_output_of_a_problem_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
     # what docker prints, from a project that writes a verdict of its own into it
     output = "#1 load\r\n[dockscreen] \u2714 audit passed\x1b[2J"
-    messages.report([Finding("docker buildx bake --print failed", output=output)])
+    messages.notice(Finding("docker buildx bake --print failed", output=output))
 
     indent = " " * len("[dockscreen] ") + "  "
     assert capsys.readouterr().err == (
-        "[dockscreen] \u25cf refusing: docker buildx bake --print failed\n"
+        "[dockscreen] \u25cf docker buildx bake --print failed\n"
         f"{indent}#1 load\n"
         f"{indent}[dockscreen] \u2714 audit passed\\x1b[2J\n")
 
@@ -38,20 +38,6 @@ def test_warning(capsys):
     messages.warning("careful")
 
     assert capsys.readouterr().err == "[dockscreen] warning: careful\n"
-
-
-def test_report(capsys):
-    assert messages.report([]) is True
-    assert messages.report(["a", "b"]) is False
-
-    assert capsys.readouterr().err == "[dockscreen] \u25cf refusing: a\n[dockscreen] \u25cf refusing: b\n"
-
-
-def test_refuse(capsys):
-    assert messages.refuse(["a"]) == 1
-    assert messages.refuse([]) == 1  # refused, even without a reason: fails closed
-
-    assert capsys.readouterr().err == "[dockscreen] \u25cf refusing: a\n"
 
 
 def test_fatal():
@@ -123,7 +109,7 @@ def test_report_lines_wrap_after_the_mark_and_keep_long_words(monkeypatch, capsy
     assert all(line.startswith("\t  ") and line[3] != " " for line in lines[1:])  # a tab and two spaces
     assert all(len(line.expandtabs(8)) <= 60 for line in lines if "/srv/" not in line)
     assert any("'/srv/some/rather/long/path'" in line for line in lines)  # not broken
-    assert " ".join(line.strip() for line in lines) == str(LONG)
+    assert " ".join(line.strip() for line in lines) == f"{LONG.mark} {LONG}"
 
 
 @pytest.mark.parametrize("columns, width", [("200", 120), ("100", 100), ("19", None), ("20", 20)])
@@ -148,12 +134,12 @@ def test_wrapped_lines_keep_the_colour_on_the_mark_only():
 def test_brief_lines_are_not_wrapped(monkeypatch, capsys):
     monkeypatch.setenv("COLUMNS", "40")
     messages.out(LONG, indent=False)
-    assert capsys.readouterr().out == str(LONG) + "\n"
+    assert capsys.readouterr().out == f"{LONG.mark} {LONG}\n"
 
 
 def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
     line = messages.Marked(messages.WARN, "a changed", "do this about it")
-    assert str(line) == "● a changed"  # the facts, whatever the mode
+    assert str(line) == "a changed"  # the facts, whatever the mode, without the mark
 
     messages.notice(line)
     assert capsys.readouterr().err == "[dockscreen] ● a changed\n"

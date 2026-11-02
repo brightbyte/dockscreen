@@ -18,6 +18,8 @@ from typing import NamedTuple
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
 from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, ids, messages
@@ -143,7 +145,7 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
     refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users)
     if refusals:
-        messages.report(refusals)
+        verdict.screened(Report.of(refusals))
         return None
     for notice in parsed.notices:
         messages.notice(notice)

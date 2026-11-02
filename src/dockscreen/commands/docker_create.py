@@ -6,6 +6,8 @@ The container is checked when it is started (docker_start).
 
 from dockscreen.cli import runargs
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
 from dockscreen.screen.scope import Scope
 from dockscreen.util import messages
 
@@ -21,7 +23,7 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     else:
         refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users)
         if refusals:
-            return messages.refuse(refusals)
+            return verdict.report(Report.of(refusals))
         for message in parsed.notices:
             messages.notice(message)
         resolved = parsed.create_args

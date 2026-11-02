@@ -17,7 +17,6 @@ import os
 import shutil
 import sys
 import textwrap
-from collections.abc import Sequence
 from typing import NoReturn, Self, TextIO
 
 PREFIX = "[dockscreen]"
@@ -36,10 +35,11 @@ class Mark(str):
 
 
 class Marked(str):
-    """Line that starts with a mark (`MARK text`), keeping the mark for colouring.
+    """Line that starts with a mark (`MARK text`), keeping the mark for colouring; its string value is the
+    text, without the mark, which only printing adds.
 
     help: an optional second part that says what to do about it, shown only in helpful mode
-    (set_helpful). The line itself only states the facts, and its string value is just that.
+    (set_helpful). The line itself only states the facts.
     output: what docker printed about it, shown after it (notice).
     """
 
@@ -49,7 +49,7 @@ class Marked(str):
     output: str | None
 
     def __new__(cls, mark: Mark, text: str, help: str | None = None, output: str | None = None) -> Self:
-        line = super().__new__(cls, f"{mark} {text}")
+        line = super().__new__(cls, text)
         line.mark, line.text, line.help, line.output = mark, text, help, output
         return line
 
@@ -191,19 +191,6 @@ def _wants_colour(stream: TextIO) -> bool:
 def warning(text: str) -> None:
     """Prints text as a warning message (notice)."""
     notice(f"warning: {text}")
-
-
-def report(problems: Sequence[str]) -> bool:
-    """Prints a refusal for each problem, with its help; returns whether there were none."""
-    for problem in problems:
-        notice(Marked(BAD, f"refusing: {problem}", help_of(problem), output_of(problem)))
-    return not problems
-
-
-def refuse(problems: Sequence[str]) -> int:
-    """Prints the problems as refusals (report) and returns exit status 1, even if there are none."""
-    report(problems)
-    return 1
 
 
 def printable(text: object) -> str:

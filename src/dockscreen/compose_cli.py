@@ -22,6 +22,8 @@ from dockscreen.commands import (
 )
 from dockscreen.host import shellenv
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
 from dockscreen.util import commandline, messages
 
 # Subcommands that create containers from the config. `alpha` is a group (older
@@ -112,7 +114,7 @@ class ComposeCommand(commandline.CommandLine):
         global_args, args, allow_me = self.global_args, self.args, self.allow_me
         if self.strict and not supports_strict(sub):
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            return messages.refuse([commandline.STRICT_REFUSAL])
+            return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
         if self._is_screened():
             if sub == "run":
                 return compose_run.gate(global_args, args, runtime, allow_me, self.strict)

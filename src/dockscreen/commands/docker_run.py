@@ -26,7 +26,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import imageuser, verdict
+from dockscreen.screen import findings, imageuser, verdict
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report, Severity
@@ -299,9 +299,8 @@ def _report_findings(found: list[Finding]) -> None:
     """Prints what the command line asks for that a project or an image may not: as refusals, or as worth a
     look where the command line is trusted.
     """
-    for finding in found:
-        dot = messages.BAD if finding.fatal else messages.WARN
-        messages.out(messages.Marked(dot, f"command line: {finding}"))
+    for finding in findings.about(found, "command line"):
+        messages.out(finding)
     if any(not finding.fatal for finding in found):
         messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))

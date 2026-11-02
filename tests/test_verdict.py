@@ -1,4 +1,5 @@
 import pytest
+from fakes import marked
 
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import verdict
@@ -17,7 +18,7 @@ from dockscreen.util import messages
     (Report.of([Finding("fine", Severity.ROUTINE), Finding("a")]), "⊖ denied by audit: a"),
 ])
 def test_brief(found, line):
-    assert verdict.brief(found) == line
+    assert marked([verdict.brief(found)]) == [line]
 
 
 def test_report(capsys):

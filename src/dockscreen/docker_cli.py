@@ -14,6 +14,8 @@ from dockscreen.commands import docker_bake, docker_create, docker_exec, docker_
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import Runtime, load_runtime
+from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
 from dockscreen.util import commandline, messages
 
 # Global `docker` options that consume the following token as their value.
@@ -45,7 +47,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # a config file that cannot be trusted stops everything, before any docker runs
         return _dispatch(argv, load_runtime())
     except config.ConfigError as e:
-        return messages.refuse([f"config file {e}"])
+        return verdict.report(Report.refusal(f"config file {e}"))
     except DockerNotFound as e:
         messages.notice(e)
         return 1
@@ -79,7 +81,7 @@ class DockerCommand(commandline.CommandLine):
         messages.set_helpful(self.helpful or sub == "audit")
         if self.strict and not self._supports_strict():
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            return messages.refuse([commandline.STRICT_REFUSAL])
+            return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
