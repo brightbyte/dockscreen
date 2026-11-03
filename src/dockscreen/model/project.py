@@ -7,14 +7,14 @@ uses, and must not hold anything that may not be mounted (Location).
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
 runs, so it is what is judged; the files themselves are not. The project also has what its definition
-does not say: where it is, which daemon its containers would run on, which containers already have its
-name, and where the values that dockscreen changed in its definition come from.
+does not say: where it is, which daemon its containers would run on, and where the values that dockscreen
+changed in its definition come from.
 
 What is known about a project is gathered in stages, some of which ask docker; a fact that was not
 looked at yet is None, and the checks of the project judge what is known.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
@@ -56,8 +56,6 @@ class Project(NamedTuple):
     - remote: whether its daemon may not be this host's; None until looked at
     - origins: by service and key, where the values dockscreen set come from, where that is not the project
       (with_origins)
-    - made_from: the directories that the containers with its name say they were made from, "" for one that
-      does not say; None until looked at
     - found_images: by service, the images that an image section of the config file could apply to, as found,
       with where they were pulled from; None until looked at
     - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
@@ -67,7 +65,6 @@ class Project(NamedTuple):
     location: Location
     remote: bool | None = None
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
-    made_from: tuple[str, ...] | None = None
     found_images: Mapping[str, Image] | None = None
     inspected: Mapping[str, Inspected | Unseen] | None = None
 
@@ -103,12 +100,6 @@ class Project(NamedTuple):
     def with_remote(self, remote: bool) -> Self:
         """Returns this project with remote telling whether its daemon may not be this host's."""
         return self._replace(remote=remote)
-
-    def with_made_from(self, made_from: Sequence[str]) -> Self:
-        """Returns this project with made_from as the directories the containers with its name were made
-        from.
-        """
-        return self._replace(made_from=tuple(made_from))
 
     def with_images(self, found: Mapping[str, Image], inspected: Mapping[str, Inspected | Unseen]) -> Self:
         """Returns this project with found as its services' images that were found, and inspected as those

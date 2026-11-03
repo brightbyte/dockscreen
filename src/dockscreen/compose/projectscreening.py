@@ -112,10 +112,10 @@ class ProjectScreening(NamedTuple):
         `docker run`. announce: called before any image is pulled or built.
         """
         static_policy = self.static_policy()
-        found = Report.of(static_policy.check_project(self.static()))
+        found = Report.of([*static_policy.check_project(self.static()),
+                           *static_policy.check_daemon(self.remote)])
         if found.passed:  # asking docker about the name is left until nothing else stands in the way
-            static, failures = self._with_name_users(self.static())
-            found = Report.of([*static_policy.check_project(static), *failures])
+            found = Report.of([*found.findings, *self._name_conflicts(static_policy)])
         if not found.passed:
             return Screened(found)
         announce()
@@ -132,20 +132,16 @@ class ProjectScreening(NamedTuple):
         checked = Report.of(decided.policy.with_trust(trust).check_project(judged))
         return Screened(checked, decided, final if checked.passed else None)
 
-    def _with_name_users(self, project: Project) -> tuple[Project, list[Finding]]:
-        """Returns project with the directories its name's containers were made from (inspect.made_from),
-        and the failure to look, if any.
+    def _name_conflicts(self, static_policy: policy.Policy) -> list[Finding]:
+        """Returns what static_policy finds in the containers that have the project's name, or the failure to
+        look (inspect.name_conflicts).
 
         Not looked at for a name the caller chose, or on a daemon that may not be this host's.
         """
-        name = project.name
-        if not name or project.remote is not False or inspect.names_project(self.global_args,
-                                                                           self.scope.runtime.env):
-            return project, []
-        try:
-            return project.with_made_from(inspect.made_from(name, self.scope.docker)), []
-        except DockerError as e:
-            return project, [inspect.name_lookup_failure(name, e)]
+        name = self.resolved.name
+        if not name or self.remote or inspect.names_project(self.global_args, self.scope.runtime.env):
+            return []
+        return inspect.name_conflicts(static_policy, name, self.directory, self.scope.docker)
 
     def final(self, decided: Decisions) -> Project:
         """Returns the project that will run: the resolved one with the hardening and then what the images

@@ -116,11 +116,12 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         return dataclasses.replace(self, per_service=MappingProxyType(dict(per_service)))
 
     def check_project(self, project: Project) -> list[Finding]:
-        """Checks what is known about a compose project: its definition, where it is, and, once they have
-        been looked at, its daemon and the containers that have its name; returns what it finds, each about
-        what it concerns.
+        """Checks a compose project's definition and where it is; returns what it finds, each about what it
+        concerns.
 
-        Empty if it passes. Each service is checked with its own policy (for_service).
+        Empty if it passes. Each service is checked with its own policy (for_service). What needs docker to
+        be known is checked on its own: the daemon (check_daemon), the containers that have the project's
+        name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
         problems = refused([*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
@@ -135,14 +136,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         for key, network in (config.get("networks") or {}).items():
             problems += refused(self._check_network(key, network, name), f"network {key}")
         problems += self._check_file_sources(config, project.directory)
-        problems += self.check_location(project.location)
-        if project.remote is not None:
-            problems += self.check_daemon(project.remote)
-        if name and project.made_from is not None:
-            problems += self.check_project_name(name, project.directory, project.made_from)
-        if project.inspected is not None:
-            problems += self.check_images(project)
-        return problems
+        return problems + self.check_location(project.location)
 
     def check_project_build(self, project: Project) -> list[Finding]:
         """Checks a compose project against the part of the policy that applies to `build`; returns the

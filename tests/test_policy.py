@@ -622,16 +622,6 @@ def test_as_option_needs_the_name_of_an_account_on_this_host():
         assert "--as takes the name of a local user" in refusal
 
 
-def test_a_project_is_judged_by_what_is_known_about_it_and_nothing_that_was_not_looked_at(project):
-    known = project_of({"name": "proj", "services": {}}, project)
-    rules_ = context(project)
-
-    assert rules_.check_project(known) == []  # its daemon and the containers with its name: not looked at
-    assert rules_.check_project(known.with_remote(True)) == [project_rules.REMOTE_MESSAGE]
-    [conflict] = rules_.check_project(known.with_remote(False).with_made_from(["/elsewhere"]))
-    assert conflict.startswith("project name 'proj' is used by containers made from '/elsewhere'")
-
-
 # --- images ---------------------------------------------------------------------
 
 PASSWD = "root:x:0:0::/root:/bin/sh\napp:x:100000:100001::/home/app:/bin/sh\n"
@@ -673,17 +663,15 @@ def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configur
     assert (found.origin, found.replaces_root, found.user) == (Origin.CONFIG, False, (7, 7))
 
 
-def test_a_projects_images_are_judged_once_they_were_looked_at(project):
+def test_a_projects_images_are_judged_as_they_were_looked_at(project):
     looked_at = project_of({"name": "proj", "services": {"web": {}, "db": {}}}, project).with_images(
         {}, {"web": inspected("app", mounts=True), "db": Unseen(Image("db:1"), "not here")})
 
-    found = [f for f in context(project).check_project(looked_at) if f.text.startswith("image ")]
+    found = context(project).check_images(looked_at)
 
     assert [(f.subject, f.severity) for f in found] == [("service web", Severity.REFUSED),
                                                         ("service db", Severity.FAILED)]
     assert found[1] == "service db: image db:1: not here"
-    assert not [f for f in context(project).check_project(looked_at._replace(inspected=None))
-                if f.text.startswith("image ")]  # not looked at: nothing to judge
 
 
 def test_paths_are_judged_against_the_targets_directory_not_the_policys(tmp_path):
