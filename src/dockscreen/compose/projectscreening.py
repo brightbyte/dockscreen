@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen.cli import userargs
-from dockscreen.compose import inspect, runoptions, serviceusers
+from dockscreen.compose import inspect, runoptions, serviceinfo
 from dockscreen.host import shellenv
 from dockscreen.host.dockerclient import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
@@ -155,17 +155,18 @@ class ProjectScreening(NamedTuple):
 
     def prepare(self, command: Sequence[str], project: Project, args: Sequence[str] = (),
                 chosen: frozenset[str] = frozenset()) -> Decisions:
-        """Gets the images of project's services (serviceusers.prepare) and decides their users
-        (Scope.decide), once compose has been shown to read the generated file back as its definition.
+        """Finds out what screening needs to know about project's services (serviceinfo.prepare) and decides
+        their users (Scope.decide), once compose has been shown to read the generated file back as its
+        definition.
 
         Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
         command: the compose command line on the generated file of project's definition (generated()).
-        args and chosen: as serviceusers.prepare takes them.
+        args and chosen: as serviceinfo.prepare takes them.
         """
         problem = _read_back_problem(command, project.definition, self.scope.docker)
         if problem:
             return self.scope.decide(project, [Finding(problem, Severity.FAILED)])
-        return self.scope.decide(*serviceusers.prepare(command, project, list(args), self.scope, chosen))
+        return self.scope.decide(*serviceinfo.prepare(command, project, list(args), self.scope, chosen))
 
     def surroundings(self) -> list[Finding]:
         """Returns what the policy finds in what the project gets from around it: configured mount dirs that
@@ -200,7 +201,8 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
     subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
-    and decided on (serviceusers); the config that runs is the one that was checked, with the result.
+    and decided on (serviceinfo, imageusers); the config that runs is the one that was checked, with the
+    result.
     parsed: the subcommand's arguments, with the user the command line chose (compose_run).
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,

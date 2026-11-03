@@ -19,7 +19,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `build.fields` for entries given as text, and `Policy._check_cache_from` for an entry it cannot read:
   current buildx prints `output`, `cache-from`, `cache-to` and `secret` entries as objects. Older buildx
   prints text.
-- `serviceusers._services_to_run`: `docker compose config --services` failing after `config` worked.
+- `serviceinfo._services_to_run`: `docker compose config --services` failing after `config` worked.
 - `dockerclient.label_values` and `inspect.name_conflicts`: `docker ps` failing.
 - `dockerclient._first_file_of_tar`: `docker cp` sending something that is not a tar archive.
 - `Policy.check_project`: a config without a project name; compose always gives one. `_check_scope`
@@ -49,7 +49,7 @@ Something has to change between two of dockscreen's calls to docker.
 
 - `docker_run._create_checked` refusing the container created again with the pinned user.
 - `docker_run.check` failing to inspect the container it just created, or its image.
-- `serviceusers._decide` failing to inspect the container it just created.
+- `imageusers._look` failing to inspect the container it just created.
 - `config._read`: the config file replaced between the check of its modes and the read.
 - `dockerclient.run_child`: docker vanishing between dockscreen's first call and compose.
 
@@ -95,7 +95,7 @@ has a repo digest under its local name (`docs/security-review.md`). So these are
 
 - `config.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
-- `serviceusers._find_section_images` and `Scope.project_policy` finding no proof for a section, and the final check of
+- `serviceinfo._find_section_images` and `Scope.project_policy` finding no proof for a section, and the final check of
   `projectscreening.check_and_run` refusing a service that only passed because of it.
 
 The scenarios for them are marked as expected failures.

@@ -1,6 +1,6 @@
 """Feature: a service that sets no user runs as a user dockscreen decided from its image, pinned as numbers
 
-Rules (serviceusers, rules.image):
+Rules (serviceinfo, imageusers, rules.image):
 - the images are pulled or built first, as `up` would by the project's pull policy, and each one's user is
   read from the image as docker reads it;
 - an image that would run as root runs as the default user instead (65534:65534 unless configured), with

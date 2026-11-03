@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from fakes import FakeImages, make_image_ctx, make_runtime, marked, project_of, rules
 
-from dockscreen.compose import serviceusers
+from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
@@ -31,7 +31,7 @@ def project(**services):
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
                                          ctx=gate_context(images, settings))
-    found = serviceusers.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
+    found = serviceinfo.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
     return image_ctx.decide(*found), recorder, images
 
 
@@ -49,7 +49,7 @@ def subcommands(recorder):
 def test_services_to_run_are_the_active_ones_plus_those_named():
     config = project(web={}, db={}, debug={})
     image_ctx, recorder = make_image_ctx(active=("web", "db"))
-    assert serviceusers._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
+    assert serviceinfo._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
         "web", "db", "debug"}
     assert recorder.captured == [[*COMMAND, "config", "--services"]]
 
@@ -126,7 +126,7 @@ def test_listing_the_services_can_fail_closed():
         return capture(cmd)
 
     image_ctx.docker.capture = failing_listing
-    _, failures = serviceusers.prepare(COMMAND, project_of(config), [], image_ctx)
+    _, failures = serviceinfo.prepare(COMMAND, project_of(config), [], image_ctx)
     assert failures == ["docker compose config --services failed"]
 
 
@@ -366,8 +366,8 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     assert "service web: user is not set, the image default may be root" in problems
 
 
-def test_the_policy_decides_from_what_serviceusers_saw():
-    # serviceusers looks at the images; the decision is the policy's: nothing here duplicates the rule
+def test_the_policy_decides_from_what_serviceinfo_saw():
+    # serviceinfo looks at the images; the decision is the policy's: nothing here duplicates the rule
     images = FakeImages(users={"web:1": ""})
     prepared, _, _ = prepare(project(), images)
     assert prepared.decisions == prepared.policy.assess_images(prepared.project)
