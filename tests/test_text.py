@@ -3,8 +3,9 @@ import os
 from fakes import FakeImages, compose_project, project_of, rules
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.screen import policy, verdict
+from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
+from dockscreen.screen.policy import Policy
 from dockscreen.util.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
@@ -21,8 +22,8 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
-    ctx = policy.Policy(rules(me=(UID, GID), allow_me=True))
-    fixed = compose_harden._fix_config(project_of(original, "/proj"), ctx)
+    policy = Policy(rules(me=(UID, GID), allow_me=True))
+    fixed = compose_harden._fix_config(project_of(original, "/proj"), policy)
 
     text = compose_harden._render(original, fixed, ["bind mount " + evil])
 

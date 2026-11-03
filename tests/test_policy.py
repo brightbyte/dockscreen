@@ -10,6 +10,7 @@ from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import Location
 from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
+from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules import project as project_rules
 from dockscreen.screen.rules import service as service_rules
 from dockscreen.util import messages
@@ -166,9 +167,9 @@ def test_subordinate_ids_are_refused(project):
         def contains(self, kind, value):
             return 100000 <= value < 165536
 
-    ctx = policy.Policy(rules(subordinate=Subordinate()))
+    policy = Policy(rules(subordinate=Subordinate()))
     definition = {"name": "proj", "services": {"web": service(user="100000:5000")}}
-    problems = ctx.check_project(project_of(definition, project))
+    problems = policy.check_project(project_of(definition, project))
     assert_refused(problems, "uid 100000 is in a subordinate id range")
 
 
@@ -264,10 +265,10 @@ def test_selinux_relabel_does_not_allow_a_bind_mount_outside_the_project(project
 
 
 def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
-    ctx = policy.Policy(rules())
+    policy = Policy(rules())
     mounted = web({"volumes": [bind(project / "data")]}, project)
-    assert ctx.check_user("900:900", mounted)  # refused: not in the nobody range, with mounts
-    configured = policy.Policy(rules(), configured_user=(900, 900))
+    assert policy.check_user("900:900", mounted)  # refused: not in the nobody range, with mounts
+    configured = Policy(rules(), configured_user=(900, 900))
     assert configured.check_user("900:900", mounted) == []
     assert configured.check_user("900:65534", mounted) == []  # each id on its own, as for nobody
     assert configured.check_user("901:900", mounted) == [
@@ -275,16 +276,16 @@ def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
 
 
 def test_security_opts_from_the_config_file_are_allowed_too(project):
-    ctx = policy.Policy(rules(), security_opts=("seccomp=/etc/strict.json",))
-    assert ctx.check_security_opt(["no-new-privileges:true", "seccomp=/etc/strict.json"], web()) == []
-    assert ctx.check_security_opt(["seccomp=/etc/strict.json"], web()) == [
+    policy = Policy(rules(), security_opts=("seccomp=/etc/strict.json",))
+    assert policy.check_security_opt(["no-new-privileges:true", "seccomp=/etc/strict.json"], web()) == []
+    assert policy.check_security_opt(["seccomp=/etc/strict.json"], web()) == [
         "security_opt must include no-new-privileges:true"]  # still required
 
 
 def test_a_mount_outside_says_how_the_config_file_can_allow_it(project):
     config_file = "/home/me/.config/dockscreen/config.toml"
-    ctx = policy.Policy(rules(allow_me=True), config_file=config_file)
-    assert ctx._check_mounts([bind("/srv/data")], web(project=project)) == [
+    policy = Policy(rules(allow_me=True), config_file=config_file)
+    assert policy._check_mounts([bind("/srv/data")], web(project=project)) == [
         (f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
          f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml')]
 
@@ -512,8 +513,8 @@ def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project)
 def check_container(user="", user_origin=Origin.IMAGE, trust=None, **host):
     info = {"Config": {"User": user},
             "HostConfig": {"CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"], **host}}
-    ctx = policy.Policy(rules())
-    return (ctx.with_trust(trust) if trust else ctx).check_container(Container(info, "/work", user_origin))
+    policy = Policy(rules()).with_trust(trust) if trust else Policy(rules())
+    return policy.check_container(Container(info, "/work", user_origin))
 
 
 def test_a_hardened_container_with_nothing_else_has_no_findings():

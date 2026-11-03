@@ -5,6 +5,7 @@ from dockscreen import compose_cli
 from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy, substitutions
+from dockscreen.screen.policy import Policy
 from dockscreen.util import messages
 
 NOBODY = "65534:65534"
@@ -187,21 +188,21 @@ def test_numbers_and_unknown_names_are_left_for_the_policy(spec):
 
 
 def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them():
-    ctx = policy.Policy(rules())
+    policy = Policy(rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     for spec, part in (("app", "user 'app'"), ("app:app", "user 'app'"), ("1000:staff", "group 'staff'")):
         hardened, _ = harden(config(user=spec, **keep), Accounts())
-        problems = ctx.check_project(project_of(hardened))
+        problems = policy.check_project(project_of(hardened))
         assert any(f"{part} does not exist on this host" in p for p in problems), spec
 
 
 def test_nobody_passes_and_root_is_refused_once_resolved():
-    ctx = policy.Policy(rules())
+    policy = Policy(rules())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     nobody, _ = harden(config(user="nobody", **keep), Accounts())
     root, _ = harden(config(user="root", **keep), Accounts())
-    assert ctx.check_project(project_of(nobody)) == []
-    assert ctx.check_project(project_of(root)) == ["service web: user '0:0': uid 0 is root",
+    assert policy.check_project(project_of(nobody)) == []
+    assert policy.check_project(project_of(root)) == ["service web: user '0:0': uid 0 is root",
                                               "service web: user '0:0': gid 0 is root"]
 
 
