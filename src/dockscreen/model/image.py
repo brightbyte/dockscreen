@@ -46,6 +46,8 @@ class Inspected(NamedTuple):
     policy to decide the user from. It holds the image, its own user, the container's user, whether the
     container reaches host files, and the image's passwd and group files once they are read.
 
+    Instances come from Scope.look.
+
     Attributes:
     - image: the image (Image)
     - image_user: the user the image's config sets
@@ -53,8 +55,6 @@ class Inspected(NamedTuple):
     - reaches_host: whether the container, or the service it stands for, reaches host files
     - passwd, group: the image's passwd and group files as the container has them, "" for a missing one; None
       until they are read (with_user_files)
-
-    Instances come from Scope.look.
     """
     image: Image
     image_user: str

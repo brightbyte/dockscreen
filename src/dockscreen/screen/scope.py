@@ -29,11 +29,11 @@ class Scope(NamedTuple):
     """Factory of the policies that screening one command needs, which also looks at images through docker for
     them. It holds the runtime and whether the caller's own ids are allowed.
 
+    Create one per command from its Runtime; with_allow_me gives a copy once the command line asks for it.
+
     Attributes:
     - runtime: the Runtime of the command
     - allow_me: whether --allow-me (or --as-me) allows the caller's own ids
-
-    Create one per command from its Runtime; with_allow_me gives a copy once the command line asks for it.
     """
     runtime: Runtime
     allow_me: bool = False

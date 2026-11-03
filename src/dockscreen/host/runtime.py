@@ -20,6 +20,8 @@ class Runtime(NamedTuple):
     reads the environment, the config file or this host's accounts on its own. It holds the settings, the real
     docker, the host's accounts, and the caller's ids, environment and directories.
 
+    Instances come from load_runtime, at the entry point.
+
     Attributes:
     - settings: the caller's settings (Config)
     - docker: the real docker (Docker)
@@ -30,8 +32,6 @@ class Runtime(NamedTuple):
       with_docker_env gives a runtime whose docker passes more variables
     - home: the caller's home directory
     - cwd: the directory dockscreen was started in
-
-    Instances come from load_runtime, at the entry point.
     """
     settings: config.Config
     docker: Docker

@@ -33,6 +33,8 @@ class Decisions(NamedTuple):
     looked at. It holds the project and the policy, the decision about each service, the report, and the
     substitutions that follow.
 
+    Instances come from Scope.decide.
+
     Attributes:
     - project: the project, with what was found of its images
     - policy: the policy that decided, with image sections only where the images proved them
@@ -41,8 +43,6 @@ class Decisions(NamedTuple):
     - report: the failures to acquire the images, and the services whose image must not run
     - changes: the substitutions that make the project the one to run
     - local: this host's accounts, for naming the users in describe
-
-    Instances come from Scope.decide.
     """
     project: Project
     policy: Policy

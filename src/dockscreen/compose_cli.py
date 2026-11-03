@@ -87,10 +87,10 @@ class ComposeCommand(commandline.CommandLine):
     running it through dockscreen. Its dispatch method screens, helps with or forwards the command. It holds
     the command line, as CommandLine reads it, and the runtime it runs in.
 
+    The options before the subcommand, which select the project, are its global_args.
+
     Attributes:
     - runtime: the Runtime the command runs in
-
-    The options before the subcommand, which select the project, are its global_args.
     """
 
     def __init__(self, argv: Sequence[str], runtime: Runtime, given: Collection[str] = ()) -> None:

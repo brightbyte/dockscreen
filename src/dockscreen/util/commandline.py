@@ -52,13 +52,13 @@ class CommandLine:
     taken out, and the base class of the command objects (DockerCommand, ComposeCommand). It holds the command
     line as docker or compose gets it, where the command is, and which of dockscreen's options were given.
 
+    The constructor reads the command line; nothing changes these attributes afterwards, though nothing
+    enforces that.
+
     Attributes:
     - argv: the command line as docker or compose gets it
     - idx: the index of the command in it, or None
     - given: the options of dockscreen's that were given, here or on a docker command line this one follows
-
-    The constructor reads the command line; nothing changes these attributes afterwards, though nothing
-    enforces that.
     """
 
     def __init__(self, argv: Sequence[str], value_opts: Collection[str], own: Collection[str],

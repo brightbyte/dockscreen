@@ -27,14 +27,14 @@ class Location(NamedTuple):
     """Record of where a compose project is, as compose would find it, and what makes that directory unfit to
     be a project's. It holds the directory and what was found against it.
 
+    Instances come from inspect.locate.
+
     Attributes:
     - directory: the project directory
     - foreign: whether it was found by walking up from the current directory into the home directory, or into
       one the caller does not own
     - redirects: the .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
     - sensitive: the sensitive paths it equals or contains ($HOME, /etc, ...)
-
-    Instances come from inspect.locate.
     """
     directory: str
     foreign: bool = False
@@ -46,6 +46,8 @@ class Project(NamedTuple):
     """View of a compose project's resolved definition, with what screening found out about the project
     besides, for judging it. It holds the definition, where the project is, and the facts that screening
     gathers in stages.
+
+    Instances come from inspect.project; each stage of screening adds what it found through a with_* copy.
 
     Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not
@@ -60,8 +62,6 @@ class Project(NamedTuple):
       with where they were pulled from; None until looked at
     - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
       Unseen); None until looked at
-
-    Instances come from inspect.project; each stage of screening adds what it found through a with_* copy.
     """
     definition: dict[str, Any]
     location: Location
@@ -135,11 +135,11 @@ class Service(NamedTuple):
     """View of one service of a Project, for judging its keys (Subject). It holds the project and the
     service's name; its keys, and what follows from them, are read from the project.
 
+    Get one from Project.service or Project.services.
+
     Attributes:
     - name: the name of the service
     - project: the project (Project)
-
-    Get one from Project.service or Project.services.
     """
     project: Project
     name: str

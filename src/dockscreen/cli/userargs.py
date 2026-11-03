@@ -39,18 +39,18 @@ class GivenUsers:
     the command to run with. It holds each user option given, whether a user was chosen, whether the caller's
     own ids are allowed, the notices that resolving names produced, and the options that take a value.
 
+    The three are lists that only its own methods add to; callers must not change them.
+
+    The parsers of this module and of runargs create and fill it, turning each user option into
+    `--user=uid:gid` through its methods (allow records --allow-me); nothing changes it after they return,
+    though nothing enforces that.
+
     Attributes:
     - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
     - allow_me: whether the caller's own ids are allowed (--as-me, or --allow-me for `docker run`)
     - notices: what resolving user names on this host did, for the caller to print
     - given: the user options given, as UserOption records
     - values: each option that takes a value, with it, as docker gets it
-
-    The three are lists that only its own methods add to; callers must not change them.
-
-    The parsers of this module and of runargs create and fill it, turning each user option into
-    `--user=uid:gid` through its methods (allow records --allow-me); nothing changes it after they return,
-    though nothing enforces that.
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -103,13 +103,13 @@ class Parsed(NamedTuple):
     service or container and the user. It holds the service or container it names, its arguments with --as and
     --as-me replaced by ids, and what it says about the user.
 
+    Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
+    nor a user.
+
     Attributes:
     - service: the service or container it names, or None
     - args: the arguments, with --as and --as-me replaced by `--user=uid:gid`
     - users: what the command line says about the user before the service (GivenUsers)
-
-    Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
-    nor a user.
     """
     service: str | None
     args: tuple[str, ...]

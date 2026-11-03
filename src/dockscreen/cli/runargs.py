@@ -54,6 +54,8 @@ class ParsedRun(NamedTuple):
     `docker start`. It holds the arguments for `create`, the image and its command, the options only `run`
     has, and what the command line says about the user.
 
+    Instances come from parse.
+
     Attributes:
     - create_args: the arguments for `docker create`, with the users given as ids
     - image: the image, as the command line names it
@@ -61,8 +63,6 @@ class ParsedRun(NamedTuple):
     - detach: whether `-d` or `--detach` was given
     - detach_keys: the value of `--detach-keys`, or None
     - users: what the command line says about the user before the image (GivenUsers)
-
-    Instances come from parse.
     """
     create_args: tuple[str, ...]
     image: str

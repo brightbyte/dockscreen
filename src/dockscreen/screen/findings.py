@@ -43,13 +43,13 @@ class Finding(messages.Marked):
     line marked by its severity (MARKS). Its string value is its text, after the subject and a colon if there
     is one, without the mark. It holds the subject and the severity besides what a Marked line holds.
 
+    The str base does not protect these attributes, so nothing changes them after construction. Build one with
+    the constructor, or with of from a text or another finding.
+
     Attributes:
     - subject: what it is about ("service web"), or None
     - severity: how much it matters
     - text, help, output: as in Marked
-
-    The str base does not protect these attributes, so nothing changes them after construction. Build one with
-    the constructor, or with of from a text or another finding.
     """
 
     severity: Severity
@@ -131,10 +131,10 @@ class Report(NamedTuple):
     """Record of what one screening found, from which its verdict follows. It holds the findings, in their
     order.
 
+    Build one with of, or with refusal or failure for a single reason.
+
     Attributes:
     - findings: what was found
-
-    Build one with of, or with refusal or failure for a single reason.
     """
     findings: tuple[Finding, ...] = ()
 

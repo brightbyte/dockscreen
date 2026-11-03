@@ -53,6 +53,9 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     the security policy, with the settings they apply with, as the config file sets them for one directory and
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
 
+    The rules come from the mixins in screen.rules. Instances come from Scope.policy and Scope.project_policy;
+    with_trust and the other with_* methods give copies.
+
     Attributes:
     - ids: the id rules (idrules.Rules)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
@@ -63,9 +66,6 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     - default_user: the (uid, gid) that runs instead of an image that would run as root
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
-
-    The rules come from the mixins in screen.rules. Instances come from Scope.policy and Scope.project_policy;
-    with_trust and the other with_* methods give copies.
     """
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file

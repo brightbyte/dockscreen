@@ -57,15 +57,15 @@ class Compose(NamedTuple):
     definition that was checked. It holds the options that select the project, the project as compose resolved
     it, the substitutions that add the defaults to it, and the scope it is screened in.
 
+    What runs is the resolved project with every substitution made, in order: the hardening, then what the
+    images decided (final). Nothing else changes the definition that compose gets. Instances come from
+    load_project.
+
     Attributes:
     - global_args: the compose options that select the project
     - resolved: the project as compose resolved it, with remote looked up
     - hardening: the substitutions that add the defaults (Substitution)
     - scope: the Scope to pull, build, decide and run with
-
-    What runs is the resolved project with every substitution made, in order: the hardening, then what the
-    images decided (final). Nothing else changes the definition that compose gets. Instances come from
-    load_project.
     """
     global_args: tuple[str, ...]
     resolved: Project

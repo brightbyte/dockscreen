@@ -20,6 +20,9 @@ class Assessment(NamedTuple):
     """Record of a judgement of the user a container would run as. It holds where that user comes from, the
     image, what was found, the identity read from the image, and the user dockscreen pins.
 
+    Instances come from Policy.check_image, through Scope.assess for one container and Scope.decide for a
+    project; failure gives one for an image that could not be looked at.
+
     Attributes:
     - origin: where the user comes from; None if the image could not be looked at
     - image: the image (Image)
@@ -29,9 +32,6 @@ class Assessment(NamedTuple):
     - section: which image section of the config file applied (Match)
     - home: the HOME to set for the default user that replaces root; "" leaves it alone
     - replaces_root: whether the default user runs instead of the image's root
-
-    Instances come from Policy.check_image, through Scope.assess for one container and Scope.decide for a
-    project; failure gives one for an image that could not be looked at.
     """
     origin: Origin | None
     image: Image

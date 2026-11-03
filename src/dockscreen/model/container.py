@@ -39,15 +39,15 @@ class Container(NamedTuple):
     judged (Subject). It holds what docker inspect shows, the directory its bind mounts are judged against,
     and where its user comes from.
 
+    Everything else it has comes from the command line that created it. A container that could not be
+    inspected comes from uninspected and has only its id.
+
     Attributes:
     - info: what docker inspect shows of it; a dict that must not be changed in place
     - directory: the directory the command line that created it ran in; None for a container that existed
       before, since docker does not record where it was created, and its labels, which an image can set, prove
       nothing
     - user_origin: where its user comes from
-
-    Everything else it has comes from the command line that created it. A container that could not be
-    inspected comes from uninspected and has only its id.
     """
     info: dict[str, Any]
     directory: str | None

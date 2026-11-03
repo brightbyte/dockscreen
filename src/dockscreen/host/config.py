@@ -64,6 +64,9 @@ class Config(NamedTuple):
     repository and per project directory. It holds the top-level settings, filled in with the defaults, the
     sections, and which settings a file set.
 
+    The caller's settings come from load_current; those that apply to one image and project come from
+    effective, which have no sections of their own.
+
     Attributes:
     - user: the (uid, gid) an image runs as when nothing chose a user, or None
     - default_user: the (uid, gid) that replaces an image's root user
@@ -75,9 +78,6 @@ class Config(NamedTuple):
     - images: the image sections, by normalised repository (Section)
     - projects: the project sections, by absolute directory (Section)
     - configured: the names of the settings a config file sets; the others are defaults
-
-    The caller's settings come from load_current; those that apply to one image and project come from
-    effective, which have no sections of their own.
     """
     user: tuple[int, int] | None = None
     default_user: tuple[int, int] = (65534, 65534)
@@ -95,11 +95,11 @@ class Match(NamedTuple):
     """Record of which image section of the config file applies to an image, or why the one for its repository
     does not.
 
+    Instances come from section_for; NO_SECTION stands for a target that is not an image.
+
     Attributes:
     - repository: the repository of the image section that applies, or None
     - problem: why a section for the image's repository does not apply, for audit; None if there is none
-
-    Instances come from section_for; NO_SECTION stands for a target that is not an image.
     """
     repository: str | None
     problem: str | None

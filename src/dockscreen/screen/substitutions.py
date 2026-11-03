@@ -37,6 +37,8 @@ class Substitution(NamedTuple):
     to the definition and reporting it. It holds the key, its new value, how the change is reported, and where
     the value comes from.
 
+    Instances come from the functions that work out changes (hardening, decisions, runoptions).
+
     Attributes:
     - service: the name of the service
     - key: the service key that is set
@@ -46,8 +48,6 @@ class Substitution(NamedTuple):
     - help: what the project can do about it, or None
     - group: the group it is reported together with, or None
     - origin: where the value comes from; None for where the key's own value came from
-
-    Instances come from the functions that work out changes (hardening, decisions, runoptions).
     """
     service: str
     key: str

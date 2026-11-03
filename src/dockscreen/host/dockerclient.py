@@ -37,11 +37,11 @@ class Docker:
     """Client for the real docker binary, which runs the docker and compose commands dockscreen needs and
     reads what they print. It holds the path of the binary and the environment its commands run with.
 
-    Attributes:
-    - binary: the path of the real docker
-
     Its commands run with the environment property; with_env gives a copy that passes more variables. Tests
     get one from new_for_testing, with a stand-in for running processes.
+
+    Attributes:
+    - binary: the path of the real docker
     """
 
     def __init__(self, binary: str, env: Mapping[str, str] | None = None) -> None:
