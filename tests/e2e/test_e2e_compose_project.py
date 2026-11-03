@@ -1,6 +1,6 @@
 """Feature: dockscreen checks the project compose would run, under a name that is its own
 
-Rules (inspect, composeproject):
+Rules (inspect, projectscreening):
 - the project directory is found as compose finds it, and a project that could send compose elsewhere is
   refused: COMPOSE_FILE in a .env; a compose file from stdin cannot be screened;
 - a project directory that is or contains a sensitive path (/, the home directory, the config file) is

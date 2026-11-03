@@ -1,5 +1,5 @@
-"""This module defines the Compose class, for screening a compose project and running docker compose from the
-config that was checked, not from the files compose would find itself.
+"""This module defines the ProjectScreening class, for screening a compose project and running docker compose
+from the config that was checked, not from the files compose would find itself.
 
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
@@ -7,7 +7,7 @@ and handed to compose as its only file, together with the project directory and
 name it came from. What was checked is then exactly what runs: no second
 reading of the project's files, no discovery rules to mirror. Before any image is
 pulled or built, compose is asked for the config of the generated file, which is
-refused if it differs from what was checked (Compose.prepare). The price is that
+refused if it differs from what was checked (ProjectScreening.prepare). The price is that
 compose runs as a child process (so the file can be removed afterwards) and
 shows the temporary file as its config file.
 """
@@ -39,8 +39,8 @@ REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p
 
 
 class Screened(NamedTuple):
-    """Record of how far screening a compose project got, as Compose.screen returns it. It holds what the last
-    stage that ran found, what was decided about the images, and the project that will run.
+    """Record of how far screening a compose project got, as ProjectScreening.screen returns it. It holds what
+    the last stage that ran found, what was decided about the images, and the project that will run.
 
     Attributes:
     - report: what the last stage that ran found
@@ -52,10 +52,10 @@ class Screened(NamedTuple):
     final: Project | None = None
 
 
-class Compose(NamedTuple):
-    """Handle on one compose project, for screening it stage by stage and running docker compose on the
-    definition that was checked. It holds the options that select the project, the project as compose resolved
-    it, the substitutions that add the defaults to it, and the scope it is screened in.
+class ProjectScreening(NamedTuple):
+    """Handle on the screening of one compose project, for checking it stage by stage and running docker
+    compose on the definition that was checked. It holds the options that select the project, the project as
+    compose resolved it, the substitutions that add the defaults to it, and the scope it is screened in.
 
     What runs is the resolved project with every substitution made, in order: the hardening, then what the
     images decided (final). Nothing else changes the definition that compose gets. Instances come from
@@ -181,7 +181,7 @@ class Compose(NamedTuple):
         return _generated(self.global_args, self.directory, self.scope.docker.binary)
 
 
-def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Compose:
+def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> ProjectScreening:
     """Loads the project global_args select, hardened.
 
     Raises inspect.Refused if the policy refuses where it is, DockerError if it cannot be inspected,
@@ -190,7 +190,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Co
     """
     found = inspect.project(global_args, runtime).with_remote(is_remote(global_args, runtime.docker))
     changes = hardening.changes(found.definition, runtime.accounts)
-    return Compose(tuple(global_args), found, tuple(changes), Scope(runtime, allow_me))
+    return ProjectScreening(tuple(global_args), found, tuple(changes), Scope(runtime, allow_me))
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,

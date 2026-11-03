@@ -11,7 +11,7 @@ The unit tests cover what is listed, unless it says otherwise.
 
 They guard against a docker, compose or buildx that behaves differently from today's, and fail closed.
 
-- `composeproject._read_back_problem` and `_first_difference`: compose reading the generated file back
+- `projectscreening._read_back_problem` and `_first_difference`: compose reading the generated file back
   differently from what was checked. dockscreen writes compose's own output, so today's compose reads it
   back the same.
 - `inspect._load_config`: `docker compose config` printing something that is not JSON.
@@ -96,6 +96,6 @@ has a repo digest under its local name (`docs/security-review.md`). So these are
 - `config.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
 - `serviceusers._find_section_images` and `Scope.project_policy` finding no proof for a section, and the final check of
-  `composeproject.check_and_run` refusing a service that only passed because of it.
+  `projectscreening.check_and_run` refusing a service that only passed because of it.
 
 The scenarios for them are marked as expected failures.

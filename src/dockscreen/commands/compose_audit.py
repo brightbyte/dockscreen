@@ -7,7 +7,7 @@ select the project.
 
 from collections.abc import Sequence
 
-from dockscreen.compose import composeproject, inspect
+from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import substitutions, verdict
@@ -28,7 +28,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
         messages.notice(f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF}]")
         return 2
     try:
-        project = composeproject.load_project(global_args, runtime, allow_me)
+        project = projectscreening.load_project(global_args, runtime, allow_me)
     except DockerError as e:
         return verdict.report(Report.failure(e), brief)
     except inspect.Refused as e:
@@ -45,9 +45,9 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     return verdict.report(outcome, brief)
 
 
-def _audit_images(project: composeproject.Compose, brief: bool) -> tuple[Report, Sequence[str]]:
-    """Screens the project as `up` would, stage by stage (Compose.screen), pulling and building its images
-    if the checks before them pass.
+def _audit_images(project: projectscreening.ProjectScreening, brief: bool) -> tuple[Report, Sequence[str]]:
+    """Screens the project as `up` would, stage by stage (ProjectScreening.screen), pulling and building its
+    images if the checks before them pass.
 
     Returns (what the last stage found, report lines).
     """

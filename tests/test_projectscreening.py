@@ -5,7 +5,7 @@ import pytest
 from fakes import ME, FakeImages, compose_project, make_image_ctx, make_runtime, read_raw
 
 from dockscreen.commands import compose_run, compose_up
-from dockscreen.compose import composeproject
+from dockscreen.compose import projectscreening
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
 from dockscreen.util import commandline
@@ -248,7 +248,7 @@ def test_a_service_that_is_not_started_gets_the_default_user_as_a_fail_safe(tmp_
     ([], []),
 ])
 def test_strip_options(args, kept):
-    assert commandline.strip_options(args, composeproject.REPLACED_OPTIONS) == kept
+    assert commandline.strip_options(args, projectscreening.REPLACED_OPTIONS) == kept
 
 
 def test_run_child_exit_codes_and_signals():
@@ -401,20 +401,20 @@ def test_a_config_that_compose_reads_differently_is_named_where_it_differs():
     interpolated = {**config, "services": {"web": {**config["services"]["web"], "pid": "host"}}}
     image_ctx, _ = make_image_ctx(reads=lambda _: interpolated)
 
-    assert composeproject._read_back_problem(COMMAND, config, image_ctx.docker) == (
+    assert projectscreening._read_back_problem(COMMAND, config, image_ctx.docker) == (
         "docker compose reads the checked config differently at config.services.web.pid; not running it")
 
 
 def test_a_config_that_compose_reads_back_unchanged_passes():
     config = project_config()
     image_ctx, _ = make_image_ctx(reads=lambda _: config)
-    assert composeproject._read_back_problem(COMMAND, config, image_ctx.docker) is None
+    assert projectscreening._read_back_problem(COMMAND, config, image_ctx.docker) is None
 
 
 def test_a_config_that_cannot_be_read_back_is_refused():
     image_ctx, _ = make_image_ctx()
     image_ctx.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
-    assert composeproject._read_back_problem(COMMAND, project_config(), image_ctx.docker) == (
+    assert projectscreening._read_back_problem(COMMAND, project_config(), image_ctx.docker) == (
         "docker compose could not read back the config that was checked")
 
 
@@ -426,7 +426,7 @@ def test_a_config_that_cannot_be_read_back_is_refused():
     ({"a": [1, "x"]}, {"a": [1, "x"]}, None),
 ])
 def test_first_difference_names_the_path(expected, actual, where):
-    assert composeproject._first_difference(expected, actual) == where
+    assert projectscreening._first_difference(expected, actual) == where
 
 
 def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path, capsys):
@@ -451,7 +451,7 @@ def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path,
 
 def test_only_a_screening_that_passed_every_stage_has_a_project_to_run(tmp_path):
     runtime, _ = compose_project(tmp_path, project_config(privileged=True), FakeImages(users={"x:1": "app"}))
-    project = composeproject.load_project([], runtime, allow_me=False)
+    project = projectscreening.load_project([], runtime, allow_me=False)
 
     with project.generated() as command:
         screened = project.screen(command)

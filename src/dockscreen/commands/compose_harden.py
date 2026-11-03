@@ -20,7 +20,7 @@ import sys
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from dockscreen.compose import composeproject, inspect
+from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
@@ -55,7 +55,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     if --allow-me were given, and the patch says that it needs it.
     """
     try:
-        project = composeproject.load_project(global_args, runtime, allow_me=True)
+        project = projectscreening.load_project(global_args, runtime, allow_me=True)
     except inspect.Refused as e:
         for refusal in e.findings:
             messages.notice(refusal)
@@ -86,8 +86,8 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     return 1 if remaining else 0
 
 
-def _fix_image_users(project: composeproject.Compose, fixed: dict[str, Any], resolved: dict[str, Any],
-                     notes: list[str]) -> tuple[list[Finding], list[str]]:
+def _fix_image_users(project: projectscreening.ProjectScreening, fixed: dict[str, Any],
+                     resolved: dict[str, Any], notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
     Returns (problems left, notes). resolved: fixed as it will run, which is what the images are looked at

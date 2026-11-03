@@ -2,11 +2,11 @@
 and not started.
 
 The project is checked, its images are looked at, and compose runs the config that was checked
-(composeproject.check_and_run).
+(projectscreening.check_and_run).
 """
 
 from dockscreen.cli import userargs
-from dockscreen.compose import composeproject
+from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
 
 
@@ -16,5 +16,5 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
 
     allow_me: --allow-me was given, so the caller's own ids are allowed.
     """
-    return composeproject.check_and_run(global_args, "create", userargs.Parsed.unread(args, runtime),
+    return projectscreening.check_and_run(global_args, "create", userargs.Parsed.unread(args, runtime),
                                         runtime, allow_me)

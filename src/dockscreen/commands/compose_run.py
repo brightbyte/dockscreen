@@ -7,7 +7,7 @@ checked against the image.
 """
 
 from dockscreen.cli import userargs
-from dockscreen.compose import composeproject
+from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
@@ -27,4 +27,4 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    return composeproject.check_and_run(global_args, "run", parsed, runtime, allow_me, strict)
+    return projectscreening.check_and_run(global_args, "run", parsed, runtime, allow_me, strict)
