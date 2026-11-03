@@ -88,8 +88,11 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 
-        rules: the id rules with the caller's allow_me; the settings give them their nobody range and
-        default user. config_file: named in hints, as in Policy.
+        Parameters:
+        - settings: the settings of the config file that apply (config.effective)
+        - rules: the id rules with the caller's allow_me; the settings give them their nobody range and
+          default user
+        - config_file: named in hints, as in Policy
         """
         return cls(rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
                    security_opts=settings.security_opts, configured_user=settings.user,
@@ -183,16 +186,21 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         return self.check_service(container)
 
     def check_images(self, inspected: Mapping[str, Inspected | Unseen]) -> list[Finding]:
-        """Checks the images that decide the users of a project's services, as they were looked at
-        (inspected, by service); returns one finding per service that must not run (image_problem).
+        """Checks the images that decide the users of a project's services, as they were looked at; returns
+        one finding per service that must not run (image_problem).
+
+        Parameters:
+        - inspected: by service, what was seen of the images (Inspected, or Unseen)
         """
         return [image_problem(name, assessment, self.config_file)
                 for name, assessment in self.assess_images(inspected).items() if assessment.refused]
 
     def assess_images(self, inspected: Mapping[str, Inspected | Unseen]) -> dict[str, Assessment]:
         """Decides the user of each service of a project whose image decides it, from its image as it was
-        looked at (inspected, by service), with the policy for that service (for_service); returns the
-        Assessments by service.
+        looked at, with the policy for that service (for_service); returns the Assessments by service.
+
+        Parameters:
+        - inspected: by service, what was seen of the images (Inspected, or Unseen)
         """
         found = {}
         for name, image in inspected.items():

@@ -54,6 +54,12 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
 
     A user that has to be set becomes `${UID}:${GID}`, the caller's own, so the result is checked as
     if --allow-me were given, and the patch says that it needs it.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given; the result is checked as if it were, either way
     """
     try:
         loaded = projectscreening.load_project(global_args, runtime)

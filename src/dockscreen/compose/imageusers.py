@@ -30,8 +30,14 @@ def find(command: Sequence[str], project: Project, started: Collection[str], loo
 
     Returns (what was seen of each image looked at, by service, Unseen for one that could not be looked at;
     the failures to get the images), with nothing looked at if getting one failed.
-    command: the compose command line (up to the subcommand) on the project's definition, as it will run.
-    args: the arguments after the subcommand, which may carry --build or --pull.
+
+    Parameters:
+    - command: the compose command line (up to the subcommand) on the project's definition, as it will run
+    - project: the project the services are in
+    - started: the services that start, whose images are got
+    - looked_at: the services whose images are looked at; each must be in started
+    - args: the arguments after the subcommand, which may carry --build or --pull
+    - screener: the Screener to pull, build and look with
     """
     failures = _acquire(command, project.definition, started, args, screener.docker)
     if failures:
@@ -42,6 +48,11 @@ def find(command: Sequence[str], project: Project, started: Collection[str], loo
 def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
     """Returns the image compose uses for the service called name in config: its own, or <project>-<service>
     if it is built.
+
+    Parameters:
+    - config: the project's definition
+    - name: the service's name
+    - service: the service's keys
     """
     return service.get("image") or f"{config.get('name', '')}-{name}"
 

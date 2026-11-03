@@ -38,10 +38,12 @@ OWN_OPTIONS = frozenset({
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Runs `dockscreen` with argv (default sys.argv[1:]) and returns the exit status, unless docker
-    replaces this process.
+    """Runs `dockscreen` with argv and returns the exit status, unless docker replaces this process.
 
     A config file that cannot be trusted or a missing docker is reported, with status 1.
+
+    Parameters:
+    - argv: the arguments after `dockscreen`; None for sys.argv[1:]
     """
     argv = sys.argv[1:] if argv is None else list(argv)
     try:
@@ -182,7 +184,11 @@ class DockerCommand(commandline.CommandLine):
         return sub if _wants_command_help(sub, argv[end + 1:]) else None
 
     def show_help(self, target: str) -> int:
-        """Prints dockscreen's help for target, then passes on to docker for its own if it has one."""
+        """Prints dockscreen's help for target, then passes on to docker for its own if it has one.
+
+        Parameters:
+        - target: the command to give the help of; "" for dockscreen itself
+        """
         if target == "":
             helptext.show(helptext.docker_overview)
             return _passthrough(self.argv, self.runtime)

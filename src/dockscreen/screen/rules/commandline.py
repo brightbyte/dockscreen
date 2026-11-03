@@ -56,8 +56,12 @@ class CommandLineRules(RuleBase):
         return [Finding(f"--user takes numeric ids as uid:gid, not {spec!r}{hint}{USER_OPTION_ALTERNATIVES}")]
 
     def check_as_option(self, name: str, account: tuple[int, int] | None) -> list[Finding]:
-        """Checks the name that --as gives and the account of that name on this host (None: there is none);
+        """Checks the name that --as gives and the account of that name on this host;
         returns a refusal unless it names an account here.
+
+        Parameters:
+        - name: what --as gives
+        - account: the (uid, gid) of the account of that name here; None if there is none
         """
         if not name or ":" in name or ids.is_id(name):
             return [Finding(f"--as takes the name of a local user, not {name!r}; use --user for ids")]

@@ -72,8 +72,10 @@ class Finding(messages.Marked):
     def of(cls, reason: object, severity: Severity | None = None, subject: str | None = None) -> Self:
         """Returns reason as a finding of severity about subject, keeping its help and output.
 
-        reason: a text, or a Finding, whose own subject becomes part of the text.
-        severity: if None, a Finding's own, else REFUSED.
+        Parameters:
+        - reason: a text, or a Finding, whose own subject becomes part of the text
+        - severity: if None, a Finding's own, else REFUSED
+        - subject: what it is about ("service web"); None to keep a Finding's own, or for none
         """
         if severity is None:
             severity = reason.severity if isinstance(reason, Finding) else Severity.REFUSED
@@ -88,6 +90,11 @@ class Finding(messages.Marked):
 def failure_of(error: BaseException, subject: str | None = None, help: str | None = None) -> Finding:
     """Returns the failure to look that error reports, about subject if given, with what to do about it
     (help) if given, and what docker printed about it if the error carries that (an `output`).
+
+    Parameters:
+    - error: the error; its `output`, if it has one, is what docker printed
+    - subject: what it is about; None for none
+    - help: what to do about it; None for nothing
     """
     return Finding(str(error), Severity.FAILED, subject, help, getattr(error, "output", None))
 
@@ -113,6 +120,12 @@ def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], s
            ) -> list[Finding]:
     """Returns each of reasons, what the policy refuses in a value from origin, as a refusal; or as a
     notable finding if origin is in trust, whose values are taken as given.
+
+    Parameters:
+    - reasons: what the policy refuses
+    - origin: where the value comes from
+    - trust: the origins whose values are taken as given
+    - subject: what they are about; None for none
     """
     severity = Severity.NOTABLE if origin in trust else Severity.REFUSED
     return [Finding.of(r, severity, subject) for r in reasons]
@@ -150,7 +163,11 @@ class Report(NamedTuple):
 
     @classmethod
     def failure(cls, reason: object) -> Self:
-        """Returns the report of a single failure to look: an error (failure_of), or a text."""
+        """Returns the report of a single failure to look.
+
+        Parameters:
+        - reason: an error (failure_of), or a text
+        """
         if isinstance(reason, BaseException):
             return cls((failure_of(reason),))
         return cls((Finding.of(reason, Severity.FAILED),))

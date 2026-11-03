@@ -136,9 +136,11 @@ def notice(text: object) -> None:
 def out(text: str, indent: bool = True) -> None:
     """Prints a line of a report to stdout, escaped and with its mark coloured.
 
-    indent: print it after a tab, which sets the report apart from the [dockscreen] messages on stderr,
-    wrapped to report_width() with the text lined up after the mark. Without it, the line is printed
-    as it is, for output that is all one line (--brief).
+    Parameters:
+    - text: the line, which may start with a mark (Marked)
+    - indent: print it after a tab, which sets the report apart from the [dockscreen] messages on stderr,
+      wrapped to report_width() with the text lined up after the mark. Without it, the line is printed as it
+      is, for output that is all one line (--brief)
     """
     if not indent:
         print(_paint(text, sys.stdout))
@@ -151,7 +153,8 @@ def report_width(fallback: int = 0) -> int | None:
     """Returns the width to wrap report lines at: COLUMNS or the terminal's, at most MAX_WIDTH, or None
     (no wrapping) below MIN_WIDTH.
 
-    fallback: the width when neither is known, as when the output goes to grep or less; 0 for no wrapping.
+    Parameters:
+    - fallback: the width when neither is known, as when the output goes to grep or less; 0 for no wrapping
     """
     columns = shutil.get_terminal_size((fallback, 24)).columns
     return None if columns < MIN_WIDTH else min(columns, MAX_WIDTH)

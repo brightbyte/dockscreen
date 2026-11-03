@@ -20,12 +20,21 @@ EXPORTED = ("UID", "GID")
 
 
 def exported(me: tuple[int, int]) -> dict[str, str]:
-    """Returns the variables UID and GID for me, the caller's real (uid, gid)."""
+    """Returns the variables UID and GID for me.
+
+    Parameters:
+    - me: the caller's real (uid, gid)
+    """
     return dict(zip(EXPORTED, (str(i) for i in me)))
 
 
 def copied(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
-    """Returns {service: [variable names]} for the environment values of services that are the shell's own."""
+    """Returns {service: [variable names]} for the environment values of services that are the shell's own.
+
+    Parameters:
+    - config: the project's resolved definition
+    - env: the shell's environment
+    """
     found = {}
     for name, service in sorted((config.get("services") or {}).items()):
         environment = (service or {}).get("environment")

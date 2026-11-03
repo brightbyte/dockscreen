@@ -57,7 +57,10 @@ class RuleBase:
 
     def mount_roots(self, directory: str | None) -> tuple[str, ...]:
         """Returns where bind mounts may come from for a project in directory: directory, then the configured
-        mount_dirs; only those for None, no known directory.
+        mount_dirs; only those for None.
+
+        Parameters:
+        - directory: the project directory; None for no known directory
         """
         return (*([directory] if directory is not None else []), *self.extra_dirs)
 
@@ -77,7 +80,11 @@ def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str
                  extensions: bool = True) -> list[str]:
     """Returns a problem for each key of mapping not in allowed; `x-` keys pass unless extensions is False.
 
-    what: names the kind of key in the problems.
+    Parameters:
+    - mapping: the keys to check, with their values
+    - allowed: the keys that may be there
+    - what: names the kind of key in the problems
+    - extensions: `x-` keys pass
     """
     return [
         f"{what} {key!r} is not on the allow list"

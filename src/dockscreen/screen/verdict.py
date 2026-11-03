@@ -46,8 +46,10 @@ def brief(found: Report) -> messages.Marked:
 def report(found: Report, brief_mode: bool = False) -> int:
     """Prints the verdict of what was found and returns it as the exit status.
 
-    brief_mode: print one line on stdout (brief); otherwise each finding that does not stop the command,
-    each reason and the closing line go to stderr.
+    Parameters:
+    - found: the report
+    - brief_mode: print one line on stdout (brief); otherwise each finding that does not stop the command,
+      each reason and the closing line go to stderr
     """
     verdict = found.verdict
     if brief_mode:
@@ -72,9 +74,12 @@ def screened(found: Report) -> bool:
 # --- the user a container runs as ---------------------------------------------------
 
 def outcome(assessment: Assessment, local: hostusers.HostAccounts) -> str:
-    """Describes what an assessment of an image's user means for running it, after the image's name: what
-    it runs as if accepted, what runs instead of its root, or why it may not run; local: this host's
-    accounts, for naming the image's user.
+    """Describes what an assessment of an image's user means for running it, after the image's name: what it
+    runs as if accepted, what runs instead of its root, or why it may not run.
+
+    Parameters:
+    - assessment: the Assessment of the image
+    - local: this host's accounts, for naming the image's user
     """
     who = imageuser.describe(assessment.identity, local) if assessment.identity else None
     if assessment.accepted and assessment.origin is Origin.CONFIG:
@@ -105,7 +110,10 @@ def root_default_notice(default_user: tuple[int, int]) -> Finding | None:
 
 def explain(assessment: Assessment, config_file: str) -> list[Finding]:
     """Returns the assessment's reasons, with how to get past them if they come from the image's user;
-    config_file: where an image section can give the image a user.
+
+    Parameters:
+    - assessment: the Assessment of the image
+    - config_file: where an image section can give the image a user
     """
     if not assessment.identity:
         return assessment.reasons

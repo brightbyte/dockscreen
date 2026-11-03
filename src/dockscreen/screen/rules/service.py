@@ -90,6 +90,10 @@ class ServiceRules(RuleBase):
 
         Refused are a missing user, a name (hardening resolved those that exist), a missing group, and ids
         the id rules refuse (ids, with whether service reaches host files and the configured user allowed).
+
+        Parameters:
+        - value: the value of `user:`; None if it is missing
+        - service: the service (Subject)
         """
         if not value:
             return ["user is not set, the image default may be root"]
@@ -110,6 +114,10 @@ class ServiceRules(RuleBase):
         """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
 
         Allowed are no-new-privileges and the configured security_opts.
+
+        Parameters:
+        - value: the value of security_opt; None if it is missing
+        - service: the service (Subject)
         """
         options = [str(o) for o in value or []]
         allowed = NO_NEW_PRIVILEGES | set(self.security_opts)
@@ -120,7 +128,12 @@ class ServiceRules(RuleBase):
         return problems
 
     def check_cap_drop(self, value: Any, service: Subject) -> list[str]:
-        """Checks cap_drop; returns a problem unless it drops ALL."""
+        """Checks cap_drop; returns a problem unless it drops ALL.
+
+        Parameters:
+        - value: the value of cap_drop; None if it is missing
+        - service: the service (Subject)
+        """
         return [] if drops_all(value) else [f"cap_drop must include {CAP_DROP}"]
 
     def _check_runtime(self, value: Any, service: Subject) -> list[str]:

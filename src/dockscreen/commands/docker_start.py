@@ -31,8 +31,17 @@ VALUE_SHORT = frozenset("st")
 
 def gate(global_args: Sequence[str], lead: list[str], args: list[str], runtime: Runtime,
          allow_me: bool = False, strict: bool = False) -> int:
-    """Runs `lead args` (`docker start` or `restart`, with docker's options) if every container it names
-    passes check; returns 1 if one does not, otherwise docker replaces this process.
+    """Runs `lead args` if every container it names passes check; returns 1 if one does not, otherwise docker
+    replaces this process.
+
+    Parameters:
+    - global_args: docker's options before the subcommand
+    - lead: the docker command line up to and including the subcommand (`docker start` or `restart`), with
+      docker's options
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given (check)
     """
     if not verdict.screened(Report.of(check(global_args, args, runtime, allow_me, strict))):
         return 1
@@ -44,10 +53,16 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     """Returns the refusals that forbid starting the containers named in `docker global_args start args`
     (or `restart`).
 
-    An existing container cannot be rewritten, so one whose user dockscreen would replace (by the
-    default user or a configured one) is refused like one whose user is not accepted, unless it
-    already runs as that user. strict: --strict-screen was given, so what the command line that created a
-    container asked for is judged as a project's would be, and refused (Policy.check_container).
+    An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default user
+    or a configured one) is refused like one whose user is not accepted, unless it already runs as that user.
+
+    Parameters:
+    - global_args: docker's options before the subcommand
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given, so what the command line that created a container asked for is judged
+      as a project's would be, and refused (Policy.check_container)
     """
     screener = Screener(runtime, allow_me)
     if is_remote(global_args, runtime.docker):

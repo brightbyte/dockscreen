@@ -92,6 +92,9 @@ class Project(NamedTuple):
     def with_origins(self, origins: Mapping[str, Mapping[str, Origin]]) -> Self:
         """Returns this project with origins added to where the values of its services' keys come from; a
         key in both takes its origin from origins.
+
+        Parameters:
+        - origins: by service and key, where the values come from
         """
         merged = {name: dict(keys) for name, keys in self.origins.items()}
         for name, keys in origins.items():

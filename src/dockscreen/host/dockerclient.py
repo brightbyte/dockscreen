@@ -47,14 +47,21 @@ class Docker:
     def __init__(self, binary: str, env: Mapping[str, str] | None = None) -> None:
         """Wraps binary, the real docker (runtime._real_docker).
 
-        env: the environment of everything it runs; None for this process's own.
+        Parameters:
+        - binary: the path of the real docker
+        - env: the environment of everything it runs; None for this process's own
         """
         self.binary, self.env = binary, env
         self._run_proc = subprocess.run
 
     @classmethod
     def new_for_testing(cls, run_proc: Callable[..., Any], binary: str = "docker") -> Self:
-        """Returns a Docker that runs binary with run_proc, a stand-in for subprocess.run."""
+        """Returns a Docker that runs binary with run_proc.
+
+        Parameters:
+        - run_proc: a stand-in for subprocess.run
+        - binary: the path of the docker it stands for
+        """
         docker = cls(binary)
         docker._run_proc = run_proc
         return docker
@@ -71,8 +78,12 @@ class Docker:
         return docker
 
     def run(self, args: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        """Runs `docker args` to completion, with kwargs as subprocess.run takes them, and returns the
-        completed process. Raises DockerNotFound if the binary does not exist.
+        """Runs `docker args` to completion and returns the completed process. Raises DockerNotFound if the
+        binary does not exist.
+
+        Parameters:
+        - args: docker's arguments
+        - kwargs: as subprocess.run takes them
         """
         return self._launch(self._run_proc, [self.binary, *args], **kwargs)
 
@@ -136,7 +147,13 @@ class Docker:
         return _first_file_of_tar(data)
 
     def start(self, container: str, attach: bool, interactive: bool, detach_keys: str | None) -> int:
-        """Runs `docker start` on container with the given attach options and returns its exit status."""
+        """Runs `docker start` on container and returns its exit status.
+
+        Parameters:
+        - container: the container's name or id
+        - attach, interactive: --attach and --interactive
+        - detach_keys: --detach-keys; None for docker's default
+        """
         args = ["start"]
         if attach:
             args.append("--attach")
@@ -154,6 +171,11 @@ class Docker:
         """Returns the value of the label wanted of each container, running or not, whose label is value.
 
         Empty for a container without wanted. Raises DockerError if docker cannot say.
+
+        Parameters:
+        - label: the label to filter by
+        - value: its value
+        - wanted: the label whose values are returned
         """
         result = self.run(["ps", "--all", "--filter", f"label={label}={value}", "--format",
                            f'{{{{.Label "{wanted}"}}}}'], capture_output=True, text=True)
@@ -167,16 +189,21 @@ class Docker:
         return result.stdout.strip() if result.returncode == 0 else None
 
     def capture(self, cmd: Sequence[str]) -> subprocess.CompletedProcess:
-        """Runs cmd, a whole command line such as `docker compose ... config`, and returns the completed
-        process with its output captured as text.
+        """Runs cmd and returns the completed process with its output captured as text.
+
+        Parameters:
+        - cmd: a whole command line, such as `docker compose ... config`
         """
         return self._launch(self._run_proc, cmd, capture_output=True, text=True, check=False)
 
     def run_child(self, cmd: Sequence[str]) -> int:
-        """Runs cmd, a whole command line, on this terminal and returns its exit status, 128 + the signal
-        if a signal ended it, or 127 if docker does not exist.
+        """Runs cmd on this terminal and returns its exit status, 128 + the signal if a signal ended it, or
+        127 if docker does not exist.
 
         Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
+
+        Parameters:
+        - cmd: a whole command line, docker's binary first
         """
         try:
             process = self._launch(subprocess.Popen, cmd)
@@ -226,8 +253,12 @@ def _first_file_of_tar(data: bytes) -> str | None:
 
 
 def is_remote(global_args: Sequence[str], docker: Docker) -> bool:
-    """Tells whether the daemon docker talks to, given global_args, might not be this host's own, where
-    the checks, which compare ids and paths with this host's, mean nothing.
+    """Tells whether the daemon docker talks to might not be this host's own, where the checks, which compare
+    ids and paths with this host's, mean nothing.
+
+    Parameters:
+    - global_args: docker's options before the subcommand, which may choose the daemon (--host, --context)
+    - docker: the docker to ask about its context
     """
     env = docker.environment
     if commandline.option_values(global_args, "--host", "-H"):

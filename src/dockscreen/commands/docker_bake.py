@@ -47,8 +47,14 @@ def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
 
 
 def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` (`docker buildx bake`, with docker's options) if the definition it would build
-    passes the policy for builds; returns 1 if it does not, otherwise docker replaces this process.
+    """Runs `lead args` if the definition it would build passes the policy for builds; returns 1 if it does
+    not, otherwise docker replaces this process.
+
+    Parameters:
+    - lead: the docker command line up to and including the subcommand (`docker buildx bake`), with docker's
+      options
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
     """
     bake_policy = Screener(runtime).policy(runtime.cwd)
     if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
@@ -60,6 +66,12 @@ def check(docker: Docker, args: Sequence[str], bake_policy: policy.Policy, direc
     """Checks `bake` with these arguments, run in directory, by bake_policy.
 
     Returns why it may not run: refusals, or the failure to get the definition.
+
+    Parameters:
+    - docker: the docker to run bake with
+    - args: bake's arguments
+    - bake_policy: the policy for builds
+    - directory: the directory bake runs in, which its relative paths are relative to
     """
     try:
         found = _definition(docker, args)

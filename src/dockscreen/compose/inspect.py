@@ -43,6 +43,10 @@ def project(global_args: Sequence[str], runtime: Runtime) -> Project:
 
     Raises Refused if the policy refuses where the project is (Policy.check_location); DockerError if
     compose cannot give the definition.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
     """
     location = locate(global_args, runtime)
     refusals = Screener(runtime).policy(location.directory).check_location(location)
@@ -55,6 +59,10 @@ def locate(global_args: Sequence[str], runtime: Runtime) -> Location:
     """Returns where the project global_args select is, as compose would find it.
 
     Raises DockerError if that cannot be found: the compose file is read from stdin, or there is none.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command, whose current directory and environment compose would start from
     """
     location = _project_location(global_args, runtime.cwd, runtime)
     return location._replace(sensitive=tuple(_sensitive_inside(location.directory, runtime)))
@@ -83,7 +91,13 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
 
 def passes(global_args: Sequence[str], runtime: Runtime,
            rules: Callable[[policy.Policy, Project], list[Finding]] = policy.Policy.check_project) -> bool:
-    """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict."""
+    """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
+    - rules: the checks to run: a Policy method that takes the project, check_project by default
+    """
     try:
         found = project(global_args, runtime)
     except DockerError as e:
@@ -131,7 +145,12 @@ def made_from(name: str, docker: Docker) -> list[str]:
 
 
 def name_lookup_failure(name: str, error: DockerError) -> Finding:
-    """Returns the failure to look at the containers called by the project name (made_from)."""
+    """Returns the failure to look at the containers called by the project name (made_from).
+
+    Parameters:
+    - name: the project name
+    - error: why docker could not say
+    """
     return Finding(f"cannot tell whether another project is called {name!r}: {error}", Severity.FAILED,
                    output=error.output)
 
@@ -139,6 +158,12 @@ def name_lookup_failure(name: str, error: DockerError) -> Finding:
 def name_conflicts(project_policy: policy.Policy, name: str, directory: str, docker: Docker) -> list[Finding]:
     """Checks the name of the project in directory against the containers that have it, by project_policy
     (Policy.check_project_name); returns what it finds, or the failure to look.
+
+    Parameters:
+    - project_policy: the policy to check with
+    - name: the project name
+    - directory: the project directory
+    - docker: the docker to ask
     """
     try:
         found = made_from(name, docker)
@@ -148,7 +173,12 @@ def name_conflicts(project_policy: policy.Policy, name: str, directory: str, doc
 
 
 def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:
-    """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME in env."""
+    """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - env: the caller's environment
+    """
     chosen = commandline.option_values(global_args, "--project-name", "-p")
     return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 

@@ -40,9 +40,13 @@ class ImageRules(RuleBase):
         """Decides which user the container that inspected looked through may run as, by the rules in this
         module's docstring; returns the Assessment.
 
-        origin: where the container's user comes from; one that is not the image's is not judged here, and
-        is the assessment's origin. The image section that applies is this policy's (section). The passwd
-        and group files must have been read if needs_user_files says so.
+        The image section that applies is this policy's (section). The passwd and group files must have been
+        read if needs_user_files says so.
+
+        Parameters:
+        - inspected: what was seen of the image (Inspected)
+        - origin: where the container's user comes from; one that is not the image's is not judged here, and
+          is the assessment's origin
         """
         image, match = inspected.image, self.section
         notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
@@ -71,7 +75,10 @@ def image_problem(name: str, assessment: Assessment, config_file: str | None = N
     """Returns, as one finding, why the service called name must not run, for an assessment of its image
     that refused or failed.
 
-    config_file: named in the hint for an image that is pulled, whose repository can be given a user.
+    Parameters:
+    - name: the service's name
+    - assessment: the Assessment of its image
+    - config_file: named in the hint for an image that is pulled, whose repository can be given a user
     """
     image = assessment.image
     text = f"image {image.reference}: {'; '.join(r.text for r in assessment.reasons)}"

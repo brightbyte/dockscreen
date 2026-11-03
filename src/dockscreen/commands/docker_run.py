@@ -43,12 +43,17 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
          strict: bool = False) -> int:
     """Runs `docker global_args run args` through the gate and returns the exit status.
 
-    The container starts only if the user it would run as is accepted, given as numbers where the image
-    or the config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it
-    could not create the container.
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
-    strict: --strict-screen was given, so what the command line asks for that a project or an image may
-    not have is refused too.
+    The container starts only if the user it would run as is accepted, given as numbers where the image or the
+    config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it could not
+    create the container.
+
+    Parameters:
+    - global_args: docker's options before the subcommand
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given, so what the command line asks for that a project or an image may not
+      have is refused too
     """
     screener = Screener(runtime, allow_me)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
@@ -160,10 +165,17 @@ def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decid
     """Creates the container as `docker run` would and returns (exit status, (container, assessment of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
-    extra: arguments that go before the command line's own. decided: the assessment of a first creation,
-    whose user extra pins; the container is then not assessed again, only checked to be what the command
-    line asked for, and its user comes from where the decided one does. The container is left for the
-    caller to remove.
+    The container is left for the caller to remove.
+
+    The container is left for the caller to remove.
+
+    Parameters:
+    - screener: the Screener of the command
+    - parsed: the `docker run` command line, as parsed
+    - extra: arguments that go before the command line's own
+    - decided: the assessment of a first creation, whose user extra pins; the container is then not assessed
+      again, only checked to be what the command line asked for, and its user comes from where the decided one
+      does
     """
     code, created = screener.docker.create([*DEFAULTS, *extra, *parsed.create_args])
     if created is None:
@@ -224,11 +236,18 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
           strict: bool = False) -> int:
     """Reports what `docker global_args run args` would do, without starting anything.
 
-    The container is created as `run` would create it, pulling the image if `run` would, and removed.
-    Returns the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the
-    command line asks for something a project or an image may not; 3 if the audit failed to get that far;
-    2 if args cannot be read. --brief, before the image, prints only the verdict, in one line.
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
+    The container is created as `run` would create it, pulling the image if `run` would, and removed. Returns
+    the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the command line
+    asks for something a project or an image may not; 3 if the audit failed to get that far; 2 if args cannot
+    be read. --brief, before the image, prints only the verdict, in one line.
+
+    Parameters:
+    - global_args: docker's options before the subcommand
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given, so what the command line asks for that a project or an image may not
+      have is refused too
     """
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv

@@ -19,8 +19,12 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     """Runs `docker compose global_args run args` if the project passes the checks, and returns the exit
     status: 1 for a user on the command line that cannot be used.
 
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
-    strict: --strict-screen was given, so what the command line changes in the service is judged too.
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given, so what the command line changes in the service is judged too
     """
     parsed = userargs.parse_compose("run", args, runtime.me, runtime.accounts)
     refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)

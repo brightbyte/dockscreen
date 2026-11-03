@@ -51,7 +51,10 @@ class BuildRules(RuleBase):
         context, Dockerfile and named contexts outside its directory, a network, and the SSH agent.
 
         Only sources that are paths on this host are checked, not URLs or services.
-        prefix: before each key in the problems.
+
+        Parameters:
+        - build: the build (Build)
+        - prefix: before each key in the problems
         """
         context_key, dockerfile_key, contexts_key = build.keys
         directory = build.directory

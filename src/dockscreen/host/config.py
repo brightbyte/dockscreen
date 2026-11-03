@@ -112,8 +112,13 @@ def effective(config: Config, repository: str | None = None, directory: str | No
     """Returns the settings for an image pulled from repository, in a project in directory.
 
     They are the top level's, amended by the image's section, then by the sections of the projects that
-    directory is in, outermost first. repository or directory None: no such section applies. The
+    directory is in, outermost first. The
     result has no sections of its own.
+
+    Parameters:
+    - config: the settings of the config file
+    - repository: the image's repository; None for no image section
+    - directory: the project directory; None for no project section
     """
     sections = [config.images[repository]] if repository in config.images else []
     if directory is not None:
@@ -148,9 +153,11 @@ def all_mount_dirs(config: Config) -> tuple[str, ...]:
 def section_for(config: Config, reference: str, repo_digests: Iterable[str] | None, built: bool) -> Match:
     """Determines which image section of the config file applies to this image, as a Match.
 
-    reference: the image name the service or command line uses.
-    repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from.
-    built: the service builds the image from a Dockerfile.
+    Parameters:
+    - config: the settings of the config file
+    - reference: the image name the service or command line uses
+    - repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from
+    - built: the service builds the image from a Dockerfile
     """
     name = repository(reference)
     if name not in config.images:
@@ -165,6 +172,11 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
 def name_matches(config: Config, reference: str, built: bool) -> str | None:
     """Returns the repository of the image section the name alone points to, or None if there is none or
     the image is built. The name proves nothing: this is for before the image is there.
+
+    Parameters:
+    - config: the settings of the config file
+    - reference: the image name
+    - built: a compose service builds the image
     """
     name = repository(reference)
     return name if name in config.images and not built else None
@@ -174,6 +186,10 @@ def user_file(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
     An XDG_CONFIG_HOME in env that is not absolute is ignored, as XDG says, in favour of home/.config.
+
+    Parameters:
+    - env: the caller's environment
+    - home: the caller's home directory
     """
     base = env.get("XDG_CONFIG_HOME", "")
     if not os.path.isabs(base):

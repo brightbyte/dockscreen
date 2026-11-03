@@ -67,6 +67,10 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> Identity:
     A numeric user or group is an id, never a name (moby looks it up by number only). A numeric
     uid without a passwd entry gets gid 0. Raises ValueError for a name the image does not define,
     which docker would refuse to start too, and for a negative id.
+
+    Parameters:
+    - spec: the `user[:group]`; None or "" for the image's default, root
+    - passwd_text, group_text: the image's passwd and group files
     """
     passwd = _parse_passwd(passwd_text)
     groups = _parse_group(group_text)
@@ -114,8 +118,11 @@ def _is_id(text: str) -> bool:
 
 
 def describe(identity: Identity, local: hostusers.HostAccounts | None = None) -> str:
-    """Describes the identity in words; with local (hostusers.HostAccounts), also which local accounts the
-    ids are.
+    """Describes the identity in words, and which local accounts the ids are.
+
+    Parameters:
+    - identity: the ids
+    - local: this host's accounts (hostusers.HostAccounts); None to leave them out
     """
     def who(kind: str, value: int) -> str:
         if local is None:

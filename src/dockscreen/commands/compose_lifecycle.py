@@ -19,6 +19,12 @@ from dockscreen.screen.screener import Screener
 def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:
     """Runs `docker compose global_args sub args` if the project's name is free; returns 1 if it is not,
     otherwise docker replaces this process.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - sub: the subcommand: `down`, `rm`, `stop` or another that uses the project's name
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
     """
     reasons = check(global_args, runtime)
     if reasons:
@@ -32,6 +38,10 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
 
     Empty for a name chosen on the command line or in the environment, and for a project that cannot be
     inspected, which is left to compose to report.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
     """
     if inspect.names_project(global_args, runtime.env):
         return []

@@ -31,7 +31,11 @@ class Mount(NamedTuple):
 
 
 def mount_flags(opts: Mapping[str, Any]) -> set[str]:
-    """Returns the comma-separated mount options in the `o` of a volume's driver_opts, lower case."""
+    """Returns the comma-separated mount options in the `o`, lower case.
+
+    Parameters:
+    - opts: a volume's driver_opts
+    """
     return {flag.strip().lower() for flag in str(opts.get("o", "")).split(",")}
 
 
@@ -49,7 +53,9 @@ def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] 
     """Tells whether a compose service reaches host files: bind mounts, secrets and configs, devices, the
     volumes of another container, or a named volume that volume_reaches_host.
 
-    volumes: the config's top-level volumes, which the service's named volumes refer to.
+    Parameters:
+    - service: the service's keys, as compose config gives them
+    - volumes: the config's top-level volumes, which the service's named volumes refer to
     """
     mounts = [m for m in service.get("volumes") or [] if isinstance(m, dict)]
     binds = any(m.get("type") == "bind"
@@ -60,10 +66,13 @@ def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] 
 
 
 def container_mounts(info: Mapping[str, Any]) -> list[Mount]:
-    """Returns the mounts of a container as docker inspect shows it (info), each one once.
+    """Returns the mounts of a container each one once.
 
     -v puts a bind mount in HostConfig.Binds, --mount in HostConfig.Mounts; inspect also lists them all in
     Mounts.
+
+    Parameters:
+    - info: what docker inspect shows of the container
     """
     host = info.get("HostConfig") or {}
     found = []
@@ -82,8 +91,11 @@ def container_mounts(info: Mapping[str, Any]) -> list[Mount]:
 
 
 def container_reaches_host(info: Mapping[str, Any]) -> bool:
-    """Tells whether a container, as docker inspect shows it (info), reaches host files: bind mounts,
-    devices, or the volumes of another container.
+    """Tells whether a container reaches host files: bind mounts, devices, or the volumes of another
+    container.
+
+    Parameters:
+    - info: what docker inspect shows of the container
     """
     host = info.get("HostConfig") or {}
     binds = any(m.kind == "bind" for m in container_mounts(info))

@@ -167,8 +167,12 @@ COMMAND_OPTIONS = {"audit": (Option(commandline.BRIEF, "Print only the verdict, 
 def command_topic(name: str, fn: Callable[..., object], aliases: Sequence[str] = ()) -> Topic:
     """Builds the Topic of one of dockscreen's own compose commands from fn's docstring.
 
-    The first line becomes the summary and each further paragraph a note. aliases: other names of the
-    command, listed in the help.
+    The first line becomes the summary and each further paragraph a note.
+
+    Parameters:
+    - name: the command's name
+    - fn: the function that implements it, whose docstring is the help
+    - aliases: other names of the command, listed in the help
     """
     summary, _, rest = (fn.__doc__ or "").strip().partition("\n")
     notes = tuple(" ".join(p.split()) for p in rest.split("\n\n") if p.strip())
@@ -181,7 +185,10 @@ def command_topic(name: str, fn: Callable[..., object], aliases: Sequence[str] =
 def topic(topic_: Topic, follows_name: str, width: int | None) -> list[str]:
     """Returns the help for one command as lines wrapped to width.
 
-    follows_name: whose help follows ours, announced at the end if the topic says it does.
+    Parameters:
+    - topic_: the Topic of the command
+    - follows_name: whose help follows ours, announced at the end if the topic says it does
+    - width: the width to wrap to; None for no wrapping
     """
     lines = [f"Usage:  {topic_.usage}", "", *_paragraph(topic_.summary, width)]
     if topic_.aliases:
@@ -255,7 +262,11 @@ def _follows(docker_help: bool, name: str) -> list[str]:
 
 
 def docker_overview(width: int | None) -> list[str]:
-    """Returns the help for dockscreen itself, as lines wrapped to width."""
+    """Returns the help for dockscreen itself, as lines wrapped to width.
+
+    Parameters:
+    - width: the width to wrap to; None for no wrapping
+    """
     return _overview(
         "dockscreen [OPTIONS] COMMAND",
         "Docker with security checks: dockscreen audits the commands that start containers and passes "
@@ -269,7 +280,9 @@ def docker_overview(width: int | None) -> list[str]:
 def compose_overview(commands: Mapping[str, Topic], width: int | None) -> list[str]:
     """Returns the help for `dockscreen compose`, as lines wrapped to width.
 
-    commands: {name: Topic} of dockscreen's own compose commands.
+    Parameters:
+    - commands: {name: Topic} of dockscreen's own compose commands
+    - width: the width to wrap to; None for no wrapping
     """
     return _overview(
         "dockscreen compose [OPTIONS] COMMAND",
@@ -284,6 +297,9 @@ def compose_overview(commands: Mapping[str, Topic], width: int | None) -> list[s
 def show(build: Callable[[int | None], list[str]]) -> None:
     """Prints the lines build(width) returns, with the width of the audit report, or 80 columns without
     a terminal, as docker does: help is read in less more than grepped.
+
+    Parameters:
+    - build: returns the lines of the help, wrapped to the width it is given (None for no wrapping)
     """
     # flush: the exec of docker that follows discards unflushed buffers
     print("\n".join(build(messages.report_width(fallback=HELP_FALLBACK_WIDTH))), flush=True)

@@ -85,10 +85,22 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
     the options `create` lacks, with users given as ids.
 
-    me: the (uid, gid) that --as-me stands for.
-    accounts: where the name given to --as is looked up (hostusers.HostAccounts).
     Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
     the policy to judge.
+
+    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
+    the policy to judge.
+
+    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
+    the policy to judge.
+
+    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
+    the policy to judge.
+
+    Parameters:
+    - args: the arguments after `run`
+    - me: the (uid, gid) that --as-me stands for
+    - accounts: where the name given to --as is looked up (hostusers.HostAccounts)
     """
     users = userargs.GivenUsers(me, accounts)
     state = _State(users)

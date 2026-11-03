@@ -23,7 +23,9 @@ def changes(config: dict[str, Any], accounts: hostusers.HostAccounts) -> list[Su
     """Returns the substitutions that add dockscreen's defaults to every service of config and resolve user
     names to ids.
 
-    accounts: the users and groups to resolve names with (hostusers.HostAccounts).
+    Parameters:
+    - config: the project's resolved config
+    - accounts: the users and groups to resolve names with (hostusers.HostAccounts)
     """
     found = []
     for name, service in (config.get("services") or {}).items():

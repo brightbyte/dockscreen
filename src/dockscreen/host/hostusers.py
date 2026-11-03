@@ -66,7 +66,12 @@ class Subordinate:
         self.ranges = {"uid": _read_ranges(uid_file), "gid": _read_ranges(gid_file)}
 
     def contains(self, kind: str, value: int) -> bool:
-        """Tells whether value lies in one of this host's subordinate ranges of kind ("uid" or "gid")."""
+        """Tells whether value lies in one of this host's subordinate ranges of kind.
+
+        Parameters:
+        - kind: "uid" or "gid"
+        - value: the id
+        """
         return any(start <= value < start + count for start, count in self.ranges[kind])
 
 

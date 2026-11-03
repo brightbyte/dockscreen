@@ -28,8 +28,13 @@ ENV_FILE = ("--env-from-file",)
 
 
 def substitutions(parsed: userargs.Parsed, service: Service, runtime: Runtime) -> list[Substitution]:
-    """Returns the substitutions that make service what `run` with parsed's options runs, from runtime's
-    current directory, with its home directory as `~`.
+    """Returns the substitutions that make service what `run` with parsed's options runs.
+
+    Parameters:
+    - parsed: the arguments of `run`
+    - service: the service that `run` runs
+    - runtime: the Runtime of the command, whose current directory relative paths are read from, with its home
+      directory as `~`
     """
     found = []
     definition = service.definition

@@ -9,8 +9,13 @@ from dockscreen.host.runtime import Runtime
 
 
 def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` (`docker exec`, with docker's options) with --as and --as-me replaced by ids;
-    returns 1 for a user that cannot be used, otherwise docker replaces this process.
+    """Runs `lead args` with --as and --as-me replaced by ids; returns 1 for a user that cannot be used,
+    otherwise docker replaces this process.
+
+    Parameters:
+    - lead: the docker command line up to and including the subcommand (`docker exec`), with docker's options
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
     """
     resolved = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
     if resolved is None:

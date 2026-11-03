@@ -55,8 +55,15 @@ class Decisions(NamedTuple):
     @classmethod
     def of(cls, project: Project, project_policy: Policy, local: hostusers.HostAccounts,
            inspected: Mapping[str, Inspected | Unseen], failures: Sequence[Finding] = ()) -> Self:
-        """Returns what project_policy decides about project from what was seen of its services' images
-        (inspected, by service), with the failures to pull, build or list its services (failures).
+        """Returns what project_policy decides about project from what was seen of its services' images, with
+        the failures to acquire them.
+
+        Parameters:
+        - project: the project
+        - project_policy: the policy that decides, with the image sections the images proved
+        - local: this host's accounts, for naming the users
+        - inspected: by service, what was seen of the images that decide the users
+        - failures: the failures to pull, build or list its services
         """
         decided = project_policy.assess_images(inspected)
         report = Report.of([*failures, *project_policy.check_images(inspected)])
@@ -95,6 +102,11 @@ def changes(project: Project, decisions: Mapping[str, Assessment], project_polic
     and set no user get the decided user (decisions), pinned to the image that was checked; those that do
     not start get the default user of project_policy, with its default_home as HOME (the function
     default_home).
+
+    Parameters:
+    - project: the project
+    - decisions: by service, the Assessment of each started service that sets no user
+    - project_policy: the policy that decided, which gives the default user and default_home
     """
     found = []
     for name, service in sorted((project.definition.get("services") or {}).items()):
@@ -144,6 +156,10 @@ def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[
 def default_home(user: tuple[int, int], home: str) -> str:
     """Returns the HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
 
-    home: the configured default_home. Root keeps its own.
+    Root keeps its own.
+
+    Parameters:
+    - user: the default user's (uid, gid)
+    - home: the configured default_home
     """
     return "" if 0 in user else home

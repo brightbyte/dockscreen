@@ -54,7 +54,12 @@ class GivenUsers:
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
-        """Starts with no user given; me: the (uid, gid) --as-me stands for; accounts: where --as looks."""
+        """Starts with no user given.
+
+        Parameters:
+        - me: the (uid, gid) that --as-me stands for
+        - accounts: where the name given to --as is looked up
+        """
         self.callers_ids = me
         self.accounts = accounts
         self.chosen = False
@@ -68,7 +73,11 @@ class GivenUsers:
         self.values.append((option, value))
 
     def numeric(self, spec: str) -> str:
-        """Returns `--user=` for spec (--user or -u), and records it."""
+        """Returns `--user=` for spec, and records it.
+
+        Parameters:
+        - spec: the value of --user or -u
+        """
         self.chosen = True
         self.given.append(UserOption("--user", spec))
         return f"--user={spec}"
@@ -128,9 +137,12 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     """Parses args far enough to find the service or container, and whether a user is given.
 
     Returns a Parsed, with --as and --as-me replaced by ids, and the users given.
-    value_flags: the command's options that take a value in the next argument.
-    me: the (uid, gid) that --as-me stands for.
-    accounts: where the name given to --as is looked up (hostusers.HostAccounts).
+
+    Parameters:
+    - args: the subcommand's arguments
+    - value_flags: the command's options that take a value in the next argument
+    - me: the (uid, gid) that --as-me stands for
+    - accounts: where the name given to --as is looked up (hostusers.HostAccounts)
     """
     users = GivenUsers(me, accounts)
     kept: list[str] = []
@@ -154,15 +166,25 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
 
 def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
                   accounts: hostusers.HostAccounts) -> Parsed:
-    """Returns parse of the arguments of `docker compose run` or `exec` (subcommand)."""
+    """Returns parse of the arguments of `docker compose run` or `exec`.
+
+    Parameters:
+    - subcommand: `run` or `exec`
+    - args: the subcommand's arguments
+    - me, accounts: as parse takes them
+    """
     return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
 def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime) -> list[str] | None:
     """Returns args with --as and --as-me replaced by ids, and prints the notices of resolving names.
 
-    Returns None, and reports why, if the user cannot be used (Policy.check_user_options). value_flags: as
-    parse takes them.
+    Returns None, and reports why, if the user cannot be used (Policy.check_user_options).
+
+    Parameters:
+    - args: the subcommand's arguments
+    - value_flags: as parse takes them
+    - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
     refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)

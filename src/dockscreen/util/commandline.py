@@ -63,9 +63,13 @@ class CommandLine:
 
     def __init__(self, argv: Sequence[str], value_opts: Collection[str], own: Collection[str],
                  given: Collection[str] = ()) -> None:
-        """Reads argv. value_opts: the options that take the next token as their value, which is then not the
-        command; own: the options of ours to take out; given: options of ours given before, on the docker
-        command line that this one follows.
+        """Reads argv.
+
+        Parameters:
+        - argv: the arguments, without the program
+        - value_opts: the options that take the next token as their value, which is then not the command
+        - own: the options of ours to take out
+        - given: options of ours given before, on the docker command line that this one follows
         """
         self.value_opts = value_opts
         self.given = frozenset(given)
@@ -144,7 +148,9 @@ def find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | N
     """Returns the index of the first argument that is not an option or an option's value, or None if
     there is none before `--`.
 
-    value_opts: the options that take a value.
+    Parameters:
+    - argv: the arguments
+    - value_opts: the options that take a value
     """
     i = 0
     while i < len(argv):
@@ -162,7 +168,12 @@ def find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | N
 
 def option_values(args: Sequence[str], long_name: str, short_name: str | None) -> list[str]:
     """Returns every value given for the option, in order, in `--opt v`, `--opt=v`, `-o v`, `-ov` and `-o=v`
-    forms, read as compose's flag parser reads them. short_name may be None.
+    forms, read as compose's flag parser reads them.
+
+    Parameters:
+    - args: the arguments
+    - long_name: the option's long name, with its dashes
+    - short_name: its short name, with its dash; None if it has none
     """
     values = []
     i = 0
@@ -180,7 +191,12 @@ def option_values(args: Sequence[str], long_name: str, short_name: str | None) -
 
 
 def option_value(args: Sequence[str], name: str) -> str | None:
-    """Returns the value of the first `--name value` or `--name=value` before any `--`, or None."""
+    """Returns the value of the first `--name value` or `--name=value` before any `--`, or None.
+
+    Parameters:
+    - args: the arguments
+    - name: the option, with its dashes
+    """
     for i, arg in enumerate(args):
         if arg == "--":
             break
@@ -194,7 +210,9 @@ def option_value(args: Sequence[str], name: str) -> str | None:
 def strip_options(args: Sequence[str], names: Collection[str]) -> list[str]:
     """Returns args without the given options and their values, in `--opt v`, `--opt=v` and `-ov` forms.
 
-    names: options that take a value, long and short.
+    Parameters:
+    - args: the arguments
+    - names: options that take a value, long and short
     """
     kept = []
     i = 0
@@ -216,8 +234,10 @@ def positionals(args: Sequence[str], long_values: Collection[str],
                 short_values: Collection[str]) -> list[str]:
     """Returns the arguments that are not options or option values, and everything after `--`.
 
-    long_values: long options that take a value; short_values: letters of short options that do, which
-    take the next argument when they end a cluster.
+    Parameters:
+    - args: the arguments
+    - long_values: long options that take a value
+    - short_values: letters of short options that do, which take the next argument when they end a cluster
     """
     found: list[str] = []
     i = 0

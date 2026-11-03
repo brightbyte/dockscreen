@@ -33,14 +33,22 @@ class Build(NamedTuple):
 
     @classmethod
     def from_compose(cls, value: Any, directory: str) -> Self:
-        """Returns the build that a compose service's `build:` value defines, a context or a section, in the
-        project in directory.
+        """Returns the build that a compose service's `build:` value defines.
+
+        Parameters:
+        - value: the `build:` value: a context, or a section
+        - directory: the project directory
         """
         return cls({"context": value} if isinstance(value, str) else value or {}, COMPOSE_KEYS, directory)
 
     @classmethod
     def from_bake(cls, target: dict[str, Any] | None, directory: str) -> Self:
-        """Returns the build that a bake target defines, with directory as the one bake ran in."""
+        """Returns the build that a bake target defines.
+
+        Parameters:
+        - target: the target, as `bake --print` gives it; None for an empty one
+        - directory: the directory bake ran in
+        """
         return cls(target or {}, BAKE_KEYS, directory)
 
     @property

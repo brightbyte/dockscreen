@@ -144,16 +144,22 @@ class ProjectRules(RuleBase):
         return found
 
     def check_mount_dirs(self, sensitive: Mapping[str, Sequence[str]]) -> list[Finding]:
-        """Checks the configured mount dirs, by the sensitive paths that each contains (sensitive: by mount
-        dir); returns a notable finding for each that contains one, since its containers can mount it.
+        """Checks the configured mount dirs, by the sensitive paths that each contains; returns a notable
+        finding for each that contains one, since its containers can mount it.
+
+        Parameters:
+        - sensitive: by mount dir, the sensitive paths it equals or contains
         """
         return [Finding(f"the configured mount dir {directory} contains {paths[0]}, so containers can "
                         "mount it", Severity.NOTABLE, help="narrow mount_dirs in the config file")
                 for directory, paths in sensitive.items() if paths]
 
     def check_shell_env(self, copied: Mapping[str, Sequence[str]]) -> list[Finding]:
-        """Checks what the project's services take from the shell (copied: the names of the variables, by
-        service); returns a notable finding for each service that takes any, without their values.
+        """Checks what the project's services take from the shell; returns a notable finding for each service
+        that takes any, without their values.
+
+        Parameters:
+        - copied: by service, the names of the variables it takes from the shell
         """
         return [Finding(f"environment variables taken from your shell: {', '.join(names)}", Severity.NOTABLE,
                         f"service {name}",
@@ -166,8 +172,12 @@ class ProjectRules(RuleBase):
 
         The name is the project's own choice (`name:`, or `COMPOSE_PROJECT_NAME` in its `.env`), and it
         decides which volumes, networks and containers compose uses, replaces and, for `down -v`, removes.
-        made_from: the directories the containers with that project name say they were made from, "" for
-        a container that does not say, which cannot be shown to come from directory.
+
+        Parameters:
+        - name: the project name
+        - directory: the project directory
+        - made_from: the directories the containers with that project name say they were made from, "" for a
+          container that does not say, which cannot be shown to come from directory
         """
         here = os.path.realpath(directory)
         others = sorted({path for path in made_from if not path or os.path.realpath(path) != here})

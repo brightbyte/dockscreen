@@ -149,6 +149,11 @@ def _shown(repository: str) -> str:
 def section_hint(reference: str, config_file: str, built: bool = False) -> str | None:
     """Returns how config_file could give this image a user, or None for a built image or a reference
     that is not one.
+
+    Parameters:
+    - reference: the image name
+    - config_file: the config file to name
+    - built: a compose service builds the image
     """
     name = repository(reference)
     if built or not name:

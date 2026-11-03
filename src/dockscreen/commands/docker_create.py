@@ -15,8 +15,14 @@ from dockscreen.util import messages
 
 
 def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` (`docker create`, with docker's options) with the defaults added and --as and --as-me
-    replaced by ids; returns 1 for a user that cannot be used, otherwise docker replaces this process.
+    """Runs `lead args` with the defaults added and --as and --as-me replaced by ids; returns 1 for a user
+    that cannot be used, otherwise docker replaces this process.
+
+    Parameters:
+    - lead: the docker command line up to and including the subcommand (`docker create`), with docker's
+      options
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
     """
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)

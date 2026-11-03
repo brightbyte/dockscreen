@@ -68,9 +68,15 @@ def _passthrough(argv: Sequence[str], runtime: Runtime) -> NoReturn:
 def main(argv: Sequence[str], runtime: Runtime, given: Collection[str]) -> int:
     """Runs `docker compose argv`, screened, and returns the exit status unless docker replaces this process.
 
-    runtime: the Runtime the `docker` wrapper loaded. given: dockscreen's own options that the docker
-    command line gave before `compose` (commandline.CommandLine.given).
     Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
+
+    Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
+
+    Parameters:
+    - argv: the arguments after `compose`
+    - runtime: the Runtime the `docker` wrapper loaded
+    - given: dockscreen's own options that the docker command line gave before `compose`
+      (commandline.CommandLine.given)
     """
     command = ComposeCommand(argv, runtime, given)
     if command.skip_screening:
@@ -152,7 +158,11 @@ class ComposeCommand(commandline.CommandLine):
         return argv[idx] if argv[idx + 1:idx + 2] in (["--help"], ["-h"]) else None
 
     def show_help(self, target: str) -> int:
-        """Prints dockscreen's help for target, then forwards to compose's own help if it has one."""
+        """Prints dockscreen's help for target, then forwards to compose's own help if it has one.
+
+        Parameters:
+        - target: the subcommand to give the help of; "" for compose itself
+        """
         if target == "":
             helptext.show(lambda width: helptext.compose_overview(_own_commands(), width))
         elif target in COMMANDS:
@@ -169,7 +179,11 @@ class ComposeCommand(commandline.CommandLine):
 
 
 def supports_strict(sub: str | None) -> bool:
-    """Tells whether the compose subcommand sub can be screened with the command line untrusted."""
+    """Tells whether the compose subcommand sub can be screened with the command line untrusted.
+
+    Parameters:
+    - sub: the subcommand; None for none
+    """
     return sub == "run"
 
 

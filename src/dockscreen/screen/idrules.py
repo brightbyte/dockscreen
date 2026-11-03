@@ -57,7 +57,12 @@ class Rules(NamedTuple):
 
     @classmethod
     def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:
-        """Returns the id rules for the config file's settings; allow_me: the caller's own ids are allowed."""
+        """Returns the id rules for the config file's settings.
+
+        Parameters:
+        - runtime: the Runtime of the command, whose settings and caller give the rules
+        - allow_me: the caller's own ids are allowed
+        """
         return cls(runtime.me, allow_me, runtime.settings.nobody_range, runtime.settings.default_user,
                    runtime.accounts, runtime.subordinate)
 
@@ -84,8 +89,11 @@ class Rules(NamedTuple):
                 extra: Iterable[tuple[int, int]] = ()) -> str | None:
         """Returns why value may not be used as an id of kind, or None if it may.
 
-        kind: "uid", "gid" or "supplementary gid". mounts: the container has host mounts, which leaves
-        only allowed ids. extra: further allowed (uid, gid) pairs.
+        Parameters:
+        - kind: "uid", "gid" or "supplementary gid"
+        - value: the id
+        - mounts: the container has host mounts, which leaves only allowed ids
+        - extra: further allowed (uid, gid) pairs
         """
         base = "uid" if kind == "uid" else "gid"
         # first: allowed ids such as nobody usually exist on this host too
@@ -115,7 +123,10 @@ class Rules(NamedTuple):
                  mounts: bool = False, extra: Collection[tuple[int, int]] = ()) -> list[str]:
         """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
 
-        An id that is None is not checked. mounts and extra are as for problem().
+        Parameters:
+        - uid, gid: the ids; None for one that is not checked
+        - supplementary: the supplementary gids
+        - mounts, extra: as problem takes them
         """
         checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
         found = [self.problem(kind, value, mounts, extra) for kind, value in checks if value is not None]

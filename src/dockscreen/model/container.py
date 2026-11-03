@@ -57,6 +57,10 @@ class Container(NamedTuple):
     def uninspected(cls, container: str, directory: str | None) -> Self:
         """Returns the container called container, created in directory, which exists but could not be
         inspected.
+
+        Parameters:
+        - container: its name or id
+        - directory: the directory it was created in; None if not known
         """
         return cls({"Id": container}, directory)
 
@@ -118,7 +122,12 @@ class Container(NamedTuple):
 
 
 def env_value(env: Sequence[str] | None, name: str) -> str | None:
-    """Returns the value the last `name=` entry of an `Env` list of `NAME=value` strings sets, or None."""
+    """Returns the value the last `name=` entry sets, or None.
+
+    Parameters:
+    - env: an `Env` list of `NAME=value` strings; None for none
+    - name: the variable
+    """
     for entry in reversed(env or []):
         key, equals, value = entry.partition("=")
         if equals and key == name:

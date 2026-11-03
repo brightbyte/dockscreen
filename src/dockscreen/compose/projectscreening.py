@@ -87,7 +87,11 @@ class Loaded(NamedTuple):
         return hardened.with_origins({name: {"user": Origin.IMAGE} for name in unset})
 
     def with_hardened(self, definition: dict[str, Any]) -> Self:
-        """Returns this project with definition, which has the defaults already, as its resolved one."""
+        """Returns this project with definition as its resolved one.
+
+        Parameters:
+        - definition: a definition with the defaults already added, as hardened has it
+        """
         return self._replace(resolved=self.hardened.with_definition(definition), hardening=())
 
     def generated(self, docker_binary: str) -> contextlib.AbstractContextManager[Command]:
@@ -128,6 +132,10 @@ def load_project(global_args: Sequence[str], runtime: Runtime) -> Loaded:
 
     Raises inspect.Refused if the policy refuses where it is, DockerError if it cannot be inspected,
     ValueError if it cannot be hardened.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
     """
     found = inspect.project(global_args, runtime)
     remote = is_remote(global_args, runtime.docker)
@@ -156,8 +164,12 @@ def decide(cleared: Cleared, screener: Screener, command: Command, args: Sequenc
     its definition.
 
     Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
-    command: writes the generated file (generated()).
-    args and chosen: as serviceinfo.prepare takes them.
+
+    Parameters:
+    - cleared: the project, as check cleared it
+    - screener: the Screener to pull, build, look and decide with
+    - command: writes the generated file (generated())
+    - args, chosen: as serviceinfo.prepare takes them
     """
     project = cleared.loaded.hardened
     on_file = command(project.definition)
@@ -175,9 +187,14 @@ def finish(cleared: Cleared, decided: Decisions, screener: Screener, parsed: use
     images proved them.
 
     Returns it as runnable, or the report that stops it, which is decided's if that did not pass.
-    parsed: the arguments of the subcommand, with the user the command line chose (compose_run).
-    strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
-    with the command line untrusted; otherwise those options are taken as given, as for `docker run`.
+
+    Parameters:
+    - cleared: the project, as check cleared it
+    - decided: what decide decided about its images
+    - screener: the Screener of the command
+    - parsed: the arguments of the subcommand, with the user the command line chose (compose_run)
+    - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
+      with the command line untrusted; otherwise those options are taken as given, as for `docker run`
     """
     if not decided.report.passed:
         return decided.report
@@ -209,10 +226,15 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
     subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
     and decided on (serviceinfo, imageusers); the config that runs is the one that was checked, with the
     result.
-    parsed: the subcommand's arguments, with the user the command line chose (compose_run).
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
-    strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
-    with the command line untrusted; otherwise those options are taken as given, as for `docker run`.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - sub: the subcommand
+    - parsed: the subcommand's arguments, with the user the command line chose (compose_run)
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
+    - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
+      with the command line untrusted; otherwise those options are taken as given, as for `docker run`
     """
     try:
         loaded = load_project(global_args, runtime)

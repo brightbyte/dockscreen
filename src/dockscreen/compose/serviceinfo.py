@@ -29,12 +29,14 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], scree
     (Screener.decide): pulls and builds the images of the services that start as `up` would, and looks at
     those of the services that set no user.
 
-    Returns (what was found of the images, the failures to acquire them), None for the first if one
-    failed.
-    command: the compose command line (up to the subcommand) on the project's definition, as it will run.
-    args: the arguments after the subcommand, which name services and may carry --build or --pull.
-    screener: the Screener to pull, build, decide and run with.
-    chosen: services whose user the command line chooses (`run -u`); their images are not looked at.
+    Returns (what was found of the images, the failures to acquire them), None for the first if one failed.
+
+    Parameters:
+    - command: the compose command line (up to the subcommand) on the project's definition, as it will run
+    - project: the hardened project
+    - args: the arguments after the subcommand, which name services and may carry --build or --pull
+    - screener: the Screener to pull, build, decide and run with
+    - chosen: services whose user the command line chooses (`run -u`); their images are not looked at
     """
     config = project.definition
     try:

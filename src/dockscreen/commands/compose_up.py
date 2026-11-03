@@ -14,7 +14,12 @@ def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime, al
     """Runs `docker compose global_args sub args` if the project passes the checks, and returns the exit
     status; sub is `up` or one of its kin.
 
-    allow_me: --allow-me was given, so the caller's own ids are allowed.
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - sub: `up` or one of its kin
+    - args: the subcommand's arguments
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
     """
     return projectscreening.check_and_run(global_args, sub, userargs.Parsed.unread(args, runtime), runtime,
                                         allow_me)

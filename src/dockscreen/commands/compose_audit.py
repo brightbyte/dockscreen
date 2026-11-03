@@ -23,6 +23,12 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
     (verdict). --brief prints only the verdict, in one line.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - args: the subcommand's arguments: none, or --brief
+    - runtime: the Runtime of the command
+    - allow_me: --allow-me was given, so the caller's own ids are allowed
     """
     brief = args == [commandline.BRIEF]
     if args and not brief:
