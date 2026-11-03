@@ -9,7 +9,7 @@ from dockscreen.compose import projectscreening
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
 from dockscreen.screen.findings import Report
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 UID, GID = ME
@@ -455,6 +455,6 @@ def test_a_project_the_checks_refuse_is_not_cleared_for_its_images(tmp_path):
     runtime, _ = compose_project(tmp_path, project_config(privileged=True), FakeImages(users={"x:1": "app"}))
     loaded = projectscreening.load_project([], runtime)
 
-    found = projectscreening.check(loaded, Scope(runtime))
+    found = projectscreening.check(loaded, Screener(runtime))
 
     assert isinstance(found, Report) and not found.passed

@@ -30,7 +30,7 @@ from dockscreen.screen.findings import Finding, Report, failure_of
 from dockscreen.screen.rules import service as service_rules
 from dockscreen.screen.rules.base import is_inside_any
 from dockscreen.screen.rules.image import image_problem
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -64,7 +64,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     except (DockerError, ValueError) as e:
         messages.notice(failure_of(e))
         return 1
-    screener = Scope(runtime, allow_me=True)
+    screener = Screener(runtime, allow_me=True)
     static = screener.project_policy(loaded.resolved)
     for refusal in static.check_daemon(loaded.remote):
         messages.notice(refusal)
@@ -91,7 +91,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     return 1 if remaining else 0
 
 
-def _fix_image_users(cleared: projectscreening.Cleared, screener: Scope, fixed: dict[str, Any],
+def _fix_image_users(cleared: projectscreening.Cleared, screener: Screener, fixed: dict[str, Any],
                      notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 

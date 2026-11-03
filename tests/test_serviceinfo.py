@@ -10,7 +10,7 @@ from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
 from dockscreen.screen import decisions, policy, substitutions
 from dockscreen.screen.findings import Severity, Verdict
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
 
@@ -37,7 +37,7 @@ def prepare(config, images, args=(), active=("web",), codes=None, settings=None,
 
 def gate_context(images, settings=None):
     settings = settings or configuration.Config()
-    return Scope(make_runtime(settings=settings, docker=images))
+    return Screener(make_runtime(settings=settings, docker=images))
 
 
 def subcommands(recorder):

@@ -10,7 +10,7 @@ from dockscreen.cli import runargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 
 
@@ -23,7 +23,7 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     except runargs.ParseError:  # docker will report what is wrong with them
         resolved: Sequence[str] = args
     else:
-        refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
+        refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
         if refusals:
             return verdict.report(Report.of(refusals))
         for message in parsed.users.notices:

@@ -12,7 +12,7 @@ from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import substitutions, verdict
 from dockscreen.screen.findings import Report
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
@@ -37,7 +37,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     except ValueError as e:
         return verdict.report(Report.refusal(str(e)), brief)
 
-    screener = Scope(runtime, allow_me)
+    screener = Screener(runtime, allow_me)
     outcome, lines = _audit_images(loaded, screener, brief)
     if not brief:
         around = projectscreening.surroundings(loaded, screener)
@@ -48,7 +48,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     return verdict.report(outcome, brief)
 
 
-def _audit_images(loaded: projectscreening.Loaded, screener: Scope, brief: bool
+def _audit_images(loaded: projectscreening.Loaded, screener: Screener, brief: bool
                   ) -> tuple[Report, Sequence[str]]:
     """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
     if the checks before them pass.

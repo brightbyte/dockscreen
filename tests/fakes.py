@@ -7,7 +7,7 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Location, Project
 from dockscreen.screen import idrules
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"
@@ -231,12 +231,12 @@ class Recorder:
 
 
 def make_image_ctx(images=None, ctx=None, **compose):
-    """(Scope, recorder), with images as its docker, which also runs the compose commands
+    """(Screener, recorder), with images as its docker, which also runs the compose commands
     (fake_compose takes compose).
     """
     images = images if images is not None else FakeImages()
     recorder = fake_compose(images, **compose)
-    ctx = ctx or Scope(make_runtime(docker=images))
+    ctx = ctx or Screener(make_runtime(docker=images))
     return ctx, recorder
 
 

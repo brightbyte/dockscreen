@@ -95,7 +95,7 @@ has a repo digest under its local name (`docs/security-review.md`). So these are
 
 - `config.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
-- `serviceinfo._find_section_images` and `Scope.project_policy` finding no proof for a section, and the final check of
+- `serviceinfo._find_section_images` and `Screener.project_policy` finding no proof for a section, and the final check of
   `projectscreening.check_and_run` refusing a service that only passed because of it.
 
 The scenarios for them are marked as expected failures.

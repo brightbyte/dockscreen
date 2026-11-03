@@ -7,7 +7,7 @@ An image is untrusted, so what it says about its user cannot be taken from its n
 The images of the services that start are acquired first, following the project's own pull policy so that
 automatic updates keep happening (pull, or build if it is built from a Dockerfile); they are then the images
 that run, since the policy pins them. Each image asked about is then looked at through a container created
-from it and never started (Scope.look).
+from it and never started (Screener.look).
 """
 
 from collections.abc import Collection, Sequence
@@ -19,12 +19,12 @@ from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import findings
 from dockscreen.screen.findings import Finding
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 
 def find(command: Sequence[str], project: Project, started: Collection[str], looked_at: Collection[str],
-         args: Sequence[str], ctx: Scope) -> tuple[dict[str, Inspected | Unseen], list[Finding]]:
+         args: Sequence[str], screener: Screener) -> tuple[dict[str, Inspected | Unseen], list[Finding]]:
     """Gets the images of the services in started as `up` would, and looks at those of the services in
     looked_at, as far as the policy needs to decide what they may run as.
 
@@ -33,10 +33,10 @@ def find(command: Sequence[str], project: Project, started: Collection[str], loo
     command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which may carry --build or --pull.
     """
-    failures = _acquire(command, project.definition, started, args, ctx.docker)
+    failures = _acquire(command, project.definition, started, args, screener.docker)
     if failures:
         return {}, findings.failed(failures)
-    return {name: _look(project, name, ctx) for name in sorted(looked_at)}, []
+    return {name: _look(project, name, screener) for name in sorted(looked_at)}, []
 
 
 def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
@@ -87,25 +87,25 @@ def _image_exists(docker: Docker, image: str) -> bool:
     return True
 
 
-def _look(project: Project, name: str, ctx: Scope) -> Inspected | Unseen:
+def _look(project: Project, name: str, screener: Screener) -> Inspected | Unseen:
     """Looks at the image of the service called name, as far as the policy needs to decide what it may run
-    as (Scope.look), through a container created from it and removed again; Unseen if that fails.
+    as (Screener.look), through a container created from it and removed again; Unseen if that fails.
     """
     config = project.definition
     service = config["services"][name]
     image = Image(image_name(config, name, service), built="build" in service)
     platform = ["--platform", service["platform"]] if service.get("platform") else []
     # a container that is never started shows the user docker would run, and its files can be copied out
-    _, container = ctx.docker.create(["--pull=never", *platform, "--", image.reference])
+    _, container = screener.docker.create(["--pull=never", *platform, "--", image.reference])
     if container is None:
         return Unseen(image, "the image is not available locally")
     try:
-        info = ctx.docker.inspect_container(container)
-        inspected, _ = ctx.look(project.directory, container, info, Origin.IMAGE,
+        info = screener.docker.inspect_container(container)
+        inspected, _ = screener.look(project.directory, container, info, Origin.IMAGE,
                                 mounts=project.service(name).reaches_host, reference=image.reference,
                                 built=image.built)
         return inspected
     except (DockerError, ValueError, KeyError) as e:
         return Unseen(image, messages.with_output(e))
     finally:
-        ctx.docker.remove(container)
+        screener.docker.remove(container)

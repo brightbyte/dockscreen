@@ -20,51 +20,51 @@ from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen.findings import Finding, failure_of
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 
 
-def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: Scope,
+def prepare(command: Sequence[str], project: Project, args: Sequence[str], screener: Screener,
             chosen: frozenset[str] = frozenset()) -> tuple[ServiceImages | None, list[Finding]]:
     """Finds out what screening needs to know about project's services, for the policy to decide on
-    (Scope.decide): pulls and builds the images of the services that start as `up` would, and looks at those
-    of the services that set no user.
+    (Screener.decide): pulls and builds the images of the services that start as `up` would, and looks at
+    those of the services that set no user.
 
     Returns (what was found of the images, the failures to acquire them), None for the first if one
     failed.
     command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
-    ctx: the Scope to pull, build, decide and run with.
+    screener: the Screener to pull, build, decide and run with.
     chosen: services whose user the command line chooses (`run -u`); their images are not looked at.
     """
     config = project.definition
     try:
-        started = _services_to_run(command, config, args, ctx)
+        started = _services_to_run(command, config, args, screener)
         looked_at = (started - chosen) & project.services_without_user
-        inspected, failures = imageusers.find(command, project, started, looked_at, args, ctx)
+        inspected, failures = imageusers.find(command, project, started, looked_at, args, screener)
     except DockerError as e:
         return None, [failure_of(e)]
     if failures:
         return None, failures
-    found = {**_find_section_images(config, ctx),
+    found = {**_find_section_images(config, screener),
              **{name: image.image for name, image in inspected.items() if isinstance(image, Inspected)}}
     return ServiceImages(found, inspected), []
 
 
-def _find_section_images(config: dict[str, Any], ctx: Scope) -> dict[str, Image]:
+def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str, Image]:
     """Finds the images of the services that an image section of the config file names, with where they
     were pulled from, which shows whether the section applies; the checks before the images were there
     trusted the name alone.
 
     Returns {service: image} for those that are here.
     """
-    settings = ctx.runtime.settings
+    settings = screener.runtime.settings
     found = {}
     for name, service in (config.get("services") or {}).items():
         image, built = imageusers.image_name(config, name, service), "build" in service
         if configuration.name_matches(settings, image, built) is None:
             continue
         try:
-            inspected = ctx.docker.inspect_image(image)
+            inspected = screener.docker.inspect_image(image)
         except DockerError:
             continue  # not there: the section does not apply, and the final check says what that means
         found[name] = Image(image, inspected.get("Id"), built, tuple(inspected.get("RepoDigests") or ()))
@@ -72,12 +72,12 @@ def _find_section_images(config: dict[str, Any], ctx: Scope) -> dict[str, Image]
 
 
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
-                     ctx: Scope) -> frozenset[str]:
+                     screener: Screener) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
     Raises DockerError if compose cannot list them.
     """
-    result = ctx.docker.capture([*command, "config", "--services"])
+    result = screener.docker.capture([*command, "config", "--services"])
     if result.returncode != 0:
         raise DockerError("docker compose config --services failed")
     services = config.get("services") or {}

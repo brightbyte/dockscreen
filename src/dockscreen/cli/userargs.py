@@ -21,7 +21,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
 from dockscreen.screen.rules.commandline import UserOption
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.
@@ -165,7 +165,7 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
     parse takes them.
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
+    refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return None

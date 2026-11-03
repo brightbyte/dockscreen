@@ -11,7 +11,7 @@ from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 
 
 def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False,
@@ -23,7 +23,7 @@ def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bo
     strict: --strict-screen was given, so what the command line changes in the service is judged too.
     """
     parsed = userargs.parse_compose("run", args, runtime.me, runtime.accounts)
-    refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
+    refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1

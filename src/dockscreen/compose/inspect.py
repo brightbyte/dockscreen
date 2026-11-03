@@ -15,7 +15,7 @@ from dockscreen.model.project import Location, Project
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.rules.base import is_inside
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
@@ -45,7 +45,7 @@ def project(global_args: Sequence[str], runtime: Runtime) -> Project:
     compose cannot give the definition.
     """
     location = locate(global_args, runtime)
-    refusals = Scope(runtime).policy(location.directory).check_location(location)
+    refusals = Screener(runtime).policy(location.directory).check_location(location)
     if refusals:
         raise Refused(refusals)
     return Project(_load_config(global_args, runtime.docker), location)
@@ -90,7 +90,7 @@ def passes(global_args: Sequence[str], runtime: Runtime,
         return verdict.screened(Report.failure(e))
     except Refused as e:
         return verdict.screened(Report.of(e.findings))
-    project_policy = Scope(runtime).project_policy(found)
+    project_policy = Screener(runtime).project_policy(found)
     return verdict.screened(Report.of(rules(project_policy, found)))
 
 

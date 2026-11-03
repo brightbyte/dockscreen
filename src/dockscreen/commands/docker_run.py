@@ -30,7 +30,7 @@ from dockscreen.screen import findings, verdict
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report, Severity
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
@@ -50,8 +50,8 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     strict: --strict-screen was given, so what the command line asks for that a project or an image may
     not have is refused too.
     """
-    ctx = Scope(runtime, allow_me)
-    daemon = Report.of(ctx.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
+    screener = Screener(runtime, allow_me)
+    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon)
     try:
@@ -60,31 +60,31 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
         return 1
-    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users.given)
+    refusals = screener.policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    root_default = root_default_notice(ctx.policy(runtime.cwd).default_user)
+    root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     for message in [*parsed.users.notices, root_default, defaults_notice()]:
         if message:
             messages.notice(message)
-    ctx = ctx.with_allow_me(parsed.users.allow_me)
+    screener = screener.with_allow_me(parsed.users.allow_me)
 
-    created = _create_checked(ctx, parsed, [])
+    created = _create_checked(screener, parsed, [])
     if isinstance(created, int):
         return created
     container, assessment = created
     if strict:
-        found = Report.of(_command_line_findings(ctx, container, assessment, STRICT))
+        found = Report.of(_command_line_findings(screener, container, assessment, STRICT))
         if not found.passed:
-            ctx.docker.remove(container.id)
+            screener.docker.remove(container.id)
             verdict.screened(found)
             return 1
 
     if assessment.pins_user:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
-        ctx.docker.remove(container.id)
+        screener.docker.remove(container.id)
         user = ids.format_user(assessment.pinned_user)
         if assessment.replaces_root:
             messages.notice(_fallback_notice(assessment))
@@ -93,14 +93,14 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
                                     Severity.ROUTINE))
         extra = [f"--user={user}"]
         if assessment.replaces_root:
-            extra += _home_args(ctx, container, assessment)
-        created = _create_checked(ctx, parsed, extra, assessment)
+            extra += _home_args(screener, container, assessment)
+        created = _create_checked(screener, parsed, extra, assessment)
         if isinstance(created, int):
             return created
         container, assessment = created
 
     verdict.screened(Report())
-    return ctx.docker.start(
+    return screener.docker.start(
         container.id,
         attach=not parsed.detach,
         # -i is kept by create; start needs it again
@@ -109,7 +109,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     )
 
 
-def _home_args(ctx: Scope, container: Container, assessment: Assessment) -> list[str]:
+def _home_args(screener: Screener, container: Container, assessment: Assessment) -> list[str]:
     """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
 
     The container as created has the merged environment: a HOME that differs from the image's own
@@ -118,7 +118,7 @@ def _home_args(ctx: Scope, container: Container, assessment: Assessment) -> list
     home = default_home(assessment.pinned_user, assessment.home)
     if not home:
         return []
-    image_env = ctx.docker.inspect_image(container.info["Image"])["Config"].get("Env")
+    image_env = screener.docker.inspect_image(container.info["Image"])["Config"].get("Env")
     if env_value(container.info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
         return []
     return ["-e", f"HOME={home}"]
@@ -135,7 +135,7 @@ def _fallback_notice(assessment: Assessment) -> Finding:
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
-def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str],
+def _create_checked(screener: Screener, parsed: runargs.ParsedRun, extra: list[str],
                     decided: Assessment | None = None) -> tuple[Container, Assessment] | int:
     """Creates the container (check); returns it with the assessment of its user, or the exit status if it
     may not start.
@@ -143,19 +143,19 @@ def _create_checked(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str],
     A container that would be refused is removed and the refusal printed. Any other assessment is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, created = check(ctx, parsed, extra, decided)
+    code, created = check(screener, parsed, extra, decided)
     if created is None:  # docker said why
         verdict.screened(Report.failure(f"docker could not create a container for {parsed.image}"))
         return code
     container, assessment = created
     if assessment.refused:
-        ctx.docker.remove(container.id)
-        verdict.screened(Report.of(explain(assessment, ctx.runtime.config_file)))
+        screener.docker.remove(container.id)
+        verdict.screened(Report.of(explain(assessment, screener.runtime.config_file)))
         return 1
     return created
 
 
-def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str], decided: Assessment | None = None
+def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decided: Assessment | None = None
           ) -> tuple[int, tuple[Container, Assessment] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, assessment of its
     user)), or (exit status, None) if docker could not create it; it said why.
@@ -165,25 +165,25 @@ def check(ctx: Scope, parsed: runargs.ParsedRun, extra: list[str], decided: Asse
     line asked for, and its user comes from where the decided one does. The container is left for the
     caller to remove.
     """
-    code, created = ctx.docker.create([*DEFAULTS, *extra, *parsed.create_args])
+    code, created = screener.docker.create([*DEFAULTS, *extra, *parsed.create_args])
     if created is None:
         return code, None
-    here = ctx.runtime.cwd
+    here = screener.runtime.cwd
     container, image = Container.uninspected(created, here), Image(parsed.image)
     try:
-        container = Container(ctx.docker.inspect_container(created), here, _user_origin(parsed, decided))
+        container = Container(screener.docker.inspect_container(created), here, _user_origin(parsed, decided))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         if problems:
             assessment = Assessment(None, image, tuple(problems))
         else:
-            assessment = decided or ctx.assess(
-                ctx.runtime.cwd, container.id, container.info, container.user_origin, reference=parsed.image)
+            assessment = decided or screener.assess(screener.runtime.cwd, container.id, container.info,
+                                                    container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
         assessment = Assessment.failure(image, messages.with_output(e))
     return code, (container, assessment)
 
 
-def _command_line_findings(ctx: Scope, container: Container, assessment: Assessment,
+def _command_line_findings(screener: Screener, container: Container, assessment: Assessment,
                            trust: frozenset[Origin]) -> list[Finding]:
     """Returns what the command line asks for, in the container it created (check, with no options of
     dockscreen's own), that a project or an image may not have: refused, or notable where trust trusts the
@@ -193,7 +193,7 @@ def _command_line_findings(ctx: Scope, container: Container, assessment: Assessm
     """
     if not container.inspected:
         return []
-    return ctx.policy(ctx.runtime.cwd, assessment.section, trust).check_container(container)
+    return screener.policy(screener.runtime.cwd, assessment.section, trust).check_container(container)
 
 
 def _user_origin(parsed: runargs.ParsedRun, decided: Assessment | None) -> Origin:
@@ -232,8 +232,8 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     """
     line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has(commandline.BRIEF), line.argv
-    ctx = Scope(runtime, allow_me)
-    daemon = Report.of(ctx.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
+    screener = Screener(runtime, allow_me)
+    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon, brief)
     try:
@@ -242,16 +242,16 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    refusals = ctx.policy(runtime.cwd).check_user_options(parsed.users.given)
+    refusals = screener.policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         return verdict.report(Report.of(refusals), brief)
     if not brief:
         for message in parsed.users.notices:
             messages.notice(message)
-    ctx = ctx.with_allow_me(parsed.users.allow_me)
+    screener = screener.with_allow_me(parsed.users.allow_me)
 
     try:
-        _, created = check(ctx, parsed, [])
+        _, created = check(screener, parsed, [])
     except DockerNotFound as e:
         return verdict.report(Report.failure(str(e)), brief)
     if created is None:
@@ -259,35 +259,36 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         return verdict.report(Report.failure(reason), brief)
     container, assessment = created
     try:
-        found = _command_line_findings(ctx, container, assessment, STRICT if strict else TRUSTED)
+        found = _command_line_findings(screener, container, assessment, STRICT if strict else TRUSTED)
     finally:
-        ctx.docker.remove(container.id)
+        screener.docker.remove(container.id)
 
-    refused = explain(assessment, ctx.runtime.config_file)
+    refused = explain(assessment, screener.runtime.config_file)
     outcome = Report.of([*refused, *found])
     if brief:
         messages.out(verdict.brief(outcome), indent=False)
     else:
-        _report_assessment(ctx, parsed.image, assessment)
+        _report_assessment(screener, parsed.image, assessment)
         _report_findings(found)
         messages.notice(verdict.line(outcome.verdict))
     return int(outcome.verdict)
 
 
-def _report_assessment(ctx: Scope, image: str, assessment: Assessment) -> None:
+def _report_assessment(screener: Screener, image: str, assessment: Assessment) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.origin is Origin.COMMAND_LINE:
         messages.out(messages.Marked(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        messages.out(messages.Marked(dot, f"image {name}: {verdict.outcome(assessment, ctx.local)}"))
+        messages.out(messages.Marked(dot, f"image {name}: {verdict.outcome(assessment, screener.local)}"))
         for note in assessment.notes:
             messages.out(Finding(f"note: {note}", Severity.NOTABLE))
     if assessment.refused:
         if not assessment.failed:
             messages.out(messages.Marked(messages.HINT, CHOOSE_HINT))
-            messages.out(messages.Marked(messages.HINT, verdict.config_hint(image, ctx.runtime.config_file)))
+            hint = verdict.config_hint(image, screener.runtime.config_file)
+            messages.out(messages.Marked(messages.HINT, hint))
         return
     if assessment.pins_user:
         user = ids.format_user(assessment.pinned_user)

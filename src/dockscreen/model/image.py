@@ -46,7 +46,7 @@ class Inspected(NamedTuple):
     policy to decide the user from. It holds the image, its own user, the container's user, whether the
     container reaches host files, and the image's passwd and group files once they are read.
 
-    Instances come from Scope.look.
+    Instances come from Screener.look.
 
     Attributes:
     - image: the image (Image)

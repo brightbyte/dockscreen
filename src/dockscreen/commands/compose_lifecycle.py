@@ -13,7 +13,7 @@ from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Finding, Report
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 
 
 def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:
@@ -41,5 +41,5 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     if not project.name:
         return []
-    project_policy = Scope(runtime).project_policy(project)
+    project_policy = Screener(runtime).project_policy(project)
     return inspect.name_conflicts(project_policy, project.name, project.directory, runtime.docker)

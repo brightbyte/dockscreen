@@ -1,5 +1,5 @@
-"""This module defines the Scope class, for getting what screening one command needs from the caller and this
-host (the runtime): the policy for each target, and what an image is like, looked at through docker.
+"""This module defines the Screener class, for getting what screening one command needs from the caller and
+this host (the runtime): the policy for each target, and what an image is like, looked at through docker.
 
 What the checks of one project, image or container need follows from it and from where that target is:
 the settings of the config file with the project and image sections that apply (config.effective), the
@@ -25,9 +25,10 @@ from dockscreen.screen.findings import Finding
 from dockscreen.screen.policy import Policy
 
 
-class Scope(NamedTuple):
-    """Factory of the policies that screening one command needs, which also looks at images through docker for
-    them. It holds the runtime and whether the caller's own ids are allowed.
+class Screener(NamedTuple):
+    """Judge of what one command runs: a factory of the policies its checks need, and a service object that
+    looks at images through docker and has them judged (look, assess, decide). It holds the runtime and
+    whether the caller's own ids are allowed.
 
     Create one per command from its Runtime; with_allow_me gives a copy once the command line asks for it.
 
@@ -142,5 +143,5 @@ class Scope(NamedTuple):
         return inspected, image_policy
 
     def with_allow_me(self, allow_me: bool) -> Self:
-        """Returns this scope with the caller's own ids allowed too if allow_me (--allow-me, --as-me)."""
+        """Returns this screener with the caller's own ids allowed too if allow_me (--allow-me, --as-me)."""
         return self._replace(allow_me=True) if allow_me else self

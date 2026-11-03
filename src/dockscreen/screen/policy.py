@@ -53,8 +53,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     the security policy, with the settings they apply with, as the config file sets them for one directory and
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
 
-    The rules come from the mixins in screen.rules. Instances come from Scope.policy and Scope.project_policy;
-    with_trust and the other with_* methods give copies.
+    The rules come from the mixins in screen.rules. Instances come from Screener.policy and
+    Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:
     - ids: the id rules (idrules.Rules)

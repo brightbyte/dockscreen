@@ -37,7 +37,7 @@ from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy, substitutions, verdict
 from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, Report, Severity
-from dockscreen.screen.scope import Scope
+from dockscreen.screen.screener import Screener
 from dockscreen.screen.substitutions import Substitution
 from dockscreen.util import commandline, messages
 
@@ -135,7 +135,7 @@ def load_project(global_args: Sequence[str], runtime: Runtime) -> Loaded:
     return Loaded(tuple(global_args), found, remote, tuple(changes))
 
 
-def check(loaded: Loaded, screener: Scope) -> Cleared | Report:
+def check(loaded: Loaded, screener: Screener) -> Cleared | Report:
     """Checks the project before any image is looked at (Loaded.static): its definition, its daemon, and,
     once those pass, the containers that already have its name.
 
@@ -149,10 +149,10 @@ def check(loaded: Loaded, screener: Scope) -> Cleared | Report:
     return Cleared(loaded) if found.passed else found
 
 
-def decide(cleared: Cleared, screener: Scope, command: Command, args: Sequence[str] = (),
+def decide(cleared: Cleared, screener: Screener, command: Command, args: Sequence[str] = (),
            chosen: frozenset[str] = frozenset()) -> Decisions:
     """Finds out what screening needs to know about the services of the hardened project (serviceinfo.prepare)
-    and decides their users (Scope.decide), once compose has been shown to read the generated file back as
+    and decides their users (Screener.decide), once compose has been shown to read the generated file back as
     its definition.
 
     Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
@@ -168,7 +168,7 @@ def decide(cleared: Cleared, screener: Scope, command: Command, args: Sequence[s
     return screener.decide(project, images, failures)
 
 
-def finish(cleared: Cleared, decided: Decisions, screener: Scope, parsed: userargs.Parsed | None = None,
+def finish(cleared: Cleared, decided: Decisions, screener: Screener, parsed: userargs.Parsed | None = None,
            strict: bool = False) -> Runnable | Report:
     """Makes the project that will run, the resolved one with the hardening and then what the images decided
     (Decisions.changes), and checks it with the policy that decided, with image sections only where the
@@ -190,7 +190,7 @@ def finish(cleared: Cleared, decided: Decisions, screener: Scope, parsed: userar
     return Runnable(final, decided, checked) if checked.passed else checked
 
 
-def surroundings(loaded: Loaded, screener: Scope) -> list[Finding]:
+def surroundings(loaded: Loaded, screener: Screener) -> list[Finding]:
     """Returns what the policy finds in what the project gets from around it: configured mount dirs that
     contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
     (Policy.check_shell_env).
@@ -226,7 +226,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         verdict.screened(Report.refusal(str(e)))
         return 1
 
-    screener = Scope(runtime, allow_me)
+    screener = Screener(runtime, allow_me)
     lines = [*parsed.users.notices, *surroundings(loaded, screener),
              verdict.root_default_notice(screener.policy(loaded.directory).default_user),
              *substitutions.describe(loaded.hardening)]
@@ -247,7 +247,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
         return screener.docker.run_child([*command(runnable.project.definition), sub, *parsed.args])
 
 
-def _name_conflicts(loaded: Loaded, static_policy: policy.Policy, screener: Scope) -> list[Finding]:
+def _name_conflicts(loaded: Loaded, static_policy: policy.Policy, screener: Screener) -> list[Finding]:
     """Returns what static_policy finds in the containers that have the project's name, or the failure to
     look (inspect.name_conflicts).
 

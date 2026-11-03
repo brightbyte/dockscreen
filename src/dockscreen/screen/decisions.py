@@ -34,7 +34,7 @@ class Decisions(NamedTuple):
     looked at. It holds the project and the policy, the decision about each service, the report, and the
     substitutions that follow.
 
-    Instances come from Scope.decide.
+    Instances come from Screener.decide.
 
     Attributes:
     - project: the project decided about
