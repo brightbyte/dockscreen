@@ -41,12 +41,14 @@ NO_ID = frozenset({65535, 4294967295})
 
 
 class ConfigError(Exception):
-    """Failure to trust or read a config file, which stops dockscreen from running."""
+    """Exception raised when a config file cannot be trusted or read, which stops dockscreen from running."""
 
 
 class Section(NamedTuple):
-    """Set of settings for one image repository or project directory; None and () for those it leaves to the
-    levels above.
+    """Record of the settings of one image or project section of the config files. It holds the settings the
+    section sets; None, or () for a list, leaves a setting to the levels above.
+
+    - user, default_user, default_home, nobody_range, mount_dirs, security_opts: as in Config
     """
     user: tuple[int, int] | None = None
     default_user: tuple[int, int] | None = None
@@ -57,25 +59,47 @@ class Section(NamedTuple):
 
 
 class Config(NamedTuple):
-    """Set of dockscreen's settings, as the config files give them, with their sections per image repository
-    and per project directory.
+    """Record of dockscreen's settings, as the config files give them, with their sections per image
+    repository and per project directory. It holds the top-level settings, filled in with the defaults, the
+    sections, and which settings a file set.
+
+    - user: the (uid, gid) an image runs as when nothing chose a user, or None
+    - default_user: the (uid, gid) that replaces an image's root user
+    - default_home: the HOME of the default user; "" leaves HOME alone
+    - nobody_range: the inclusive range of ids any image or project may use
+    - mount_dirs: the absolute directories bind mounts may come from
+    - security_opts: the security options allowed besides no-new-privileges
+    - docker: the absolute path of the real docker, or None
+    - images: the image sections, by normalised repository (Section)
+    - projects: the project sections, by absolute directory (Section)
+    - configured: the names of the settings a config file sets; the others are defaults
+
+    The caller's settings come from load_current; those that apply to one image and project come from
+    effective, which have no sections of their own.
     """
-    user: tuple[int, int] | None = None                # (uid, gid) an image runs as when nothing chose a user
-    default_user: tuple[int, int] = (65534, 65534)     # (uid, gid) that replaces an image's root user
-    default_home: str = "/tmp"                         # HOME of the default user; "" leaves HOME alone
-    nobody_range: tuple[int, int] = (65530, 65534)     # inclusive: ids any image or project may use
-    mount_dirs: tuple = ()                             # absolute directories bind mounts may come from
-    security_opts: tuple = ()                          # security options allowed besides no-new-privileges
-    docker: str | None = None                          # absolute path of the real docker
-    images: MappingProxyType = MappingProxyType({})    # normalised repository -> Section
-    projects: MappingProxyType = MappingProxyType({})  # absolute directory -> Section
-    configured: frozenset = frozenset()                # the settings a config file sets; others are defaults
+    user: tuple[int, int] | None = None
+    default_user: tuple[int, int] = (65534, 65534)
+    default_home: str = "/tmp"
+    nobody_range: tuple[int, int] = (65530, 65534)
+    mount_dirs: tuple = ()
+    security_opts: tuple = ()
+    docker: str | None = None
+    images: MappingProxyType = MappingProxyType({})
+    projects: MappingProxyType = MappingProxyType({})
+    configured: frozenset = frozenset()
 
 
 class Match(NamedTuple):
-    """Finding of which image section applies to an image, or why the one for its repository does not."""
-    repository: str | None  # the image section that applies to the image, if one does
-    problem: str | None     # why a section for the image's repository does not apply, for audit
+    """Record of which image section of the config file applies to an image, or why the one for its repository
+    does not.
+
+    - repository: the repository of the image section that applies, or None
+    - problem: why a section for the image's repository does not apply, for audit; None if there is none
+
+    Instances come from section_for; NO_SECTION stands for a target that is not an image.
+    """
+    repository: str | None
+    problem: str | None
 
 
 NO_SECTION = Match(None, None)  # for what is not an image, or an image no section is for

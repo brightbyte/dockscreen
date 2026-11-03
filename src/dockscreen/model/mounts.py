@@ -17,8 +17,12 @@ BIND_FLAGS = frozenset({"bind", "rbind"})
 
 
 class Mount(NamedTuple):
-    """Filesystem attached to a container: its type (bind, volume, tmpfs, image), where it comes from and
-    where it is mounted.
+    """Value object for a filesystem attached to a container. It holds its type, where it comes from and where
+    it is mounted.
+
+    - kind: its type: bind, volume, tmpfs or image
+    - source: where it comes from: a host path, a volume or an image
+    - target: where it is mounted in the container
     """
     kind: str
     source: str

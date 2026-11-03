@@ -24,7 +24,13 @@ DOCKER_NOT_FOUND = "'docker' not found in PATH"
 
 
 class Mark(str):
-    """Symbol that starts a line, with the ANSI colour a terminal shows it in, bold."""
+    """Value object for a symbol that starts a line, with the ANSI colour a terminal shows it in, bold. It is
+    the symbol as a string, and holds the colour.
+
+    - colour: the ANSI colour code
+
+    The str base does not protect the colour, so nothing changes it after construction.
+    """
 
     colour: str
 
@@ -35,12 +41,16 @@ class Mark(str):
 
 
 class Marked(str):
-    """Line that starts with a mark (`MARK text`), keeping the mark for colouring; its string value is the
-    text, without the mark, which only printing adds.
+    """Value object for a message line that starts with a mark, which is kept apart from the text for
+    colouring. Its string value is the text, without the mark, which only printing adds; the line only states
+    the facts. It holds the mark, the text, what to do about it and what docker printed about it.
 
-    help: an optional second part that says what to do about it, shown only in helpful mode
-    (set_helpful). The line itself only states the facts.
-    output: what docker printed about it, shown after it (notice).
+    - mark: the Mark
+    - text: the text
+    - help: what to do about it, shown only in helpful mode (set_helpful), or None
+    - output: what docker printed about it, shown after it (notice), or None
+
+    The str base does not protect these attributes, so nothing changes them after construction.
     """
 
     mark: Mark

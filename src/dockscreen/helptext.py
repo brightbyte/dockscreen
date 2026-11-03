@@ -17,7 +17,7 @@ HELP_FALLBACK_WIDTH = 80
 
 
 class Option(NamedTuple):
-    """Option that dockscreen adds to a command, as the help lists it."""
+    """Private helper that holds one option dockscreen adds to a command, as a help page lists it."""
     long: str
     text: str
     short: str = ""
@@ -30,15 +30,22 @@ class Option(NamedTuple):
 
 
 class Topic(NamedTuple):
-    """Help page for one command: its usage and summary, what dockscreen does with it, and dockscreen's own
-    options for it.
+    """Record of the help page for one command, for showing it laid out like docker's own. It holds the
+    command's usage and summary, what dockscreen does with it, and dockscreen's own options for it.
+
+    - usage: the usage line
+    - summary: one line, also in the overview
+    - aliases: the other names of the command
+    - notes: what dockscreen does with it: paragraphs, and list items starting with "- "
+    - options: dockscreen's own options for the command
+    - docker_help: whether docker (or compose) has its own help for the command, which follows ours
     """
     usage: str
-    summary: str               # one line, also in the overview
-    notes: tuple = ()          # what dockscreen does: paragraphs, and list items starting with "- "
-    options: tuple = ()        # dockscreen's own options for the command
+    summary: str
+    notes: tuple = ()
+    options: tuple = ()
     aliases: tuple = ()
-    docker_help: bool = True   # docker (or compose) has its own help for the command, to follow ours
+    docker_help: bool = True
 
 
 ALLOW_ME = Option(commandline.ALLOW_ME, "Allow your own ids as the image's user (--as-me implies it)")

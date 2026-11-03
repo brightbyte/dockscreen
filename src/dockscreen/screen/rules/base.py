@@ -12,8 +12,9 @@ from dockscreen.screen import idrules
 
 
 class Subject(Protocol):
-    """Service as Policy.check_service judges it: one of a compose project (project.Service), or what a
-    container asks for, read back as one (container.Container).
+    """Protocol of a service as Policy.check_service judges it, which a compose service (project.Service) and
+    a container read back as one (container.Container) both implement. It gives the service's keys, the
+    directory they are judged against, whether it reaches host files, and where each key's value comes from.
     """
 
     @property
@@ -40,7 +41,9 @@ class Subject(Protocol):
 
 
 class RuleBase:
-    """Settings that every group of rules reads, which Policy holds, and what they make of them."""
+    """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
+    which Policy holds and documents, and what follows from them for every group of rules.
+    """
     ids: idrules.Rules
     extra_dirs: tuple
     trust: frozenset[Origin]

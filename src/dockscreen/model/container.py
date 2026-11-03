@@ -35,14 +35,18 @@ SERVICE_FIELDS = {
 
 
 class Container(NamedTuple):
-    """Container as docker inspect shows it (info): its user, its image, its mounts and its host settings;
-    with the directory the command line that created it ran in, which its bind mounts are judged against
-    as a project's are against the project's, and where its user comes from (user_origin).
+    """View of a container as docker inspect shows it, for judging what it asks for as a compose service is
+    judged (Subject). It holds what docker inspect shows, the directory its bind mounts are judged against,
+    and where its user comes from.
 
-    directory is None for a container that existed before: docker does not record where it was created, and
-    its labels, which an image can set, prove nothing.
+    - info: what docker inspect shows of it
+    - directory: the directory the command line that created it ran in; None for a container that existed
+      before, since docker does not record where it was created, and its labels, which an image can set, prove
+      nothing
+    - user_origin: where its user comes from
 
-    Everything else it has comes from the command line that created it.
+    Everything else it has comes from the command line that created it. A container that could not be
+    inspected comes from uninspected and has only its id.
     """
     info: dict[str, Any]
     directory: str | None

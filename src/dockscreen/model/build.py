@@ -16,9 +16,15 @@ BAKE_KEYS = ("context", "dockerfile", "contexts")
 
 
 class Build(NamedTuple):
-    """Build of one image: its definition, as compose's `build:` or a bake target gives it, what that
-    definition calls the context, the Dockerfile and the named contexts (keys), and the directory its
-    relative paths are relative to, which what it reads must stay inside.
+    """View of the definition of one image build, from compose's `build:` or a target of `docker buildx bake`,
+    for judging what the build reads on this host. It holds the definition, what it calls the context, the
+    Dockerfile and the named contexts, and the directory its relative paths are relative to.
+
+    - definition: the build's keys, as compose or bake gives them
+    - keys: what the definition calls the context, the Dockerfile and the named contexts
+    - directory: the directory its relative paths are relative to, which what it reads must stay inside
+
+    Instances come from from_compose and from_bake.
     """
     definition: dict[str, Any]
     keys: tuple[str, str, str]
@@ -53,8 +59,11 @@ class Build(NamedTuple):
 
 
 class BakeDefinition(NamedTuple):
-    """Definition that `docker buildx bake --print` gives, its targets and groups as a JSON object, and the
-    directory bake ran in, which it reads the targets' relative paths from.
+    """View of the definition that `docker buildx bake --print` gives, for judging its targets. It holds the
+    definition and the directory bake ran in.
+
+    - definition: the targets and groups, as a JSON object
+    - directory: the directory bake ran in, which it reads the targets' relative paths from
     """
     definition: dict[str, Any]
     directory: str

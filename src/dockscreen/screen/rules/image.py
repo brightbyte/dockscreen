@@ -27,7 +27,7 @@ from dockscreen.screen.rules.base import RuleBase
 
 
 class ImageRules(RuleBase):
-    """Rules for the user an image runs a container as."""
+    """Mixin of Policy with the rules for the user an image runs a container as, not used on its own."""
 
     def needs_user_files(self, origin: Origin) -> bool:
         """Tells whether check_image needs the image's passwd and group files (Inspected.passwd) for a

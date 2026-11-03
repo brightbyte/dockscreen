@@ -38,9 +38,12 @@ REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p
 
 
 class Screened(NamedTuple):
-    """Outcome of screening a compose project stage by stage (Compose.screen): what the last stage that ran
-    found, what was decided about the images if it got that far, and the project that will run, which only a
-    screening that passed every stage has.
+    """Record of how far screening a compose project got, as Compose.screen returns it. It holds what the last
+    stage that ran found, what was decided about the images, and the project that will run.
+
+    - report: what the last stage that ran found
+    - decided: the Decisions about the images, or None if no image was looked at
+    - final: the project that will run, or None unless every stage passed
     """
     report: Report
     decided: Decisions | None = None
@@ -48,17 +51,23 @@ class Screened(NamedTuple):
 
 
 class Compose(NamedTuple):
-    """Docker compose on one project, as dockscreen drives it: the options that select the project, the
-    project as compose resolved it, the substitutions that add the defaults to it (hardening), and the
-    scope it is screened in.
+    """Handle on one compose project, for screening it stage by stage and running docker compose on the
+    definition that was checked. It holds the options that select the project, the project as compose resolved
+    it, the substitutions that add the defaults to it, and the scope it is screened in.
 
-    What runs is the resolved project with every substitution made, in order: the hardening, then what
-    the images decided (final). Nothing else changes the definition that compose gets.
+    - global_args: the compose options that select the project
+    - resolved: the project as compose resolved it, with remote looked up
+    - hardening: the substitutions that add the defaults (Substitution)
+    - scope: the Scope to pull, build, decide and run with
+
+    What runs is the resolved project with every substitution made, in order: the hardening, then what the
+    images decided (final). Nothing else changes the definition that compose gets. Instances come from
+    load_project.
     """
-    global_args: list          # the compose options that select it
-    resolved: Project          # as compose resolved it, with remote looked up
-    hardening: list            # the substitutions that add the defaults (substitutions.Substitution)
-    scope: Scope               # to pull, build, decide and run with
+    global_args: list
+    resolved: Project
+    hardening: list
+    scope: Scope
 
     @property
     def hardened(self) -> Project:

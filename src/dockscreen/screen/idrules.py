@@ -34,8 +34,11 @@ MAX_ID = 2**31 - 1
 
 
 class Rules(NamedTuple):
-    """Set of rules that decide which uids and gids a project or an image may choose, with the host's and
-    the caller's ids they depend on.
+    """Value object for deciding which uids and gids a project or an image may choose (problems). It holds the
+    caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
+    this host's accounts and subordinate ranges.
+
+    Instances come from for_runtime; with_settings and with_allow_me give copies.
     """
     me: tuple                              # (uid, gid) of the caller
     allow_me: bool                         # --allow-me (or --as-me on docker run)

@@ -44,22 +44,35 @@ EXEC_VALUE_FLAGS = frozenset({
 
 
 class ParseError(Exception):
-    pass
+    """Exception raised when a `docker run` command line cannot be read, because it has no image or an option
+    lacks its value.
+    """
 
 
 class ParsedRun(NamedTuple):
-    """Reading of a `docker run` command line: the arguments for `docker create`, the image and command, what
-    only `run` does with them, and what it says about the user (users).
+    """Record of what a `docker run` command line asks for, read far enough to run it as `docker create` and
+    `docker start`. It holds the arguments for `create`, the image and its command, the options only `run`
+    has, and what the command line says about the user.
+
+    - create_args: the arguments for `docker create`, with the users given as ids
+    - image: the image, as the command line names it
+    - command: what follows the image
+    - detach: whether `-d` or `--detach` was given
+    - detach_keys: the value of `--detach-keys`, or None
+    - users: what the command line says about the user before the image (GivenUsers)
+
+    Instances come from parse.
     """
     create_args: list
     image: str
     command: list
     detach: bool
     detach_keys: str | None
-    users: userargs.GivenUsers  # what it says about the user before the image
+    users: userargs.GivenUsers
 
 
 class _State:
+    """Private helper of parse that holds what it has read of a command line so far."""
     def __init__(self, users: userargs.GivenUsers) -> None:
         self.users = users
         self.kept: list[str] = []

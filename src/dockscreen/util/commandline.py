@@ -48,10 +48,16 @@ AS_ME_MESSAGE = messages.Marked(
 
 
 class CommandLine:
-    """Docker or docker compose command line with dockscreen's own options before the command taken out,
-    what those asked for, and where the command is.
+    """Record of a docker or docker compose command line with dockscreen's own options before the command
+    taken out, and the base class of the command objects (DockerCommand, ComposeCommand). It holds the command
+    line as docker or compose gets it, where the command is, and which of dockscreen's options were given.
 
-    argv: the command line as docker or compose gets it; idx: the index of the command in it, or None.
+    - argv: the command line as docker or compose gets it
+    - idx: the index of the command in it, or None
+    - given: the options of dockscreen's that were given, here or on a docker command line this one follows
+
+    The constructor reads the command line; nothing changes these attributes afterwards, though nothing
+    enforces that.
     """
 
     def __init__(self, argv: Sequence[str], value_opts: Collection[str], own: Collection[str],

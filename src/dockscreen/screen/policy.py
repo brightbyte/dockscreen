@@ -49,8 +49,17 @@ from dockscreen.screen.rules.service import (
 
 @dataclasses.dataclass(frozen=True)
 class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRules):
-    """Security policy: the rules, and the settings they apply with (the ids a project may choose, and what
-    else decides what a service may reach), as the config file sets them for one directory and image.
+    """Service object for checking a compose project, a container, a build or an image against the rules of
+    the security policy, with the settings they apply with, as the config file sets them for one directory and
+    image. It holds those settings, the origins it trusts, and the policy of each service of a project.
+
+    - ids: the id rules (idrules.Rules)
+    - default_user: the (uid, gid) that runs instead of an image that would run as root
+    - default_home: the HOME the default user gets (default_home)
+    - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
+
+    The rules come from the mixins in screen.rules. Instances come from Scope.policy and Scope.project_policy;
+    with_trust and the other with_* methods give copies.
     """
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
@@ -62,8 +71,6 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     # The user the config file sets for this service (its image's or project's, or the top level's):
     # its uid and gid are allowed ids for the service too, whoever names them.
     configured_user: tuple | None = None
-    # What runs instead of an image that would run as root, and the HOME it gets (default_home); where that
-    # user comes from: the config file if it sets one, else it is dockscreen's own.
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN

@@ -24,28 +24,44 @@ from dockscreen.model.origin import Origin
 
 
 class Location(NamedTuple):
-    """Directory of a compose project, as compose would find it, with what makes it unfit to be one."""
+    """Record of where a compose project is, as compose would find it, and what makes that directory unfit to
+    be a project's. It holds the directory and what was found against it.
+
+    - directory: the project directory
+    - foreign: whether it was found by walking up from the current directory into the home directory, or into
+      one the caller does not own
+    - redirects: the .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
+    - sensitive: the sensitive paths it equals or contains ($HOME, /etc, ...)
+
+    Instances come from inspect.locate.
+    """
     directory: str
-    # found by walking up from the current directory into the home directory or one the caller does not own
     foreign: bool = False
-    redirects: tuple[str, ...] = ()  # .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
-    sensitive: tuple[str, ...] = ()  # the sensitive paths it equals or contains ($HOME, /etc, ...)
+    redirects: tuple[str, ...] = ()
+    sensitive: tuple[str, ...] = ()
 
 
 class Project(NamedTuple):
-    """Compose project: its definition, where it is, whether its daemon may not be this host's (remote), the
-    directories that the containers with its name say they were made from ("" for one that does not say;
-    made_from), where the values in its definition come from where that is not the project (origins, by
-    service and key), and what was found of its services' images.
+    """View of a compose project's resolved definition, with what screening found out about the project
+    besides, for judging it. It holds the definition, where the project is, and the facts that screening
+    gathers in stages.
 
-    The images are those an image section of the config file could apply to, as found here, with where
-    they were pulled from (found_images, by service), and those of the services whose image decides their
-    user, as looked at (inspected, by service). remote, made_from and the images are None until they are
-    looked at.
+    - definition: what `docker compose config` resolves from all the project's files
+    - location: where it is (Location)
+    - remote: whether its daemon may not be this host's; None until looked at
+    - made_from: the directories that the containers with its name say they were made from, "" for one that
+      does not say; None until looked at
+    - found_images: by service, the images that an image section of the config file could apply to, as found,
+      with where they were pulled from; None until looked at
+    - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
+      Unseen); None until looked at
+
+    Instances come from inspect.project; each stage of screening adds what it found through a with_* copy.
     """
     definition: dict[str, Any]
     location: Location
     remote: bool | None = None
+    # where the values dockscreen set come from, by service and key, where not the project (with_origins)
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
     made_from: tuple[str, ...] | None = None
     found_images: Mapping[str, Image] | None = None
@@ -112,8 +128,13 @@ class Project(NamedTuple):
 
 
 class Service(NamedTuple):
-    """Service of a compose project, called name: its keys as the project's definition gives them, and what
-    follows from them.
+    """View of one service of a Project, for judging its keys (Subject). It holds the project and the
+    service's name; its keys, and what follows from them, are read from the project.
+
+    - name: the name of the service
+    - project: the project (Project)
+
+    Get one from Project.service or Project.services.
     """
     project: Project
     name: str

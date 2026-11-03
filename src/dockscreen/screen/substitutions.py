@@ -21,23 +21,40 @@ from dockscreen.screen.findings import Finding, Severity
 
 
 class Group(NamedTuple):
-    """Kind of routine change that is reported once for all the services it was made to: the line, with
-    `{services}` where their names go, and what to do about it.
+    """Record of a kind of routine change that is reported once for all the services it was made to. It holds
+    the line and what to do about it.
+
+    - text: the line, with `{services}` where the names of the services go
+    - help: what to do about it, or None
     """
     text: str
     help: str | None = None
 
 
 class Substitution(NamedTuple):
-    """Change dockscreen makes to one key of a compose service, with how it is reported."""
+    """Record of one change dockscreen makes to a key of a compose service before running it, for applying it
+    to the definition and reporting it. It holds the key, its new value, how the change is reported, and where
+    the value comes from.
+
+    - service: the name of the service
+    - key: the service key that is set
+    - value: what the key is set to
+    - text: what it was and what dockscreen does, if it is reported on its own line; None if not
+    - notable: whether it alters what the project chose
+    - help: what the project can do about it, or None
+    - group: the group it is reported together with, or None
+    - origin: where the value comes from; None for where the key's own value came from
+
+    Instances come from the functions that work out changes (hardening, decisions, runoptions).
+    """
     service: str
     key: str
-    value: Any                # what the key is set to
-    text: str | None = None   # what it was and what dockscreen does, if it is reported on its own line
-    notable: bool = False     # it alters what the project chose
-    help: str | None = None   # what the project can do about it
-    group: Group | None = None  # reported together with the others of its group
-    origin: Origin | None = None  # where the value comes from; None: from where the key's own came from
+    value: Any
+    text: str | None = None
+    notable: bool = False
+    help: str | None = None
+    group: Group | None = None
+    origin: Origin | None = None
 
 
 def apply(config: dict[str, Any], substitutions: Iterable[Substitution]) -> dict[str, Any]:

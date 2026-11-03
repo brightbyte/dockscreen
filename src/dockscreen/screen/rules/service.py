@@ -82,7 +82,7 @@ SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option 
 
 
 class ServiceRules(RuleBase):
-    """Rules for the keys of a service."""
+    """Mixin of Policy with the rules for the keys of a service, not used on its own."""
 
     def check_user(self, value: Any, service: Subject) -> list[str]:
         """Checks a `user:` of service as hardening left it; returns the problems, empty for an acceptable

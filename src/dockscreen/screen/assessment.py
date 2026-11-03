@@ -17,19 +17,29 @@ from dockscreen.screen.findings import Finding, Severity
 
 
 class Assessment(NamedTuple):
-    """Judgement of the user a container would run as: where the user comes from (origin, None if the image
-    could not be looked at; and whether it is the default user instead of the image's root, replaces_root),
-    the image, what was found (refusals, failures to look, and notable findings), the identity read from the
-    image, and the user dockscreen pins.
+    """Record of a judgement of the user a container would run as. It holds where that user comes from, the
+    image, what was found, the identity read from the image, and the user dockscreen pins.
+
+    - origin: where the user comes from; None if the image could not be looked at
+    - image: the image (Image)
+    - findings: refusals, failures to look, and notable findings
+    - identity: the ids read from the image, or None
+    - user: the (uid, gid) dockscreen pins (pins_user), or None
+    - section: which image section of the config file applied (Match)
+    - home: the HOME to set for the default user that replaces root; "" leaves it alone
+    - replaces_root: whether the default user runs instead of the image's root
+
+    Instances come from Policy.check_image, through Scope.assess for one container and Scope.decide for a
+    project; failure gives one for an image that could not be looked at.
     """
     origin: Origin | None
     image: Image
     findings: tuple[Finding, ...] = ()
     identity: Identity | None = None
-    user: tuple[int, int] | None = None  # the (uid, gid) it runs as, when dockscreen decided it (pins_user)
-    section: Match = NO_SECTION    # which image section applied, if one did
-    home: str = ""                 # the HOME to set for the default user that replaces root; "": leave it
-    replaces_root: bool = False    # the image would run as root: the default user instead
+    user: tuple[int, int] | None = None
+    section: Match = NO_SECTION
+    home: str = ""
+    replaces_root: bool = False
 
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:

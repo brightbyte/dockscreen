@@ -11,8 +11,12 @@ from dockscreen.util import ids
 
 
 class UserOption(NamedTuple):
-    """User a command line gives: --user with its value, or --as with the name and the account of that name
-    on this host (None: there is none).
+    """Record of one user option a command line gives, for the policy to judge. It holds the option and its
+    value, and for --as the account of that name on this host.
+
+    - flag: `--user` or `--as`
+    - value: what the option gives
+    - account: for --as, the (uid, gid) of the account of that name on this host; None if there is none
     """
     flag: str
     value: str
@@ -24,7 +28,7 @@ USER_OPTION_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yoursel
 
 
 class CommandLineRules(RuleBase):
-    """Rules for the users a command line gives."""
+    """Mixin of Policy with the rules for the users a command line gives, not used on its own."""
 
     def check_user_options(self, options: Iterable[UserOption]) -> list[Finding]:
         """Checks the users a command line gives (check_user_option, check_as_option); returns the

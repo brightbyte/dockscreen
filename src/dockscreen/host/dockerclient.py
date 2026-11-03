@@ -17,8 +17,10 @@ FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class DockerError(Exception):
-    """Failure to get from docker or compose what screening asked for (a project, an image, a definition),
-    with what docker printed about it (output), if anything.
+    """Exception raised when docker or compose cannot give what screening asked for, such as a project, an
+    image or a definition. It holds what docker printed about it.
+
+    - output: what docker printed, which may span lines; "" if nothing
     """
 
     def __init__(self, message: str, output: str | None = None) -> None:
@@ -27,12 +29,17 @@ class DockerError(Exception):
 
 
 class DockerNotFound(DockerError):
-    """Failure to find the docker binary."""
+    """Exception raised when the real docker binary cannot be found."""
 
 
 class Docker:
-    """Client of the real docker binary, which runs the docker commands dockscreen needs and reads what they
-    print.
+    """Client for the real docker binary, which runs the docker and compose commands dockscreen needs and
+    reads what they print. It holds the path of the binary and the environment its commands run with.
+
+    - binary: the path of the real docker
+
+    Its commands run with the environment property; with_env gives a copy that passes more variables. Tests
+    get one from new_for_testing, with a stand-in for running processes.
     """
 
     def __init__(self, binary: str, env: Mapping[str, str] | None = None) -> None:

@@ -25,21 +25,34 @@ COMPONENT = re.compile(r"^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$")
 
 
 class Image(NamedTuple):
-    """Image a container is made from: the name it is asked for by, the id that name stood for when it was
-    looked at, whether a compose service builds it, so that no image section of the config file applies,
-    and where docker says it was pulled from (digests: its RepoDigests).
+    """Value object for an image as screening refers to it. It holds the name it is asked for by, the id that
+    name stood for when it was looked at, whether a compose service builds it, and where docker says it was
+    pulled from.
+
+    - reference: the name, as the command line or the service gives it
+    - id: the image id; None until it was looked at, or if it could not be
+    - built: whether a compose service builds it, so that no image section of the config file applies
+    - digests: its RepoDigests, where docker says it was pulled from
     """
     reference: str
-    id: str | None = None  # None until it was looked at, or if it could not be
+    id: str | None = None
     built: bool = False
     digests: tuple[str, ...] = ()
 
 
 class Inspected(NamedTuple):
-    """Image as dockscreen looked at it, through a container created from it: the image, the image's own
-    user (image_user), the user the container was created with, whether the container reaches host files,
-    and the image's passwd and group files as the container has them ("" for a missing one), None until
-    they are read.
+    """Record of what was seen of an image through a container created from it and never started, for the
+    policy to decide the user from. It holds the image, its own user, the container's user, whether the
+    container reaches host files, and the image's passwd and group files once they are read.
+
+    - image: the image (Image)
+    - image_user: the user the image's config sets
+    - user: the user the container was created with, as given to docker
+    - reaches_host: whether the container, or the service it stands for, reaches host files
+    - passwd, group: the image's passwd and group files as the container has them, "" for a missing one; None
+      until they are read (with_user_files)
+
+    Instances come from Scope.look.
     """
     image: Image
     image_user: str
@@ -61,13 +74,22 @@ class Inspected(NamedTuple):
 
 
 class Unseen(NamedTuple):
-    """Image that could not be looked at, and why (reason)."""
+    """Record of an image that could not be looked at, and why.
+
+    - image: the image (Image)
+    - reason: why it could not be looked at
+    """
     image: Image
     reason: str
 
 
 class Identity(NamedTuple):
-    """Set of ids a process runs as: a uid, a primary gid and the supplementary gids."""
+    """Value object for the set of ids a process runs as. It holds a uid, a primary gid and the supplementary
+    gids.
+
+    - uid, gid: the uid and the primary gid
+    - supplementary: the supplementary gids
+    """
     uid: int
     gid: int
     supplementary: tuple[int, ...] = ()

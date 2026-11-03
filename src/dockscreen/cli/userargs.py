@@ -35,13 +35,18 @@ COMPOSE_VALUE_FLAGS = {
 
 
 class GivenUsers:
-    """What a command line says about the user to run as, gathered while it is read: each user option turned
-    into `--user=uid:gid` for docker, and recorded.
+    """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
+    the command to run with. It holds each user option given, whether a user was chosen, whether the caller's
+    own ids are allowed, the notices that resolving names produced, and the options that take a value.
 
-    Records whether it chooses a user (chosen: --user, -u, --as or --as-me), whether the caller's own ids
-    are allowed (allow_me: --as-me, or --allow-me for `docker run`), the notices that resolving names
-    produced, the users given (given), for the policy to judge (Policy.check_user_options), and each option
-    that takes a value, with it (values), as docker gets it.
+    - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
+    - allow_me: whether the caller's own ids are allowed (--as-me, or --allow-me for `docker run`)
+    - notices: what resolving user names on this host did, for the caller to print
+    - given: the user options given, as UserOption records
+    - values: each option that takes a value, with it, as docker gets it
+
+    The parsers of this module and of runargs create and fill it, turning each user option into
+    `--user=uid:gid` through its methods; nothing changes it after they return, though nothing enforces that.
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -86,9 +91,16 @@ class GivenUsers:
 
 
 class Parsed(NamedTuple):
-    """Reading of a command line that runs something in a container: the service or container it names, its
-    arguments with --as and --as-me replaced by ids, and what it says about the user before the service
-    (users).
+    """Record of what a command line that runs something in a container asks for, read far enough to find the
+    service or container and the user. It holds the service or container it names, its arguments with --as and
+    --as-me replaced by ids, and what it says about the user.
+
+    - service: the service or container it names, or None
+    - args: the arguments, with --as and --as-me replaced by `--user=uid:gid`
+    - users: what the command line says about the user before the service (GivenUsers)
+
+    Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
+    nor a user.
     """
     service: str | None
     args: list

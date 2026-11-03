@@ -26,7 +26,11 @@ DOCKER_SOCKET = "/var/run/docker.sock"
 
 
 class Refused(Exception):
-    """Refusal of a project before its config is looked at, with the policy's findings."""
+    """Exception raised when the policy refuses a project before its config is looked at. It holds the
+    policy's findings.
+
+    - findings: the refusals
+    """
 
     def __init__(self, findings: Sequence[Finding]) -> None:
         super().__init__("; ".join(findings))

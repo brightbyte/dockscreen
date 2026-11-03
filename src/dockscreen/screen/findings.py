@@ -21,7 +21,7 @@ from dockscreen.util import messages
 
 
 class Severity(enum.Enum):
-    """Degree to which a finding matters to whoever runs the command."""
+    """Enum of how much a finding matters to whoever runs the command."""
     ROUTINE = "routine"  # reported; rarely changes how anything runs
     NOTABLE = "notable"  # reported; worth a look, it can change how something runs
     REFUSED = "refused"  # the policy says no
@@ -39,10 +39,16 @@ MARKS = {Severity.ROUTINE: messages.ROUTINE, Severity.NOTABLE: messages.WARN, Se
 
 
 class Finding(messages.Marked):
-    """Statement about one subject of screening, with how much it matters, what to do about it (help) and
-    what docker printed about it (output), which may span lines; a line marked by its severity (MARKS).
+    """Value object for a statement about one subject of screening and how much it matters, which prints as a
+    line marked by its severity (MARKS). Its string value is its text, after the subject and a colon if there
+    is one, without the mark. It holds the subject and the severity besides what a Marked line holds.
 
-    Its string value is the text, after the subject and a colon if there is a subject, without the mark.
+    - subject: what it is about ("service web"), or None
+    - severity: how much it matters
+    - text, help, output: as in Marked
+
+    The str base does not protect these attributes, so nothing changes them after construction. Build one with
+    the constructor, or with of from a text or another finding.
     """
 
     severity: Severity
@@ -112,14 +118,22 @@ def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], s
 
 
 class Verdict(enum.IntEnum):
-    """Outcome of an audit, or of the screening before a command runs, whose value is the exit status."""
+    """Enum of the outcomes of an audit, or of the screening before a command runs. Its value is the exit
+    status.
+    """
     PASSED = 0
     REFUSED = 1
     FAILED = 3
 
 
 class Report(NamedTuple):
-    """Result of screening a command: what was found, and the verdict that follows from it."""
+    """Record of what one screening found, from which its verdict follows. It holds the findings, in their
+    order.
+
+    - findings: what was found
+
+    Build one with of, or with refusal or failure for a single reason.
+    """
     findings: tuple[Finding, ...] = ()
 
     @classmethod

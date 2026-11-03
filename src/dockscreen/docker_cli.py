@@ -68,7 +68,12 @@ def _dispatch(argv: list[str], runtime: Runtime) -> int:
 
 
 class DockerCommand(commandline.CommandLine):
-    """Docker command line with dockscreen's own options taken out, and what those asked for."""
+    """Command object for one `docker` command line, with dockscreen's own options taken out, for running it
+    through dockscreen. Its dispatch method screens, helps with or hands on the command. It holds the command
+    line, as CommandLine reads it, and the runtime it runs in.
+
+    - runtime: the Runtime the command runs in
+    """
 
     def __init__(self, argv: list[str], runtime: Runtime) -> None:
         super().__init__(argv, DOCKER_OPTS_WITH_VALUE, OWN_OPTIONS)

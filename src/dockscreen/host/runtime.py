@@ -16,17 +16,29 @@ from dockscreen.util import messages
 
 
 class Runtime(NamedTuple):
-    """Snapshot of what dockscreen takes from the process it runs in: the settings, the real docker, the
-    host's accounts, and the caller's ids, environment and directories.
+    """Snapshot of what dockscreen takes from the process it runs in, so that nothing below the entry points
+    reads the environment, the config file or this host's accounts on its own. It holds the settings, the real
+    docker, the host's accounts, and the caller's ids, environment and directories.
+
+    - settings: the caller's settings (Config)
+    - docker: the real docker (Docker)
+    - accounts: the accounts on this host (HostAccounts)
+    - subordinate: the ranges in /etc/subuid and /etc/subgid (Subordinate)
+    - me: the caller's real (uid, gid)
+    - env: the environment, which compose and docker inherit
+    - home: the caller's home directory
+    - cwd: the directory dockscreen was started in
+
+    Instances come from load_runtime, at the entry point.
     """
     settings: config.Config
-    docker: Docker                          # the real docker
+    docker: Docker
     accounts: hostusers.HostAccounts
-    subordinate: hostusers.Subordinate      # ranges in /etc/subuid and /etc/subgid
-    me: tuple                               # the caller's real (uid, gid)
-    env: MutableMapping                     # the environment, which compose and docker inherit
-    home: str                               # the caller's home directory
-    cwd: str                                # the directory dockscreen was started in
+    subordinate: hostusers.Subordinate
+    me: tuple
+    env: MutableMapping
+    home: str
+    cwd: str
 
     @property
     def config_file(self) -> str:

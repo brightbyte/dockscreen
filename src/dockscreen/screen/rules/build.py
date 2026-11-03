@@ -31,7 +31,7 @@ BAKE_CACHE_TO_TYPES = frozenset({"inline", "registry"})
 
 
 class BuildRules(RuleBase):
-    """Rules for builds of images."""
+    """Mixin of Policy with the rules for builds of images, not used on its own."""
 
     def _check_build(self, value: Any, service: Subject) -> list[str]:
         """Checks a service's build; returns unknown keys, sources outside the project, and escapes from

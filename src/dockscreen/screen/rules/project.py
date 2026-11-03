@@ -31,7 +31,9 @@ REMOTE_MESSAGE = "the daemon is not the default local one; ids and paths cannot 
 
 
 class ProjectRules(RuleBase):
-    """Rules for a compose project's resources, location, daemon and name."""
+    """Mixin of Policy with the rules for a compose project's resources, location, daemon and name, and what
+    it gets from around it, not used on its own.
+    """
 
     def _check_service_names(self, config: dict[str, Any]) -> list[str]:
         """Returns a problem for each service name that starts with `-`, which compose would read as an

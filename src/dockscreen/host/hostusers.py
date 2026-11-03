@@ -10,8 +10,8 @@ SUBGID_FILE = "/etc/subgid"
 
 
 class HostAccounts:
-    """Directory of the users and groups on this host, looked up through NSS (so LDAP and sssd accounts
-    count).
+    """Lookup service for the users and groups of this host, through NSS, so that LDAP and sssd accounts
+    count. It holds no state of its own: every lookup asks NSS.
     """
 
     def user(self, name: str) -> tuple[int, int] | None:
@@ -45,8 +45,11 @@ class HostAccounts:
 
 
 class Subordinate:
-    """Table of the subordinate id ranges of this host, read once from `name:start:count` lines, malformed
-    ones skipped.
+    """Table of the subordinate id ranges of this host, for telling whether an id belongs to rootless
+    containers (contains). It holds the ranges of /etc/subuid and /etc/subgid, read once on construction with
+    malformed lines skipped, and does not change afterwards, though nothing enforces that.
+
+    Tests get one from new_for_testing, which reads other files.
     """
 
     def __init__(self) -> None:

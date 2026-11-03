@@ -11,7 +11,7 @@ import enum
 
 
 class Origin(enum.Enum):
-    """Source of a value that screening judges."""
+    """Enum of the sources a value that screening judges can come from."""
     COMMAND_LINE = "command line"  # the person typing the command
     CONFIG = "config file"         # dockscreen's config files, which only their owner or root can write
     PROJECT = "project"            # the compose project: its files, .env, env files and fragments

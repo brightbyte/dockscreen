@@ -29,15 +29,21 @@ USER_HELP = ("set user: on the service to choose one; the default user may not b
 
 
 class Decisions(NamedTuple):
-    """What the policy for a project (policy) decided about its services' users from what was found of their
-    images (Project.found_images, Project.inspected): the decision about each started service that sets no
-    user (decisions), the report (the failures to acquire the images, and the services whose image must not
-    run), and the substitutions that make the project the one to run (changes); local: this host's
-    accounts, for naming users.
+    """Record of what a policy decided about the users of a compose project's services once their images were
+    looked at. It holds the project and the policy, the decision about each service, the report, and the
+    substitutions that follow.
+
+    - project: the project, with what was found of its images
+    - policy: the policy that decided, with image sections only where the images proved them
+    - decisions: by service, the Assessment of each started service that sets no user
+    - report: the failures to acquire the images, and the services whose image must not run
+    - changes: the substitutions that make the project the one to run
+
+    Instances come from Scope.decide.
     """
     project: Project
     policy: Policy
-    local: hostusers.HostAccounts
+    local: hostusers.HostAccounts  # this host's accounts, for naming the users in describe
     decisions: dict[str, Assessment]
     report: Report
     changes: tuple[Substitution, ...]
