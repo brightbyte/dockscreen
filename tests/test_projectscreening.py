@@ -2,7 +2,7 @@ import os
 import subprocess
 
 import pytest
-from fakes import ME, FakeImages, compose_project, make_image_ctx, make_runtime, read_raw
+from fakes import ME, FakeImages, compose_project, make_runtime, make_screener, read_raw
 
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import projectscreening
@@ -401,22 +401,22 @@ def test_the_user_an_image_section_sets_needs_the_image_to_prove_it(tmp_path, ca
 def test_a_config_that_compose_reads_differently_is_named_where_it_differs():
     config = project_config(pid="${P:-host}")
     interpolated = {**config, "services": {"web": {**config["services"]["web"], "pid": "host"}}}
-    image_ctx, _ = make_image_ctx(reads=lambda _: interpolated)
+    screener, _ = make_screener(reads=lambda _: interpolated)
 
-    assert projectscreening._read_back_problem(COMMAND, config, image_ctx.docker) == (
+    assert projectscreening._read_back_problem(COMMAND, config, screener.docker) == (
         "docker compose reads the checked config differently at config.services.web.pid; not running it")
 
 
 def test_a_config_that_compose_reads_back_unchanged_passes():
     config = project_config()
-    image_ctx, _ = make_image_ctx(reads=lambda _: config)
-    assert projectscreening._read_back_problem(COMMAND, config, image_ctx.docker) is None
+    screener, _ = make_screener(reads=lambda _: config)
+    assert projectscreening._read_back_problem(COMMAND, config, screener.docker) is None
 
 
 def test_a_config_that_cannot_be_read_back_is_refused():
-    image_ctx, _ = make_image_ctx()
-    image_ctx.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
-    assert projectscreening._read_back_problem(COMMAND, project_config(), image_ctx.docker) == (
+    screener, _ = make_screener()
+    screener.docker.capture = lambda cmd: subprocess.CompletedProcess(cmd, 1, "", "boom")
+    assert projectscreening._read_back_problem(COMMAND, project_config(), screener.docker) == (
         "docker compose could not read back the config that was checked")
 
 

@@ -230,14 +230,14 @@ class Recorder:
         self.captured = []
 
 
-def make_image_ctx(images=None, ctx=None, **compose):
+def make_screener(images=None, screener=None, **compose):
     """(Screener, recorder), with images as its docker, which also runs the compose commands
     (fake_compose takes compose).
     """
     images = images if images is not None else FakeImages()
     recorder = fake_compose(images, **compose)
-    ctx = ctx or Screener(make_runtime(docker=images))
-    return ctx, recorder
+    screener = screener or Screener(make_runtime(docker=images))
+    return screener, recorder
 
 
 def fake_compose(images, active=("web",), codes=None, on_child=None, reads=None, project=None):

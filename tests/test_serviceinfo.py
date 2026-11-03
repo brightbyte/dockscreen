@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_image_ctx, make_runtime, marked, project_of, rules
+from fakes import FakeImages, make_runtime, make_screener, marked, project_of, rules
 
 from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
@@ -29,13 +29,13 @@ def project(**services):
 
 
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
-    image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
-                                         ctx=gate_context(images, settings))
-    found, failures = serviceinfo.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
-    return image_ctx.decide(project_of(config), found, failures), recorder, images
+    screener, recorder = make_screener(images, active=active, codes=codes, reads=lambda _: config,
+                                         screener=configured_screener(images, settings))
+    found, failures = serviceinfo.prepare(COMMAND, project_of(config), list(args), screener, chosen)
+    return screener.decide(project_of(config), found, failures), recorder, images
 
 
-def gate_context(images, settings=None):
+def configured_screener(images, settings=None):
     settings = settings or configuration.Config()
     return Screener(make_runtime(settings=settings, docker=images))
 
@@ -48,8 +48,8 @@ def subcommands(recorder):
 
 def test_services_to_run_are_the_active_ones_plus_those_named():
     config = project(web={}, db={}, debug={})
-    image_ctx, recorder = make_image_ctx(active=("web", "db"))
-    assert serviceinfo._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], image_ctx) == {
+    screener, recorder = make_screener(active=("web", "db"))
+    assert serviceinfo._services_to_run(COMMAND, config, ["-d", "debug", "--", "nope"], screener) == {
         "web", "db", "debug"}
     assert recorder.captured == [[*COMMAND, "config", "--services"]]
 
@@ -117,16 +117,16 @@ def test_pulling_before_building_and_failure_stops_everything():
 
 def test_listing_the_services_can_fail_closed():
     config = project()
-    image_ctx, _ = make_image_ctx(reads=lambda _: config)
-    capture = image_ctx.docker.capture
+    screener, _ = make_screener(reads=lambda _: config)
+    capture = screener.docker.capture
 
     def failing_listing(cmd):
         if "--services" in cmd:
             return subprocess.CompletedProcess(cmd, 1, "", "boom")
         return capture(cmd)
 
-    image_ctx.docker.capture = failing_listing
-    _, failures = serviceinfo.prepare(COMMAND, project_of(config), [], image_ctx)
+    screener.docker.capture = failing_listing
+    _, failures = serviceinfo.prepare(COMMAND, project_of(config), [], screener)
     assert failures == ["docker compose config --services failed"]
 
 
@@ -368,9 +368,9 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
 
 def test_the_policy_decides_from_what_serviceinfo_saw():
     # serviceinfo looks at the images; the decision is the policy's: nothing here duplicates the rule
-    image_ctx, _ = make_image_ctx(FakeImages(users={"web:1": ""}), reads=lambda _: project())
-    found, _ = serviceinfo.prepare(COMMAND, project_of(project()), [], image_ctx)
-    prepared = image_ctx.decide(project_of(project()), found)
+    screener, _ = make_screener(FakeImages(users={"web:1": ""}), reads=lambda _: project())
+    found, _ = serviceinfo.prepare(COMMAND, project_of(project()), [], screener)
+    prepared = screener.decide(project_of(project()), found)
     assert found and prepared.decisions == prepared.policy.assess_images(found.inspected)
 
 
