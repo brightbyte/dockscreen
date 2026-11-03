@@ -29,6 +29,7 @@ class Image(NamedTuple):
     name stood for when it was looked at, whether a compose service builds it, and where docker says it was
     pulled from.
 
+    Attributes:
     - reference: the name, as the command line or the service gives it
     - id: the image id; None until it was looked at, or if it could not be
     - built: whether a compose service builds it, so that no image section of the config file applies
@@ -45,6 +46,7 @@ class Inspected(NamedTuple):
     policy to decide the user from. It holds the image, its own user, the container's user, whether the
     container reaches host files, and the image's passwd and group files once they are read.
 
+    Attributes:
     - image: the image (Image)
     - image_user: the user the image's config sets
     - user: the user the container was created with, as given to docker
@@ -76,6 +78,7 @@ class Inspected(NamedTuple):
 class Unseen(NamedTuple):
     """Record of an image that could not be looked at, and why.
 
+    Attributes:
     - image: the image (Image)
     - reason: why it could not be looked at
     """
@@ -87,6 +90,7 @@ class Identity(NamedTuple):
     """Value object for the set of ids a process runs as. It holds a uid, a primary gid and the supplementary
     gids.
 
+    Attributes:
     - uid, gid: the uid and the primary gid
     - supplementary: the supplementary gids
     """

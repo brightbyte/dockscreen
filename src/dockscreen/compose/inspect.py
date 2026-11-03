@@ -29,6 +29,7 @@ class Refused(Exception):
     """Exception raised when the policy refuses a project before its config is looked at. It holds the
     policy's findings.
 
+    Attributes:
     - findings: the refusals
     """
 

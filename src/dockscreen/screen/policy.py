@@ -53,6 +53,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     the security policy, with the settings they apply with, as the config file sets them for one directory and
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
 
+    Attributes:
     - ids: the id rules (idrules.Rules)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
       instead (with_trust)

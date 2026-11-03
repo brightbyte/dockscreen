@@ -29,6 +29,7 @@ class Scope(NamedTuple):
     """Factory of the policies that screening one command needs, which also looks at images through docker for
     them. It holds the runtime and whether the caller's own ids are allowed.
 
+    Attributes:
     - runtime: the Runtime of the command
     - allow_me: whether --allow-me (or --as-me) allows the caller's own ids
 

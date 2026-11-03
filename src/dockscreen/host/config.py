@@ -48,6 +48,7 @@ class Section(NamedTuple):
     """Record of the settings of one image or project section of the config files. It holds the settings the
     section sets; None, or () for a list, leaves a setting to the levels above.
 
+    Attributes:
     - user, default_user, default_home, nobody_range, mount_dirs, security_opts: as in Config
     """
     user: tuple[int, int] | None = None
@@ -63,6 +64,7 @@ class Config(NamedTuple):
     repository and per project directory. It holds the top-level settings, filled in with the defaults, the
     sections, and which settings a file set.
 
+    Attributes:
     - user: the (uid, gid) an image runs as when nothing chose a user, or None
     - default_user: the (uid, gid) that replaces an image's root user
     - default_home: the HOME of the default user; "" leaves HOME alone
@@ -93,6 +95,7 @@ class Match(NamedTuple):
     """Record of which image section of the config file applies to an image, or why the one for its repository
     does not.
 
+    Attributes:
     - repository: the repository of the image section that applies, or None
     - problem: why a section for the image's repository does not apply, for audit; None if there is none
 

@@ -20,6 +20,7 @@ class DockerError(Exception):
     """Exception raised when docker or compose cannot give what screening asked for, such as a project, an
     image or a definition. It holds what docker printed about it.
 
+    Attributes:
     - output: what docker printed, which may span lines; "" if nothing
     """
 
@@ -36,6 +37,7 @@ class Docker:
     """Client for the real docker binary, which runs the docker and compose commands dockscreen needs and
     reads what they print. It holds the path of the binary and the environment its commands run with.
 
+    Attributes:
     - binary: the path of the real docker
 
     Its commands run with the environment property; with_env gives a copy that passes more variables. Tests

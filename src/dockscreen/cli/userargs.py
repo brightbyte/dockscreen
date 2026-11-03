@@ -39,6 +39,7 @@ class GivenUsers:
     the command to run with. It holds each user option given, whether a user was chosen, whether the caller's
     own ids are allowed, the notices that resolving names produced, and the options that take a value.
 
+    Attributes:
     - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
     - allow_me: whether the caller's own ids are allowed (--as-me, or --allow-me for `docker run`)
     - notices: what resolving user names on this host did, for the caller to print
@@ -102,6 +103,7 @@ class Parsed(NamedTuple):
     service or container and the user. It holds the service or container it names, its arguments with --as and
     --as-me replaced by ids, and what it says about the user.
 
+    Attributes:
     - service: the service or container it names, or None
     - args: the arguments, with --as and --as-me replaced by `--user=uid:gid`
     - users: what the command line says about the user before the service (GivenUsers)

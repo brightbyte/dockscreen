@@ -42,6 +42,7 @@ class Screened(NamedTuple):
     """Record of how far screening a compose project got, as Compose.screen returns it. It holds what the last
     stage that ran found, what was decided about the images, and the project that will run.
 
+    Attributes:
     - report: what the last stage that ran found
     - decided: the Decisions about the images, or None if no image was looked at
     - final: the project that will run, or None unless every stage passed
@@ -56,6 +57,7 @@ class Compose(NamedTuple):
     definition that was checked. It holds the options that select the project, the project as compose resolved
     it, the substitutions that add the defaults to it, and the scope it is screened in.
 
+    Attributes:
     - global_args: the compose options that select the project
     - resolved: the project as compose resolved it, with remote looked up
     - hardening: the substitutions that add the defaults (Substitution)

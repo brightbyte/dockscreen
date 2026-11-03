@@ -20,6 +20,7 @@ class Runtime(NamedTuple):
     reads the environment, the config file or this host's accounts on its own. It holds the settings, the real
     docker, the host's accounts, and the caller's ids, environment and directories.
 
+    Attributes:
     - settings: the caller's settings (Config)
     - docker: the real docker (Docker)
     - accounts: the accounts on this host (HostAccounts)

@@ -38,6 +38,7 @@ class Rules(NamedTuple):
     caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
     this host's accounts and subordinate ranges.
 
+    Attributes:
     - me: the caller's (uid, gid)
     - allow_me: whether the caller's ids are allowed (--allow-me, or --as-me on docker run)
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose

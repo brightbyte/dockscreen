@@ -24,6 +24,7 @@ class Group(NamedTuple):
     """Record of a kind of routine change that is reported once for all the services it was made to. It holds
     the line and what to do about it.
 
+    Attributes:
     - text: the line, with `{services}` where the names of the services go
     - help: what to do about it, or None
     """
@@ -36,6 +37,7 @@ class Substitution(NamedTuple):
     to the definition and reporting it. It holds the key, its new value, how the change is reported, and where
     the value comes from.
 
+    Attributes:
     - service: the name of the service
     - key: the service key that is set
     - value: what the key is set to, which must not be changed in place; apply copies it into the definition

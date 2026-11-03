@@ -14,6 +14,7 @@ class UserOption(NamedTuple):
     """Record of one user option a command line gives, for the policy to judge. It holds the option and its
     value, and for --as the account of that name on this host.
 
+    Attributes:
     - flag: `--user` or `--as`
     - value: what the option gives
     - account: for --as, the (uid, gid) of the account of that name on this host; None if there is none

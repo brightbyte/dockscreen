@@ -20,6 +20,7 @@ class Mount(NamedTuple):
     """Value object for a filesystem attached to a container. It holds its type, where it comes from and where
     it is mounted.
 
+    Attributes:
     - kind: its type: bind, volume, tmpfs or image
     - source: where it comes from: a host path, a volume or an image
     - target: where it is mounted in the container

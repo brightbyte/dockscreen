@@ -43,6 +43,7 @@ class Finding(messages.Marked):
     line marked by its severity (MARKS). Its string value is its text, after the subject and a colon if there
     is one, without the mark. It holds the subject and the severity besides what a Marked line holds.
 
+    Attributes:
     - subject: what it is about ("service web"), or None
     - severity: how much it matters
     - text, help, output: as in Marked
@@ -130,6 +131,7 @@ class Report(NamedTuple):
     """Record of what one screening found, from which its verdict follows. It holds the findings, in their
     order.
 
+    Attributes:
     - findings: what was found
 
     Build one with of, or with refusal or failure for a single reason.

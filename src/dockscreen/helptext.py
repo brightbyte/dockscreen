@@ -33,6 +33,7 @@ class Topic(NamedTuple):
     """Record of the help page for one command, for showing it laid out like docker's own. It holds the
     command's usage and summary, what dockscreen does with it, and dockscreen's own options for it.
 
+    Attributes:
     - usage: the usage line
     - summary: one line, also in the overview
     - aliases: the other names of the command

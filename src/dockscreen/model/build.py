@@ -20,6 +20,7 @@ class Build(NamedTuple):
     for judging what the build reads on this host. It holds the definition, what it calls the context, the
     Dockerfile and the named contexts, and the directory its relative paths are relative to.
 
+    Attributes:
     - definition: the build's keys, as compose or bake gives them; a dict that must not be changed in place
     - keys: what the definition calls the context, the Dockerfile and the named contexts
     - directory: the directory its relative paths are relative to, which what it reads must stay inside
@@ -62,6 +63,7 @@ class BakeDefinition(NamedTuple):
     """View of the definition that `docker buildx bake --print` gives, for judging its targets. It holds the
     definition and the directory bake ran in.
 
+    Attributes:
     - definition: the targets and groups, as a JSON object; a dict that must not be changed in place
     - directory: the directory bake ran in, which it reads the targets' relative paths from
     """

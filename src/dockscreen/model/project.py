@@ -27,6 +27,7 @@ class Location(NamedTuple):
     """Record of where a compose project is, as compose would find it, and what makes that directory unfit to
     be a project's. It holds the directory and what was found against it.
 
+    Attributes:
     - directory: the project directory
     - foreign: whether it was found by walking up from the current directory into the home directory, or into
       one the caller does not own
@@ -46,6 +47,7 @@ class Project(NamedTuple):
     besides, for judging it. It holds the definition, where the project is, and the facts that screening
     gathers in stages.
 
+    Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not
       be changed in place: with_definition gives a project with another one
     - location: where it is (Location)
@@ -133,6 +135,7 @@ class Service(NamedTuple):
     """View of one service of a Project, for judging its keys (Subject). It holds the project and the
     service's name; its keys, and what follows from them, are read from the project.
 
+    Attributes:
     - name: the name of the service
     - project: the project (Project)
 

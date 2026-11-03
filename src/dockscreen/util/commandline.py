@@ -52,6 +52,7 @@ class CommandLine:
     taken out, and the base class of the command objects (DockerCommand, ComposeCommand). It holds the command
     line as docker or compose gets it, where the command is, and which of dockscreen's options were given.
 
+    Attributes:
     - argv: the command line as docker or compose gets it
     - idx: the index of the command in it, or None
     - given: the options of dockscreen's that were given, here or on a docker command line this one follows

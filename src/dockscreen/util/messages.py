@@ -27,6 +27,7 @@ class Mark(str):
     """Value object for a symbol that starts a line, with the ANSI colour a terminal shows it in, bold. It is
     the symbol as a string, and holds the colour.
 
+    Attributes:
     - colour: the ANSI colour code
 
     The str base does not protect the colour, so nothing changes it after construction.
@@ -45,6 +46,7 @@ class Marked(str):
     colouring. Its string value is the text, without the mark, which only printing adds; the line only states
     the facts. It holds the mark, the text, what to do about it and what docker printed about it.
 
+    Attributes:
     - mark: the Mark
     - text: the text
     - help: what to do about it, shown only in helpful mode (set_helpful), or None

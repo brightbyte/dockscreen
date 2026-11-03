@@ -72,6 +72,7 @@ class DockerCommand(commandline.CommandLine):
     through dockscreen. Its dispatch method screens, helps with or hands on the command. It holds the command
     line, as CommandLine reads it, and the runtime it runs in.
 
+    Attributes:
     - runtime: the Runtime the command runs in
     """
 

@@ -20,6 +20,7 @@ class Assessment(NamedTuple):
     """Record of a judgement of the user a container would run as. It holds where that user comes from, the
     image, what was found, the identity read from the image, and the user dockscreen pins.
 
+    Attributes:
     - origin: where the user comes from; None if the image could not be looked at
     - image: the image (Image)
     - findings: refusals, failures to look, and notable findings
