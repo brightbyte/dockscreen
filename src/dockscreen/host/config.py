@@ -1,5 +1,6 @@
-"""This module defines dockscreen's configuration and reads it from TOML files that only the user or root
-can write.
+"""This module defines the Config class, dockscreen's settings, with functions for reading them from TOML
+files that only the user or root can write and for working out the settings that apply to one image and
+project.
 
 The files are trusted completely, so they are only read when nothing but their owner could have put
 their content there: the file and every directory above it must be owned by the user or root and not

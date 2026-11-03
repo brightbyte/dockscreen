@@ -1,9 +1,9 @@
-"""This module provides the reading of the uid and gids a container would run as from the image, as docker
-reads them.
+"""This module provides functions for working out the uid and gids a container would run as from the image's
+passwd and group files, as docker does.
 
 The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is
-untrusted, so idrules decides whether the image may have it. Whatever is accepted runs pinned as numbers, so a
-difference between this reading and docker's can at worst refuse a good image.
+untrusted, so the id rules (idrules) decide whether the image may have it. Whatever is accepted runs
+pinned as numbers, so a difference between this reading and docker's can at worst refuse a good image.
 """
 
 from collections.abc import Sequence

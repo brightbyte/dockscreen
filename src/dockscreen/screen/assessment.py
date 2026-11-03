@@ -1,5 +1,5 @@
-"""This module defines the judgement of the user a container would run as (Assessment), which the policy
-makes (Policy.check_image).
+"""This module defines the Assessment class, a record of a judgement of the user a container would run as,
+which Policy.check_image returns.
 
 Where that user comes from is an origin like any other value's: the image's own user (Origin.IMAGE),
 judged by the id rules; one the config file sets (Origin.CONFIG), for the image, the project or every one;

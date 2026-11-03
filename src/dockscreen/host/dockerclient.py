@@ -1,4 +1,5 @@
-"""This module provides the docker operations dockscreen needs, as thin wrappers around the real binary."""
+"""This module defines the Docker class, a client for the docker commands dockscreen needs, as thin wrappers
+around the real binary, and the errors it raises."""
 
 import io
 import json

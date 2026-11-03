@@ -1,5 +1,5 @@
-"""This module defines the security policy: the rules that decide what a compose project, a container, a
-build or an image may ask for, and the settings they apply with (Policy).
+"""This module defines the Policy class, for checking a compose project, a container, a build or an image
+against the rules of the security policy, with the settings they apply with.
 
 The rules are grouped by what they judge (screen.rules): the keys of a service (rules.service), what a
 project has besides its services (rules.project), builds (rules.build), the user an image runs as

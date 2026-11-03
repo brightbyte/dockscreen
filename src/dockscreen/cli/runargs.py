@@ -1,5 +1,5 @@
-"""This module provides the reading of a `docker run` command line, just far enough to run it as
-`docker create` + `docker start`.
+"""This module provides functions for reading a `docker run` command line just far enough to run it as `docker
+create` + `docker start`.
 
 We need the image position and the few flags that `run` has and `create` lacks
 (`-d`, `--sig-proxy`, `--detach-keys`, `-a`). Nothing security-relevant hangs

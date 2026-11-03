@@ -1,5 +1,6 @@
-"""This module defines the policy's rules for the user an image runs a container as, decided from what was
-seen of the image (model.image.Inspected), for `docker run` and compose alike.
+"""This module defines the ImageRules class, the group of the policy's rules for deciding the user an image
+runs a container as, from what was seen of the image (model.image.Inspected), for `docker run` and compose
+alike.
 
 The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use (see
 imageuser), and the id rules decide whether the image may have it (idrules). With no user chosen, in

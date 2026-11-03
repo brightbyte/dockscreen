@@ -1,5 +1,5 @@
-"""This module defines the mounts of a container or a compose service, and which of them reach files on this
-host.
+"""This module provides functions for finding the mounts of a container or a compose service, and for telling
+which of them reach files on this host.
 
 What a container can write on the host depends on its user only where it reaches host files: bind mounts,
 devices, the volumes of another container, and for compose secrets and configs, which are bind-mounted

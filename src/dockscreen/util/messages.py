@@ -1,5 +1,5 @@
-"""This module provides the messages to the person running dockscreen, on stderr, and the escaping that
-keeps the untrusted text they quote from passing for anything else.
+"""This module provides functions for printing messages to the person running dockscreen, on stderr, and for
+escaping the untrusted text they quote, so that it cannot pass for anything else.
 
 Every message is one line that starts with PREFIX, so it can be told apart from what docker and compose
 print. Text is escaped with printable(), because much of it quotes the untrusted project or image.

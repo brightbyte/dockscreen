@@ -1,5 +1,5 @@
-"""This module defines where the values that screening judges come from, and which of those sources are
-trusted.
+"""This module defines the Origin enum, for labelling where a value that screening judges comes from, and the
+sets of origins that are trusted.
 
 Screening knows a value's origin only as finely as docker shows it. `docker compose config` merges the
 compose files, `.env`, env files, `include` and `extends`, so everything in it comes from the project.

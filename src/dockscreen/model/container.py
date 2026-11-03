@@ -1,5 +1,5 @@
-"""This module defines a container as docker inspect shows it, and what it asks for in the terms of a compose
-service.
+"""This module defines the Container class, a view of a container as docker inspect shows it, which can also
+give what the container asks for in the terms of a compose service.
 
 A container that `docker run` created holds what its command line asked for, parsed by the daemon. Read
 back into the compose service keys of the same meaning (Container.as_service), it can be judged by the

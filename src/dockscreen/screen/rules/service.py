@@ -1,5 +1,5 @@
-"""This module defines the policy's rules for the keys of a service, which a compose service and a container
-read back into compose service keys alike are judged by (SERVICE_CHECKS).
+"""This module defines the ServiceRules class and the checks of each key (SERVICE_CHECKS), for judging the
+keys of a service: a compose service's, or a container's read back into compose service keys.
 
 A key is listed either as harmless (any value is fine) or as checked (it has an entry in SERVICE_CHECKS
 that validates the value). A key that is neither is refused, so a Compose feature added tomorrow is

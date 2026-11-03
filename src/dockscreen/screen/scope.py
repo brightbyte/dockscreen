@@ -1,5 +1,5 @@
-"""This module defines the scope a command is screened in: the caller and this host (the runtime), and
-whether the caller's own ids are allowed.
+"""This module defines the Scope class, for getting what screening one command needs from the caller and this
+host (the runtime): the policy for each target, and what an image is like, looked at through docker.
 
 What the checks of one project, image or container need follows from it and from where that target is:
 the settings of the config file with the project and image sections that apply (config.effective), the

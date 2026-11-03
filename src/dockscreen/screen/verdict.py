@@ -1,6 +1,5 @@
-"""This module defines how the verdict of screening a command or of an audit is reported (see findings for
-what the verdicts mean), and how the decision about a container's user is described.
-"""
+"""This module provides functions for reporting the verdict of screening a command or of an audit (see
+findings for what the verdicts mean), and for describing a decision about a container's user."""
 
 from dockscreen.host import hostusers
 from dockscreen.model.image import section_hint

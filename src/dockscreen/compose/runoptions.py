@@ -1,5 +1,5 @@
-"""This module provides what the options of `docker compose run` change in the service it runs, as
-substitutions with the command line as their origin, so that the service can be judged as it will run.
+"""This module provides functions for turning the options of `docker compose run` into substitutions on the
+service it runs, with the command line as their origin, so that the service can be judged as it will run.
 
 Compose applies these options to the service itself, from the command line, after reading the project:
 `--user` replaces the service's user; `-v` adds a mount; `--cap-add` and `--cap-drop` add to theirs and

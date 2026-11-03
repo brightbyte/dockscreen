@@ -1,6 +1,6 @@
-"""This module defines the policy's rules for the users a command line gives: only their form, since the
-command line is trusted, but in a form docker cannot read differently from what was checked.
-"""
+"""This module defines the CommandLineRules class, the group of the policy's rules for judging the users a
+command line gives, and UserOption, the record of one: only their form is judged, since the command line is
+trusted, but in a form docker cannot read differently from what was checked."""
 
 from collections.abc import Iterable
 from typing import NamedTuple

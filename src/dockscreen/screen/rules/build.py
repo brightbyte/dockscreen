@@ -1,6 +1,6 @@
-"""This module defines the policy's rules for builds: a compose service's `build:` and the targets of `docker
-buildx bake`, which share what a build may reach on this host (BuildRules.check_build).
-"""
+"""This module defines the BuildRules class, the group of the policy's rules for judging builds: a compose
+service's `build:` and the targets of `docker buildx bake`, which share what a build may reach on this host
+(BuildRules.check_build)."""
 
 import os
 from collections.abc import Sequence

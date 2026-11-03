@@ -1,5 +1,5 @@
-"""This module provides a compose project as dockscreen checks it, and runs docker compose from the config
-that was checked, not from the files compose would find itself.
+"""This module defines the Compose class, for screening a compose project and running docker compose from the
+config that was checked, not from the files compose would find itself.
 
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
@@ -7,7 +7,7 @@ and handed to compose as its only file, together with the project directory and
 name it came from. What was checked is then exactly what runs: no second
 reading of the project's files, no discovery rules to mirror. Before any image is
 pulled or built, compose is asked for the config of the generated file, which is
-refused if it differs from what was checked (Project.prepare). The price is that
+refused if it differs from what was checked (Compose.prepare). The price is that
 compose runs as a child process (so the file can be removed afterwards) and
 shows the temporary file as its config file.
 """

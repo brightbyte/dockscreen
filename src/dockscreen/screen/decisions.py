@@ -1,6 +1,6 @@
-"""This module provides what the policy decided about the users of a compose project's services once their
-images were looked at (Decisions), and what follows: the substitutions that make the project the one that
-runs (changes), and how both are described.
+"""This module defines the Decisions class, a record of what a policy decided about the users of a compose
+project's services once their images were looked at, with functions for working out the substitutions that
+follow from it and for describing both.
 
 A user dockscreen decided is pinned as numbers, `user: "uid:gid"`: the runtime reads neither passwd nor
 group for that, so it cannot resolve the image's user to anything but what was checked. The image that was

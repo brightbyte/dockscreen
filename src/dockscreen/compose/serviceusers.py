@@ -1,6 +1,6 @@
-"""This module gets the images of a compose project's services as compose would, and looks at those that
-decide which user a service runs as, where the project leaves that to the image, so that the policy can
-decide by the rule `docker run` uses (rules.image), and what follows from that (decisions).
+"""This module provides functions for getting the images of a compose project's services as compose would, and
+for looking at those that decide which user a service runs as, where the project leaves that to the image, so
+that the policy can decide by the rule `docker run` uses (rules.image).
 
 A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
 whatever its image says. The image is acquired first, following the project's own pull policy so that

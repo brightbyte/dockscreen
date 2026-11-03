@@ -1,5 +1,5 @@
-"""This module provides the help for dockscreen and the commands it audits or adds, laid out like docker's
-own.
+"""This module provides functions for showing the help for dockscreen and the commands it audits or adds, laid
+out like docker's own.
 
 An overview lists dockscreen's options and the commands it audits or adds; a topic covers one command.
 Docker's (or compose's) own help for the same thing follows ours, except for commands only dockscreen

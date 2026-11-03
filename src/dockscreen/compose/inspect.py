@@ -1,7 +1,6 @@
-"""This module provides a project's config as docker compose resolves it, and what the policy judges about
-the project before and around its config: where it is, what it is called, and which configured mount
-directories are risky.
-"""
+"""This module provides functions for finding and loading the project a compose command line selects, as
+docker compose resolves it, and for gathering what the policy judges about it besides its config: where it is,
+which containers have its name, and which configured mount directories are risky."""
 
 import json
 import os

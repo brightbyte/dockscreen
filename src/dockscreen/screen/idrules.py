@@ -1,4 +1,5 @@
-"""This module defines which uids and gids a project or an image may choose for a container.
+"""This module defines the Rules class, for deciding which uids and gids a project or an image may choose for
+a container.
 
 Applies to every id that comes from an untrusted source: `user:` and hook users in a compose
 file, and the user an image runs as. Ids from the command line and the config file are trusted and are

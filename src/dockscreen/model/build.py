@@ -1,5 +1,6 @@
-"""This module defines a build of one image as screening sees it, from compose's `build:` section or from a
-target of `docker buildx bake`, and bake's definition of its builds.
+"""This module defines the Build class, a view of the build of one image as screening sees it, from compose's
+`build:` section or from a target of `docker buildx bake`, and BakeDefinition, bake's definition of its
+builds.
 
 Both read a context, a Dockerfile and named contexts from this host, and may use a network and the SSH
 agent; they give these different names (Build.keys). Bake also says where a build writes (`output`,

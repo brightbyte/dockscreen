@@ -1,4 +1,5 @@
-"""This module defines an image as screening knows it before and after looking at it.
+"""This module defines classes for representing an image as screening knows it before and after looking at it,
+and functions for reading an image reference as docker does.
 
 An image is asked for by a name (`mariadb:11`, or `<project>-<service>` for one a compose service builds).
 Once it is there, the name stands for an image id, which is what dockscreen pins, so that a tag moved in

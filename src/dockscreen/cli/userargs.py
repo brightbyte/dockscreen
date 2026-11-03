@@ -1,5 +1,5 @@
-"""This module provides the reading of command lines that run something in a container (`docker compose run`
-and `exec`, `docker exec`), just far enough to find the user and the service or container.
+"""This module provides functions for reading command lines that run something in a container (`docker compose
+run` and `exec`, `docker exec`) just far enough to find the user and the service or container.
 
 The command line is trusted, so the user it gives is not checked against the id rules, only for its
 form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. A name would be

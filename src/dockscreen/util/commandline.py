@@ -1,5 +1,6 @@
-"""This module provides what every reading of docker and compose command lines needs: dockscreen's own
-options, which docker and compose never see, and helpers that find one thing in a command line.
+"""This module provides what every reader of docker and compose command lines uses: the names of dockscreen's
+own options, which docker and compose never see, the CommandLine class, which takes them out, and functions
+that find one thing in a command line.
 
 Before the subcommand (CommandLine takes them out):
 - --skip-screening runs the real thing with no checks and no defaults. After the subcommand it is

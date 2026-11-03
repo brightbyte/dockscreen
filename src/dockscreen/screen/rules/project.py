@@ -1,7 +1,7 @@
-"""This module defines the policy's rules for what a compose project has besides its services: its top-level
-volumes, networks, secrets and configs, where it is, the daemon it runs on, and its name; and for what it
-gets from around it: the configured mount dirs, and variables from the shell.
-"""
+"""This module defines the ProjectRules class, the group of the policy's rules for judging what a compose
+project has besides its services: its top-level volumes, networks, secrets and configs, where it is, the
+daemon it runs on, and its name; and what it gets from around it: the configured mount dirs, and variables
+from the shell."""
 
 import os
 from collections.abc import Iterable, Mapping, Sequence

@@ -1,5 +1,6 @@
-"""This module is the entry point of `dockscreen`, a wrapper for `docker`, which can also be installed as
-`docker`: it gates or adds the commands dockscreen knows and hands everything else to the real docker.
+"""This module provides the entry point of `dockscreen` (main), a wrapper for `docker` that can also be
+installed as `docker`, and the dispatch that gates or adds the commands dockscreen knows and hands everything
+else to the real docker.
 
 `compose` goes to compose_cli, commands that start containers from images
 go through the gate, everything else is exec'd to the real docker unchanged.

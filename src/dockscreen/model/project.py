@@ -1,4 +1,5 @@
-"""This module defines a compose project as screening sees it, where it is, and the services in it.
+"""This module defines the Project class, a view of a compose project as screening sees it, with classes for
+where it is and for the services in it.
 
 Every path below the project directory can be bind-mounted, so the directory must be the one compose
 uses, and must not hold anything that may not be mounted (Location).

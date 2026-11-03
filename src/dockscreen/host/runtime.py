@@ -1,4 +1,5 @@
-"""This module defines what dockscreen takes from the process it runs in, gathered once by the entry point.
+"""This module defines the Runtime class, a snapshot of what dockscreen takes from the process it runs in,
+gathered once by the entry point.
 
 Everything below the entry points gets these as a Runtime, so none of it reads the config file, the
 caller's ids, the environment or the host's accounts on its own.

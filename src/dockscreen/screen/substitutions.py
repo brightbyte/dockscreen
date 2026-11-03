@@ -1,5 +1,5 @@
-"""This module defines the changes dockscreen makes to the services of a compose config before it runs it,
-and how they are reported.
+"""This module defines the Substitution class and helpers for recording the changes dockscreen makes to a
+compose config before running it, for applying them and for reporting them. It does not decide what to change.
 
 Each change sets one key of one service. Everything dockscreen changes in what it runs is said: a change
 that alters what the project chose is notable, the others are routine, and routine changes of the same

@@ -1,6 +1,5 @@
-"""This module provides what dockscreen knows about the users and groups of this host: its accounts, and
-the subordinate id ranges of rootless containers.
-"""
+"""This module provides classes for looking up the users and groups of this host, and the subordinate id
+ranges of rootless containers."""
 
 import grp
 import pwd

@@ -1,5 +1,5 @@
-"""This module implements `docker compose` through dockscreen: it gates or adds the subcommands dockscreen
-knows and forwards everything else.
+"""This module implements `docker compose` through dockscreen: the dispatch that gates or adds the subcommands
+dockscreen knows and forwards everything else.
 
 We deliberately do not use argparse for the docker compose surface. Anything we
 do not recognise must reach docker compose untouched, so the only thing we

@@ -1,4 +1,5 @@
-"""This module defines what screening finds out about what it screens, and the verdict that follows.
+"""This module defines classes for recording what screening finds out about what it screens, and the verdict
+that follows from it.
 
 A finding says one thing about one subject (a service, an image, a container, the command line) and how
 much it matters: routine and notable findings are reported, refused and failed ones stop the command.

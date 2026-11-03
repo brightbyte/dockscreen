@@ -1,7 +1,6 @@
-"""This module defines what the groups of the policy's rules share: the settings they read (RuleBase), what
-they judge a service as (Subject), the allowlist of keys (unknown_keys) and the judging of paths
-(is_inside).
-"""
+"""This module defines what the groups of the policy's rules have in common: the base class with the settings
+they read, the interface of the service they judge, and functions for checking keys against an allowlist and
+paths against a directory."""
 
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
