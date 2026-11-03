@@ -35,15 +35,17 @@ class Decisions(NamedTuple):
 
     - project: the project, with what was found of its images
     - policy: the policy that decided, with image sections only where the images proved them
-    - decisions: by service, the Assessment of each started service that sets no user
+    - decisions: by service, the Assessment of each started service that sets no user; a dict that must not
+      be changed in place
     - report: the failures to acquire the images, and the services whose image must not run
     - changes: the substitutions that make the project the one to run
+    - local: this host's accounts, for naming the users in describe
 
     Instances come from Scope.decide.
     """
     project: Project
     policy: Policy
-    local: hostusers.HostAccounts  # this host's accounts, for naming the users in describe
+    local: hostusers.HostAccounts
     decisions: dict[str, Assessment]
     report: Report
     changes: tuple[Substitution, ...]

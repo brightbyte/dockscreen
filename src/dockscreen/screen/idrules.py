@@ -38,14 +38,21 @@ class Rules(NamedTuple):
     caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
     this host's accounts and subordinate ranges.
 
+    - me: the caller's (uid, gid)
+    - allow_me: whether the caller's ids are allowed (--allow-me, or --as-me on docker run)
+    - nobody_range: the inclusive (low, high) range of ids any project or image may choose
+    - default_user: the (uid, gid) that replaces root
+    - local: the accounts on this host (HostAccounts)
+    - subordinate: the ranges in /etc/subuid and /etc/subgid (Subordinate)
+
     Instances come from for_runtime; with_settings and with_allow_me give copies.
     """
-    me: tuple                              # (uid, gid) of the caller
-    allow_me: bool                         # --allow-me (or --as-me on docker run)
-    nobody_range: tuple                    # inclusive (low, high)
-    default_user: tuple                    # (uid, gid) that replaces root
-    local: hostusers.HostAccounts          # the accounts on this host
-    subordinate: hostusers.Subordinate     # ranges in /etc/subuid and /etc/subgid
+    me: tuple
+    allow_me: bool
+    nobody_range: tuple
+    default_user: tuple
+    local: hostusers.HostAccounts
+    subordinate: hostusers.Subordinate
 
     @classmethod
     def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:

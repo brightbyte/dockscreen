@@ -213,7 +213,7 @@ def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[Findi
     config = info["Config"]
     misread_image = config.get("Image") != parsed.image
     # without a command of its own the container has the image's Cmd, which says nothing about our reading
-    misread_command = parsed.command and (config.get("Cmd") or []) != parsed.command
+    misread_command = parsed.command and (config.get("Cmd") or []) != list(parsed.command)
     if misread_image or misread_command:
         return [Finding("could not reliably tell the image from the command line",
                         help="use the real docker for this one")]

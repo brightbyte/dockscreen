@@ -46,9 +46,12 @@ class Project(NamedTuple):
     besides, for judging it. It holds the definition, where the project is, and the facts that screening
     gathers in stages.
 
-    - definition: what `docker compose config` resolves from all the project's files
+    - definition: what `docker compose config` resolves from all the project's files; a dict that must not
+      be changed in place: with_definition gives a project with another one
     - location: where it is (Location)
     - remote: whether its daemon may not be this host's; None until looked at
+    - origins: by service and key, where the values dockscreen set come from, where that is not the project
+      (with_origins)
     - made_from: the directories that the containers with its name say they were made from, "" for one that
       does not say; None until looked at
     - found_images: by service, the images that an image section of the config file could apply to, as found,
@@ -61,7 +64,6 @@ class Project(NamedTuple):
     definition: dict[str, Any]
     location: Location
     remote: bool | None = None
-    # where the values dockscreen set come from, by service and key, where not the project (with_origins)
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
     made_from: tuple[str, ...] | None = None
     found_images: Mapping[str, Image] | None = None

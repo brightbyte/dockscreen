@@ -33,7 +33,7 @@ def parse(command, args):
 ])
 def test_run_arguments(args, service, user_given):
     parsed = parse("run", args)
-    assert (parsed.service, parsed.users.chosen, parsed.args) == (service, user_given, args)
+    assert (parsed.service, parsed.users.chosen, list(parsed.args)) == (service, user_given, args)
 
 
 @pytest.mark.parametrize("args", [
@@ -74,7 +74,7 @@ ACCOUNTS = Accounts()
 ])
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
     parsed = parse(subcommand, args)
-    assert parsed.args == rewritten
+    assert list(parsed.args) == rewritten
     assert parsed.users.chosen == ("--as" not in rewritten)
     resolving = ["Resolving user alice to uid 1001, gid 1002"]
     assert parsed.users.notices == ([] if "--as" in rewritten else resolving)
@@ -93,4 +93,4 @@ def test_a_name_given_to_user_points_to_as():
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
     parsed = parse(subcommand, ["-it", "--as-me", "c", "sh"])
-    assert parsed.args == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.chosen
+    assert list(parsed.args) == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.chosen

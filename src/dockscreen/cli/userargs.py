@@ -45,8 +45,11 @@ class GivenUsers:
     - given: the user options given, as UserOption records
     - values: each option that takes a value, with it, as docker gets it
 
+    The three are lists that only its own methods add to; callers must not change them.
+
     The parsers of this module and of runargs create and fill it, turning each user option into
-    `--user=uid:gid` through its methods; nothing changes it after they return, though nothing enforces that.
+    `--user=uid:gid` through its methods (allow records --allow-me); nothing changes it after they return,
+    though nothing enforces that.
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -83,6 +86,10 @@ class GivenUsers:
         self.value("--user", ids.format_user(account))
         return f"--user={ids.format_user(account)}"
 
+    def allow(self) -> None:
+        """Records that the caller's own ids are allowed (--allow-me), without choosing a user."""
+        self.allow_me = True
+
     def me(self) -> str:
         """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
         self.chosen = self.allow_me = True
@@ -103,7 +110,7 @@ class Parsed(NamedTuple):
     nor a user.
     """
     service: str | None
-    args: list
+    args: tuple[str, ...]
     users: GivenUsers
 
     @classmethod
@@ -111,7 +118,7 @@ class Parsed(NamedTuple):
         """Returns args as a command line that names no service and gives no user, for a subcommand that
         takes neither (`up`, `create`).
         """
-        return cls(None, args, GivenUsers(runtime.me, runtime.accounts))
+        return cls(None, tuple(args), GivenUsers(runtime.me, runtime.accounts))
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
@@ -129,7 +136,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     while i < len(args):
         token = args[i]
         if token == "--":
-            return Parsed(args[i + 1] if i + 1 < len(args) else None, [*kept, *args[i:]], users)
+            return Parsed(args[i + 1] if i + 1 < len(args) else None, (*kept, *args[i:]), users)
         if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
@@ -138,8 +145,8 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         elif token.startswith("-") and token != "-":
             i = _parse_short(args, i, value_flags, users, kept)
         else:
-            return Parsed(token, [*kept, *args[i:]], users)
-    return Parsed(None, kept, users)
+            return Parsed(token, (*kept, *args[i:]), users)
+    return Parsed(None, tuple(kept), users)
 
 
 
@@ -162,7 +169,7 @@ def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
         return None
     for notice in parsed.users.notices:
         messages.notice(notice)
-    return parsed.args
+    return list(parsed.args)
 
 def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: GivenUsers,
                 kept: list[str]) -> int:

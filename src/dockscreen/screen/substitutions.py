@@ -38,7 +38,7 @@ class Substitution(NamedTuple):
 
     - service: the name of the service
     - key: the service key that is set
-    - value: what the key is set to
+    - value: what the key is set to, which must not be changed in place; apply copies it into the definition
     - text: what it was and what dockscreen does, if it is reported on its own line; None if not
     - notable: whether it alters what the project chose
     - help: what the project can do about it, or None

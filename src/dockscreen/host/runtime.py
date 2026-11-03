@@ -25,7 +25,8 @@ class Runtime(NamedTuple):
     - accounts: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (Subordinate)
     - me: the caller's real (uid, gid)
-    - env: the environment, which compose and docker inherit
+    - env: the environment, which compose and docker inherit; it must not be changed in place, and
+      with_docker_env gives a runtime whose docker passes more variables
     - home: the caller's home directory
     - cwd: the directory dockscreen was started in
 

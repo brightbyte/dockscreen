@@ -54,6 +54,11 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
 
     - ids: the id rules (idrules.Rules)
+    - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
+      instead (with_trust)
+    - config_file: the caller's config file, named in hints on what it can allow; None for no hints
+    - section: which image section of the config file applies to the image this policy is for, and why the
+      one for its repository does not (config.section_for); NO_SECTION for a policy not for an image
     - default_user: the (uid, gid) that runs instead of an image that would run as root
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
@@ -63,9 +68,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     """
     ids: idrules.Rules
     extra_dirs: tuple = ()  # mount_dirs from the config file
-    # Whose values are taken as given: what the policy refuses in them is pointed out instead.
     trust: frozenset[Origin] = TRUSTED
-    # The caller's config file, named in hints on what it can allow; no hints without it.
     config_file: str | None = None
     security_opts: tuple = ()  # allowed besides no-new-privileges (security_opts in the config file)
     # The user the config file sets for this service (its image's or project's, or the top level's):
@@ -74,8 +77,6 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN
-    # Which image section of the config file applies to the image this policy is for, and why the one for
-    # its repository does not (config.section_for); none for a policy that is not for an image.
     section: configuration.Match = configuration.NO_SECTION
     # The policy for each service of the project this one is for, with the settings of its image section
     # if one applies, by service name; a service that is not in it gets this one.

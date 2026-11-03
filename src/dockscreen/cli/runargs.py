@@ -63,9 +63,9 @@ class ParsedRun(NamedTuple):
 
     Instances come from parse.
     """
-    create_args: list
+    create_args: tuple[str, ...]
     image: str
-    command: list
+    command: tuple[str, ...]
     detach: bool
     detach_keys: str | None
     users: userargs.GivenUsers
@@ -106,7 +106,8 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
             break
     if i >= len(args):
         raise ParseError("no image found in the command line")
-    return ParsedRun([*state.kept, *args[i:]], args[i], args[i + 1:], state.detach, state.detach_keys, users)
+    return ParsedRun((*state.kept, *args[i:]), args[i], tuple(args[i + 1:]), state.detach, state.detach_keys,
+                     users)
 
 
 def _parse_long(args: list[str], i: int, state: _State) -> int:
@@ -116,7 +117,7 @@ def _parse_long(args: list[str], i: int, state: _State) -> int:
     if name == commandline.AS_ME:
         state.kept.append(state.users.me())
     elif name == commandline.ALLOW_ME:  # not a docker option: dropped
-        state.users.allow_me = True
+        state.users.allow()
     elif name == commandline.AS:
         if not has_value:
             i += 1

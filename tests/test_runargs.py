@@ -18,22 +18,22 @@ def parse(*args):
 
 def test_plain_command():
     parsed = parse("-it", "--rm", "alpine", "sh", "-c", "echo hi")
-    assert parsed.create_args == ["-it", "--rm", "alpine", "sh", "-c", "echo hi"]
-    assert (parsed.image, parsed.command, parsed.detach) == ("alpine", ["sh", "-c", "echo hi"], False)
+    assert list(parsed.create_args) == ["-it", "--rm", "alpine", "sh", "-c", "echo hi"]
+    assert (parsed.image, list(parsed.command), parsed.detach) == ("alpine", ["sh", "-c", "echo hi"], False)
 
 
 def test_values_are_not_mistaken_for_the_image():
     parsed = parse("--name", "web", "-p", "80:80", "-v", "/a:/b", "-e", "A=1", "--user=1:1", "-w", "/x",
                    "img", "cmd")
-    assert parsed.image == "img" and parsed.command == ["cmd"]
-    assert parsed.create_args[-2:] == ["img", "cmd"]
-    assert parsed.create_args[:2] == ["--name", "web"]
+    assert parsed.image == "img" and list(parsed.command) == ["cmd"]
+    assert list(parsed.create_args)[-2:] == ["img", "cmd"]
+    assert list(parsed.create_args)[:2] == ["--name", "web"]
 
 
 def test_attached_short_values():
     parsed = parse("-p80:80", "-eA=1", "-v/a:/b", "img")
     assert parsed.image == "img"
-    assert parsed.create_args == ["-p80:80", "-eA=1", "-v/a:/b", "img"]
+    assert list(parsed.create_args) == ["-p80:80", "-eA=1", "-v/a:/b", "img"]
 
 
 @pytest.mark.parametrize("flags, detach, kept", [
@@ -51,7 +51,7 @@ def test_attached_short_values():
 ])
 def test_flags_that_create_lacks_are_dropped(flags, detach, kept):
     parsed = parse(*flags, "img")
-    assert parsed.create_args == [*kept, "img"]
+    assert list(parsed.create_args) == [*kept, "img"]
     assert parsed.detach is detach
 
 
@@ -62,14 +62,14 @@ def test_detach_keys_are_remembered():
 
 def test_flags_after_the_image_belong_to_the_command():
     parsed = parse("img", "ls", "-d", "--detach", "-a")
-    assert parsed.create_args == ["img", "ls", "-d", "--detach", "-a"]
+    assert list(parsed.create_args) == ["img", "ls", "-d", "--detach", "-a"]
     assert not parsed.detach
 
 
 def test_double_dash_ends_the_options():
     parsed = parse("--rm", "--", "img", "-d")
-    assert parsed.create_args == ["--rm", "--", "img", "-d"]
-    assert (parsed.image, parsed.command) == ("img", ["-d"])
+    assert list(parsed.create_args) == ["--rm", "--", "img", "-d"]
+    assert (parsed.image, list(parsed.command)) == ("img", ["-d"])
 
 
 @pytest.mark.parametrize("args", [[], ["--rm"], ["-it"], ["--name"], ["-p"], ["-a"]])
@@ -80,20 +80,20 @@ def test_incomplete_command_lines_are_errors(args):
 
 def test_as_me_means_the_callers_ids_and_resolves_nothing():
     parsed = runargs.parse(["--as-me", "img"], ME, accounts=None)  # looking anything up would fail
-    assert parsed.create_args == ["--user=4242:4343", "img"]
+    assert list(parsed.create_args) == ["--user=4242:4343", "img"]
     assert parsed.users.chosen and parsed.users.notices == []
 
 
 def test_current_user_is_no_longer_a_flag_of_ours():
     parsed = parse("--current-user", "img")
-    assert parsed.create_args == ["--current-user", "img"]  # docker will reject it
+    assert list(parsed.create_args) == ["--current-user", "img"]  # docker will reject it
     assert not parsed.users.chosen
 
 
 @pytest.mark.parametrize("flags", [["--as", "alice"], ["--as=alice"]])
 def test_as_resolves_a_local_account_on_the_host(flags):
     parsed = runargs.parse([*flags, "img"], ME, fakes.Accounts())
-    assert parsed.create_args == ["--user=4242:4343", "img"]
+    assert list(parsed.create_args) == ["--user=4242:4343", "img"]
     assert parsed.users.notices == ["Resolving user alice to uid 4242, gid 4343"]
     assert parsed.users.chosen
 
@@ -116,7 +116,7 @@ def test_as_with_an_unknown_account_or_an_id_is_refused():
 ])
 def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
     parsed = parse(*flags, "img")
-    assert f"--user={user}" in parsed.create_args
+    assert f"--user={user}" in list(parsed.create_args)
     assert parsed.users.chosen and parsed.users.notices == []
 
 
@@ -131,13 +131,13 @@ def test_user_names_are_refused_with_a_pointer_to_as(flags):
 
 
 def test_a_user_flag_in_a_cluster_keeps_its_neighbours():
-    assert parse("-itu", "7:8", "img").create_args == ["-it", "--user=7:8", "img"]
+    assert list(parse("-itu", "7:8", "img").create_args) == ["-it", "--user=7:8", "img"]
 
 
 def test_user_flags_after_the_image_belong_to_the_command():
     parsed = parse("img", "id", "-u", "--as-me", "--as", "alice")
     assert not parsed.users.chosen
-    assert parsed.create_args == ["img", "id", "-u", "--as-me", "--as", "alice"]
+    assert list(parsed.create_args) == ["img", "id", "-u", "--as-me", "--as", "alice"]
 
 
 def test_no_user_flag_means_not_given():

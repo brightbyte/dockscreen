@@ -4,6 +4,8 @@
 The container is checked when it is started (docker_start).
 """
 
+from collections.abc import Sequence
+
 from dockscreen.cli import runargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
@@ -19,7 +21,7 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError:  # docker will report what is wrong with them
-        resolved = args
+        resolved: Sequence[str] = args
     else:
         refusals = Scope(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
         if refusals:

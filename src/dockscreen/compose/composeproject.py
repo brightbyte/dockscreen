@@ -31,6 +31,7 @@ from dockscreen.screen import hardening, policy, substitutions, verdict
 from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.scope import Scope
+from dockscreen.screen.substitutions import Substitution
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
@@ -64,9 +65,9 @@ class Compose(NamedTuple):
     images decided (final). Nothing else changes the definition that compose gets. Instances come from
     load_project.
     """
-    global_args: list
+    global_args: tuple[str, ...]
     resolved: Project
-    hardening: list
+    hardening: tuple[Substitution, ...]
     scope: Scope
 
     @property
@@ -187,7 +188,7 @@ def load_project(global_args: list[str], runtime: Runtime, allow_me: bool) -> Co
     """
     found = inspect.project(global_args, runtime).with_remote(is_remote(global_args, runtime.docker))
     changes = hardening.changes(found.definition, runtime.accounts)
-    return Compose(global_args, found, changes, Scope(runtime, allow_me))
+    return Compose(tuple(global_args), found, tuple(changes), Scope(runtime, allow_me))
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, runtime: Runtime,
