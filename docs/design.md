@@ -111,7 +111,7 @@ An image section (`[images."REPOSITORY"]`) names a repository: it trusts the ima
 
 `audit` says why when a section for the repository exists but did not apply.
 
-The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceinfo._find_section_images` records where each image was pulled from (`Project.found_images`), the policy for the project takes the section each image proves from that (`Scope.project_policy`, `Scope.section_for`), and the check of the config that will run (with `Decisions.policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
+The policy checks run before the images are pulled, so they apply the section the image name points to (`config.name_matches`). Once the images are there, `serviceinfo._find_section_images` records where each image was pulled from (`project.ServiceImages`), the policy for the project takes the section each image proves from that (`Scope.project_policy`, `Scope.section_for`), and the check of the config that will run (with `Decisions.policy`) applies only those: a service that passed on the name alone is refused if its image does not prove it.
 
 A project section (`[projects."DIRECTORY"]`) applies to the compose project directory, or for `docker run` and `audit` the current directory, when it is that directory or below it, compared after resolving symlinks.
 
@@ -132,7 +132,7 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 
 ### Notices
 
-Everything dockscreen changes in what it runs is said, as a finding (`findings.Finding`) like everything else screening reports, whose severity sets the mark of its line: cyan for routine, yellow for notable (check this), red for refused or failed. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done. For compose, each change to a service's key is a `substitutions.Substitution`, whether hardening (`hardening.changes`) or the users and pins of the images (`decisions.Decisions.changes`) made it, and the definition that runs is the resolved one with all of them made, in that order (`ProjectScreening.final`); routine ones of the same kind share one line that names their services (`substitutions.Group`).
+Everything dockscreen changes in what it runs is said, as a finding (`findings.Finding`) like everything else screening reports, whose severity sets the mark of its line: cyan for routine, yellow for notable (check this), red for refused or failed. The mark is a coloured `●`, so without colour (a pipe, `NO_COLOR`) the two look alike and the words alone must say what was done. For compose, each change to a service's key is a `substitutions.Substitution`, whether hardening (`hardening.changes`) or the users and pins of the images (`decisions.Decisions.changes`) made it, and the definition that runs is the resolved one with all of them made, in that order (`projectscreening.finish`); routine ones of the same kind share one line that names their services (`substitutions.Group`).
 
 A message has two parts: the facts, and an optional help part that says what to do about it. The help part is shown after ` - ` only in helpful mode: with `--helpful` or `--verbose` before the subcommand, or for the `audit` commands. `--verbose` is dockscreen's own there, because passing it on would make docker and compose noisy. Refusal reasons carry their help the same way (`findings.Finding`, which also names its subject and how much it matters), though a reason built inside the policy checks (SELinux label, `--allow-me` for your own id) still has its hint in the text.
 
@@ -161,7 +161,7 @@ The `docker` and `docker compose` dispatchers are built alike. A command object 
 
 ### Compose (`compose_cli`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `serviceinfo`, `imageusers`, `projectscreening`)
 
-For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.Project`) is screened in stages, each only once the one before it passed (`projectscreening.ProjectScreening.screen`). Each stage judges what it found out with a check of its own; only a screening that passed every stage has a project to run (`Screened.final`):
+For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.Project`) is screened in stages, each only once the one before it passed (`projectscreening`). Each stage is a function from what the one before it gave to what the next needs, or to the report that stops screening, and judges what it found out with a check of its own: `load_project` gives a `Loaded`, `check` clears it (`Cleared`), `decide` takes only a cleared project, and `finish` makes what may run (`Runnable`). The types say which stage may follow which: nothing is pulled or built for a project that was not cleared, and nothing runs that was not checked last.
 
 1. `inspect.project` runs `docker compose config --format json --no-env-resolution --profile '*'`. All profiles are included so that a service named on the command line is checked too. Without env resolution, `env_file` paths stay visible to the policy instead of being inlined. The project directory is worked out the way compose does it (`inspect.locate`), and the policy judges it before the config is read (`Policy.check_location`). A `.env` that sets `COMPOSE_FILE` is refused, because it could send compose to a different directory than the one checked.
 2. `hardening.changes` adds `cap_drop: [ALL]` and `no-new-privileges:true` where they are missing. It resolves names in `user:` and hook users to ids on this host (`hostusers.HostAccounts`); a name unknown here stays a name, which the policy refuses.
@@ -170,14 +170,14 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 4. `serviceinfo.prepare`, with `imageusers` for the images:
    - asks compose which services will start (`config --services`);
    - pulls or builds their images by the project's own `pull_policy`, so automatic updates keep working;
-   - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`Scope.look`), which the project then holds (`Project.inspected`); the policy decides from that once, as `docker run` does (below), and that decision is the project's `Decisions` (`Scope.decide`);
+   - for each one without `user:`, creates a container with `--pull=never` and looks at its image as far as the policy needs (`Scope.look`, which gives `project.ServiceImages`); the policy decides from that once, as `docker run` does (below), and that decision is the project's `Decisions` (`Scope.decide`);
    - skips the service that `run -u uid:gid` names: the command line chose its user.
-5. `ProjectScreening.final`, which makes the substitutions of `decisions.Decisions.changes`:
+5. `projectscreening.finish`, which makes the substitutions of `decisions.Decisions.changes`:
    - every decided user is pinned as numeric `user: "uid:gid"`, so the runtime resolves nothing in the image;
    - services that fall back, and services that will not start, get the default user, so a mistake in working out what starts fails safe;
    - services whose image was looked at get `pull_policy: never` and, unless built, `image:` set to the checked image id, so neither a pull nor a moved tag changes what runs;
    - the policy runs again on the result, with each value it set judged by where it came from (`project.Project.origins`, from the substitutions that set them): an image's own user was checked when it was decided, a user from the config file (configured, or the default user it sets) is trusted, so what the rules say about it is pointed out, not refused, and what dockscreen chose itself (its own default user, the defaults, the pinned image) is checked like the project's.
-6. Before anything is pulled or built (`projectscreening.ProjectScreening.prepare`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
+6. Before anything is pulled or built (`projectscreening.decide`, ahead of step 4), compose is asked for the config of the generated file, and the run is refused unless it equals the config that was checked: compose interpolates the files it reads.
 7. `projectscreening.check_and_run` writes the final config to a mode 0600 file in a private temporary directory. It runs `docker compose -f FILE --project-directory DIR --project-name NAME SUBCOMMAND …` as a child process, then removes the file.
 
 `build` and `bake` get only `Policy.check_project_build`, with no runtime checks. A service's `build:` is a `build.Build`, as a bake target is, and the rules they share are `Policy.check_build`. Each build knows the directory its paths are relative to (its project's, or the one bake ran in), and what it reads is judged against that:
@@ -186,7 +186,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `dockerclient.DockerError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments.
+`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `dockerclient.DockerError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments. The patched project goes through the same stages, name check included, before its images are looked at.
 
 ### Origins and trust (`origin`, `findings`)
 

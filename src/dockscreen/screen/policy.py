@@ -28,7 +28,7 @@ from typing import Self
 
 from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
-from dockscreen.model.image import Unseen
+from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules
@@ -182,20 +182,20 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         """
         return self.check_service(container)
 
-    def check_images(self, project: Project) -> list[Finding]:
-        """Checks the images that decide the users of project's services, as they were looked at
-        (Project.inspected); returns one finding per service that must not run (image_problem).
+    def check_images(self, inspected: Mapping[str, Inspected | Unseen]) -> list[Finding]:
+        """Checks the images that decide the users of a project's services, as they were looked at
+        (inspected, by service); returns one finding per service that must not run (image_problem).
         """
         return [image_problem(name, assessment, self.config_file)
-                for name, assessment in self.assess_images(project).items() if assessment.refused]
+                for name, assessment in self.assess_images(inspected).items() if assessment.refused]
 
-    def assess_images(self, project: Project) -> dict[str, Assessment]:
-        """Decides the user of each service of project whose image decides it, from its image as it was
-        looked at (Project.inspected), with the policy for that service (for_service); returns the
+    def assess_images(self, inspected: Mapping[str, Inspected | Unseen]) -> dict[str, Assessment]:
+        """Decides the user of each service of a project whose image decides it, from its image as it was
+        looked at (inspected, by service), with the policy for that service (for_service); returns the
         Assessments by service.
         """
         found = {}
-        for name, image in (project.inspected or {}).items():
+        for name, image in inspected.items():
             if isinstance(image, Unseen):
                 found[name] = Assessment.failure(image.image, image.reason)
             else:

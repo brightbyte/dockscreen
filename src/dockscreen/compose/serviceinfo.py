@@ -1,7 +1,7 @@
 """This module provides functions for finding out what screening needs to know about the services of a
 compose project besides their definition: which of them start, which user the image of each started service
 that sets no user would run it as (imageusers), and the images that an image section of the config file
-names, with where they were pulled from, which shows whether the section applies (Project.found_images).
+names, with where they were pulled from, which shows whether the section applies (ServiceImages).
 
 A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
 whatever its image says; a service whose user the command line chose (`run -u`) runs as that one, so its
@@ -18,19 +18,19 @@ from dockscreen.compose import imageusers
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.image import Image, Inspected
-from dockscreen.model.project import Project
+from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.screen.scope import Scope
 
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: Scope,
-            chosen: frozenset[str] = frozenset()) -> tuple[Project, list[Finding]]:
+            chosen: frozenset[str] = frozenset()) -> tuple[ServiceImages | None, list[Finding]]:
     """Finds out what screening needs to know about project's services, for the policy to decide on
     (Scope.decide): pulls and builds the images of the services that start as `up` would, and looks at those
     of the services that set no user.
 
-    Returns (the project with what was found of its images, the failures to acquire them), with nothing
-    found if one failed.
+    Returns (what was found of the images, the failures to acquire them), None for the first if one
+    failed.
     command: the compose command line (up to the subcommand) on the project's definition, as it will run.
     args: the arguments after the subcommand, which name services and may carry --build or --pull.
     ctx: the Scope to pull, build, decide and run with.
@@ -42,12 +42,12 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], ctx: 
         looked_at = (started - chosen) & project.services_without_user
         inspected, failures = imageusers.find(command, project, started, looked_at, args, ctx)
     except DockerError as e:
-        return project, [failure_of(e)]
+        return None, [failure_of(e)]
     if failures:
-        return project, failures
+        return None, failures
     found = {**_find_section_images(config, ctx),
              **{name: image.image for name, image in inspected.items() if isinstance(image, Inspected)}}
-    return project.with_images(found, inspected), []
+    return ServiceImages(found, inspected), []
 
 
 def _find_section_images(config: dict[str, Any], ctx: Scope) -> dict[str, Image]:

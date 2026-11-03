@@ -8,7 +8,7 @@ target's: a compose project's own, for what a command line runs the current one,
 that existed before, since docker does not record where it was created.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config, hostusers
@@ -17,7 +17,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
-from dockscreen.model.project import Project
+from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen import idrules
 from dockscreen.screen.assessment import Assessment
 from dockscreen.screen.decisions import Decisions
@@ -68,15 +68,15 @@ class Scope(NamedTuple):
         """
         return config.section_for(self.runtime.settings, image.reference, image.digests, image.built)
 
-    def project_policy(self, project: Project) -> Policy:
+    def project_policy(self, project: Project, found: Mapping[str, Image] | None = None) -> Policy:
         """Returns the policy for project, which gives each service the settings of its image section, if one
         applies (Policy.for_service).
 
-        Before the images were found (Project.found_images), that is the section the image name points to;
-        once they were, the section its image was proven to have been pulled for (section_for), and none
-        for an image that was not found.
+        found: the images of project's services that were found (ServiceImages.found), None before they were
+        looked for. Before, the section is the one the image name points to; after, the one its image was
+        proven to have been pulled for (section_for), and none for an image that was not found.
         """
-        directory, found = project.directory, project.found_images
+        directory = project.directory
         per_service = {}
         for name, service in (project.definition.get("services") or {}).items():
             service = service or {}
@@ -89,11 +89,14 @@ class Scope(NamedTuple):
             per_service[name] = self.policy(directory, section)
         return self.policy(directory).with_per_service(per_service)
 
-    def decide(self, project: Project, failures: Sequence[Finding] = ()) -> Decisions:
+    def decide(self, project: Project, images: ServiceImages | None, failures: Sequence[Finding] = ()
+               ) -> Decisions:
         """Returns what the policy for project (project_policy) decides about its services' users from what
-        was found of their images, with the failures to acquire them.
+        was found of their images (None: nothing, since acquiring them failed), with the failures to acquire
+        them.
         """
-        return Decisions.of(project, self.project_policy(project), self.local, failures)
+        found, inspected = (images.found, images.inspected) if images else (None, {})
+        return Decisions.of(project, self.project_policy(project, found), self.local, inspected, failures)
 
     def assess(self, directory: str | None, container: str, info: dict[str, Any],
                origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,

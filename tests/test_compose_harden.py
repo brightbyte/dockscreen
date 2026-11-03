@@ -114,6 +114,18 @@ def test_harden_does_not_pull_or_build_while_other_problems_remain(capsys, tmp_p
     assert recorder.children == []
 
 
+def test_harden_checks_the_patched_project_as_up_would_and_its_name_too(capsys, tmp_path):
+    images = FakeImages(users={"web:1": "app"})
+    images.project_dirs = ["/elsewhere"]  # another project's containers have the name
+    runtime, recorder = setup(tmp_path, project(web={}), images)
+
+    assert compose_harden.harden([], [], runtime) == 1
+
+    out = capsys.readouterr().out
+    assert "# not fixed: project name 'proj' is used by containers made from '/elsewhere'" in out
+    assert pulls(recorder) == []
+
+
 def test_harden_reports_a_failed_pull_as_a_problem_it_cannot_fix(capsys, tmp_path):
     runtime, _ = setup(tmp_path, project(web={}), FakeImages(users={}, local=set()), codes={"pull": 1})
     assert compose_harden.harden([], [], runtime) == 1

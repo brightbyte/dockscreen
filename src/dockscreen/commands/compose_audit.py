@@ -12,6 +12,7 @@ from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import substitutions, verdict
 from dockscreen.screen.findings import Report
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline, messages
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
@@ -28,7 +29,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
         messages.notice(f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF}]")
         return 2
     try:
-        project = projectscreening.load_project(global_args, runtime, allow_me)
+        loaded = projectscreening.load_project(global_args, runtime)
     except DockerError as e:
         return verdict.report(Report.failure(e), brief)
     except inspect.Refused as e:
@@ -36,29 +37,32 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     except ValueError as e:
         return verdict.report(Report.refusal(str(e)), brief)
 
-    outcome, lines = _audit_images(project, brief)
+    screener = Scope(runtime, allow_me)
+    outcome, lines = _audit_images(loaded, screener, brief)
     if not brief:
-        for line in [*substitutions.describe(project.hardening), *project.surroundings(), *lines]:
+        around = projectscreening.surroundings(loaded, screener)
+        for line in [*substitutions.describe(loaded.hardening), *around, *lines]:
             messages.out(line)
-        if outcome.reasons or project.hardening:
+        if outcome.reasons or loaded.hardening:
             messages.out(messages.Marked(messages.HINT, HARDEN_HINT))
     return verdict.report(outcome, brief)
 
 
-def _audit_images(project: projectscreening.ProjectScreening, brief: bool) -> tuple[Report, Sequence[str]]:
-    """Screens the project as `up` would, stage by stage (ProjectScreening.screen), pulling and building its
-    images if the checks before them pass.
+def _audit_images(loaded: projectscreening.Loaded, screener: Scope, brief: bool
+                  ) -> tuple[Report, Sequence[str]]:
+    """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
+    if the checks before them pass.
 
     Returns (what the last stage found, report lines).
     """
-    def announce() -> None:
-        if not brief:
-            messages.notice("pulling or building the images as `up` would, to look at the users they run as")
-
-    # the last stage is what `up` checks once more before it runs: image sections need proof then
-    with project.generated() as command:
-        screened = project.screen(command, announce=announce)
-    if screened.decided is None:
-        return screened.report, [
+    cleared = projectscreening.check(loaded, screener)
+    if isinstance(cleared, Report):
+        return cleared, [
             "the images were not looked at because of the problems below: nothing was pulled or built"]
-    return screened.report, screened.decided.describe()
+    if not brief:
+        messages.notice("pulling or building the images as `up` would, to look at the users they run as")
+    with loaded.generated(screener.docker.binary) as command:
+        decided = projectscreening.decide(cleared, screener, command)
+    # the last stage is what `up` checks once more before it runs: image sections need proof then
+    runnable = projectscreening.finish(cleared, decided, screener)
+    return (runnable if isinstance(runnable, Report) else runnable.report), decided.describe()

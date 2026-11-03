@@ -26,10 +26,11 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy
-from dockscreen.screen.findings import Finding, failure_of
+from dockscreen.screen.findings import Finding, Report, failure_of
 from dockscreen.screen.rules import service as service_rules
 from dockscreen.screen.rules.base import is_inside_any
 from dockscreen.screen.rules.image import image_problem
+from dockscreen.screen.scope import Scope
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -55,7 +56,7 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     if --allow-me were given, and the patch says that it needs it.
     """
     try:
-        project = projectscreening.load_project(global_args, runtime, allow_me=True)
+        loaded = projectscreening.load_project(global_args, runtime)
     except inspect.Refused as e:
         for refusal in e.findings:
             messages.notice(refusal)
@@ -63,22 +64,26 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     except (DockerError, ValueError) as e:
         messages.notice(failure_of(e))
         return 1
-    for refusal in project.static_policy().check_daemon(project.remote):
+    screener = Scope(runtime, allow_me=True)
+    static = screener.project_policy(loaded.resolved)
+    for refusal in static.check_daemon(loaded.remote):
         messages.notice(refusal)
         return 1
 
-    base, static = project.static(), project.static_policy()
+    base = loaded.static()
     fixed = _fix_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
     resolved = _as_compose_reads(fixed, static, base.directory)
-    remaining = [f for f in static.check_project(base.with_definition(resolved)) if f.fatal]
+    # the patched project goes through the same stages as `up` would take it through
+    cleared = projectscreening.check(loaded.with_hardened(resolved), screener)
     notes = [hardening.defaults_note()]
-    if remaining:
+    if isinstance(cleared, Report):
+        remaining = cleared.reasons
         messages.notice("the images were not looked at because of the problems below: "
                         "nothing was pulled or built")
     else:
-        remaining, notes = _fix_image_users(project, fixed, resolved, notes)
+        remaining, notes = _fix_image_users(cleared, screener, fixed, notes)
 
     sys.stdout.write(_render(base.definition, fixed, remaining, notes=notes))
     for problem in remaining:
@@ -86,15 +91,15 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     return 1 if remaining else 0
 
 
-def _fix_image_users(project: projectscreening.ProjectScreening, fixed: dict[str, Any],
-                     resolved: dict[str, Any], notes: list[str]) -> tuple[list[Finding], list[str]]:
+def _fix_image_users(cleared: projectscreening.Cleared, screener: Scope, fixed: dict[str, Any],
+                     notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
-    Returns (problems left, notes). resolved: fixed as it will run, which is what the images are looked at
-    with.
+    Returns (problems left, notes). cleared: the project with fixed as it will run, which is what the images
+    are looked at with.
     """
-    with project.generated() as command:
-        decided = project.prepare(command(resolved), project.hardened.with_definition(resolved))
+    with cleared.loaded.generated(screener.docker.binary) as command:
+        decided = projectscreening.decide(cleared, screener, command)
     if not decided.decisions:
         return decided.report.reasons, notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []

@@ -8,6 +8,8 @@ from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import projectscreening
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
+from dockscreen.screen.findings import Report
+from dockscreen.screen.scope import Scope
 from dockscreen.util import commandline
 
 UID, GID = ME
@@ -449,11 +451,10 @@ def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path,
     assert "volumes" not in config["services"]["web"]  # compose applies run's options itself
 
 
-def test_only_a_screening_that_passed_every_stage_has_a_project_to_run(tmp_path):
+def test_a_project_the_checks_refuse_is_not_cleared_for_its_images(tmp_path):
     runtime, _ = compose_project(tmp_path, project_config(privileged=True), FakeImages(users={"x:1": "app"}))
-    project = projectscreening.load_project([], runtime, allow_me=False)
+    loaded = projectscreening.load_project([], runtime)
 
-    with project.generated() as command:
-        screened = project.screen(command)
+    found = projectscreening.check(loaded, Scope(runtime))
 
-    assert not screened.report.passed and screened.decided is None and screened.final is None
+    assert isinstance(found, Report) and not found.passed

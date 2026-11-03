@@ -664,8 +664,7 @@ def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configur
 
 
 def test_a_projects_images_are_judged_as_they_were_looked_at(project):
-    looked_at = project_of({"name": "proj", "services": {"web": {}, "db": {}}}, project).with_images(
-        {}, {"web": inspected("app", mounts=True), "db": Unseen(Image("db:1"), "not here")})
+    looked_at = {"web": inspected("app", mounts=True), "db": Unseen(Image("db:1"), "not here")}
 
     found = context(project).check_images(looked_at)
 

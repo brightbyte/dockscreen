@@ -31,8 +31,8 @@ def project(**services):
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     image_ctx, recorder = make_image_ctx(images, active=active, codes=codes, reads=lambda _: config,
                                          ctx=gate_context(images, settings))
-    found = serviceinfo.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
-    return image_ctx.decide(*found), recorder, images
+    found, failures = serviceinfo.prepare(COMMAND, project_of(config), list(args), image_ctx, chosen)
+    return image_ctx.decide(project_of(config), found, failures), recorder, images
 
 
 def gate_context(images, settings=None):
@@ -368,9 +368,10 @@ def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
 
 def test_the_policy_decides_from_what_serviceinfo_saw():
     # serviceinfo looks at the images; the decision is the policy's: nothing here duplicates the rule
-    images = FakeImages(users={"web:1": ""})
-    prepared, _, _ = prepare(project(), images)
-    assert prepared.decisions == prepared.policy.assess_images(prepared.project)
+    image_ctx, _ = make_image_ctx(FakeImages(users={"web:1": ""}), reads=lambda _: project())
+    found, _ = serviceinfo.prepare(COMMAND, project_of(project()), [], image_ctx)
+    prepared = image_ctx.decide(project_of(project()), found)
+    assert found and prepared.decisions == prepared.policy.assess_images(found.inspected)
 
 
 def test_an_image_name_that_looks_like_an_option_is_not_read_as_one():

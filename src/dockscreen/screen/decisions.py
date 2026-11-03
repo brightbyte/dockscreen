@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import hostusers
+from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import substitutions, verdict
@@ -36,7 +37,7 @@ class Decisions(NamedTuple):
     Instances come from Scope.decide.
 
     Attributes:
-    - project: the project, with what was found of its images
+    - project: the project decided about
     - policy: the policy that decided, with image sections only where the images proved them
     - decisions: by service, the Assessment of each started service that sets no user; a dict that must not
       be changed in place
@@ -53,12 +54,12 @@ class Decisions(NamedTuple):
 
     @classmethod
     def of(cls, project: Project, project_policy: Policy, local: hostusers.HostAccounts,
-           failures: Sequence[Finding] = ()) -> Self:
-        """Returns what project_policy decides about project, with the failures to pull, build or list its
-        services (failures).
+           inspected: Mapping[str, Inspected | Unseen], failures: Sequence[Finding] = ()) -> Self:
+        """Returns what project_policy decides about project from what was seen of its services' images
+        (inspected, by service), with the failures to pull, build or list its services (failures).
         """
-        decided = project_policy.assess_images(project)
-        report = Report.of([*failures, *project_policy.check_images(project)])
+        decided = project_policy.assess_images(inspected)
+        report = Report.of([*failures, *project_policy.check_images(inspected)])
         return cls(project, project_policy, local, decided, report,
                    tuple(changes(project, decided, project_policy)))
 

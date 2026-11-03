@@ -1,5 +1,5 @@
 """This module defines the Project class, a view of a compose project as screening sees it, with classes for
-where it is and for the services in it.
+where it is, for the services in it, and for what was found of their images.
 
 Every path below the project directory can be bind-mounted, so the directory must be the one compose
 uses, and must not hold anything that may not be mounted (Location).
@@ -7,11 +7,8 @@ uses, and must not hold anything that may not be mounted (Location).
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
 runs, so it is what is judged; the files themselves are not. The project also has what its definition
-does not say: where it is, which daemon its containers would run on, and where the values that dockscreen
-changed in its definition come from.
-
-What is known about a project is gathered in stages, some of which ask docker; a fact that was not
-looked at yet is None, and the checks of the project judge what is known.
+does not say: where it is, and where the values that dockscreen changed in its definition come from. What
+docker says about it besides (its daemon, the containers with its name, its images) is not part of it.
 """
 
 from collections.abc import Mapping
@@ -43,30 +40,21 @@ class Location(NamedTuple):
 
 
 class Project(NamedTuple):
-    """View of a compose project's resolved definition, with what screening found out about the project
-    besides, for judging it. It holds the definition, where the project is, and the facts that screening
-    gathers in stages.
+    """View of a compose project's resolved definition, for judging it. It holds the definition, where the
+    project is, and where the values dockscreen set in the definition come from.
 
-    Instances come from inspect.project; each stage of screening adds what it found through a with_* copy.
+    Instances come from inspect.project; substitutions.applied gives one with values changed.
 
     Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not
       be changed in place: with_definition gives a project with another one
     - location: where it is (Location)
-    - remote: whether its daemon may not be this host's; None until looked at
     - origins: by service and key, where the values dockscreen set come from, where that is not the project
       (with_origins)
-    - found_images: by service, the images that an image section of the config file could apply to, as found,
-      with where they were pulled from; None until looked at
-    - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
-      Unseen); None until looked at
     """
     definition: dict[str, Any]
     location: Location
-    remote: bool | None = None
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
-    found_images: Mapping[str, Image] | None = None
-    inspected: Mapping[str, Inspected | Unseen] | None = None
 
     @property
     def name(self) -> str | None:
@@ -96,17 +84,6 @@ class Project(NamedTuple):
     def service(self, name: str) -> "Service":
         """Returns the service called name."""
         return Service(self, name)
-
-    def with_remote(self, remote: bool) -> Self:
-        """Returns this project with remote telling whether its daemon may not be this host's."""
-        return self._replace(remote=remote)
-
-    def with_images(self, found: Mapping[str, Image], inspected: Mapping[str, Inspected | Unseen]) -> Self:
-        """Returns this project with found as its services' images that were found, and inspected as those
-        of the services whose image decides their user, as looked at.
-        """
-        return self._replace(found_images=MappingProxyType(dict(found)),
-                             inspected=MappingProxyType(dict(inspected)))
 
     def with_definition(self, definition: dict[str, Any]) -> Self:
         """Returns this project with definition as its definition."""
@@ -153,3 +130,20 @@ class Service(NamedTuple):
     def origin_of(self, key: str) -> Origin:
         """Returns where the value of key comes from: the project, unless dockscreen set it."""
         return (self.project.origins.get(self.name) or {}).get(key, Origin.PROJECT)
+
+
+class ServiceImages(NamedTuple):
+    """Record of what was found of the images of a compose project's services once they were acquired, for
+    the policy to decide on. It holds the images found, and what was seen of those that decide the services'
+    users.
+
+    Instances come from serviceinfo.prepare.
+
+    Attributes:
+    - found: by service, the images that an image section of the config file could apply to, with where they
+      were pulled from
+    - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
+      Unseen)
+    """
+    found: Mapping[str, Image] = MappingProxyType({})
+    inspected: Mapping[str, Inspected | Unseen] = MappingProxyType({})
