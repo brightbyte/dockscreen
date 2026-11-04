@@ -11,7 +11,7 @@ agent. Bake adds ways to write to the host (`output`, `cache-to`) and to read fi
 that is not known is refused, because a new one may be a new way out.
 """
 import json
-from collections.abc import Collection, Sequence
+from collections.abc import Collection
 from typing import Any
 
 from dockscreen.host.dockerclient import Docker, DockerError
@@ -30,12 +30,14 @@ def _wants_screening(args: Collection[str]) -> bool:
     return not NOT_SCREENED & set(args)
 
 
-def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
-    """Returns the bake definition for the arguments, as `--print` gives it, without building anything.
+def _definition(docker: Docker, bake: commandline.CommandLine) -> dict[str, Any]:
+    """Returns the bake definition for the command line, as `--print` gives it, without building anything.
+
+    It is asked for with the options before `buildx` and `bake`, which choose the daemon and the builder.
 
     Raises DockerError, saying why, if docker cannot give one or it is not a JSON object.
     """
-    result = docker.capture([docker.binary, "buildx", "bake", "--print", *args])
+    result = docker.capture([docker.binary, *bake.global_args, "bake", "--print", *bake.args])
     if result.returncode != 0:
         raise DockerError("docker buildx bake --print failed", result.stderr.strip())
     try:
@@ -57,27 +59,27 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "bake"
-    args = parent_cli.args
-    if _wants_screening(args):
+    if _wants_screening(parent_cli.args):
         bake_policy = Screener(runtime).policy(runtime.cwd)
-        if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
+        if not verdict.screened(Report.of(check(runtime.docker, parent_cli, bake_policy, runtime.cwd))):
             return 1
     runtime.docker.exec(parent_cli.full_argv)
 
 
-def check(docker: Docker, args: Sequence[str], bake_policy: policy.Policy, directory: str) -> list[Finding]:
-    """Checks `bake` with these arguments, run in directory, by bake_policy.
+def check(docker: Docker, bake: commandline.CommandLine, bake_policy: policy.Policy, directory: str
+          ) -> list[Finding]:
+    """Checks the `bake` command line, run in directory, by bake_policy.
 
     Returns why it may not run: refusals, or the failure to get the definition.
 
     Parameters:
     - docker: the docker to run bake with
-    - args: bake's arguments
+    - bake: buildx's part of the command line, with `bake` as its command
     - bake_policy: the policy for builds
     - directory: the directory bake runs in, which its relative paths are relative to
     """
     try:
-        found = _definition(docker, args)
+        found = _definition(docker, bake)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
         return [findings.failure_of(e, help=hint)]

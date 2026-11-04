@@ -127,20 +127,20 @@ class Runnable(NamedTuple):
     report: Report
 
 
-def load_project(global_args: Sequence[str], runtime: Runtime) -> Loaded:
-    """Loads the project global_args select, with the defaults to add.
+def load_project(args: Sequence[str], runtime: Runtime) -> Loaded:
+    """Loads the project args select, with the defaults to add.
 
     Raises inspect.Refused if the policy refuses where it is, DockerError if it cannot be inspected,
     ValueError if it cannot be hardened.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
+    - args: the compose options before the subcommand, which select the project
     - runtime: the Runtime of the command
     """
-    found = inspect.project(global_args, runtime)
-    remote = is_remote(global_args, runtime.docker)
+    found = inspect.project(args, runtime)
+    remote = is_remote(args, runtime.docker)
     changes = hardening.changes(found.definition, runtime.accounts)
-    return Loaded(tuple(global_args), found, remote, tuple(changes))
+    return Loaded(tuple(args), found, remote, tuple(changes))
 
 
 def check(loaded: Loaded, screener: Screener) -> Cleared | Report:

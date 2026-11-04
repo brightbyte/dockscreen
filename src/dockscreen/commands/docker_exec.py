@@ -24,7 +24,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if parent_cli.strict:
         return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
 
-    resolved = userargs.resolved(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
+    resolved = userargs.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
     if resolved is None:
         return 1
     runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved])

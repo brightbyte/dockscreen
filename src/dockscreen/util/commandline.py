@@ -50,7 +50,7 @@ AS_ME_MESSAGE = messages.Marked(
     "run as you")
 
 
-def split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts: Collection[str] = ()
+def _split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts: Collection[str] = ()
                ) -> tuple[str | None, tuple[str, ...], tuple[str, ...], frozenset[str]]:
     """Splits argv at its command and returns (command, arguments after it, options before it, own options
     taken out). The command is None, and the arguments are empty, if argv has none before `--`.
@@ -82,7 +82,7 @@ def split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts: 
         else:
             break
     rest = (*kept, *argv[i:])
-    idx = find_subcommand(rest, value_opts)
+    idx = _find_subcommand(rest, value_opts)
     if idx is None:
         return None, (), rest, frozenset(taken)
     return rest[idx], rest[idx + 1:], rest[:idx], frozenset(taken)
@@ -129,22 +129,6 @@ class CommandLine:
         """Tells whether option, one of dockscreen's own, was given."""
         return option in self.own_args
 
-    def lead_values(self, long_name: str, short_name: str | None) -> list[str]:
-        """Returns every value given for the option before the command (option_values)."""
-        return option_values(self.lead_args, long_name, short_name)
-
-    def lead_value(self, name: str) -> str | None:
-        """Returns the value of the option before the command (option_value)."""
-        return option_value(self.lead_args, name)
-
-    def arg_values(self, long_name: str, short_name: str | None) -> list[str]:
-        """Returns every value given for the option after the command (option_values)."""
-        return option_values(self.args, long_name, short_name)
-
-    def arg_value(self, name: str) -> str | None:
-        """Returns the value of the option after the command (option_value)."""
-        return option_value(self.args, name)
-
     @property
     def argv(self) -> list[str]:
         """Returns this level of the command line as docker or compose gets it: the options before the
@@ -157,6 +141,17 @@ class CommandLine:
     def full_argv(self) -> list[str]:
         """Returns the whole docker command line: the prefix, then argv."""
         return [*self.prefix, *self.argv]
+
+    @property
+    def global_args(self) -> list[str]:
+        """Returns the docker command line up to the command, composed from the prefix and
+        lead before the command.
+
+        This is meant to be used when building commands. To read an option, look at the
+        lead_args of its own level: what an option means, and whether it takes a value,
+        depends on the level.
+        """
+        return [*self.prefix, *self.lead_args]
 
     @property
     def skip_screening(self) -> bool:
@@ -183,18 +178,24 @@ class CommandLine:
         """Tells whether --helpful or --verbose was given."""
         return self.has_own(HELPFUL) or self.has_own(VERBOSE)
 
-    def subcommand(self, value_opts: Collection[str] = (), own_opts: Collection[str] = ()) -> "CommandLine":
+    def subcommand(self, value_opts: Collection[str] = (), own_opts: Collection[str] = (),
+                   inherit_lead: bool = False) -> "CommandLine":
         """Returns the command line of the command, read from the arguments after it: `up -d` for the
         `compose -f a.yml up -d` of `docker compose -f a.yml up -d`.
 
         It keeps the dockscreen options given here, and its prefix is this one's up to and including the
-        command.
+        command. With inherit_lead, it takes this one's place instead: its lead starts with this one's, its
+        prefix is this one's, and this command is dropped. That is only right where the subcommand on its
+        own means the same, as `run` does for `container run`.
 
         Parameters:
         - value_opts: the command's options that take the next token as their value
         - own_opts: dockscreen's own options, to take out of those before its command
+        - inherit_lead: whether the subcommand replaces this command, keeping the options before it
         """
-        cmd, args, lead, taken = split_argv(self.args, value_opts, own_opts)
+        cmd, args, lead, taken = _split_argv(self.args, value_opts, own_opts)
+        if inherit_lead:
+            return CommandLine(cmd, args, [*self.lead_args, *lead], self.own_args | taken, self.prefix)
         prefix = [*self.prefix, *self.lead_args, *([self.cmd] if self.cmd is not None else [])]
         return CommandLine(cmd, args, lead, self.own_args | taken, prefix)
 
@@ -208,7 +209,7 @@ def main_commandline(argv: Sequence[str], value_opts: Collection[str] = (),
     - value_opts: docker's options that take the next token as their value, which is then not the command
     - own_opts: dockscreen's own options, to take out of those before the command
     """
-    cmd, args, lead, taken = split_argv(argv, value_opts, own_opts)
+    cmd, args, lead, taken = _split_argv(argv, value_opts, own_opts)
     return CommandLine(cmd, args, lead, taken)
 
 
@@ -218,7 +219,7 @@ def banner() -> None:
     messages.warning("nothing in this command is checked, and no defaults are added.")
 
 
-def find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | None:
+def _find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | None:
     """Returns the index of the first argument that is not an option or an option's value, or None if
     there is none before `--`.
 

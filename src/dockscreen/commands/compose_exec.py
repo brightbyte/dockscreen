@@ -19,7 +19,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "exec"
-    resolved = userargs.resolved(list(parent_cli.args), userargs.COMPOSE_VALUE_FLAGS["exec"], runtime)
+    resolved = userargs.resolve_user_args(list(parent_cli.args), userargs.COMPOSE_VALUE_FLAGS["exec"], runtime)
     if resolved is None:
         return 1
     runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved])

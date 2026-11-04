@@ -41,6 +41,15 @@ def test_a_subcommand_keeps_the_options_given_before_it_and_knows_what_came_befo
     assert compose.allow_me and compose.helpful and not compose.skip_screening
     assert (compose.lead_args, compose.cmd, compose.args) == (("-f", "a.yml"), "up", ("-d",))
     assert compose.full_argv == ["-H", "unix:///s", "compose", "-f", "a.yml", "up", "-d"]
+    assert compose.global_args == ["-H", "unix:///s", "compose", "-f", "a.yml"]
+
+
+def test_a_subcommand_that_inherits_the_lead_takes_the_place_of_its_command():
+    line = docker_line("--allow-me", "-H", "unix:///s", "container", "run", "-it", "x")
+    run = line.subcommand(inherit_lead=True)
+    assert run.allow_me
+    assert (run.lead_args, run.cmd, run.args, run.prefix) == (("-H", "unix:///s"), "run", ("-it", "x"), ())
+    assert run.full_argv == ["-H", "unix:///s", "run", "-it", "x"]
 
 
 def test_banner_goes_to_stderr(capsys):

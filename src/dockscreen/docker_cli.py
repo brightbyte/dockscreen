@@ -142,7 +142,7 @@ def _short_form(cli: commandline.CommandLine) -> commandline.CommandLine:
     """
     if cli.cmd != "container" or not cli.args or cli.args[0] not in GATES:
         return cli
-    return commandline.CommandLine(cli.args[0], cli.args[1:], cli.lead_args, cli.own_args)
+    return cli.subcommand(inherit_lead=True)
 
 
 def _help_request(cli: commandline.CommandLine) -> str | None:

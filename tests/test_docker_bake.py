@@ -3,8 +3,9 @@ import os
 import subprocess
 
 import pytest
-from fakes import docker_dispatch, make_runtime, rules
+from fakes import docker_dispatch, docker_line, make_runtime, rules
 
+from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.build import BakeDefinition
@@ -109,11 +110,19 @@ class Docker:
         self.executed.append(args)
 
 
-def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
-    docker = Docker(out=json.dumps({"target": {}}))
+def bake_line(*argv):
+    """Returns buildx's part of the docker command line argv, with `bake` as its command."""
+    return docker_line(*argv).subcommand(docker_cli.BUILDX_OPTS_WITH_VALUE)
 
-    assert docker_bake._definition(docker, ["-f", "b.hcl", "app"]) == {"target": {}}
-    assert docker.commands == [["docker", "buildx", "bake", "--print", "-f", "b.hcl", "app"]]
+
+def test_the_definition_comes_from_print_with_the_whole_command_line():
+    docker = Docker(out=json.dumps({"target": {}}))
+    bake = bake_line("--context", "x", "buildx", "--builder", "b", "bake", "-f", "b.hcl", "app")
+
+    assert docker_bake._definition(docker, bake) == {"target": {}}
+    # the daemon and the builder are the ones the build would use
+    assert docker.commands == [
+        ["docker", "--context", "x", "buildx", "--builder", "b", "bake", "--print", "-f", "b.hcl", "app"]]
 
 
 @pytest.mark.parametrize("docker, message", [
@@ -123,9 +132,9 @@ def test_the_definition_comes_from_print_with_the_arguments_of_the_command():
 ])
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
-        docker_bake._definition(docker, [])
+        docker_bake._definition(docker, bake_line("buildx", "bake"))
     assert message in messages.with_output(raised.value)
-    [reason] = docker_bake.check(docker, [], policy.Policy(rules()), os.getcwd())
+    [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(rules()), os.getcwd())
     assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
 
 
@@ -133,7 +142,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    [reason] = docker_bake.check(docker, [], policy.Policy(rules()), os.getcwd())
+    [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(rules()), os.getcwd())
     assert reason == "target app: context '/etc' is outside " + str(project)
     assert reason.severity is Severity.REFUSED
 
@@ -141,6 +150,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
 @pytest.mark.parametrize("argv, args", [
     (["buildx", "bake", "app"], ["app"]),
     (["buildx", "--builder", "b", "bake", "-f", "x.hcl"], ["-f", "x.hcl"]),
+    (["--context", "x", "buildx", "bake", "app"], ["app"]),
     (["buildx", "build", "."], None),
     (["buildx", "bake"], []),
     (["build", "."], None),
@@ -151,8 +161,8 @@ def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
 
     docker_dispatch(argv, make_runtime(docker=docker))
 
-    # only buildx bake is screened, with the arguments after bake; everything else passes through
-    screened = [["docker", "buildx", "bake", "--print", *args]] if args is not None else []
+    # only buildx bake is screened, with the command line up to bake; everything else passes through
+    screened = [["docker", *argv[:argv.index("bake") + 1], "--print", *args]] if args is not None else []
     assert docker.commands == screened and docker.executed == [argv]
 
 

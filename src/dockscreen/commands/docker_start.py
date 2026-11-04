@@ -10,7 +10,6 @@ nothing. So it is judged without a directory: no project section of the config f
 the configured mount_dirs allow bind mounts.
 """
 
-from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.host.dockerclient import DockerError, is_remote
@@ -29,7 +28,7 @@ VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--
 VALUE_SHORT = frozenset("st")
 
 
-def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+def gate(cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs `docker start` or `restart` if every container it names passes check; returns 1 if one does not,
     otherwise docker replaces this process.
 
@@ -37,16 +36,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - parent_cli: the docker command line, with `start` or `restart` as its command
     - runtime: the Runtime of the command
     """
-    assert parent_cli.cmd in ("start", "restart")
-    global_args, args = parent_cli.lead_args, parent_cli.args
-    if not verdict.screened(Report.of(check(global_args, args, runtime, parent_cli.allow_me,
-                                            parent_cli.strict))):
+    assert cli.cmd in ("start", "restart")
+    if not verdict.screened(Report.of(check(cli, runtime))):
         return 1
-    runtime.docker.exec([*global_args, parent_cli.cmd, *args])
+    runtime.docker.exec(cli.argv)
 
 
-def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False,
-          strict: bool = False) -> list[Finding]:
+def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
     """Returns the refusals that forbid starting the containers named in `docker global_args start args`
     (or `restart`).
 
@@ -61,11 +57,11 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
     - strict: --strict-screen was given, so what the command line that created a container asked for is judged
       as a project's would be, and refused (Policy.check_container)
     """
-    screener = Screener(runtime, allow_me)
-    if is_remote(global_args, runtime.docker):
+    screener = Screener(runtime, cli.allow_me)
+    if is_remote(cli.lead_args, runtime.docker):
         return screener.policy(None).check_daemon(True)
     problems: list[Finding] = []
-    for ref in commandline.positionals(args, VALUE_LONG, VALUE_SHORT):
+    for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
         try:
             info = screener.docker.inspect_container(ref)
             assessment = screener.assess(None, info["Id"], info)
@@ -78,7 +74,7 @@ def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, all
             else:
                 explained = explain(assessment, runtime.config_file)
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
-            if strict:
+            if cli.strict:
                 chosen = assessment.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
                 strict_policy = screener.policy(None, assessment.section, STRICT)

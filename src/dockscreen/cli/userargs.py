@@ -176,7 +176,7 @@ def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
     return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
-def resolved(args: Sequence[str], value_flags: Collection[str], runtime: Runtime) -> list[str] | None:
+def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime) -> list[str] | None:
     """Returns args with --as and --as-me replaced by ids, and prints the notices of resolving names.
 
     Returns None, and reports why, if the user cannot be used (Policy.check_user_options).

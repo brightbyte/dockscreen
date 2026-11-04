@@ -38,33 +38,33 @@ class Refused(Exception):
         self.findings = list(findings)
 
 
-def project(global_args: Sequence[str], runtime: Runtime) -> Project:
-    """Returns the project global_args select, with its definition as compose resolves it.
+def project(args: Sequence[str], runtime: Runtime) -> Project:
+    """Returns the project args select, with its definition as compose resolves it.
 
     Raises Refused if the policy refuses where the project is (Policy.check_location); DockerError if
     compose cannot give the definition.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
+    - args: the compose options before the subcommand, which select the project
     - runtime: the Runtime of the command
     """
-    location = locate(global_args, runtime)
+    location = locate(args, runtime)
     refusals = Screener(runtime).policy(location.directory).check_location(location)
     if refusals:
         raise Refused(refusals)
-    return Project(_load_config(global_args, runtime.docker), location)
+    return Project(_load_config(args, runtime.docker), location)
 
 
-def locate(global_args: Sequence[str], runtime: Runtime) -> Location:
-    """Returns where the project global_args select is, as compose would find it.
+def locate(args: Sequence[str], runtime: Runtime) -> Location:
+    """Returns where the project args select is, as compose would find it.
 
     Raises DockerError if that cannot be found: the compose file is read from stdin, or there is none.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
+    - args: the compose options before the subcommand, which select the project
     - runtime: the Runtime of the command, whose current directory and environment compose would start from
     """
-    location = _project_location(global_args, runtime.cwd, runtime)
+    location = _project_location(args, runtime.cwd, runtime)
     return location._replace(sensitive=tuple(_sensitive_inside(location.directory, runtime)))
 
 
@@ -89,17 +89,17 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
             for directory in config.all_mount_dirs(runtime.settings)}
 
 
-def passes(global_args: Sequence[str], runtime: Runtime,
+def passes(args: Sequence[str], runtime: Runtime,
            rules: Callable[[policy.Policy, Project], list[Finding]] = policy.Policy.check_project) -> bool:
     """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
+    - args: the compose options before the subcommand, which select the project
     - runtime: the Runtime of the command
     - rules: the checks to run: a Policy method that takes the project, check_project by default
     """
     try:
-        found = project(global_args, runtime)
+        found = project(args, runtime)
     except DockerError as e:
         return verdict.screened(Report.failure(e))
     except Refused as e:
@@ -172,28 +172,28 @@ def name_conflicts(project_policy: policy.Policy, name: str, directory: str, doc
     return project_policy.check_project_name(name, directory, found)
 
 
-def names_project(global_args: Sequence[str], env: Mapping[str, str]) -> bool:
+def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
     """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
+    - args: the compose options before the subcommand, which select the project
     - env: the caller's environment
     """
-    chosen = commandline.option_values(global_args, "--project-name", "-p")
+    chosen = commandline.option_values(args, "--project-name", "-p")
     return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 
 
-def _project_location(global_args: Sequence[str], cwd: str, runtime: Runtime) -> Location:
-    """Determines the project directory as docker compose would from global_args and cwd.
+def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Location:
+    """Determines the project directory as docker compose would from args and cwd.
 
     Raises DockerError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
     """
     env = runtime.env
-    explicit = commandline.option_values(global_args, "--project-directory", None)
+    explicit = commandline.option_values(args, "--project-directory", None)
     if explicit:  # the last one wins, as in compose
         return Location(os.path.realpath(os.path.join(cwd, explicit[-1])))
 
-    files = commandline.option_values(global_args, "--file", "-f")
+    files = commandline.option_values(args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
@@ -201,7 +201,7 @@ def _project_location(global_args: Sequence[str], cwd: str, runtime: Runtime) ->
     if files:  # compose takes the project directory from the first file
         return Location(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
 
-    env_files = commandline.option_values(global_args, "--env-file", None)
+    env_files = commandline.option_values(args, "--env-file", None)
     return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 
