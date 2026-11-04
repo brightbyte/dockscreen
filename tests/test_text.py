@@ -1,6 +1,6 @@
 import os
 
-from fakes import FakeImages, compose_project, project_of, rules
+from fakes import FakeImages, compose_line, compose_project, project_of, rules
 
 from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.screen import verdict
@@ -51,7 +51,7 @@ def test_audit_info_lines_are_escaped(capsys, tmp_path):
     cfg = {"name": "p", "services": {"web": {"image": image}}}
     runtime, _ = compose_project(tmp_path, cfg, FakeImages(users={image: "app"}))
 
-    compose_audit.audit([], [], runtime)
+    compose_audit.audit(compose_line("audit"), runtime)
 
     out = capsys.readouterr().out
     assert "service web: no user set; image x\\x1b[31m:1 runs as" in out

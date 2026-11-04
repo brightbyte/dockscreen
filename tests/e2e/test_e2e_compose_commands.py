@@ -1,6 +1,6 @@
 """Feature: every compose command that starts or builds something is screened, and the rest pass on
 
-Rules (compose_cli and the compose commands):
+Rules (docker_compose, ComposeCommand and the compose commands):
 - up, create, run, scale, watch and alpha get every check, and compose runs the config that was checked;
 - run takes a user from the command line, as numbers or as a name of this host (--as, --as-me), and that
   service's image is then not decided; --as-me before the subcommand is refused;

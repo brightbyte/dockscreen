@@ -8,17 +8,18 @@ The project is checked, its images are looked at, and compose runs the config th
 from dockscreen.cli import userargs
 from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
+from dockscreen.util import commandline
 
 
-def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False) -> int:
-    """Runs `docker compose global_args create args` if the project passes the checks, and returns the exit
-    status.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker compose create` if the project passes the checks, and returns the exit status.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - args: the subcommand's arguments
+    - parent_cli: the compose command line, with `create` as its command; its lead_args are the compose
+      options, which select the project
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
     """
-    return projectscreening.check_and_run(global_args, "create", userargs.Parsed.unread(args, runtime),
-                                        runtime, allow_me)
+    assert parent_cli.cmd == "create"
+    parsed = userargs.Parsed.unread(list(parent_cli.args), runtime)
+    return projectscreening.check_and_run(list(parent_cli.lead_args), "create", parsed, runtime,
+                                          parent_cli.allow_me)

@@ -6,18 +6,25 @@ The command line is trusted, and the container was checked when it started (dock
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import verdict
+from dockscreen.screen.findings import Report
+from dockscreen.util import commandline
 
 
-def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` with --as and --as-me replaced by ids; returns 1 for a user that cannot be used,
-    otherwise docker replaces this process.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker exec` with --as and --as-me replaced by ids; returns 1 for a user that cannot be used,
+    otherwise docker replaces this process. --strict-screen is refused: exec starts a process in a running
+    container at once, and there is nothing to judge before it does.
 
     Parameters:
-    - lead: the docker command line up to and including the subcommand (`docker exec`), with docker's options
-    - args: the subcommand's arguments
+    - parent_cli: the docker command line, with `exec` as its command
     - runtime: the Runtime of the command
     """
-    resolved = userargs.resolved(args, runargs.EXEC_VALUE_FLAGS, runtime)
+    assert parent_cli.cmd == "exec"
+    if parent_cli.strict:
+        return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
+
+    resolved = userargs.resolved(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
     if resolved is None:
         return 1
-    runtime.docker.exec([*lead, *resolved])
+    runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved])

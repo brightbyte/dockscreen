@@ -20,11 +20,12 @@ from dockscreen.model.build import BakeDefinition
 from dockscreen.screen import findings, policy, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.screener import Screener
+from dockscreen.util import commandline
 
 NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
 
 
-def wants_screening(args: Collection[str]) -> bool:
+def _wants_screening(args: Collection[str]) -> bool:
     """Tells whether `bake` with these arguments builds, and so needs screening."""
     return not NOT_SCREENED & set(args)
 
@@ -46,20 +47,22 @@ def _definition(docker: Docker, args: Sequence[str]) -> dict[str, Any]:
     return found
 
 
-def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` if the definition it would build passes the policy for builds; returns 1 if it does
-    not, otherwise docker replaces this process.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker buildx bake` if the definition it would build passes the policy for builds; returns 1 if
+    it does not, otherwise docker replaces this process. With --print or --help it builds nothing, and runs
+    unchecked.
 
     Parameters:
-    - lead: the docker command line up to and including the subcommand (`docker buildx bake`), with docker's
-      options
-    - args: the subcommand's arguments
+    - parent_cli: buildx's part of the command line, with `bake` as its command
     - runtime: the Runtime of the command
     """
-    bake_policy = Screener(runtime).policy(runtime.cwd)
-    if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
-        return 1
-    runtime.docker.exec([*lead, *args])
+    assert parent_cli.cmd == "bake"
+    args = parent_cli.args
+    if _wants_screening(args):
+        bake_policy = Screener(runtime).policy(runtime.cwd)
+        if not verdict.screened(Report.of(check(runtime.docker, args, bake_policy, runtime.cwd))):
+            return 1
+    runtime.docker.exec(parent_cli.full_argv)
 
 
 def check(docker: Docker, args: Sequence[str], bake_policy: policy.Policy, directory: str) -> list[Finding]:

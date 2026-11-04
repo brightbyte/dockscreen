@@ -16,7 +16,6 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 --strict-screen.
 """
 
-from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.cli import runargs
@@ -39,28 +38,26 @@ AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief]
                "IMAGE [COMMAND]")
 
 
-def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False,
-         strict: bool = False) -> int:
-    """Runs `docker global_args run args` through the gate and returns the exit status.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker run` through the gate and returns the exit status.
 
     The container starts only if the user it would run as is accepted, given as numbers where the image or the
     config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it could not
-    create the container.
+    create the container. Under --strict-screen, what the command line asks for that a project or an image
+    may not have is refused too.
 
     Parameters:
-    - global_args: docker's options before the subcommand
-    - args: the subcommand's arguments
+    - parent_cli: the docker command line, with `run` as its command
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given, so what the command line asks for that a project or an image may not
-      have is refused too
     """
-    screener = Screener(runtime, allow_me)
-    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
+    assert parent_cli.cmd == "run"
+    screener = Screener(runtime, parent_cli.allow_me)
+    remote = is_remote(parent_cli.lead_args, runtime.docker)
+    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
         return verdict.report(daemon)
     try:
-        parsed = runargs.parse(args, runtime.me, runtime.accounts)
+        parsed = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
@@ -79,7 +76,7 @@ def gate(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me
     if isinstance(created, int):
         return created
     container, assessment = created
-    if strict:
+    if parent_cli.strict:
         found = Report.of(_command_line_findings(screener, container, assessment, STRICT))
         if not found.passed:
             screener.docker.remove(container.id)
@@ -232,9 +229,8 @@ def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[Findi
     return []
 
 
-def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_me: bool = False,
-          strict: bool = False) -> int:
-    """Reports what `docker global_args run args` would do, without starting anything.
+def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Reports what `docker run` with the arguments of audit would do, without starting anything.
 
     The container is created as `run` would create it, pulling the image if `run` would, and removed. Returns
     the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the command line
@@ -242,17 +238,20 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
     be read. --brief, before the image, prints only the verdict, in one line.
 
     Parameters:
-    - global_args: docker's options before the subcommand
-    - args: the subcommand's arguments
+    - parent_cli: the docker command line, with `audit` as its command
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given, so what the command line asks for that a project or an image may not
-      have is refused too
     """
-    line = commandline.CommandLine(args, runargs.VALUE_OPTIONS, {commandline.BRIEF})
-    brief, args = line.has(commandline.BRIEF), line.argv
-    screener = Screener(runtime, allow_me)
-    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(global_args, runtime.docker)))
+    assert parent_cli.cmd == "audit"
+    if not parent_cli.args:
+        messages.notice(AUDIT_USAGE)
+        messages.notice("Run 'dockscreen audit --help' for more.")
+        return 2
+
+    line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
+    brief, args = line.has_own(commandline.BRIEF), line.argv
+    screener = Screener(runtime, line.allow_me)
+    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
+                                                                            runtime.docker)))
     if not daemon.passed:
         return verdict.report(daemon, brief)
     try:
@@ -278,7 +277,7 @@ def audit(global_args: Sequence[str], args: list[str], runtime: Runtime, allow_m
         return verdict.report(Report.failure(reason), brief)
     container, assessment = created
     try:
-        found = _command_line_findings(screener, container, assessment, STRICT if strict else TRUSTED)
+        found = _command_line_findings(screener, container, assessment, STRICT if line.strict else TRUSTED)
     finally:
         screener.docker.remove(container.id)
 

@@ -3,16 +3,34 @@ import json
 import os
 import subprocess
 
+from dockscreen import docker_cli
+from dockscreen.commands import docker_compose
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Location, Project
 from dockscreen.screen import idrules
 from dockscreen.screen.screener import Screener
-from dockscreen.util import messages
+from dockscreen.util import commandline, messages
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"
           "pg:x:998:998::/:/bin/sh\nnobody:x:65534:65534::/:/bin/sh\n")
 GROUP = "app:x:100001:\npg:x:998:\n"
+
+
+def docker_line(*argv):
+    """Returns the command line of `docker argv`, as docker_cli reads it."""
+    return commandline.main_commandline(argv, docker_cli.DOCKER_OPTS_WITH_VALUE, commandline.OWN_OPTIONS)
+
+
+def docker_dispatch(argv, runtime):
+    """Runs `dockscreen argv` in runtime and returns the exit status, as docker_cli.main does."""
+    return docker_cli.DockerCommand(docker_line(*argv), runtime).dispatch()
+
+
+def compose_line(*argv, docker_options=()):
+    """Returns compose's part of `docker docker_options compose argv`, as docker_compose reads it."""
+    return docker_line(*docker_options, "compose", *argv).subcommand(docker_compose.GLOBAL_OPTS_WITH_VALUE,
+                                                                     docker_compose.OWN_OPTIONS)
 
 
 SUBCOMMANDS = ("pull", "build", "up", "run", "create", "watch", "scale")

@@ -1,8 +1,8 @@
 """This module implements `docker compose harden` (and `fix`), dockscreen's own command, which prints a
 compose override that fixes what can be fixed.
 
-`global_args` are the compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
-select the project.
+The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
+lead_args of the command line.
 
 _fix_config removes or replaces only what has a safe automatic fix; checking the result with
 Policy.check_project reports what is left.
@@ -17,7 +17,7 @@ import json
 import os
 import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import Any
 
 from dockscreen.compose import inspect, projectscreening
@@ -31,7 +31,7 @@ from dockscreen.screen.rules import service as service_rules
 from dockscreen.screen.rules.base import is_inside_any
 from dockscreen.screen.rules.image import image_problem
 from dockscreen.screen.screener import Screener
-from dockscreen.util import ids, messages
+from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
 # What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
@@ -42,7 +42,7 @@ _USER_TEMPLATE = "${UID}:${GID}"
 _REMOVABLE_SERVICE_KEYS = (*service_rules.FORBIDDEN_KEYS, "runtime", *service_rules.NAMESPACE_KEYS)
 
 
-def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
+def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
@@ -56,13 +56,13 @@ def harden(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_
     if --allow-me were given, and the patch says that it needs it.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - args: the subcommand's arguments
+    - parent_cli: the compose command line, with `harden` or `fix` as its command; --allow-me in it makes no
+      difference, since the result is checked as if it were given either way
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given; the result is checked as if it were, either way
     """
+    assert parent_cli.cmd in ("harden", "fix")
     try:
-        loaded = projectscreening.load_project(global_args, runtime)
+        loaded = projectscreening.load_project(list(parent_cli.lead_args), runtime)
     except inspect.Refused as e:
         for refusal in e.findings:
             messages.notice(refusal)

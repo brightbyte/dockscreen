@@ -11,19 +11,19 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
 from dockscreen.screen.screener import Screener
-from dockscreen.util import messages
+from dockscreen.util import commandline, messages
 
 
-def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
-    """Runs `lead args` with the defaults added and --as and --as-me replaced by ids; returns 1 for a user
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker create` with the defaults added and --as and --as-me replaced by ids; returns 1 for a user
     that cannot be used, otherwise docker replaces this process.
 
     Parameters:
-    - lead: the docker command line up to and including the subcommand (`docker create`), with docker's
-      options
-    - args: the subcommand's arguments
+    - parent_cli: the docker command line, with `create` as its command
     - runtime: the Runtime of the command
     """
+    assert parent_cli.cmd == "create"
+    args = parent_cli.args
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError:  # docker will report what is wrong with them
@@ -36,4 +36,4 @@ def gate(lead: list[str], args: list[str], runtime: Runtime) -> int:
             messages.notice(message)
         resolved = parsed.create_args
     messages.notice(runargs.defaults_notice())
-    runtime.docker.exec([*lead, *runargs.DEFAULTS, *resolved])
+    runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *runargs.DEFAULTS, *resolved])

@@ -1,5 +1,5 @@
 import pytest
-from fakes import FakeDocker, compose_project, make_runtime
+from fakes import FakeDocker, compose_project, docker_dispatch, make_runtime
 
 from dockscreen import docker_cli
 from dockscreen.commands import compose_run
@@ -32,7 +32,7 @@ def dispatch(argv, docker=None, **fields):
     returns (exit status, the argv lists docker was replaced with).
     """
     docker = docker or FakeDocker(image_user="app")
-    return docker_cli._dispatch(argv, make_runtime(docker=docker, **fields)), docker.executed
+    return docker_dispatch(argv, make_runtime(docker=docker, **fields)), docker.executed
 
 
 # --- routing ---------------------------------------------------------------
@@ -53,7 +53,7 @@ def test_the_overview_precedes_dockers_own_help(capsys, argv):
 @pytest.mark.parametrize("argv, routed_argv", [
     (["run", "--help"], ["run", "--help"]),
     (["help", "run"], ["run", "--help"]),
-    (["container", "start", "--help"], ["container", "start", "--help"]),
+    (["container", "start", "--help"], ["start", "--help"]),  # read as the same command, `start`
     (["start", "-h"], ["start", "-h"]),
 ])
 def test_a_command_dockscreen_audits_gets_our_help_then_dockers(capsys, argv, routed_argv):
@@ -106,7 +106,7 @@ def test_exec_takes_numeric_users_only(argv, capsys):
 
 def test_exec_as_a_local_user_reaches_docker_as_numeric_ids():
     executed = dispatch(["-l", "debug", "container", "exec", "--as=alice", "c", "sh"])[1]
-    assert executed == [["-l", "debug", "container", "exec", "--user=4242:4343", "c", "sh"]]
+    assert executed == [["-l", "debug", "exec", "--user=4242:4343", "c", "sh"]]  # `container exec` is `exec`
 
 
 def test_exec_as_me_reaches_docker_as_the_callers_ids():
@@ -117,7 +117,7 @@ def test_exec_as_me_reaches_docker_as_the_callers_ids():
 def test_our_options_before_compose_reach_compose(tmp_path):
     mine = {"name": "proj", "services": {"web": {"image": "x:1", "user": "4242:4343"}}}  # fakes.ME
     runtime, recorder = compose_project(tmp_path, mine)
-    assert docker_cli._dispatch(["--allow-me", "compose", "up"], runtime) == 0  # your ids, allowed
+    assert docker_dispatch(["--allow-me", "compose", "up"], runtime) == 0  # your ids, allowed
     assert recorder.children[-1][-1] == "up" and runtime.docker.forwarded == []
 
 
@@ -129,7 +129,7 @@ def test_allow_me_before_the_subcommand_reaches_the_gate_and_not_docker():
 
 @pytest.mark.parametrize("argv, expected", [
     (["create", "-it", "img"], ["create", *DEFAULTS, "-it", "img"]),
-    (["container", "create", "img"], ["container", "create", *DEFAULTS, "img"]),
+    (["container", "create", "img"], ["create", *DEFAULTS, "img"]),  # the same command
     (["-l", "debug", "create", "img"], ["-l", "debug", "create", *DEFAULTS, "img"]),
 ])
 def test_create_gets_the_hardening_defaults_and_nothing_else(argv, expected):
@@ -213,11 +213,22 @@ def test_strict_screen_refuses_what_a_run_command_line_asks_for():
 
 @pytest.mark.parametrize("argv", [["--strict-screen", "exec", "c", "sh"],
                                   ["--strict-screen", "compose", "up"], ["--strict-screen", "ps"],
-                                  ["--strict-screen"]])
+                                  ["--strict-screen", "--debug"]])
 def test_strict_screen_is_refused_where_it_is_not_supported(argv, capsys):
     assert dispatch(argv) == (1, [])
     assert ("--strict-screen is only supported for audit, create, restart, run, start, buildx bake and "
             "compose run so far" in capsys.readouterr().err)
+
+
+@pytest.mark.parametrize("argv, routed_argv", [
+    (["--strict-screen", "exec", "--help"], ["exec", "--help"]),
+    (["--strict-screen", "compose", "up", "--help"], ["compose", "up", "--help"]),
+    (["--strict-screen"], []),
+])
+def test_help_is_given_under_strict_screen_too(argv, routed_argv, capsys):
+    # help runs nothing, so there is nothing strict screening could refuse
+    assert dispatch(argv)[1] == [routed_argv]
+    assert "--strict-screen is only supported" not in capsys.readouterr().err
 
 
 def test_docker_audit_without_an_image_prints_usage(capsys):
@@ -240,4 +251,4 @@ def test_strict_screen_reaches_compose_run_and_no_other_compose_subcommand(monke
     monkeypatch.setattr(compose_run, "gate", lambda *args: seen.append(args) or 0)
 
     assert dispatch(["--strict-screen", "compose", "run", "web"])[0] == 0
-    assert seen[0][-1] is True  # strict
+    assert seen[0][0].strict

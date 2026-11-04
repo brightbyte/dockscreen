@@ -29,23 +29,20 @@ VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--
 VALUE_SHORT = frozenset("st")
 
 
-def gate(global_args: Sequence[str], lead: list[str], args: list[str], runtime: Runtime,
-         allow_me: bool = False, strict: bool = False) -> int:
-    """Runs `lead args` if every container it names passes check; returns 1 if one does not, otherwise docker
-    replaces this process.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker start` or `restart` if every container it names passes check; returns 1 if one does not,
+    otherwise docker replaces this process.
 
     Parameters:
-    - global_args: docker's options before the subcommand
-    - lead: the docker command line up to and including the subcommand (`docker start` or `restart`), with
-      docker's options
-    - args: the subcommand's arguments
+    - parent_cli: the docker command line, with `start` or `restart` as its command
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given (check)
     """
-    if not verdict.screened(Report.of(check(global_args, args, runtime, allow_me, strict))):
+    assert parent_cli.cmd in ("start", "restart")
+    global_args, args = parent_cli.lead_args, parent_cli.args
+    if not verdict.screened(Report.of(check(global_args, args, runtime, parent_cli.allow_me,
+                                            parent_cli.strict))):
         return 1
-    runtime.docker.exec([*lead, *args])
+    runtime.docker.exec([*global_args, parent_cli.cmd, *args])
 
 
 def check(global_args: Sequence[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False,

@@ -72,7 +72,7 @@ Something has to change between two of dockscreen's calls to docker.
 - `images.section_hint` for an image from a registry other than Docker Hub: the scenarios pull only from
   Docker Hub.
 - `docker_cli`'s `if __name__ == "__main__"`: `bin/docker` calls `main` itself.
-- `commandline.CommandLine` and `find_subcommand` at a `--` before the command (`docker -- ps`), and
+- `commandline.split_argv` and `find_subcommand` at a `--` before the command (`docker -- ps`), and
   `option_value` at a `--` before `--pull`.
 - `docker_run.audit` when docker is missing: the check for a remote daemon runs docker first, and the
   entry point reports that it is missing.

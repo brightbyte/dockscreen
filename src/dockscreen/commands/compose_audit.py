@@ -1,8 +1,8 @@
 """This module implements `docker compose audit`, dockscreen's own command, which reports what `up` would do
 without starting anything.
 
-`global_args` are the compose-level options that preceded the subcommand (e.g. ["-f", "x.yml"]), which
-select the project.
+The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
+lead_args of the command line.
 """
 
 from collections.abc import Sequence
@@ -18,18 +18,18 @@ from dockscreen.util import commandline, messages
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"
 
 
-def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_me: bool = False) -> int:
+def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
     (verdict). --brief prints only the verdict, in one line.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - args: the subcommand's arguments: none, or --brief
+    - parent_cli: the compose command line, with `audit` as its command; its arguments are none, or --brief
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
     """
+    assert parent_cli.cmd == "audit"
+    args, global_args = list(parent_cli.args), list(parent_cli.lead_args)
     brief = args == [commandline.BRIEF]
     if args and not brief:
         messages.notice(f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF}]")
@@ -43,7 +43,7 @@ def audit(global_args: list[str], args: Sequence[str], runtime: Runtime, allow_m
     except ValueError as e:
         return verdict.report(Report.refusal(str(e)), brief)
 
-    screener = Screener(runtime, allow_me)
+    screener = Screener(runtime, parent_cli.allow_me)
     outcome, lines = _audit_images(loaded, screener, brief)
     if not brief:
         around = projectscreening.surroundings(loaded, screener)

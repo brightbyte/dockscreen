@@ -3,9 +3,8 @@ import os
 import subprocess
 
 import pytest
-from fakes import make_runtime, rules
+from fakes import docker_dispatch, make_runtime, rules
 
-from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.build import BakeDefinition
@@ -89,7 +88,7 @@ def test_a_top_level_key_that_is_not_known_is_refused(project):
     (["-h"], False),
 ])
 def test_only_a_bake_that_builds_is_screened(args, screened):
-    assert docker_bake.wants_screening(args) is screened
+    assert docker_bake._wants_screening(args) is screened
 
 
 class Docker:
@@ -145,10 +144,16 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     (["buildx", "build", "."], None),
     (["buildx", "bake"], []),
     (["build", "."], None),
-    (["run", "bake"], None),
+    (["pull", "bake"], None),
 ])
 def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
-    assert docker_cli.DockerCommand(argv, runtime=None)._bake_arguments() == args
+    docker = Docker(out=json.dumps({"target": {}}))
+
+    docker_dispatch(argv, make_runtime(docker=docker))
+
+    # only buildx bake is screened, with the arguments after bake; everything else passes through
+    screened = [["docker", "buildx", "bake", "--print", *args]] if args is not None else []
+    assert docker.commands == screened and docker.executed == [argv]
 
 
 @pytest.mark.parametrize("docker, code", [
@@ -157,13 +162,13 @@ def test_bake_arguments_are_taken_from_buildx_bake_only(argv, args):
     (Docker(code=1, err="no bake file"), 1),                                    # cannot be screened
 ])
 def test_bake_runs_only_when_screening_passes(docker, code):
-    assert docker_cli._dispatch(["buildx", "bake", "app"], make_runtime(docker=docker)) == code
+    assert docker_dispatch(["buildx", "bake", "app"], make_runtime(docker=docker)) == code
     assert docker.executed == ([["buildx", "bake", "app"]] if code is None else [])
 
 
 def test_bake_print_is_not_screened():
     docker = Docker(code=1)  # screening would fail
 
-    docker_cli._dispatch(["buildx", "bake", "--print"], make_runtime(docker=docker))
+    docker_dispatch(["buildx", "bake", "--print"], make_runtime(docker=docker))
 
     assert docker.commands == [] and docker.executed == [["buildx", "bake", "--print"]]

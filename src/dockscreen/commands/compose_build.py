@@ -9,18 +9,20 @@ Builds start no containers of the project, so only what a build can reach is che
 from dockscreen.compose import inspect
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
+from dockscreen.util import commandline
 
 
-def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:
-    """Runs `docker compose global_args sub args` if the project's builds pass the checks; returns 1 if they
-    do not, otherwise docker replaces this process.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker compose build` or `bake` if the project's builds pass the checks; returns 1 if they do
+    not, otherwise docker replaces this process.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - sub: `build` or `bake`
-    - args: the subcommand's arguments
+    - parent_cli: the compose command line, with `build` or `bake` as its command; its lead_args are the
+      compose options, which select the project
     - runtime: the Runtime of the command
     """
+    assert parent_cli.cmd in ("build", "bake")
+    global_args = parent_cli.lead_args
     if not inspect.passes(global_args, runtime, policy.Policy.check_project_build):
         return 1
-    runtime.docker.exec(["compose", *global_args, sub, *args])
+    runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])

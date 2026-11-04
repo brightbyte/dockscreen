@@ -4,7 +4,7 @@ import json
 import os
 
 import pytest
-from fakes import ME, FakeImages, compose_project, project_of, rules
+from fakes import ME, FakeImages, compose_line, compose_project, project_of, rules
 
 from dockscreen.commands import compose_harden
 from dockscreen.model.origin import Origin
@@ -34,7 +34,7 @@ def test_harden_writes_nothing_for_a_root_image_and_never_the_pull_pin(capsys, t
     images = FakeImages(users={"web:1": "", "db:1": "app"})
     runtime, recorder = setup(tmp_path, config, images, active=("web", "db"))
 
-    assert compose_harden.harden([], [], runtime) == 0
+    assert compose_harden.harden(compose_line("harden"), runtime) == 0
 
     out = capsys.readouterr().out
     assert out.splitlines()[-1] == "services: {}"       # nothing is needed: dockscreen does it all
@@ -51,7 +51,7 @@ def test_harden_sets_a_user_where_the_image_chose_one_that_is_not_acceptable(cap
     images = FakeImages(users={"web:1": "web", "db:1": "app"})
     runtime, _ = setup(tmp_path, config, images, active=("web", "db"))
 
-    assert compose_harden.harden([], [], runtime) == 0
+    assert compose_harden.harden(compose_line("harden"), runtime) == 0
 
     out = capsys.readouterr().out
     assert ("# note: service web: image web:1 chose a user that is not acceptable, "
@@ -76,7 +76,7 @@ def test_harden_looks_at_the_images_with_the_users_it_writes_resolved(capsys, tm
     runtime, _ = setup(tmp_path, config, FakeImages(users={"web:1": "app", "db:1": "app"}),
           active=("web", "db"), reads=interpolating)
 
-    assert compose_harden.harden([], [], runtime) == 0
+    assert compose_harden.harden(compose_line("harden"), runtime) == 0
     captured = capsys.readouterr()
     assert '    user: "${UID}:${GID}"' in captured.out
     assert "reads the checked config differently" not in captured.out + captured.err
@@ -85,7 +85,7 @@ def test_harden_looks_at_the_images_with_the_users_it_writes_resolved(capsys, tm
 def test_harden_fixes_no_user_when_compose_reads_the_patched_config_back_differently(capsys, tmp_path):
     runtime, recorder = setup(tmp_path, project(web={}), FakeImages(users={"web:1": "app"}),
                               reads=lambda c: {**c, "name": "other"})
-    assert compose_harden.harden([], [], runtime) == 1
+    assert compose_harden.harden(compose_line("harden"), runtime) == 1
     assert "reads the checked config differently at config.name" in capsys.readouterr().err
     assert recorder.children == []
 
@@ -98,7 +98,7 @@ def test_harden_leaves_a_user_the_config_file_sets_for_the_image(capsys, tmp_pat
     images = FakeImages(users={"db:1": "app"}, digests={"db:1": ["db@sha256:x"]})
     runtime, _ = setup(tmp_path, config, images, active=("db",), settings=settings)
 
-    assert compose_harden.harden([], [], runtime) == 0
+    assert compose_harden.harden(compose_line("harden"), runtime) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "services: {}"  # nothing to fix
 
 
@@ -106,7 +106,7 @@ def test_harden_does_not_pull_or_build_while_other_problems_remain(capsys, tmp_p
     config = project(web={"build": {"context": "/"}})  # a build context outside the project: no safe fix
     runtime, recorder = setup(tmp_path, config, FakeImages(users={"web:1": ""}))
 
-    assert compose_harden.harden([], [], runtime) == 1
+    assert compose_harden.harden(compose_line("harden"), runtime) == 1
 
     captured = capsys.readouterr()
     assert "nothing was pulled or built" in captured.err
@@ -119,7 +119,7 @@ def test_harden_checks_the_patched_project_as_up_would_and_its_name_too(capsys, 
     images.project_dirs = ["/elsewhere"]  # another project's containers have the name
     runtime, recorder = setup(tmp_path, project(web={}), images)
 
-    assert compose_harden.harden([], [], runtime) == 1
+    assert compose_harden.harden(compose_line("harden"), runtime) == 1
 
     out = capsys.readouterr().out
     assert "# not fixed: project name 'proj' is used by containers made from '/elsewhere'" in out
@@ -128,7 +128,7 @@ def test_harden_checks_the_patched_project_as_up_would_and_its_name_too(capsys, 
 
 def test_harden_reports_a_failed_pull_as_a_problem_it_cannot_fix(capsys, tmp_path):
     runtime, _ = setup(tmp_path, project(web={}), FakeImages(users={}, local=set()), codes={"pull": 1})
-    assert compose_harden.harden([], [], runtime) == 1
+    assert compose_harden.harden(compose_line("harden"), runtime) == 1
     assert "cannot fix automatically: docker compose pull web failed" in capsys.readouterr().err
 
 
@@ -201,7 +201,7 @@ def test_fix_command_prints_patch_and_fails_when_problems_remain(capsys, tmp_pat
     original = config(user="0:0", build={"context": "/"})
     runtime, _ = compose_project(tmp_path, original)
 
-    assert compose_harden.harden([], [], runtime) == 1
+    assert compose_harden.harden(compose_line("harden"), runtime) == 1
 
     captured = capsys.readouterr()
     assert "services:" in captured.out and "user:" in captured.out

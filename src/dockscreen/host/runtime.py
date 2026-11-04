@@ -62,7 +62,9 @@ def load_runtime() -> Runtime:
     Creates the caller's config file if it is missing (config.load_current). Warns about empty or
     relative PATH entries.
     """
-    env, home, me = os.environ, os.path.expanduser("~"), (os.getuid(), os.getgid())
+    env = os.environ
+    home = os.path.expanduser("~")
+    me = (os.getuid(), os.getgid())
     _warn_about_relative_path(env)
     settings = config.load_current(env, home, me[0])
     return Runtime(

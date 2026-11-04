@@ -7,6 +7,7 @@ on this: the policy looks at the container the daemon created from the result,
 and docker_run checks that our reading of the command line matched the daemon's.
 """
 
+from collections.abc import Sequence
 from typing import NamedTuple
 
 from dockscreen.cli import userargs
@@ -81,7 +82,7 @@ class _State:
         self.detach_keys: str | None = None
 
 
-def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> ParsedRun:
+def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> ParsedRun:
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
     the options `create` lacks, with users given as ids.
 
@@ -123,7 +124,7 @@ def parse(args: list[str], me: tuple[int, int], accounts: hostusers.HostAccounts
                      users)
 
 
-def _parse_long(args: list[str], i: int, state: _State) -> int:
+def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
     """Reads the --option at args[i] into state and returns the index after it, and after its value."""
     token = args[i]
     name, has_value, value = token.partition("=")
@@ -159,7 +160,7 @@ def _parse_long(args: list[str], i: int, state: _State) -> int:
     return i + 1
 
 
-def _parse_short(args: list[str], i: int, state: _State) -> int:
+def _parse_short(args: Sequence[str], i: int, state: _State) -> int:
     """Reads the option cluster at args[i], such as -itv or -p80:80, into state and returns the index
     after it, and after its value.
     """
@@ -198,7 +199,7 @@ def _parse_short(args: list[str], i: int, state: _State) -> int:
     return i + consumed
 
 
-def _value_at(args: list[str], index: int, flag: str) -> str:
+def _value_at(args: Sequence[str], index: int, flag: str) -> str:
     """Returns args[index], the value of flag. Raises ParseError if args end before it."""
     if index >= len(args):
         raise ParseError(f"{flag} needs a value")

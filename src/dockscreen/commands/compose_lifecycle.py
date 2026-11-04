@@ -14,23 +14,25 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.screener import Screener
+from dockscreen.util import commandline
 
 
-def gate(global_args: list[str], sub: str, args: list[str], runtime: Runtime) -> int:
-    """Runs `docker compose global_args sub args` if the project's name is free; returns 1 if it is not,
-    otherwise docker replaces this process.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker compose down`, `rm`, `stop` or another command that uses the project's name if the name is
+    free; returns 1 if it is not, otherwise docker replaces this process.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - sub: the subcommand: `down`, `rm`, `stop` or another that uses the project's name
-    - args: the subcommand's arguments
+    - parent_cli: the compose command line, with the subcommand as its command; its lead_args are the compose
+      options, which select the project
     - runtime: the Runtime of the command
     """
+    assert parent_cli.cmd is not None
+    global_args = parent_cli.lead_args
     reasons = check(global_args, runtime)
     if reasons:
         verdict.screened(Report.of(reasons))
         return 1
-    runtime.docker.exec(["compose", *global_args, sub, *args])
+    runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])
 
 
 def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:

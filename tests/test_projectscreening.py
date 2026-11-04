@@ -2,7 +2,7 @@ import os
 import subprocess
 
 import pytest
-from fakes import ME, FakeImages, compose_project, make_runtime, make_screener, read_raw
+from fakes import ME, FakeImages, compose_line, compose_project, make_runtime, make_screener, read_raw
 
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import projectscreening
@@ -22,10 +22,9 @@ def project_config(**service):
 
 def up(argv, idx, runtime, allow_me=False):
     """Runs the compose subcommand at argv[idx], `up` or `run`, through its gate."""
-    global_args, sub, args = argv[:idx], argv[idx], argv[idx + 1:]
-    if sub == "run":
-        return compose_run.gate(global_args, args, runtime, allow_me=allow_me)
-    return compose_up.gate(global_args, sub, args, runtime, allow_me=allow_me)
+    own = [commandline.ALLOW_ME] if allow_me else []
+    line = commandline.CommandLine(argv[idx], argv[idx + 1:], argv[:idx], own, prefix=["compose"])
+    return (compose_run.gate if line.cmd == "run" else compose_up.gate)(line, runtime)
 
 
 def last(recorder):
@@ -434,7 +433,8 @@ def test_first_difference_names_the_path(expected, actual, where):
 def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path, capsys):
     def run(*args, strict):
         runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}))
-        code = compose_run.gate([], [*args, "web"], runtime, strict=strict)
+        strict_option = [commandline.STRICT_SCREEN] if strict else []
+        code = compose_run.gate(compose_line("run", *args, "web", docker_options=strict_option), runtime)
         return code, recorder
 
     code, recorder = run("-v", "/etc:/e", strict=False)

@@ -1,8 +1,8 @@
 """This module provides what every reader of docker and compose command lines uses: the names of dockscreen's
-own options, which docker and compose never see, the CommandLine class, which takes them out, and functions
-that find one thing in a command line.
+own options, which docker and compose never see, the CommandLine class, which splits a command line at its
+command and holds it without them, and functions that find one thing in a command line.
 
-Before the subcommand (CommandLine takes them out):
+Before the subcommand (main_commandline and CommandLine.subcommand take them out):
 - --skip-screening runs the real thing with no checks and no defaults. After the subcommand it is
   not recognised, so docker or compose rejects it, which is the safe direction. The warning is
   printed every time and cannot be silenced, because the flag may have been copied into a script or
@@ -41,101 +41,175 @@ STRICT_REFUSAL = (f"{STRICT_SCREEN} is only supported for audit, create, restart
 HELPFUL = "--helpful"
 VERBOSE = "--verbose"
 BRIEF = "--brief"
+# dockscreen's own options before the docker command
+OWN_OPTIONS = frozenset({SKIP_SCREENING, ALLOW_ME, STRICT_SCREEN, HELPFUL, VERBOSE})
+
 AS_ME_MESSAGE = messages.Marked(
     messages.BAD, "--as-me goes after run or exec, before the service",
     "for up, give --allow-me before the subcommand, and user: \"${UID}:${GID}\" to the services that should "
     "run as you")
 
 
-class CommandLine:
-    """Record of a docker or docker compose command line with dockscreen's own options before the command
-    taken out, and the base class of the command objects (DockerCommand, ComposeCommand). It holds the command
-    line as docker or compose gets it, where the command is, and which of dockscreen's options were given.
+def split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts: Collection[str] = ()
+               ) -> tuple[str | None, tuple[str, ...], tuple[str, ...], frozenset[str]]:
+    """Splits argv at its command and returns (command, arguments after it, options before it, own options
+    taken out). The command is None, and the arguments are empty, if argv has none before `--`.
 
-    The constructor reads the command line; nothing changes these attributes afterwards, though nothing
-    enforces that.
+    Only the own options before the command are taken out; those after it, and any after `--`, stay.
+
+    Parameters:
+    - argv: the arguments, in the form [options...] [command [arguments...]]
+    - value_opts: the options before the command that take the next token as their value, which is then
+      not the command
+    - own_opts: dockscreen's own options, to take out of those before the command
+    """
+    taken: set[str] = set()
+    kept: list[str] = []
+    i = 0
+    while i < len(argv):
+        token = argv[i]
+        if token == "--":
+            break
+        if token in own_opts:
+            taken.add(token)
+            i += 1
+        elif token in value_opts:
+            kept += argv[i:i + 2]
+            i += 2
+        elif token.startswith("-"):
+            kept.append(token)
+            i += 1
+        else:
+            break
+    rest = (*kept, *argv[i:])
+    idx = find_subcommand(rest, value_opts)
+    if idx is None:
+        return None, (), rest, frozenset(taken)
+    return rest[idx], rest[idx + 1:], rest[:idx], frozenset(taken)
+
+
+class CommandLine:
+    """Record of one level of a docker command line, `docker run …` or the `up …` of `docker compose up …`,
+    split at its command, with dockscreen's own options before the command taken out. It holds the options
+    before the command, the command and the arguments after it, which dockscreen options were given, and
+    what came before this level.
+
+    Instances come from main_commandline, for the docker command line, and from subcommand, for the
+    command line of a command that has commands of its own (compose, buildx, container). Nothing changes
+    their attributes afterwards, though nothing enforces that.
 
     Attributes:
-    - argv: the command line as docker or compose gets it
-    - idx: the index of the command in it, or None
-    - given: the options of dockscreen's that were given, here or on a docker command line this one follows
+    - cmd: the command, or None if there is none
+    - lead_args: the options before the command, at this level only; all of argv if there is no command
+    - args: the arguments after the command; empty if there is none
+    - own_args: dockscreen's own options that were given, at this level or one before it; none of them is
+      in argv
+    - prefix: the docker command line before this level, up to and including the command it belongs to
+      (`compose` for compose's); empty for docker's own
     """
 
-    def __init__(self, argv: Sequence[str], value_opts: Collection[str], own: Collection[str],
-                 given: Collection[str] = ()) -> None:
-        """Reads argv.
+    def __init__(self, cmd: str | None, args: Collection[str], lead: Collection[str] = (),
+                 own_args: Collection[str] = (), prefix: Collection[str] = ()) -> None:
+        """Holds a command line that is already split.
 
         Parameters:
-        - argv: the arguments, without the program
-        - value_opts: the options that take the next token as their value, which is then not the command
-        - own: the options of ours to take out
-        - given: options of ours given before, on the docker command line that this one follows
+        - cmd: the command; None for none
+        - args: the arguments after the command
+        - lead: the options before the command
+        - own_args: dockscreen's own options that were given
+        - prefix: the docker command line before this level (prefix in the class docstring)
         """
-        self.value_opts = value_opts
-        self.given = frozenset(given)
-        kept: list[str] = []
-        i = 0
-        while i < len(argv):
-            token = argv[i]
-            if token == "--":
-                break
-            if token in own:
-                self.given |= {token}
-                i += 1
-            elif token in value_opts:
-                kept += argv[i:i + 2]
-                i += 2
-            elif token.startswith("-"):
-                kept.append(token)
-                i += 1
-            else:
-                break
-        self.argv = [*kept, *argv[i:]]
-        self.idx = find_subcommand(self.argv, value_opts)
+        self.cmd = cmd
+        self.args = tuple(args)
+        self.lead_args = tuple(lead)
+        self.own_args = frozenset(own_args)
+        self.prefix = tuple(prefix)
 
-    def has(self, option: str) -> bool:
-        """Tells whether option, one of ours, was given."""
-        return option in self.given
+    def has_own(self, option: str) -> bool:
+        """Tells whether option, one of dockscreen's own, was given."""
+        return option in self.own_args
+
+    def lead_values(self, long_name: str, short_name: str | None) -> list[str]:
+        """Returns every value given for the option before the command (option_values)."""
+        return option_values(self.lead_args, long_name, short_name)
+
+    def lead_value(self, name: str) -> str | None:
+        """Returns the value of the option before the command (option_value)."""
+        return option_value(self.lead_args, name)
+
+    def arg_values(self, long_name: str, short_name: str | None) -> list[str]:
+        """Returns every value given for the option after the command (option_values)."""
+        return option_values(self.args, long_name, short_name)
+
+    def arg_value(self, name: str) -> str | None:
+        """Returns the value of the option after the command (option_value)."""
+        return option_value(self.args, name)
+
+    @property
+    def argv(self) -> list[str]:
+        """Returns this level of the command line as docker or compose gets it: the options before the
+        command, the command, and the arguments after it, without dockscreen's own options. The prefix is
+        not part of it.
+        """
+        return [*self.lead_args, *([self.cmd] if self.cmd is not None else []), *self.args]
+
+    @property
+    def full_argv(self) -> list[str]:
+        """Returns the whole docker command line: the prefix, then argv."""
+        return [*self.prefix, *self.argv]
 
     @property
     def skip_screening(self) -> bool:
         """Tells whether --skip-screening was given."""
-        return self.has(SKIP_SCREENING)
+        return self.has_own(SKIP_SCREENING)
 
     @property
     def allow_me(self) -> bool:
         """Tells whether --allow-me was given."""
-        return self.has(ALLOW_ME)
+        return self.has_own(ALLOW_ME)
 
     @property
     def as_me(self) -> bool:
         """Tells whether --as-me was given before the command, where it does not belong."""
-        return self.has(AS_ME)
+        return self.has_own(AS_ME)
 
     @property
     def strict(self) -> bool:
         """Tells whether --strict-screen was given."""
-        return self.has(STRICT_SCREEN)
+        return self.has_own(STRICT_SCREEN)
 
     @property
     def helpful(self) -> bool:
         """Tells whether --helpful or --verbose was given."""
-        return self.has(HELPFUL) or self.has(VERBOSE)
+        return self.has_own(HELPFUL) or self.has_own(VERBOSE)
 
-    @property
-    def sub(self) -> str | None:
-        """Returns the command (the first argument that is not an option or an option's value), or None."""
-        return None if self.idx is None else self.argv[self.idx]
+    def subcommand(self, value_opts: Collection[str] = (), own_opts: Collection[str] = ()) -> "CommandLine":
+        """Returns the command line of the command, read from the arguments after it: `up -d` for the
+        `compose -f a.yml up -d` of `docker compose -f a.yml up -d`.
 
-    @property
-    def global_args(self) -> list[str]:
-        """Returns the options before the command."""
-        return self.argv if self.idx is None else self.argv[:self.idx]
+        It keeps the dockscreen options given here, and its prefix is this one's up to and including the
+        command.
 
-    @property
-    def args(self) -> list[str]:
-        """Returns the arguments after the command."""
-        return [] if self.idx is None else self.argv[self.idx + 1:]
+        Parameters:
+        - value_opts: the command's options that take the next token as their value
+        - own_opts: dockscreen's own options, to take out of those before its command
+        """
+        cmd, args, lead, taken = split_argv(self.args, value_opts, own_opts)
+        prefix = [*self.prefix, *self.lead_args, *([self.cmd] if self.cmd is not None else [])]
+        return CommandLine(cmd, args, lead, self.own_args | taken, prefix)
+
+
+def main_commandline(argv: Sequence[str], value_opts: Collection[str] = (),
+                     own_opts: Collection[str] = ()) -> CommandLine:
+    """Returns the CommandLine of a docker command line.
+
+    Parameters:
+    - argv: the arguments, without the program
+    - value_opts: docker's options that take the next token as their value, which is then not the command
+    - own_opts: dockscreen's own options, to take out of those before the command
+    """
+    cmd, args, lead, taken = split_argv(argv, value_opts, own_opts)
+    return CommandLine(cmd, args, lead, taken)
 
 
 def banner() -> None:

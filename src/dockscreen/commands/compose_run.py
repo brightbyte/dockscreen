@@ -12,23 +12,24 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
 from dockscreen.screen.screener import Screener
+from dockscreen.util import commandline
 
 
-def gate(global_args: list[str], args: list[str], runtime: Runtime, allow_me: bool = False,
-         strict: bool = False) -> int:
-    """Runs `docker compose global_args run args` if the project passes the checks, and returns the exit
-    status: 1 for a user on the command line that cannot be used.
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
+    """Runs `docker compose run` if the project passes the checks, and returns the exit status: 1 for a user
+    on the command line that cannot be used. Under --strict-screen, what the command line changes in the
+    service is judged too.
 
     Parameters:
-    - global_args: the compose options before the subcommand, which select the project
-    - args: the subcommand's arguments
+    - parent_cli: the compose command line, with `run` as its command; its lead_args are the compose
+      options, which select the project
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given, so what the command line changes in the service is judged too
     """
-    parsed = userargs.parse_compose("run", args, runtime.me, runtime.accounts)
+    assert parent_cli.cmd == "run"
+    parsed = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
     refusals = Screener(runtime).policy(runtime.cwd).check_user_options(parsed.users.given)
     if refusals:
         verdict.screened(Report.of(refusals))
         return 1
-    return projectscreening.check_and_run(global_args, "run", parsed, runtime, allow_me, strict)
+    return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
+                                          parent_cli.allow_me, parent_cli.strict)
