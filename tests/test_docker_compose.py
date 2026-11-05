@@ -2,8 +2,6 @@ import pytest
 from fakes import compose_line, compose_project, docker_dispatch
 
 from dockscreen.commands import docker_compose
-from dockscreen.compose import command
-from dockscreen.compose.command import ComposeCommand
 from dockscreen.util import commandline
 
 
@@ -18,7 +16,7 @@ from dockscreen.util import commandline
     (["--help"], None),
 ])
 def test_find_subcommand(argv, expected):
-    assert commandline.find_subcommand(argv, docker_compose.GLOBAL_OPTS_WITH_VALUE) == expected
+    assert commandline._find_subcommand(argv, docker_compose.GLOBAL_OPTS_WITH_VALUE) == expected
 
 
 PROJECT = {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534"}}}
@@ -98,7 +96,7 @@ def test_help_after_the_service_belongs_to_its_command(tmp_path):
     assert recorder.children[-1][-4:] == ["run", "web", "grep", "--help"]
 
 
-@pytest.mark.parametrize("subcommand", sorted(command.RUNTIME_SUBCOMMANDS))
+@pytest.mark.parametrize("subcommand", sorted(docker_compose.RUNTIME_SUBCOMMANDS))
 def test_runtime_subcommands_run_from_the_checked_config(tmp_path, subcommand):
     runtime, recorder = compose_project(tmp_path, PROJECT)
 
@@ -108,7 +106,7 @@ def test_runtime_subcommands_run_from_the_checked_config(tmp_path, subcommand):
     assert runtime.docker.forwarded == []    # the gate runs compose itself, from the hardened config
 
 
-@pytest.mark.parametrize("subcommand", sorted(command.BUILD_SUBCOMMANDS))
+@pytest.mark.parametrize("subcommand", sorted(docker_compose.BUILD_SUBCOMMANDS))
 def test_build_subcommands_get_the_build_rules_and_are_then_forwarded(tmp_path, subcommand):
     privileged = {"name": "proj", "services": {"web": {"image": "x:1", "privileged": True}}}
     runtime, _ = compose_project(tmp_path, privileged)  # refused to run, but it builds nothing wrong
@@ -148,7 +146,7 @@ def test_unscreened_subcommand_is_not_inspected(tmp_path):
     ([], ""),
 ])
 def test_help_request(argv, help_for):
-    assert ComposeCommand(compose_line(*argv), runtime=None)._help_request() == help_for
+    assert docker_compose.ComposeCommand(compose_line(*argv), runtime=None)._help_request() == help_for
 
 
 @pytest.mark.parametrize("argv, screened", [
@@ -158,7 +156,7 @@ def test_help_request(argv, help_for):
     ([], False),
 ])
 def test_is_screened(argv, screened):
-    assert (compose_line(*argv).cmd in command.SCREENED) == screened
+    assert (compose_line(*argv).cmd in docker_compose.SCREENED) == screened
 
 
 # --- dockscreen's own options and the config file ------------------------------------

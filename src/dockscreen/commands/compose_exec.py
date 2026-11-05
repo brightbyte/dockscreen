@@ -5,6 +5,7 @@ The command line is trusted, and the service's container was checked when it was
 """
 
 from dockscreen.cli import userargs
+from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline
 
@@ -19,7 +20,20 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "exec"
-    resolved = userargs.resolve_user_args(list(parent_cli.args), userargs.COMPOSE_VALUE_FLAGS["exec"], runtime)
+    value_flags = userargs.COMPOSE_VALUE_FLAGS["exec"]
+    resolved = userargs.resolve_user_args(list(parent_cli.args), value_flags, runtime)
     if resolved is None:
         return 1
     runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved])
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    assert name == "exec"
+    return helptext.Topic("dockscreen compose exec [OPTIONS] SERVICE COMMAND [ARGS...]",
+                          "Run a command in a running service; --as and --as-me choose the user", (),
+                          helptext.USER_OPTIONS)

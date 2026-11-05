@@ -7,6 +7,7 @@ The container is checked when it is started (docker_start).
 from collections.abc import Sequence
 
 from dockscreen.cli import runargs
+from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
@@ -37,3 +38,17 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         resolved = parsed.create_args
     messages.notice(runargs.defaults_notice())
     runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *runargs.DEFAULTS, *resolved])
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    assert name == "create"
+    return helptext.Topic(
+        "dockscreen create [OPTIONS] IMAGE [COMMAND] [ARG...]",
+        "Create a container, with the hardening defaults added",
+        (helptext.DEFAULTS, "The container is checked when dockscreen starts it."),
+        helptext.USER_OPTIONS, aliases=("dockscreen container create", "dockscreen create"))

@@ -6,6 +6,7 @@ Builds start no containers of the project, so only what a build can reach is che
 `buildx bake` would read.
 """
 
+from dockscreen.commands import helptext
 from dockscreen.compose import inspect
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import policy
@@ -26,3 +27,19 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if not inspect.passes(global_args, runtime, policy.Policy.check_project_build):
         return 1
     runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it: build or bake
+    """
+    if name == "bake":
+        return helptext.Topic("dockscreen compose bake [OPTIONS] [SERVICE...]",
+                              "Build with bake, after checking what the builds can reach",
+                              (*helptext.BUILD_RULES,
+                               "x- keys in build are refused, because bake reads x-bake."))
+    assert name == "build"
+    return helptext.Topic("dockscreen compose build [OPTIONS] [SERVICE...]",
+                          "Build services, after checking what the builds can reach", helptext.BUILD_RULES)

@@ -225,7 +225,7 @@ patch = execv
 [report]
 show_missing = true
 skip_covered = true
-omit = */dockscreen/helptext.py
+omit = */dockscreen/commands/helptext.py
 """)
 
 

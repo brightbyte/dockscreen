@@ -5,8 +5,8 @@ import subprocess
 import pytest
 from fakes import docker_dispatch, docker_line, make_runtime, rules
 
-from dockscreen import docker_cli
 from dockscreen.commands import docker_bake
+from dockscreen.commands.docker import BUILDX_OPTS_WITH_VALUE
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.build import BakeDefinition
 from dockscreen.screen import policy
@@ -112,7 +112,7 @@ class Docker:
 
 def bake_line(*argv):
     """Returns buildx's part of the docker command line argv, with `bake` as its command."""
-    return docker_line(*argv).subcommand(docker_cli.BUILDX_OPTS_WITH_VALUE)
+    return docker_line(*argv).subcommand(BUILDX_OPTS_WITH_VALUE)
 
 
 def test_the_definition_comes_from_print_with_the_whole_command_line():

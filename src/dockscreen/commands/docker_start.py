@@ -12,6 +12,7 @@ the configured mount_dirs allow bind mounts.
 
 from typing import Any
 
+from dockscreen.commands import helptext
 from dockscreen.host.dockerclient import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
@@ -28,7 +29,7 @@ VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--
 VALUE_SHORT = frozenset("st")
 
 
-def gate(cli: commandline.CommandLine, runtime: Runtime) -> int:
+def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs `docker start` or `restart` if every container it names passes check; returns 1 if one does not,
     otherwise docker replaces this process.
 
@@ -36,26 +37,24 @@ def gate(cli: commandline.CommandLine, runtime: Runtime) -> int:
     - parent_cli: the docker command line, with `start` or `restart` as its command
     - runtime: the Runtime of the command
     """
-    assert cli.cmd in ("start", "restart")
-    if not verdict.screened(Report.of(check(cli, runtime))):
+    assert parent_cli.cmd in ("start", "restart")
+    if not verdict.screened(Report.of(check(parent_cli, runtime))):
         return 1
-    runtime.docker.exec(cli.argv)
+    runtime.docker.exec(parent_cli.argv)
 
 
 def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
-    """Returns the refusals that forbid starting the containers named in `docker global_args start args`
-    (or `restart`).
+    """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
+    command line cli names.
 
     An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default user
     or a configured one) is refused like one whose user is not accepted, unless it already runs as that user.
 
     Parameters:
-    - global_args: docker's options before the subcommand
-    - args: the subcommand's arguments
+    - cli: the docker command line, with `start` or `restart` as its command. With --allow-me in it, the
+      caller's own ids are allowed; with --strict-screen, what the command line that created a container
+      asked for is judged as a project's would be, and refused (Policy.check_container)
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given, so what the command line that created a container asked for is judged
-      as a project's would be, and refused (Policy.check_container)
     """
     screener = Screener(runtime, cli.allow_me)
     if is_remote(cli.lead_args, runtime.docker):
@@ -88,3 +87,24 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
 def _runs_as_pinned_user(info: dict[str, Any], assessment: Assessment) -> bool:
     """Tells whether the container was created with the numeric user dockscreen would have chosen."""
     return ids.parse_user(info["Config"].get("User") or "") == assessment.user
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it: start or restart
+    """
+    if name == "restart":
+        return helptext.Topic(
+            "dockscreen restart [OPTIONS] CONTAINER [CONTAINER...]",
+            "Restart containers, denied if they would fail the check of run",
+            ("As for start.", helptext.VERDICT),
+            aliases=("dockscreen container restart", "dockscreen restart"))
+    assert name == "start"
+    return helptext.Topic(
+        "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
+        "Start containers, denied if they would fail the check of run",
+        (("An existing container cannot be changed, so one whose image's user dockscreen would replace or "
+          "deny is denied."), helptext.VERDICT),
+        aliases=("dockscreen container start", "dockscreen start"))

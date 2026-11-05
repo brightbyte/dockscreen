@@ -7,6 +7,7 @@ lead_args of the command line.
 
 from collections.abc import Sequence
 
+from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
@@ -72,3 +73,12 @@ def _audit_images(loaded: projectscreening.Loaded, screener: Screener, brief: bo
     # the last stage is what `up` checks once more before it runs: image sections need proof then
     runnable = projectscreening.finish(cleared, decided, screener)
     return (runnable if isinstance(runnable, Report) else runnable.report), decided.describe()
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name, from the docstring of audit.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    return helptext.command_topic(name, audit, options=(helptext.BRIEF,))

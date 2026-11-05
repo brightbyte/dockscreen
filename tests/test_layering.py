@@ -6,10 +6,9 @@ import pytest
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 # Each layer is a package and may import its own and the ones before it: the shared vocabulary (util),
 # then the concepts that screening judges (model), then what describes the host (host), then the checks
-# (screen), then reading the command line (cli), then
-# what compose commands share (compose), then the commands. The modules at the top are the dispatchers
-# that choose a command.
-LAYERS = ("util", "model", "host", "screen", "cli", "compose", "commands", "dispatch")
+# (screen), then reading the command line (cli), then what compose commands share (compose), then the
+# commands, docker's and compose's dispatch among them. The module at the top is the entry point.
+LAYERS = ("util", "model", "host", "screen", "cli", "compose", "commands", "entry")
 
 
 def module_name(path):
@@ -36,7 +35,7 @@ def imported(path):
 def layer(module):
     """Returns the layer the module belongs to (LAYERS)."""
     top = module.split(".")[1]
-    return top if (SOURCE / top).is_dir() else "dispatch"
+    return top if (SOURCE / top).is_dir() else "entry"
 
 
 @pytest.mark.parametrize("path", MODULES, ids=lambda p: module_name(p))
@@ -44,9 +43,6 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
     module = module_name(path)
     for name in imported(path):
         assert LAYERS.index(layer(name)) <= LAYERS.index(layer(module)), f"{module} imports {name}"
-        if layer(module) == "commands":  # and none imports another
-            own = (module, "dockscreen.commands")
-            assert layer(name) != "commands" or name in own, f"{module} imports {name}"
 
 
 @pytest.mark.parametrize("package", ["cli", "commands", "compose", "host", "model", "screen", "util"])

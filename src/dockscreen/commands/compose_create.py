@@ -6,6 +6,7 @@ The project is checked, its images are looked at, and compose runs the config th
 """
 
 from dockscreen.cli import userargs
+from dockscreen.commands import helptext
 from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline
@@ -23,3 +24,14 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     parsed = userargs.Parsed.unread(list(parent_cli.args), runtime)
     return projectscreening.check_and_run(list(parent_cli.lead_args), "create", parsed, runtime,
                                           parent_cli.allow_me)
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    assert name == "create"
+    return helptext.Topic("dockscreen compose create [OPTIONS] [SERVICE...]",
+                          "Create containers, after the project passes the audit", helptext.SCREENED_COMPOSE)

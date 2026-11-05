@@ -20,6 +20,7 @@ import sys
 from collections.abc import Iterable
 from typing import Any
 
+from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
@@ -255,3 +256,12 @@ def _render_value(value: Any) -> str:
     if isinstance(value, list):
         return "!override " + json.dumps(value)
     return json.dumps(value)
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name, from the docstring of harden.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it: harden, or its alias fix
+    """
+    return helptext.command_topic("harden", harden, aliases=("fix",))

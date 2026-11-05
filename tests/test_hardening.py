@@ -1,8 +1,7 @@
 import pytest
 from fakes import Accounts, compose_line, compose_project, marked, project_of, rules
 
-from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.compose import command
+from dockscreen.commands import compose_audit, compose_harden, docker_compose
 from dockscreen.model.origin import Origin
 from dockscreen.screen import hardening, policy, substitutions
 from dockscreen.screen.policy import Policy
@@ -151,8 +150,8 @@ def test_the_audit_names_every_service_that_gets_the_defaults_in_one_line(capsys
 
 
 def test_fix_is_an_alias_of_harden_and_is_listed_once_in_the_help():
-    assert command.COMMANDS["fix"] is command.COMMANDS["harden"]
-    assert command.ALIASES == {"fix": "harden"}
+    assert docker_compose.COMMANDS["fix"] is docker_compose.COMMANDS["harden"]
+    assert docker_compose.ALIASES == {"fix": "harden"}
 
 
 # --- names in `user:`, hook users and group_add -------------------------------------

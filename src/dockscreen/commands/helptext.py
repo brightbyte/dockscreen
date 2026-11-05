@@ -83,50 +83,6 @@ COMPOSE_OPTIONS = (
     Option(commandline.SKIP_SCREENING, "Turn all checks off; warns every time"),
 )
 
-DOCKER = {
-    "run": Topic(
-        f"dockscreen [{commandline.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
-        "Create and run a container, after checking the user its image runs as",
-        ("dockscreen creates the container, checks it, and only then starts it:", *IMAGE_RULES, DEFAULTS,
-         VERDICT),
-        (ALLOW_ME, *USER_OPTIONS), aliases=("dockscreen container run", "dockscreen run")),
-    "create": Topic(
-        "dockscreen create [OPTIONS] IMAGE [COMMAND] [ARG...]",
-        "Create a container, with the hardening defaults added",
-        (DEFAULTS, "The container is checked when dockscreen starts it."),
-        USER_OPTIONS, aliases=("dockscreen container create", "dockscreen create")),
-    "start": Topic(
-        "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
-        "Start containers, denied if they would fail the check of run",
-        (("An existing container cannot be changed, so one whose image's user dockscreen would replace or "
-          "deny is denied."), VERDICT),
-        aliases=("dockscreen container start", "dockscreen start")),
-    "restart": Topic(
-        "dockscreen restart [OPTIONS] CONTAINER [CONTAINER...]",
-        "Restart containers, denied if they would fail the check of run",
-        ("As for start.", VERDICT), aliases=("dockscreen container restart", "dockscreen restart")),
-    "exec": Topic(
-        "dockscreen exec [OPTIONS] CONTAINER COMMAND [ARG...]",
-        "Run a command in a running container; --as and --as-me choose the user",
-        (), USER_OPTIONS, aliases=("dockscreen container exec", "dockscreen exec")),
-    "audit": Topic(
-        f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
-        "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
-        "Say what run would do with the same arguments, without starting anything",
-        (("The container is created as run would create it, pulling the image if run would, judged, and "
-          "removed. It also points out what the command line asks for that a compose project or an image "
-          "may not have; run allows that, because the command line is trusted."),
-         ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
-          "image could not be pulled or created).")),
-        (Option(commandline.BRIEF, "Print only the verdict, in one line"),
-         Option(commandline.STRICT_SCREEN, "(before audit) Deny for what the command line asks for, too"),
-         ALLOW_ME, *USER_OPTIONS),
-        docker_help=False),
-    "compose": Topic(
-        "dockscreen compose [OPTIONS] COMMAND",
-        "Docker Compose, with projects audited before they run"),
-}
-
 SCREENED_COMPOSE = (
     "dockscreen audits the project first, and runs it from the config it checked:",
     "- bind mounts and files only from the project directory or the configured mount_dirs",
@@ -137,49 +93,42 @@ SCREENED_COMPOSE = (
 )
 BUILD_RULES = (("Builds may not read outside the project, use the host network, run privileged or forward "
                 "your SSH agent."), VERDICT)
-COMPOSE = {
-    "up": Topic("dockscreen compose up [OPTIONS] [SERVICE...]",
-                "Create and start containers, after the project passes the audit", SCREENED_COMPOSE),
-    "create": Topic("dockscreen compose create [OPTIONS] [SERVICE...]",
-                    "Create containers, after the project passes the audit", SCREENED_COMPOSE),
-    "run": Topic("dockscreen compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]",
-                 "Run a one-off command, after the project passes the audit", SCREENED_COMPOSE,
-                 USER_OPTIONS),
-    "watch": Topic("dockscreen compose watch [OPTIONS] [SERVICE...]",
-                   "Watch the build context and rebuild, after the project passes the audit",
-                   SCREENED_COMPOSE),
-    "scale": Topic("dockscreen compose scale [SERVICE=REPLICAS...]",
-                   "Scale services, after the project passes the audit", SCREENED_COMPOSE),
-    "alpha": Topic("dockscreen compose alpha COMMAND", "Experimental commands, audited like up",
-                   SCREENED_COMPOSE),
-    "build": Topic("dockscreen compose build [OPTIONS] [SERVICE...]",
-                   "Build services, after checking what the builds can reach", BUILD_RULES),
-    "bake": Topic("dockscreen compose bake [OPTIONS] [SERVICE...]",
-                  "Build with bake, after checking what the builds can reach",
-                  (*BUILD_RULES, "x- keys in build are refused, because bake reads x-bake.")),
-    "exec": Topic("dockscreen compose exec [OPTIONS] SERVICE COMMAND [ARGS...]",
-                  "Run a command in a running service; --as and --as-me choose the user", (), USER_OPTIONS),
-}
-# Options of dockscreen's own compose commands, which their docstrings do not list.
-COMMAND_OPTIONS = {"audit": (Option(commandline.BRIEF, "Print only the verdict, in one line"),)}
+BRIEF = Option(commandline.BRIEF, "Print only the verdict, in one line")
 
 
-def command_topic(name: str, fn: Callable[..., object], aliases: Sequence[str] = ()) -> Topic:
-    """Builds the Topic of one of dockscreen's own compose commands from fn's docstring.
+def command_topic(name: str, fn: Callable[..., object], aliases: Sequence[str] = (),
+                  options: Sequence[Option] = ()) -> Topic:
+    """Returns the Topic of one of dockscreen's own compose commands, from fn's docstring.
 
-    The first line becomes the summary and each further paragraph a note.
+    The first line becomes the summary and each further paragraph a note, up to the Parameters: list,
+    which is for developers.
 
     Parameters:
     - name: the command's name
     - fn: the function that implements it, whose docstring is the help
     - aliases: other names of the command, listed in the help
+    - options: dockscreen's options for the command, which the docstring does not list
     """
     summary, _, rest = (fn.__doc__ or "").strip().partition("\n")
-    notes = tuple(" ".join(p.split()) for p in rest.split("\n\n") if p.strip())
+    paragraphs = [p for p in rest.split("\n\n") if p.strip()]
+    notes = tuple(" ".join(p.split()) for p in paragraphs[:_end_of_help(paragraphs)])
     names = tuple(f"dockscreen compose {n}" for n in (name, *aliases)) if aliases else ()
-    usage = f"dockscreen compose {name}" + (" [OPTIONS]" if name in COMMAND_OPTIONS else "")
-    return Topic(usage, summary.strip().rstrip("."), notes, COMMAND_OPTIONS.get(name, ()), names,
-                 docker_help=False)
+    usage = f"dockscreen compose {name}" + (" [OPTIONS]" if options else "")
+    return Topic(usage, summary.strip().rstrip("."), notes, tuple(options), names, docker_help=False)
+
+
+def _end_of_help(paragraphs: Sequence[str]) -> int:
+    """Returns the index of the paragraph that starts the Parameters: list, or the number of paragraphs."""
+    return next((i for i, p in enumerate(paragraphs) if p.strip().startswith("Parameters:")), len(paragraphs))
+
+
+def topics(helps: Mapping[str, Callable[[str], Topic]]) -> dict[str, Topic]:
+    """Returns the Topic of each command, by name.
+
+    Parameters:
+    - helps: the help function of each command, by name, which returns its Topic given that name
+    """
+    return {name: help_(name) for name, help_ in helps.items()}
 
 
 def topic(topic_: Topic, follows_name: str, width: int | None) -> list[str]:
@@ -261,10 +210,11 @@ def _follows(docker_help: bool, name: str) -> list[str]:
     return ["", f"{name} help follows:", ""] if docker_help and name else []
 
 
-def docker_overview(width: int | None) -> list[str]:
+def docker_overview(commands: Mapping[str, Topic], width: int | None) -> list[str]:
     """Returns the help for dockscreen itself, as lines wrapped to width.
 
     Parameters:
+    - commands: {name: Topic} of the commands dockscreen handles
     - width: the width to wrap to; None for no wrapping
     """
     return _overview(
@@ -272,15 +222,17 @@ def docker_overview(width: int | None) -> list[str]:
         "Docker with security checks: dockscreen audits the commands that start containers and passes "
         "everything else to docker unchanged. Its own options go before the command, with docker's.",
         DOCKER_OPTIONS,
-        [("Commands dockscreen handles:", DOCKER)],
+        [("Commands dockscreen handles:", commands)],
         "Run 'dockscreen COMMAND --help' for more information on a command.",
         "Docker's own", width)
 
 
-def compose_overview(commands: Mapping[str, Topic], width: int | None) -> list[str]:
+def compose_overview(screened: Mapping[str, Topic], commands: Mapping[str, Topic], width: int | None
+                     ) -> list[str]:
     """Returns the help for `dockscreen compose`, as lines wrapped to width.
 
     Parameters:
+    - screened: {name: Topic} of the compose commands dockscreen audits
     - commands: {name: Topic} of dockscreen's own compose commands
     - width: the width to wrap to; None for no wrapping
     """
@@ -289,7 +241,7 @@ def compose_overview(commands: Mapping[str, Topic], width: int | None) -> list[s
         "Docker Compose with security checks: dockscreen audits the project before the commands that "
         "start containers, and passes everything else to docker compose unchanged.",
         COMPOSE_OPTIONS,
-        [("Commands dockscreen audits:", COMPOSE), ("Commands dockscreen adds:", commands)],
+        [("Commands dockscreen audits:", screened), ("Commands dockscreen adds:", commands)],
         "Run 'dockscreen compose COMMAND --help' for more information on a command.",
         "Docker Compose's own", width)
 

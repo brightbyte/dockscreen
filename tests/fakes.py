@@ -3,8 +3,8 @@ import json
 import os
 import subprocess
 
-from dockscreen import docker_cli
 from dockscreen.commands import docker_compose
+from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Location, Project
@@ -19,12 +19,12 @@ GROUP = "app:x:100001:\npg:x:998:\n"
 
 def docker_line(*argv):
     """Returns the command line of `docker argv`, as docker_cli reads it."""
-    return commandline.main_commandline(argv, docker_cli.DOCKER_OPTS_WITH_VALUE, commandline.OWN_OPTIONS)
+    return commandline.main_commandline(argv, DOCKER_OPTS_WITH_VALUE, commandline.OWN_OPTIONS)
 
 
 def docker_dispatch(argv, runtime):
-    """Runs `dockscreen argv` in runtime and returns the exit status, as docker_cli.main does."""
-    return docker_cli.DockerCommand(docker_line(*argv), runtime).dispatch()
+    """Runs `dockscreen argv` in runtime and returns the exit status, as DockerCommand does."""
+    return DockerCommand(docker_line(*argv), runtime).dispatch()
 
 
 def compose_line(*argv, docker_options=()):

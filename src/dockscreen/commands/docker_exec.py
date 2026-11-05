@@ -5,6 +5,7 @@ The command line is trusted, and the container was checked when it started (dock
 """
 
 from dockscreen.cli import runargs, userargs
+from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
 from dockscreen.screen.findings import Report
@@ -28,3 +29,16 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if resolved is None:
         return 1
     runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved])
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    assert name == "exec"
+    return helptext.Topic(
+        "dockscreen exec [OPTIONS] CONTAINER COMMAND [ARG...]",
+        "Run a command in a running container; --as and --as-me choose the user",
+        (), helptext.USER_OPTIONS, aliases=("dockscreen container exec", "dockscreen exec"))

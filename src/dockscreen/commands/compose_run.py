@@ -7,6 +7,7 @@ checked against the image.
 """
 
 from dockscreen.cli import userargs
+from dockscreen.commands import helptext
 from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import verdict
@@ -33,3 +34,15 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return 1
     return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
                                           parent_cli.allow_me, parent_cli.strict)
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it
+    """
+    assert name == "run"
+    return helptext.Topic("dockscreen compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]",
+                          "Run a one-off command, after the project passes the audit",
+                          helptext.SCREENED_COMPOSE, helptext.USER_OPTIONS)

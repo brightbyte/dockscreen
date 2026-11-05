@@ -1,7 +1,7 @@
 """Feature: dockscreen stands in for docker, screens what it knows, and trusts only a config file nobody else
 could have written
 
-Rules (docker_cli, docker_compose, ComposeCommand, runtime, config):
+Rules (docker_cli, commands.docker, docker_compose, ComposeCommand, runtime, config):
 - the commands that start containers or build are screened; everything else goes to the real docker as
   typed, and so does everything after --skip-screening, with a warning;
 - dockscreen's own options go before the command; --strict-screen is refused for the commands that do not

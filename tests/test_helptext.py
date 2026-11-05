@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from dockscreen import helptext
+from dockscreen.commands import docker, docker_exec, docker_run, helptext
 from dockscreen.util import messages
 
 OPTIONS = (helptext.Option("--long-option", "Some text that is long enough to need wrapping at a narrow "
@@ -29,17 +29,17 @@ def test_list_items_continue_under_their_text():
 
 
 def test_a_topic_has_docker_like_parts_and_says_whose_help_follows():
-    lines = helptext.topic(helptext.DOCKER["exec"], "Docker's own", None)
+    lines = helptext.topic(docker_exec.help("exec"), "Docker's own", None)
     assert lines[0] == "Usage:  dockscreen exec [OPTIONS] CONTAINER COMMAND [ARG...]"
     assert "Aliases:" in lines and "Options:" in lines
     assert lines[-2] == "Docker's own help follows:"
-    assert helptext.topic(helptext.DOCKER["audit"], "Docker's own", None)[-1] != ""  # nothing follows audit
+    assert helptext.topic(docker_run.help("audit"), "Docker's own", None)[-1] != ""  # nothing follows audit
 
 
 def test_help_without_a_terminal_is_wrapped_at_80_unlike_reports(monkeypatch, capsys):
     monkeypatch.delenv("COLUMNS")
     monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback: os.terminal_size(fallback))
-    helptext.show(helptext.docker_overview)
+    helptext.show(lambda width: helptext.docker_overview(helptext.topics(docker.HELP), width))
     lines = capsys.readouterr().out.splitlines()
     assert max(len(line) for line in lines if not line.startswith("Usage:")) <= 80
     assert messages.report_width() is None  # reports: whole lines for grep

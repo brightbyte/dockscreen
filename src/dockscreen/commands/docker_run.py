@@ -20,6 +20,7 @@ from typing import Any
 
 from dockscreen.cli import runargs
 from dockscreen.cli.runargs import DEFAULTS, defaults_notice
+from dockscreen.commands import helptext
 from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
@@ -323,3 +324,33 @@ def _report_findings(found: list[Finding]) -> None:
     if any(not finding.fatal for finding in found):
         messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
+
+
+def help(name: str) -> helptext.Topic:
+    """Returns the help of the command name.
+
+    Parameters:
+    - name: the command, as the dispatcher knows it: run or audit
+    """
+    if name == "audit":
+        return helptext.Topic(
+            f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
+            "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
+            "Say what run would do with the same arguments, without starting anything",
+            (("The container is created as run would create it, pulling the image if run would, judged, and "
+              "removed. It also points out what the command line asks for that a compose project or an "
+              "image may not have; run allows that, because the command line is trusted."),
+             ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
+              "image could not be pulled or created).")),
+            (helptext.BRIEF,
+             helptext.Option(commandline.STRICT_SCREEN,
+                             "(before audit) Deny for what the command line asks for, too"),
+             helptext.ALLOW_ME, *helptext.USER_OPTIONS),
+            docker_help=False)
+    assert name == "run"
+    return helptext.Topic(
+        f"dockscreen [{commandline.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
+        "Create and run a container, after checking the user its image runs as",
+        ("dockscreen creates the container, checks it, and only then starts it:", *helptext.IMAGE_RULES,
+         helptext.DEFAULTS, helptext.VERDICT),
+        (helptext.ALLOW_ME, *helptext.USER_OPTIONS), aliases=("dockscreen container run", "dockscreen run"))
