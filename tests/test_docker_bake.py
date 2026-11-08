@@ -3,14 +3,14 @@ import os
 import subprocess
 
 import pytest
-from fakes import docker_dispatch, docker_line, make_runtime, rules
+from fakes import docker_dispatch, docker_line, make_runtime, rules, texts
 
 from dockscreen.commands import docker_bake
 from dockscreen.commands.docker import BUILDX_OPTS_WITH_VALUE
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.build import BakeDefinition
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Verdict
 from dockscreen.util import messages
 
 
@@ -70,7 +70,7 @@ def test_entries_printed_as_objects_are_read_as_their_fields(project):
     ({"newkey": 1}, "key 'newkey' is not on the allow list"),
 ])
 def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, problem):
-    problems = check(project, **{"context": ".", **fields} if "context" not in fields else fields)
+    problems = texts(check(project, **{"context": ".", **fields} if "context" not in fields else fields))
     assert len(problems) == 1 and problem in problems[0], problems
     assert problems[0].startswith("target app: ")
 
@@ -78,7 +78,7 @@ def test_what_a_build_could_reach_on_the_host_is_refused(project, fields, proble
 def test_a_top_level_key_that_is_not_known_is_refused(project):
     bake_policy = policy.Policy(rules())
     found = bake_policy.check_bake(BakeDefinition({"target": {}, "variable": {}}, str(project)))
-    assert found == ["key 'variable' is not on the allow list"]
+    assert texts(found) == ["key 'variable' is not on the allow list"]
 
 
 @pytest.mark.parametrize("args, screened", [
@@ -135,7 +135,7 @@ def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
         docker_bake._definition(docker, bake_line("buildx", "bake"))
     assert message in messages.with_output(raised.value)
     [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(rules()), os.getcwd())
-    assert reason.severity is Severity.FAILED and message in messages.with_output(reason)
+    assert reason.verdict is Verdict.FAILED and message in messages.with_output(reason)
 
 
 def test_screen_checks_against_the_current_directory(project, monkeypatch):
@@ -143,8 +143,8 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
     [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(rules()), os.getcwd())
-    assert reason == "target app: context '/etc' is outside " + str(project)
-    assert reason.severity is Severity.REFUSED
+    assert str(reason) == "target app: context '/etc' is outside " + str(project)
+    assert reason.verdict is Verdict.REFUSED
 
 
 @pytest.mark.parametrize("argv, args", [

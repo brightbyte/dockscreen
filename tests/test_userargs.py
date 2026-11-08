@@ -1,5 +1,5 @@
 import pytest
-from fakes import make_runtime, rules
+from fakes import make_runtime, rules, texts
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
@@ -12,7 +12,7 @@ VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE
 
 def refusals(parsed):
     """What the policy says about the users parsed gives."""
-    return policy.Policy(rules()).check_user_options(parsed.users.given)
+    return texts(policy.Policy(rules()).check_user_options(parsed.users.given))
 
 
 
@@ -97,7 +97,8 @@ def test_check_given_users_reports_what_the_policy_refuses():
     assert screener.check_given_users(parse("exec", ["-u", "1000:1000", "web"]).users.given).passed
     refused = screener.check_given_users(parse("exec", ["-u", "postgres", "web"]).users.given)
     # the same refusals as the policy gives, as a report that stops the command
-    assert not refused.passed and refused.reasons == refusals(parse("exec", ["-u", "postgres", "web"]))
+    assert not refused.passed
+    assert texts(refused.findings) == refusals(parse("exec", ["-u", "postgres", "web"]))
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])

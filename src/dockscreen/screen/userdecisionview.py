@@ -6,8 +6,9 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
+from dockscreen.screen.findings import Finding
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
 
@@ -36,7 +37,7 @@ def outcome(decision: UserDecision, local: hostusers.HostAccounts) -> str:
         return f"runs as {who}; accepted"
     if decision.replaces_root and not decision.refused:
         return f"would run as {who}; {instead_of_root(decision)}"
-    reasons = "; ".join(printable(r.text) for r in decision.reasons)
+    reasons = "; ".join(printable(r.text) for r in decision.findings)
     if decision.failed:
         return f"could not be assessed: {reasons}"
     return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"
@@ -47,12 +48,12 @@ def instead_of_root(decision: UserDecision) -> str:
     return f"running as {ids.format_user(decision.pinned_user)} instead of root"
 
 
-def root_default_notice(default_user: tuple[int, int]) -> Finding | None:
-    """Returns the notable finding to give on every run if the configured default user is root, else None."""
+def root_default_notice(default_user: tuple[int, int]) -> Notice | None:
+    """Returns the warning to give on every run if the configured default user is root, else None."""
     if 0 in default_user:
         default = ids.format_user(default_user)
-        return Finding(f"the configured default user is {default}: images that would run as root run as root",
-                       Severity.NOTABLE, help="set default_user in the config file to change it")
+        return Notice(f"the configured default user is {default}: images that would run as root run as root",
+                      NoticeSeverity.WARNING, help="set default_user in the config file to change it")
     return None
 
 
@@ -64,9 +65,9 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
     - config_file: where an image section can give the image a user
     """
     if not decision.identity:
-        return decision.reasons
+        return list(decision.findings)
     help = f"{CHOOSE_HINT}, {config_hint(decision.image.reference, config_file)}"
-    return [r.with_help(help) for r in decision.reasons]
+    return [r.with_help(help) for r in decision.findings]
 
 
 def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
@@ -79,8 +80,8 @@ def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
     """
     hint = section_hint(decision.image.reference, config_file, decision.image.built)
     if not decision.identity or hint is None:
-        return decision.reasons
-    return [r.with_help(f"for an image pulled from a registry, {hint}") for r in decision.reasons]
+        return list(decision.findings)
+    return [r.with_help(f"for an image pulled from a registry, {hint}") for r in decision.findings]
 
 
 def config_hint(image: str, config_file: str) -> str:

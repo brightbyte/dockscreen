@@ -1,4 +1,4 @@
-from fakes import FakeImages, make_screener, project_of
+from fakes import FakeImages, make_screener, project_of, texts
 
 from dockscreen.compose import imageusers
 from dockscreen.model.image import Inspected, Unseen
@@ -28,7 +28,7 @@ def test_nothing_is_looked_at_when_getting_an_image_fails():
 
     seen, failures = imageusers.find(COMMAND, project(web={}), {"web"}, {"web"}, [], screener)
 
-    assert seen == {} and failures == ["docker compose pull web failed"]
+    assert seen == {} and texts(failures) == ["docker compose pull web failed"]
 
 
 def test_an_image_that_is_not_there_is_unseen():

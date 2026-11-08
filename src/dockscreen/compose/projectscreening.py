@@ -36,7 +36,8 @@ from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy, substitutions, userdecisionview
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Verdict
+from dockscreen.screen.notices import Notice
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.substitutions import Substitution
@@ -176,7 +177,7 @@ def decide(cleared: ClearedProject, screener: Screener, command: Command, args: 
     on_file = command(project.definition)
     problem = _read_back_problem(on_file, project.definition, screener.docker)
     if problem:
-        return screener.decide(project, None, [Finding(problem, Severity.FAILED)])
+        return screener.decide(project, None, [Finding(problem, Verdict.FAILED)])
     images, failures = serviceinfo.prepare(on_file, project, list(args), screener, chosen)
     return screener.decide(project, images, failures)
 
@@ -209,7 +210,7 @@ def finish(cleared: ClearedProject, decided: Decisions, screener: Screener,
     return RunnableProject(final, decided, checked) if checked.passed else checked
 
 
-def surroundings(loaded: LoadedProject, screener: Screener) -> list[Finding]:
+def surroundings(loaded: LoadedProject, screener: Screener) -> list[Notice]:
     """Returns what the policy finds in what the project gets from around it: configured mount dirs that
     contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
     (Policy.check_shell_env).

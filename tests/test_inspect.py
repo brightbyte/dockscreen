@@ -8,7 +8,7 @@ from dockscreen.compose import inspect
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Verdict
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
@@ -74,8 +74,8 @@ def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, 
     monkeypatch.chdir(tmp_path)
     with pytest.raises(inspect.ProjectRefused) as refused:
         inspect.project([], make_runtime())
-    assert [f.severity for f in refused.value.findings] == [Severity.REFUSED]
-    assert "contains" in refused.value.findings[0]
+    assert [f.verdict for f in refused.value.findings] == [Verdict.REFUSED]
+    assert "contains" in str(refused.value.findings[0])
 
 
 def test_the_walk_up_stops_at_the_home_directory(tmp_path):

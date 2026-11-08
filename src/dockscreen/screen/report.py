@@ -1,27 +1,18 @@
-"""This module defines the Report of what one screening found, the verdict that follows from it, and how both
-are shown: a report is what a command or an audit ends by showing, and its verdict is the exit status of an
-audit. Exit status 2 is left for usage errors.
+"""This module defines the Report of what one screening reported, and how it is shown: a report is what a
+command or an audit ends by showing, and its verdict (findings.Verdict), the worst of its findings, is the
+exit status of an audit.
 
 Use it to build a report from findings (Report.of, Report.refusal, Report.failure, Report.with_more_findings)
 and to show it (Report.show, Report.show_screening).
 """
 
-import enum
 from collections.abc import Iterable
 from typing import NamedTuple, Self
 
-from dockscreen.screen.findings import Finding, Severity, failure_of
+from dockscreen.screen.findings import Finding, Reportable, Verdict, failure_of
+from dockscreen.screen.notices import Notice
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
-
-
-class Verdict(enum.IntEnum):
-    """Enum of the outcomes of an audit, or of the screening before a command runs. Its value is the exit
-    status.
-    """
-    PASSED = 0
-    REFUSED = 1
-    FAILED = 3
 
 
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
@@ -31,26 +22,30 @@ LINES = {Verdict.PASSED: "audit passed", Verdict.REFUSED: "denied by audit", Ver
 
 
 class Report(NamedTuple):
-    """Record of what one screening found, from which its verdict follows. It holds the findings, in their
-    order.
+    """Record of what one screening reported, from which its verdict follows. It holds the notices and the
+    findings, each in their order.
 
     Build one with of, or with refusal or failure for a single reason; show it with show, or with
     show_screening before a command runs.
 
     Attributes:
-    - findings: what was found
+    - notices: what was reported without stopping the command (Notice)
+    - findings: what stops the command (Finding)
     """
+    notices: tuple[Notice, ...] = ()
     findings: tuple[Finding, ...] = ()
 
     @classmethod
-    def of(cls, findings: Iterable[Finding]) -> Self:
-        """Returns the report of findings, in their order."""
-        return cls(tuple(findings))
+    def of(cls, reported: Iterable[Reportable]) -> Self:
+        """Returns the report of reported, with the notices and the findings each in their order."""
+        reported = list(reported)
+        return cls(tuple(r for r in reported if isinstance(r, Notice)),
+                   tuple(r for r in reported if isinstance(r, Finding)))
 
     @classmethod
     def refusal(cls, reason: object) -> Self:
         """Returns the report of a single refusal (Finding.of)."""
-        return cls((Finding.of(reason, Severity.REFUSED),))
+        return cls((), (Finding.of(reason, Verdict.REFUSED),))
 
     @classmethod
     def failure(cls, reason: object) -> Self:
@@ -60,32 +55,24 @@ class Report(NamedTuple):
         - reason: an error (failure_of), or a text
         """
         if isinstance(reason, BaseException):
-            return cls((failure_of(reason),))
-        return cls((Finding.of(reason, Severity.FAILED),))
+            return cls((), (failure_of(reason),))
+        return cls((), (Finding.of(reason, Verdict.FAILED),))
 
-    def with_more_findings(self, more: Iterable[Finding]) -> Self:
-        """Returns a report of the findings of this one, then more."""
-        return type(self)((*self.findings, *more))
+    def with_more_findings(self, more: Iterable[Reportable]) -> Self:
+        """Returns a report of what this one holds, then more."""
+        return type(self).of([*self.notices, *self.findings, *more])
 
     @property
     def verdict(self) -> Verdict:
-        """Returns FAILED if anything could not be looked at, else REFUSED if anything is refused, else
-        PASSED.
+        """Returns the worst verdict of the findings: FAILED if anything could not be looked at, else REFUSED
+        if anything is refused, else PASSED.
         """
-        severities = {f.severity for f in self.findings}
-        if Severity.FAILED in severities:
-            return Verdict.FAILED
-        return Verdict.REFUSED if Severity.REFUSED in severities else Verdict.PASSED
-
-    @property
-    def reasons(self) -> list[Finding]:
-        """Returns the findings that stop the command, in their order."""
-        return [f for f in self.findings if f.fatal]
+        return max((f.verdict for f in self.findings), default=Verdict.PASSED)
 
     @property
     def passed(self) -> bool:
         """Tells whether the command may run."""
-        return self.verdict is Verdict.PASSED
+        return not self.findings
 
     @property
     def closing_line(self) -> messages.Message:
@@ -99,25 +86,24 @@ class Report(NamedTuple):
         """
         if self.passed:
             return self.closing_line
-        first = printable(messages.with_output(self.reasons[0]))
-        more = f" (+{len(self.reasons) - 1} more)" if len(self.reasons) > 1 else ""
+        first = printable(messages.with_output(self.findings[0]))
+        more = f" (+{len(self.findings) - 1} more)" if len(self.findings) > 1 else ""
         return messages.Message(ICONS[self.verdict], f"{LINES[self.verdict]}: {first}{more}")
 
     def show(self, brief_mode: bool = False) -> int:
         """Prints the verdict and returns its int value as the exit status.
 
         Parameters:
-        - brief_mode: print one line on stdout (brief); otherwise each finding that does not stop the command,
-          each reason and the closing line go to stderr
+        - brief_mode: print one line on stdout (brief); otherwise each notice, each finding and the closing
+          line go to stderr
         """
         if brief_mode:
             messages.out(self.brief, indent=False)
             return int(self.verdict)
+        for notice in self.notices:
+            messages.notice(notice)
         for finding in self.findings:
-            if not finding.fatal:
-                messages.notice(finding)
-        for reason in self.reasons:
-            flat = Finding.of(reason)  # the subject becomes part of the text
+            flat = Finding.of(finding)  # the subject becomes part of the text
             messages.notice(flat.with_text(f"refusing: {flat}") if self.verdict is Verdict.REFUSED else flat)
         messages.notice(self.closing_line)
         return int(self.verdict)

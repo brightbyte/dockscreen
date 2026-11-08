@@ -2,16 +2,16 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_runtime, make_screener, marked, project_of, rules
+from fakes import FakeImages, make_runtime, make_screener, marked, project_of, rules, texts
 
 from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
 from dockscreen.screen import decisions, policy, substitutions
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Verdict
+from dockscreen.screen.notices import Notice
 from dockscreen.screen.policy import Policy
-from dockscreen.screen.report import Verdict
 from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
@@ -111,7 +111,7 @@ def test_pulling_before_building_and_failure_stops_everything():
 
     prepared, recorder, images = prepare(config, FakeImages(users={}, local=set()), active=("web", "app"),
                                          codes={"pull": 1})
-    assert prepared.report.reasons == ["docker compose pull web failed"]
+    assert texts(prepared.report.findings) == ["docker compose pull web failed"]
     # build never started
     assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]
     assert images.calls == []  # and nothing was created
@@ -129,7 +129,7 @@ def test_listing_the_services_can_fail_closed():
 
     screener.docker.capture = failing_listing
     _, failures = serviceinfo.prepare(COMMAND, project_of(config), [], screener)
-    assert failures == ["docker compose config --services failed"]
+    assert texts(failures) == ["docker compose config --services failed"]
 
 
 # --- deciding about the images ---------------------------------------------------
@@ -153,16 +153,17 @@ def test_the_images_own_user_is_judged_as_docker_run_does(image_user, replaces_r
 
 def test_refusals_say_what_to_do():
     prepared, _, _ = prepare(project(), FakeImages(users={"web:1": "web"}))
-    assert len(prepared.report.reasons) == 1  # one line per service, however many ids are the problem
-    assert "service web: image web:1: the image's uid 1000 exists on this host" in prepared.report.reasons[0]
-    assert "gid 1000" in prepared.report.reasons[0]
-    assert prepared.report.reasons[0].help == (
+    assert len(prepared.report.findings) == 1  # one line per service, however many ids are the problem
+    refusal = str(prepared.report.findings[0])
+    assert "service web: image web:1: the image's uid 1000 exists on this host" in refusal
+    assert "gid 1000" in refusal
+    assert prepared.report.findings[0].help == (
         f'set user: to choose one, or set user under [images."web"] in {make_runtime().config_file}')
 
 
 def test_a_built_image_is_not_pointed_at_an_image_section():
     prepared, _, _ = prepare(project(web={"build": {"context": "."}}), FakeImages(users={"web:1": "web"}))
-    assert prepared.report.reasons[0].help == "set user: to choose one"  # the config file never applies
+    assert prepared.report.findings[0].help == "set user: to choose one"  # the config file never applies
 
 
 def test_services_with_a_user_are_not_looked_at():
@@ -181,7 +182,7 @@ def test_only_started_services_are_looked_at_and_the_platform_is_passed():
 
 def test_an_image_that_is_not_there_is_a_failure():
     prepared, _, _ = prepare(project(web={"pull_policy": "never"}), FakeImages(users={}, local=set()))
-    assert prepared.report.reasons == ["service web: image web:1: the image is not available locally"]
+    assert texts(prepared.report.findings) == ["service web: image web:1: the image is not available locally"]
     assert prepared.report.verdict is Verdict.FAILED  # no user would fix it
 
 
@@ -189,7 +190,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
     images = FakeImages(users={"web:1": "app"})
     images.inspect_container = lambda ref: (_ for _ in ()).throw(DockerError("boom"))
     prepared, _, _ = prepare(project(), images)
-    assert prepared.decisions["web"].reasons == ["boom"] and prepared.decisions["web"].failed
+    assert texts(prepared.decisions["web"].findings) == ["boom"] and prepared.decisions["web"].failed
     assert ("remove", "c1") in images.calls
 
 
@@ -258,8 +259,9 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
     _, final, origins = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
     found = policy.check_project(project_of(final, origins=origins))
-    assert found and {f.severity for f in found} == {Severity.NOTABLE}
-    assert [p for p in policy.check_project(project_of(final)) if p.startswith("service db: user")] == [
+    assert found and {type(f) for f in found} == {Notice}
+    problems = texts(policy.check_project(project_of(final)))
+    assert [p for p in problems if p.startswith("service db: user")] == [
         "service db: user '1000:1000': uid 1000 exists on this host (local user daniel)",
         "service db: user '1000:1000': gid 1000 exists on this host (local group daniel)"]
 
@@ -285,7 +287,7 @@ def test_descriptions_and_notices():
 
 def test_a_refusal_names_the_local_account_that_the_images_id_would_be():
     refused, _, _ = prepare(project(web={}), FakeImages(users={"web:1": "web"}))
-    assert refused.report.reasons == [
+    assert texts(refused.report.findings) == [
         ("service web: image web:1: the image's uid 1000 exists on this host (local user daniel); "
          "the image's gid 1000 exists on this host (local group daniel)")]
 
@@ -298,7 +300,7 @@ BIND = {"volumes": [{"type": "bind", "source": "/p/data", "target": "/data"}]}
 def test_with_mounts_an_image_user_outside_the_nobody_range_is_refused():
     prepared, _, _ = prepare(project(web=BIND), FakeImages(users={"web:1": "app"}))
     assert prepared.decisions["web"].refused
-    assert "the image's uid 100000 is not in the nobody range 65530-65534" in prepared.report.reasons[0]
+    assert "the image's uid 100000 is not in the nobody range 65530-65534" in str(prepared.report.findings[0])
 
 
 def test_without_mounts_a_low_unknown_id_is_accepted_and_with_mounts_it_is_not():
@@ -365,7 +367,7 @@ def test_services_whose_user_the_command_line_chooses_are_not_decided():
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     # No key in a compose file can mark a service as vetted: it lives in the Context only.
     config = project(web={"x-vetted": True, "vetted": True})
-    problems = policy.Policy(rules()).check_project(project_of(config))
+    problems = texts(policy.Policy(rules()).check_project(project_of(config)))
     assert "service web: key 'vetted' is not on the allow list" in problems
     assert "service web: user is not set, the image default may be root" in problems
 

@@ -4,7 +4,7 @@ import json
 import os
 
 import pytest
-from fakes import ME, FakeImages, compose_line, compose_project, project_of, rules
+from fakes import ME, FakeImages, compose_line, compose_project, project_of, rules, texts
 
 from dockscreen.commands import compose_harden
 from dockscreen.model.origin import Origin
@@ -250,7 +250,7 @@ def test_fix_config_does_not_touch_input_and_keeps_unfixable_problems(project_di
     config = {"services": {"web": service(privileged=True, build={"context": "/"}, provider={"type": "x"})}}
     fixed = compose_harden._fix_config(project_of(config, project_dir), context(project_dir))
     assert config["services"]["web"]["privileged"] is True
-    assert check(project_dir, fixed) == [
+    assert texts(check(project_dir, fixed)) == [
         "service web: key 'provider' is not on the allow list",
         f"service web: build context '/' is outside {project_dir}",
     ]
@@ -272,7 +272,7 @@ def test_fix_config_replaces_bad_mount_sources_with_relative_upper_case_placehol
     assert [m["source"] for m in web] == [
         "./ETC", "./VAR_RUN_DOCKER.SOCK", "./ESCAPE", str(project_dir / "data"), "cache"]
     assert web[0]["read_only"] is True  # other mount attributes survive
-    assert check(project_dir, fixed) == []
+    assert texts(check(project_dir, fixed)) == []
     assert config["services"]["web"]["volumes"] == mounts
     # compose reads the placeholders relative to the project, and the result still passes
     resolved = compose_harden._as_compose_reads(fixed, context(project_dir), str(project_dir))

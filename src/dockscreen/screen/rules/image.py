@@ -21,7 +21,8 @@ from typing import Any
 from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Verdict
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import RuleBase
 from dockscreen.screen.userdecision import UserDecision
 
@@ -49,25 +50,25 @@ class ImageRules(RuleBase):
           is the decision's origin
         """
         image, match = inspected.image, self.section
-        notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
+        notes = (Notice(match.problem, NoticeSeverity.WARNING),) if match.problem else ()
         found: dict[str, Any] = {"section": match}
         if origin is not Origin.IMAGE:
             return UserDecision(origin, image, notes, **found)
         if self.configured_user:
-            return UserDecision(Origin.CONFIG, image, notes, UserIdentity(*self.configured_user),
+            return UserDecision(Origin.CONFIG, image, notes, identity=UserIdentity(*self.configured_user),
                                 user=self.configured_user, **found)
         assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
         try:
             identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
         except ValueError as e:
-            return UserDecision(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
+            return UserDecision(Origin.IMAGE, image, notes, (Finding(str(e)),), **found)
         if identity.involves_root:
-            return UserDecision(self.default_origin, image, notes, identity, user=self.default_user,
+            return UserDecision(self.default_origin, image, notes, identity=identity, user=self.default_user,
                                 home=self.default_home, replaces_root=True, **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
-        return UserDecision(Origin.IMAGE, image, (*notes, *refusals), identity,
+        return UserDecision(Origin.IMAGE, image, notes, refusals, identity,
                             user=(identity.uid, identity.gid), **found)
 
 
@@ -81,9 +82,9 @@ def image_problem(name: str, decision: UserDecision, config_file: str | None = N
     - config_file: named in the hint for an image that is pulled, whose repository can be given a user
     """
     image = decision.image
-    text = f"image {image.reference}: {'; '.join(r.text for r in decision.reasons)}"
+    text = f"image {image.reference}: {'; '.join(r.text for r in decision.findings)}"
     if decision.failed:
-        return Finding(text, Severity.FAILED, f"service {name}")
+        return Finding(text, Verdict.FAILED, f"service {name}")
     hint = section_hint(image.reference, config_file, image.built) if config_file else None
-    return Finding(text, Severity.REFUSED, f"service {name}",
+    return Finding(text, Verdict.REFUSED, f"service {name}",
                    "set user: to choose one" + (f", or {hint}" if hint else ""))

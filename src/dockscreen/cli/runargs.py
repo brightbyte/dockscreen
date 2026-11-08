@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 from dockscreen.cli import userargs
 from dockscreen.host import hostusers
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.
@@ -208,9 +208,9 @@ def _value_at(args: Sequence[str], index: int, flag: str) -> str:
     return args[index]
 
 
-def defaults_notice() -> Finding:
-    """Returns the routine finding that `run` and `create` add their defaults to every container."""
-    return Finding(
-        f"added {' '.join(DEFAULTS)}", Severity.ROUTINE,
+def defaults_notice() -> Notice:
+    """Returns the notice that `run` and `create` add their defaults to every container."""
+    return Notice(
+        f"added {' '.join(DEFAULTS)}", NoticeSeverity.INFO,
         help="a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
              "which override these")

@@ -17,8 +17,8 @@ A Policy holds the settings the rules apply with, such as the id rules (idrules.
 uids and gids a project may choose; what is known about the thing judged belongs to it, not to the
 policy, down to the directory its paths are judged against. Every rule is a method of Policy, whether it
 reads the settings or not. The checks of a whole target turn the problems of each rule into findings
-(findings.Finding) about the service, volume or network they concern. Nothing here touches docker, only
-the filesystem for realpath resolution.
+(findings.Finding), or into notices (notices.Notice) for a trusted value, about the service, volume or
+network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
 """
 
 import dataclasses
@@ -31,7 +31,7 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen.findings import Finding, about, judged, refused
+from dockscreen.screen.findings import Finding, Reportable, about, judged, refused
 from dockscreen.screen.rules import idrules
 from dockscreen.screen.rules.base import JudgedService, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
@@ -118,7 +118,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         """Returns this policy with per_service as the policy of each service (for_service)."""
         return dataclasses.replace(self, per_service=MappingProxyType(dict(per_service)))
 
-    def check_project(self, project: Project) -> list[Finding]:
+    def check_project(self, project: Project) -> list[Reportable]:
         """Checks a compose project's definition and where it is; returns what it finds, each about what it
         concerns.
 
@@ -127,8 +127,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
-        problems = refused([*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
-                            *self._check_service_names(config)])
+        problems: list[Reportable] = refused([*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
+                                              *self._check_service_names(config)])
         if not name:  # volumes and networks are scoped to the project by its name
             problems += refused(["config has no project name"])
         for service in project.services:
@@ -157,14 +157,14 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         # build secrets refer to these
         return problems + self._check_file_sources(project.definition, project.directory)
 
-    def check_service(self, service: JudgedService) -> list[Finding]:
+    def check_service(self, service: JudgedService) -> list[Reportable]:
         """Checks one service; returns what it finds, empty if there is nothing.
 
-        A problem is refused, or notable if its value comes from an origin that this policy trusts
+        A problem is refused, or a warning if its value comes from an origin that this policy trusts
         (findings.judged). A user from the image is left to the image decision.
         """
         keys = service.definition
-        found = []
+        found: list[Reportable] = []
         for key in keys:
             unknown = unknown_keys({key: keys[key]}, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
             found += judged(unknown, service.origin_of(key), self.trust)
@@ -176,7 +176,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
                 found += judged(check(self, keys.get(key), service), origin, self.trust)
         return found
 
-    def check_container(self, container: Container) -> list[Finding]:
+    def check_container(self, container: Container) -> list[Reportable]:
         """Checks what a container asks for as check_service would check a service that asked for the same
         (Container.definition); returns what it finds.
 

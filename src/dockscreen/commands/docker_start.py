@@ -18,7 +18,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding
+from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
@@ -44,7 +44,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     runtime.docker.exec(parent_cli.argv)
 
 
-def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
+def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
     """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
     command line cli names.
 
@@ -60,7 +60,7 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
     screener = Screener(runtime, own_ids_hint="")  # the image's user is set in the config file, see the hint
     if is_remote(cli.lead_args, runtime.docker):
         return screener.policy(None).check_daemon(True)
-    problems: list[Finding] = []
+    problems: list[Reportable] = []
     for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
         try:
             info = screener.docker.inspect_container(ref)

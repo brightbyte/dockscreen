@@ -13,12 +13,13 @@ from typing import NamedTuple, Self
 from dockscreen.host.config import NO_SECTION, SectionMatch
 from dockscreen.model.image import Image, UserIdentity
 from dockscreen.model.origin import Origin
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Verdict
+from dockscreen.screen.notices import Notice
 
 
 class UserDecision(NamedTuple):
     """Record of a judgement of the user a container would run as. It holds where that user comes from, the
-    image, what was found, the identity read from the image, and the user dockscreen pins.
+    image, what was reported, the identity read from the image, and the user dockscreen pins.
 
     Instances come from Policy.check_image, through Screener.assess for one container and Screener.decide for
     a project; failure gives one for an image that could not be looked at.
@@ -26,7 +27,8 @@ class UserDecision(NamedTuple):
     Attributes:
     - origin: where the user comes from; None if the image could not be looked at
     - image: the image (Image)
-    - findings: refusals, failures to look, and notable findings
+    - notices: what is worth a look but forbids nothing: an image section that does not apply, and why
+    - findings: refusals and failures to look, which forbid running the container
     - identity: the ids read from the image, or None
     - user: the (uid, gid) dockscreen pins (pins_user), or None
     - section: which image section of the config file applied (SectionMatch)
@@ -35,6 +37,7 @@ class UserDecision(NamedTuple):
     """
     origin: Origin | None
     image: Image
+    notices: tuple[Notice, ...] = ()
     findings: tuple[Finding, ...] = ()
     identity: UserIdentity | None = None
     user: tuple[int, int] | None = None
@@ -45,27 +48,17 @@ class UserDecision(NamedTuple):
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:
         """Returns the decision of an image that could not be looked at, for reason."""
-        return cls(None, image, (Finding.of(reason, Severity.FAILED),))
-
-    @property
-    def reasons(self) -> list[Finding]:
-        """Returns the findings that forbid running the container: refusals, or failures to look."""
-        return [f for f in self.findings if f.fatal]
-
-    @property
-    def notes(self) -> list[Finding]:
-        """Returns what is worth a look but forbids nothing: an image section that does not apply, and why."""
-        return [f for f in self.findings if not f.fatal]
+        return cls(None, image, (), (Finding.of(reason, Verdict.FAILED),))
 
     @property
     def refused(self) -> bool:
         """Tells whether the container must not run: refused, or not assessed at all."""
-        return bool(self.reasons)
+        return bool(self.findings)
 
     @property
     def failed(self) -> bool:
         """Tells whether the image could not be assessed at all."""
-        return any(f.severity is Severity.FAILED for f in self.findings)
+        return any(f.verdict is Verdict.FAILED for f in self.findings)
 
     @property
     def pins_user(self) -> bool:

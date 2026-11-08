@@ -28,7 +28,8 @@ from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import findings, userdecisionview
 from dockscreen.screen.decisions import default_home
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Reportable
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules import idrules
 from dockscreen.screen.screener import Screener
@@ -93,8 +94,8 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         if decision.replaces_root:
             messages.notice(_fallback_notice(decision))
         else:
-            messages.notice(Finding(f"image {parsed.image} runs as {user}, passed to docker as numbers",
-                                    Severity.ROUTINE))
+            messages.notice(Notice(f"image {parsed.image} runs as {user}, passed to docker as numbers",
+                                   NoticeSeverity.INFO))
         extra = [f"--user={user}"]
         if decision.replaces_root:
             extra += _home_args(screener, container, decision)
@@ -128,13 +129,13 @@ def _home_args(screener: Screener, container: Container, decision: UserDecision)
     return ["-e", f"HOME={home}"]
 
 
-def _fallback_notice(decision: UserDecision) -> Finding:
-    """Returns the notable finding that the default user replaces the image's root, and what to do about
+def _fallback_notice(decision: UserDecision) -> Notice:
+    """Returns the warning that the default user replaces the image's root, and what to do about
     it.
     """
     home = default_home(decision.pinned_user, decision.home)
-    return Finding(
-        instead_of_root(decision), Severity.NOTABLE,
+    return Notice(
+        instead_of_root(decision), NoticeSeverity.WARNING,
         help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
@@ -185,7 +186,7 @@ def check(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
         container = Container(screener.docker.inspect_container(created), here, _user_origin(parsed, decided))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         if problems:
-            decision = UserDecision(None, image, tuple(problems))
+            decision = UserDecision(None, image, (), tuple(problems))
         else:
             decision = decided or screener.assess(screener.runtime.cwd, container.id, container.info,
                                                     container.user_origin, reference=parsed.image)
@@ -195,9 +196,9 @@ def check(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
 
 
 def _command_line_findings(screener: Screener, container: Container, decision: UserDecision,
-                           trust: frozenset[Origin]) -> list[Finding]:
+                           trust: frozenset[Origin]) -> list[Reportable]:
     """Returns what the command line asks for, in the container it created (check, with no options of
-    dockscreen's own), that a project or an image may not have: refused, or notable where trust trusts the
+    dockscreen's own), that a project or an image may not have: refused, or a warning where trust trusts the
     command line (Policy.check_container).
 
     Empty if the container could not be inspected.
@@ -302,8 +303,8 @@ def _report_decision(screener: Screener, image: str, decision: UserDecision) -> 
     else:
         outcome = userdecisionview.outcome(decision, screener.local)
         messages.out(messages.Message(dot, f"image {name}: {outcome}"))
-        for note in decision.notes:
-            messages.out(Finding(f"note: {note}", Severity.NOTABLE))
+        for note in decision.notices:
+            messages.out(Notice(f"note: {note}", NoticeSeverity.WARNING))
     if decision.refused:
         if not decision.failed:
             messages.out(messages.Message(messages.HINT, CHOOSE_HINT))
@@ -316,13 +317,13 @@ def _report_decision(screener: Screener, image: str, decision: UserDecision) -> 
     messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
 
 
-def _report_findings(found: list[Finding]) -> None:
+def _report_findings(found: list[Reportable]) -> None:
     """Prints what the command line asks for that a project or an image may not: as refusals, or as worth a
     look where the command line is trusted.
     """
     for finding in findings.about(found, "command line"):
         messages.out(finding)
-    if any(not finding.fatal for finding in found):
+    if any(isinstance(item, Notice) for item in found):
         messages.out(messages.Message(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
 

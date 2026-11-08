@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from fakes import project_of, rules
+from fakes import project_of, rules, texts
 
 from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
@@ -9,7 +9,8 @@ from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import ProjectLocation
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Finding, Verdict
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules import project as project_rules
 from dockscreen.screen.rules import service as service_rules
@@ -42,7 +43,7 @@ def context(project, extra_dirs=(), allow_me=True):
 
 def check(project, config, extra_dirs=(), allow_me=True):
     definition = project_of({"name": "proj", **config}, project)
-    return context(project, extra_dirs, allow_me).check_project(definition)
+    return texts(context(project, extra_dirs, allow_me).check_project(definition))
 
 
 def web(definition=None, project="/p"):
@@ -169,7 +170,7 @@ def test_subordinate_ids_are_refused(project):
 
     policy = Policy(rules(subordinate=SubordinateRanges()))
     definition = {"name": "proj", "services": {"web": service(user="100000:5000")}}
-    problems = policy.check_project(project_of(definition, project))
+    problems = texts(policy.check_project(project_of(definition, project)))
     assert_refused(problems, "uid 100000 is in a subordinate id range")
 
 
@@ -340,7 +341,7 @@ def test_build_context_outside_project_is_refused(project):
 def test_unsafe_build_options_are_refused_when_building_and_running(project, build, reason):
     build = {"context": str(project), **build}
     definition = project_of({"name": "proj", "services": {"web": {"build": build}}}, project)
-    build_only = context(project).check_project_build(definition)
+    build_only = texts(context(project).check_project_build(definition))
 
     assert_refused(problems_for(project, build=build), reason)
     assert_refused(build_only, reason)
@@ -361,7 +362,7 @@ def test_build_config_check_ignores_runtime_policy(project):
 
 def test_build_config_check_covers_secret_files(project):
     config = {"name": "proj", "secrets": {"s": {"file": "/etc/shadow"}}}
-    assert_refused(context(project).check_project_build(project_of(config, project)),
+    assert_refused(texts(context(project).check_project_build(project_of(config, project))),
                    "file '/etc/shadow' is outside")
 
 
@@ -504,7 +505,7 @@ def test_a_service_name_that_compose_would_read_as_an_option_is_refused(project)
     reason = "service name '--ssh' starts with '-', which compose would read as an option"
 
     assert check(project, config) == [reason]
-    assert context(project).check_project_build(project_of({"name": "proj", **config}, project)) == [
+    assert texts(context(project).check_project_build(project_of({"name": "proj", **config}, project))) == [
         reason]
 
 
@@ -525,17 +526,18 @@ def test_a_containers_bind_mounts_are_judged_against_the_current_directory_once_
     found = check_container(Binds=["/etc:/etc:ro", "/work/src:/src"],
                             Mounts=[{"Type": "bind", "Source": "/etc", "Target": "/etc"}])
 
-    assert found == ["bind mount '/etc' is outside /work"]
+    assert texts(found) == ["bind mount '/etc' is outside /work"]
 
 
 def test_a_containers_volumes_from_and_devices_are_found():
-    assert check_container(VolumesFrom=["db"], Devices=[{"PathOnHost": "/dev/kvm"}]) == [
+    found = check_container(VolumesFrom=["db"], Devices=[{"PathOnHost": "/dev/kvm"}])
+    assert texts(found) == [
         "devices is not allowed", "volumes_from 'container:db' reaches a container outside the project"]
 
 
 def test_a_containers_user_is_judged_only_when_the_command_line_chose_it():
     assert check_container(user="0:0") == []  # the image's: run decides that one, not this
-    assert check_container(user="0:0", user_origin=Origin.COMMAND_LINE) == [
+    assert texts(check_container(user="0:0", user_origin=Origin.COMMAND_LINE)) == [
         "user '0:0': uid 0 is root", "user '0:0': gid 0 is root"]
 
 
@@ -543,8 +545,8 @@ def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not
     found = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, Privileged=True)
     strict = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, trust=STRICT, Privileged=True)
 
-    assert {f.severity for f in found} == {Severity.NOTABLE}
-    assert {f.severity for f in strict} == {Severity.REFUSED}
+    assert {(type(f), f.severity) for f in found} == {(Notice, NoticeSeverity.WARNING)}
+    assert {(type(f), f.verdict) for f in strict} == {(Finding, Verdict.REFUSED)}
 
 
 def test_each_key_is_judged_as_where_its_value_comes_from():
@@ -556,16 +558,16 @@ def test_each_key_is_judged_as_where_its_value_comes_from():
     found = policy.Policy(rules()).check_service(web)
 
     # the config file is trusted, dockscreen is not: its values are checked once more
-    assert [(f, f.severity) for f in found] == [
-        ("user '0:0': uid 0 is root", Severity.NOTABLE), ("user '0:0': gid 0 is root", Severity.NOTABLE),
-        ("cap_drop must include ALL", Severity.REFUSED)]
+    assert [(str(f), type(f)) for f in found] == [
+        ("user '0:0': uid 0 is root", Notice), ("user '0:0': gid 0 is root", Notice),
+        ("cap_drop must include ALL", Finding)]
 
 
 # --- the daemon, the project name, and the command line's users ----------------
 
 def test_a_daemon_that_may_not_be_this_hosts_is_refused():
     assert policy.Policy(rules()).check_daemon(False) == []
-    assert policy.Policy(rules()).check_daemon(True) == [project_rules.REMOTE_MESSAGE]
+    assert texts(policy.Policy(rules()).check_daemon(True)) == [project_rules.REMOTE_MESSAGE]
 
 
 def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
@@ -575,24 +577,25 @@ def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
                                sensitive=("/home/me",))
     found = policy.Policy(rules()).check_location(location)
 
-    assert [f.severity for f in found] == [Severity.REFUSED] * 3
-    assert found[0].startswith("the nearest compose file is in /home/me, which is your home directory")
-    assert found[1].startswith("/home/me/.env sets COMPOSE_FILE")
-    assert found[2].startswith("the project directory /home/me contains /home/me;")
+    assert [f.verdict for f in found] == [Verdict.REFUSED] * 3
+    first, second, third = texts(found)
+    assert first.startswith("the nearest compose file is in /home/me, which is your home directory")
+    assert second.startswith("/home/me/.env sets COMPOSE_FILE")
+    assert third.startswith("the project directory /home/me contains /home/me;")
 
 
 def test_a_mount_dir_that_contains_a_sensitive_path_is_pointed_out():
     [warning] = policy.Policy(rules()).check_mount_dirs({"/srv": [], "/home": ["/home/me", "/home/me/.x"]})
 
-    assert warning == "the configured mount dir /home contains /home/me, so containers can mount it"
-    assert warning.severity is Severity.NOTABLE and warning.mark is messages.WARN
+    assert str(warning) == "the configured mount dir /home contains /home/me, so containers can mount it"
+    assert warning.severity is NoticeSeverity.WARNING and warning.mark is messages.WARN
 
 
 def test_what_services_take_from_the_shell_is_pointed_out_by_name_per_service():
     found = policy.Policy(rules()).check_shell_env({"db": ["HOME"], "web": ["A", "TOKEN"], "job": []})
 
-    assert [(f.subject, f.severity) for f in found] == [("service db", Severity.NOTABLE)] + [
-        ("service web", Severity.NOTABLE)]
+    assert [(f.subject, f.severity) for f in found] == [("service db", NoticeSeverity.WARNING)] + [
+        ("service web", NoticeSeverity.WARNING)]
     assert found[1].shown == "service web: environment variables taken from your shell: A, TOKEN"
 
 
@@ -605,22 +608,22 @@ def test_user_option_takes_numeric_ids(spec):
     "alice", "nobody", "root", "1000:staff", "alice:1000", "", "1000:", ":1000", "-1", "1000", "0",
 ])
 def test_user_option_refuses_everything_else_and_points_at_the_alternatives(spec):
-    [refusal] = policy.Policy(rules()).check_user_option(spec)
+    [refusal] = texts(policy.Policy(rules()).check_user_option(spec))
     assert "--user takes numeric ids as uid:gid" in refusal
     assert "--as NAME runs as a local user, --as-me as yourself" in refusal
 
 
 def test_a_user_option_with_a_uid_alone_says_to_give_the_group():
-    [refusal] = policy.Policy(rules()).check_user_option("1000")
+    [refusal] = texts(policy.Policy(rules()).check_user_option("1000"))
     assert "not '1000'; give the group too, as uid:gid" in refusal
 
 
 def test_as_option_needs_the_name_of_an_account_on_this_host():
     assert policy.Policy(rules()).check_as_option("alice", (4242, 4343)) == []
-    assert policy.Policy(rules()).check_as_option("ghost", None) == [
+    assert texts(policy.Policy(rules()).check_as_option("ghost", None)) == [
         "user 'ghost' does not exist on this host; use --user with a numeric id"]
     for name in ("1000", "alice:staff", ""):
-        [refusal] = policy.Policy(rules()).check_as_option(name, (1, 1))
+        [refusal] = texts(policy.Policy(rules()).check_as_option(name, (1, 1)))
         assert "--as takes the name of a local user" in refusal
 
 
@@ -652,7 +655,7 @@ def test_the_default_user_the_config_file_sets_comes_from_it():
 
 def test_an_image_user_the_id_rules_refuse_with_host_mounts_is_refused():
     found = policy.Policy(rules()).check_image(inspected("app", mounts=True), Origin.IMAGE)
-    assert found.refused and found.reasons[0].startswith("the image's uid 100000")
+    assert found.refused and str(found.findings[0]).startswith("the image's uid 100000")
 
 
 def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configured():
@@ -670,9 +673,9 @@ def test_a_projects_images_are_judged_as_they_were_looked_at(project):
 
     found = context(project).check_images(looked_at)
 
-    assert [(f.subject, f.severity) for f in found] == [("service web", Severity.REFUSED),
-                                                        ("service db", Severity.FAILED)]
-    assert found[1] == "service db: image db:1: not here"
+    assert [(f.subject, f.verdict) for f in found] == [("service web", Verdict.REFUSED),
+                                                    ("service db", Verdict.FAILED)]
+    assert str(found[1]) == "service db: image db:1: not here"
 
 
 def test_paths_are_judged_against_the_targets_directory_not_the_policys(tmp_path):
@@ -682,4 +685,4 @@ def test_paths_are_judged_against_the_targets_directory_not_the_policys(tmp_path
 
     assert one_policy.check_project_build(project_of(build, tmp_path / "a")) == []
     [outside] = one_policy.check_project_build(project_of(build, tmp_path / "b"))
-    assert outside.endswith(f"is outside {tmp_path / 'b'}")
+    assert str(outside).endswith(f"is outside {tmp_path / 'b'}")

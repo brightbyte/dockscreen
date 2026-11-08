@@ -17,7 +17,7 @@ from typing import Any, NamedTuple
 
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.notices import Notice, NoticeSeverity
 
 
 class SubstitutionGroup(NamedTuple):
@@ -86,16 +86,16 @@ def origins(substitutions: Iterable[Substitution]) -> dict[str, dict[str, Origin
     return found
 
 
-def individual(substitutions: Iterable[Substitution]) -> list[Finding]:
-    """Describes the substitutions that are reported on their own line, one finding each, in their order:
-    notable if it alters what the project chose, else routine.
+def individual(substitutions: Iterable[Substitution]) -> list[Notice]:
+    """Describes the substitutions that are reported on their own line, one notice each, in their order:
+    a warning if it alters what the project chose, else info.
     """
-    return [Finding(s.text, Severity.NOTABLE if s.notable else Severity.ROUTINE, f"service {s.service}",
-                    s.help)
+    severity = {True: NoticeSeverity.WARNING, False: NoticeSeverity.INFO}
+    return [Notice(s.text, severity[s.notable], f"service {s.service}", s.help)
             for s in substitutions if s.text]
 
 
-def grouped(substitutions: Iterable[Substitution]) -> list[Finding]:
+def grouped(substitutions: Iterable[Substitution]) -> list[Notice]:
     """Describes the groups of the substitutions, one line each naming its services, in the order the groups
     first appear.
     """
@@ -103,12 +103,12 @@ def grouped(substitutions: Iterable[Substitution]) -> list[Finding]:
     for s in substitutions:
         if s.group:
             services.setdefault(s.group, []).append(s.service)
-    return [Finding(group.text.format(services=", ".join(dict.fromkeys(names))), Severity.ROUTINE,
-                    help=group.help)
+    return [Notice(group.text.format(services=", ".join(dict.fromkeys(names))), NoticeSeverity.INFO,
+                   help=group.help)
             for group, names in services.items()]
 
 
-def describe(substitutions: Iterable[Substitution]) -> list[Finding]:
+def describe(substitutions: Iterable[Substitution]) -> list[Notice]:
     """Describes the substitutions for an audit or a run: the individual lines, then one per group."""
     found = list(substitutions)
     return [*individual(found), *grouped(found)]

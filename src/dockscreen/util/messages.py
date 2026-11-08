@@ -8,9 +8,9 @@ message on lines indented past PREFIX, each escaped, so none of them can pass fo
 Command output that is meant as data (audit reports, harden patches, help) goes to stdout and is not
 a message.
 
-A line can start with a mark (Message): a plain text symbol, coloured as docker colours its own when the
-line goes to a terminal and NO_COLOR is not set. The line keeps its mark as an attribute, so the same
-symbol can stand for different things in different colours.
+A line can start with a mark (Message, or anything else that HasMark): a plain text symbol, coloured as
+docker colours its own when the line goes to a terminal and NO_COLOR is not set. The line keeps its mark as
+an attribute, so the same symbol can stand for different things in different colours.
 """
 
 import os
@@ -67,6 +67,19 @@ class Message(str):
     def shown(self) -> str:
         """Returns the text, followed by the help if there is one and helpful mode is on (with_help)."""
         return with_help(self.text, self.help)
+
+
+@runtime_checkable
+class HasMark(Protocol):
+    """Protocol for what prints as a line that starts with a mark, such as a Message, a Finding or a Notice.
+
+    Attributes:
+    - mark: the Mark
+    - shown: the text, followed by its help if there is one and helpful mode is on (with_help)
+    """
+
+    mark: Mark
+    shown: str
 
 
 def with_help(text: str, help: str | None) -> str:
@@ -148,7 +161,7 @@ def out(text: str, indent: bool = True) -> None:
     """Prints a line of a report to stdout, escaped and with its mark coloured.
 
     Parameters:
-    - text: the line, which may start with a mark (Message)
+    - text: the line, which may start with a mark (HasMark)
     - indent: print it after a tab, which sets the report apart from the [dockscreen] messages on stderr,
       wrapped to report_width() with the text lined up after the mark. Without it, the line is printed as it
       is, for output that is all one line (--brief)
@@ -177,7 +190,7 @@ def _wrapped(text: str, width: int | None, colour: bool) -> list[str]:
     Continued lines line up under the text after the mark. width: None for one line; colour: whether
     to colour the mark.
     """
-    if isinstance(text, Message):
+    if isinstance(text, HasMark):
         lead, body = f"{text.mark} ", printable(text.shown)
     else:
         lead, body = "", printable(text)
@@ -186,14 +199,14 @@ def _wrapped(text: str, width: int | None, colour: bool) -> list[str]:
     else:
         lines = textwrap.wrap(lead + body, width=width - TAB_WIDTH, subsequent_indent=CONTINUATION,
                               break_long_words=False, break_on_hyphens=False) or [""]
-    if isinstance(text, Message) and colour:  # coloured after wrapping, so the escape codes take up no width
+    if isinstance(text, HasMark) and colour:  # coloured after wrapping, so the escape codes take up no width
         lines[0] = _coloured(text.mark) + lines[0][len(text.mark):]
     return lines
 
 
 def _paint(line: object, stream: TextIO) -> str:
     """Returns line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
-    if not isinstance(line, Message):
+    if not isinstance(line, HasMark):
         return printable(line)
     mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
     return f"{mark} {printable(line.shown)}"

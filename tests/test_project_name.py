@@ -1,11 +1,11 @@
 import pytest
-from fakes import FakeImages, compose_line, compose_project, docker_dispatch, rules
+from fakes import FakeImages, compose_line, compose_project, docker_dispatch, rules, texts
 
 from dockscreen.commands import compose_up
 from dockscreen.compose import inspect
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Severity
+from dockscreen.screen.findings import Verdict
 
 
 def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():
@@ -35,12 +35,12 @@ def test_a_name_used_from_another_directory_is_refused_with_the_way_out(tmp_path
     problems = conflicts([str(tmp_path / "victim"), str(tmp_path)], str(tmp_path))
 
     assert len(problems) == 1
-    assert f"project name 'proj' is used by containers made from '{tmp_path / 'victim'}'" in problems[0]
+    assert f"project name 'proj' is used by containers made from '{tmp_path / 'victim'}'" in str(problems[0])
     assert "-p NAME" in problems[0].help
 
 
 def test_containers_without_a_directory_label_count_as_another_project():
-    assert "an unknown directory" in conflicts([""])[0]
+    assert "an unknown directory" in str(conflicts([""])[0])
 
 
 def test_not_being_able_to_ask_is_a_failure_to_look():
@@ -49,8 +49,8 @@ def test_not_being_able_to_ask_is_a_failure_to_look():
             raise DockerError("daemon down")
 
     [failure] = inspect.name_conflicts(policy.Policy(rules()), "proj", "/p", Broken())
-    assert failure == "cannot tell whether another project is called 'proj': daemon down"
-    assert failure.severity is Severity.FAILED
+    assert str(failure) == "cannot tell whether another project is called 'proj': daemon down"
+    assert failure.verdict is Verdict.FAILED
 
 
 @pytest.mark.parametrize("args, env, chosen", [

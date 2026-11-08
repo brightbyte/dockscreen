@@ -13,7 +13,7 @@ from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.findings import Finding, Verdict
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.screener import Screener
@@ -35,7 +35,7 @@ class ProjectRefused(Exception):
     """
 
     def __init__(self, findings: Sequence[Finding]) -> None:
-        super().__init__("; ".join(findings))
+        super().__init__("; ".join(str(f) for f in findings))
         self.findings = list(findings)
 
 
@@ -152,7 +152,7 @@ def name_lookup_failure(name: str, error: DockerError) -> Finding:
     - name: the project name
     - error: why docker could not say
     """
-    return Finding.of(error, Severity.FAILED).with_text(
+    return Finding.of(error, Verdict.FAILED).with_text(
         f"cannot tell whether another project is called {name!r}: {error}")
 
 

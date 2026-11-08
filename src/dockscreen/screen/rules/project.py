@@ -9,7 +9,8 @@ from typing import Any
 
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen.findings import Finding, Severity, refused
+from dockscreen.screen.findings import Finding, refused
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 
 TOP_LEVEL_KEYS = frozenset({"name", "services", "volumes", "networks", "secrets", "configs", "version"})
@@ -143,27 +144,27 @@ class ProjectRules(RuleBase):
                                  "own"))
         return found
 
-    def check_mount_dirs(self, sensitive: Mapping[str, Sequence[str]]) -> list[Finding]:
-        """Checks the configured mount dirs, by the sensitive paths that each contains; returns a notable
-        finding for each that contains one, since its containers can mount it.
+    def check_mount_dirs(self, sensitive: Mapping[str, Sequence[str]]) -> list[Notice]:
+        """Checks the configured mount dirs, by the sensitive paths that each contains; returns a warning
+        for each that contains one, since its containers can mount it.
 
         Parameters:
         - sensitive: by mount dir, the sensitive paths it equals or contains
         """
-        return [Finding(f"the configured mount dir {directory} contains {paths[0]}, so containers can "
-                        "mount it", Severity.NOTABLE, help="narrow mount_dirs in the config file")
+        return [Notice(f"the configured mount dir {directory} contains {paths[0]}, so containers can "
+                       "mount it", NoticeSeverity.WARNING, help="narrow mount_dirs in the config file")
                 for directory, paths in sensitive.items() if paths]
 
-    def check_shell_env(self, copied: Mapping[str, Sequence[str]]) -> list[Finding]:
-        """Checks what the project's services take from the shell; returns a notable finding for each service
+    def check_shell_env(self, copied: Mapping[str, Sequence[str]]) -> list[Notice]:
+        """Checks what the project's services take from the shell; returns a warning for each service
         that takes any, without their values.
 
         Parameters:
         - copied: by service, the names of the variables it takes from the shell
         """
-        return [Finding(f"environment variables taken from your shell: {', '.join(names)}", Severity.NOTABLE,
-                        f"service {name}",
-                        "unset them in your shell, or give the project literal values, to keep them out")
+        return [Notice(f"environment variables taken from your shell: {', '.join(names)}",
+                       NoticeSeverity.WARNING, f"service {name}",
+                       "unset them in your shell, or give the project literal values, to keep them out")
                 for name, names in copied.items() if names]
 
     def check_project_name(self, name: str, directory: str, made_from: Iterable[str]) -> list[Finding]:

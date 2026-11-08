@@ -87,7 +87,7 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     cleared = projectscreening.check(loaded.with_hardened(resolved), screener)
     notes = [hardening.defaults_note()]
     if isinstance(cleared, Report):
-        remaining = cleared.reasons
+        remaining = list(cleared.findings)
         messages.notice("the images were not looked at because of the problems below: "
                         "nothing was pulled or built")
     else:
@@ -109,7 +109,7 @@ def _fix_image_users(cleared: projectscreening.ClearedProject, screener: Screene
     with cleared.loaded.generated(screener.docker.binary) as command:
         decided = projectscreening.decide(cleared, screener, command)
     if not decided.decisions:
-        return decided.report.reasons, notes  # nothing could be looked at: pulling or building failed
+        return list(decided.report.findings), notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []
     for name, decision in decided.decisions.items():
         if decision.failed:  # setting a user does not fix an image that could not be read

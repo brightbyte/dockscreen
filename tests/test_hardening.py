@@ -1,5 +1,5 @@
 import pytest
-from fakes import Accounts, compose_line, compose_project, marked, project_of, rules
+from fakes import Accounts, compose_line, compose_project, marked, project_of, rules, texts
 
 from dockscreen.commands import compose_audit, compose_harden, docker_compose
 from dockscreen.model.origin import Origin
@@ -75,7 +75,7 @@ def test_a_project_cannot_weaken_the_defaults():
     # Appending true does not undo false: the policy still refuses the config.
     original = config(security_opt=["no-new-privileges:false"], cap_add=["SYS_ADMIN"])
     hardened, _ = harden(original, Accounts())
-    problems = policy.Policy(rules()).check_project(project_of(hardened))
+    problems = texts(policy.Policy(rules()).check_project(project_of(hardened)))
     assert "service web: security_opt 'no-new-privileges:false' is not allowed" in problems
     assert "service web: cap_add is not allowed" in problems
 
@@ -191,7 +191,7 @@ def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them()
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     for spec, part in (("app", "user 'app'"), ("app:app", "user 'app'"), ("1000:staff", "group 'staff'")):
         hardened, _ = harden(config(user=spec, **keep), Accounts())
-        problems = policy.check_project(project_of(hardened))
+        problems = texts(policy.check_project(project_of(hardened)))
         assert any(f"{part} does not exist on this host" in p for p in problems), spec
 
 
@@ -201,8 +201,8 @@ def test_nobody_passes_and_root_is_refused_once_resolved():
     nobody, _ = harden(config(user="nobody", **keep), Accounts())
     root, _ = harden(config(user="root", **keep), Accounts())
     assert policy.check_project(project_of(nobody)) == []
-    assert policy.check_project(project_of(root)) == ["service web: user '0:0': uid 0 is root",
-                                              "service web: user '0:0': gid 0 is root"]
+    assert texts(policy.check_project(project_of(root))) == ["service web: user '0:0': uid 0 is root",
+                                                          "service web: user '0:0': gid 0 is root"]
 
 
 def test_hook_users_are_resolved_too():
