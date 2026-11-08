@@ -66,7 +66,7 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
     if not decision.identity:
         return decision.reasons
     help = f"{CHOOSE_HINT}, {config_hint(decision.image.reference, config_file)}"
-    return [r.replace(help=help) for r in decision.reasons]
+    return [r.with_help(help) for r in decision.reasons]
 
 
 def config_hint(image: str, config_file: str) -> str:

@@ -45,7 +45,7 @@ def report(found: Report, brief_mode: bool = False) -> int:
             messages.notice(finding)
     for reason in found.reasons:
         flat = Finding.of(reason)  # the subject becomes part of the text
-        messages.notice(flat.replace(text=f"refusing: {flat}") if verdict is Verdict.REFUSED else flat)
+        messages.notice(flat.with_text(f"refusing: {flat}") if verdict is Verdict.REFUSED else flat)
     messages.notice(line(verdict))
     return int(verdict)
 

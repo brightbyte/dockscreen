@@ -46,7 +46,8 @@ class Finding(messages.Message):
     holds.
 
     The str base does not protect these attributes, so nothing changes them after construction. Build one with
-    the constructor, or with of from a text, an error or another finding; replace builds a changed copy.
+    the constructor, or with of from a text, an error or another finding; with_text and with_help build a
+    changed copy.
 
     Attributes:
     - subject: what it is about ("service web"), or None
@@ -94,15 +95,13 @@ class Finding(messages.Message):
             docker_error = reason if isinstance(reason, DockerError) else None
         return Finding(str(reason), severity, subject, messages.help_of(reason), docker_error)
 
-    def replace(self, *, text: str | None = None, help: str | None = None) -> "Finding":
-        """Returns a copy of this finding with its text or its help changed, if given.
+    def with_text(self, text: str) -> "Finding":
+        """Returns a copy of this finding with text as its text, after the same subject."""
+        return Finding(text, self.severity, self.subject, self.help, self.docker_error)
 
-        Parameters:
-        - text: the new text; None to keep it
-        - help: the new help; None to keep it
-        """
-        return Finding(self.text if text is None else text, self.severity, self.subject,
-                       self.help if help is None else help, self.docker_error)
+    def with_help(self, help: str | None) -> "Finding":
+        """Returns a copy of this finding with help as what to do about it; None for nothing."""
+        return Finding(self.text, self.severity, self.subject, help, self.docker_error)
 
     @property
     def fatal(self) -> bool:
@@ -119,7 +118,7 @@ def failure_of(error: BaseException, subject: str | None = None, help: str | Non
     - subject: what it is about; None for none
     - help: what to do about it; None for nothing
     """
-    return Finding.of(error, Severity.FAILED, subject).replace(help=help)
+    return Finding.of(error, Severity.FAILED, subject).with_help(help)
 
 
 def about(found: Iterable[Finding], subject: str) -> list[Finding]:

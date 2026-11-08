@@ -151,8 +151,8 @@ def name_lookup_failure(name: str, error: DockerError) -> Finding:
     - name: the project name
     - error: why docker could not say
     """
-    return Finding.of(error, Severity.FAILED).replace(
-        text=f"cannot tell whether another project is called {name!r}: {error}")
+    return Finding.of(error, Severity.FAILED).with_text(
+        f"cannot tell whether another project is called {name!r}: {error}")
 
 
 def name_conflicts(project_policy: policy.Policy, name: str, directory: str, docker: Docker) -> list[Finding]:

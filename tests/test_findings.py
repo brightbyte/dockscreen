@@ -31,18 +31,22 @@ def test_of_keeps_what_a_finding_says_beyond_its_text():
         "is docker running?", "connection refused", Severity.FAILED)
 
 
-def test_replace_keeps_the_rest_of_a_finding_and_its_output():
+def test_with_text_and_with_help_keep_the_rest_of_a_finding_and_its_docker_error():
     plain = Finding("text", Severity.NOTABLE, "service web", "help")
     printed = Finding("text", Severity.FAILED, "service web", "help", DockerError("text", "docker said"))
 
     for finding in (plain, printed):
-        changed = finding.replace(help="other help")
+        changed = finding.with_help("other help")
         assert (changed.text, changed.subject, changed.severity) == ("text", "service web", finding.severity)
         assert changed.help == "other help"
-        assert finding.replace(text="other").help == "help"
-    assert messages.output_of(plain.replace(help="x")) is None
+        assert finding.with_text("other").help == "help"
+        retexted = finding.with_text("other")
+        assert (retexted.text, retexted.severity) == ("other", finding.severity)
+    assert messages.output_of(plain.with_help("x")) is None
     # the docker error stays with the copy
-    assert messages.output_of(printed.replace(text="other")) == "docker said"
+    assert messages.output_of(printed.with_text("other")) == "docker said"
+    assert messages.output_of(printed.with_help("x")) == "docker said"
+    assert printed.with_help(None).help is None
 
 
 def test_failure_of_an_error_keeps_what_docker_printed():
