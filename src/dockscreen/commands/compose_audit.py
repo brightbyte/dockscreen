@@ -51,7 +51,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         for line in [*substitutions.describe(loaded.hardening), *around, *lines]:
             messages.out(line)
         if outcome.reasons or loaded.hardening:
-            messages.out(messages.Marked(messages.HINT, HARDEN_HINT))
+            messages.out(messages.Message(messages.HINT, HARDEN_HINT))
     return verdict.report(outcome, brief)
 
 

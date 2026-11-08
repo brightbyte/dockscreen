@@ -17,7 +17,8 @@ def test_notice_is_one_prefixed_escaped_line(capsys):
 def test_the_output_of_a_problem_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
     # what docker prints, from a project that writes a verdict of its own into it
     output = "#1 load\r\n[dockscreen] \u2714 audit passed\x1b[2J"
-    messages.notice(Finding("docker buildx bake --print failed", output=output))
+    messages.notice(Finding("docker buildx bake --print failed",
+                            docker_error=DockerError("docker buildx bake --print failed", output)))
 
     indent = " " * len("[dockscreen] ") + "  "
     assert capsys.readouterr().err == (
@@ -63,7 +64,7 @@ class Terminal:
 def test_marks_are_coloured_on_a_terminal(monkeypatch, mark, painted):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm")
-    assert messages._paint(messages.Marked(mark, "x"), Terminal()) == painted
+    assert messages._paint(messages.Message(mark, "x"), Terminal()) == painted
     assert messages._paint("\u2714 x", Terminal()) == "\u2714 x"  # a plain string is not a marked line
 
 
@@ -81,23 +82,23 @@ def test_no_colour_when_piped_or_asked_not_to(monkeypatch, capsys):
 
 
 def test_report_lines_are_escaped_before_they_are_painted(capsys):
-    messages.out(messages.Marked(messages.BAD, "evil\x1b[2J"))
+    messages.out(messages.Message(messages.BAD, "evil\x1b[2J"))
     assert capsys.readouterr().out == "\t\u25cf evil\\x1b[2J\n"  # a report line: after a tab
 
 
 def test_untrusted_text_is_escaped_in_coloured_lines_too(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm")
-    line = messages.Marked(messages.BAD, "evil\x1b[2J")
+    line = messages.Message(messages.BAD, "evil\x1b[2J")
     assert messages._paint(line, Terminal()) == "\x1b[1;31m\u25cf\x1b[0m evil\\x1b[2J"
 
 
 def test_a_line_that_is_all_of_the_output_has_no_tab(capsys):
-    messages.out(messages.Marked(messages.PASSED, "passed"), indent=False)
+    messages.out(messages.Message(messages.PASSED, "passed"), indent=False)
     assert capsys.readouterr().out == "\u2714 passed\n"
 
 
-LONG = messages.Marked(messages.BAD, "refusing: service web: bind mount '/srv/some/rather/long/path' is "
+LONG = messages.Message(messages.BAD, "refusing: service web: bind mount '/srv/some/rather/long/path' is "
                                      "outside /home/me/src/shop; add it to mount_dirs")
 
 
@@ -138,7 +139,7 @@ def test_brief_lines_are_not_wrapped(monkeypatch, capsys):
 
 
 def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
-    line = messages.Marked(messages.WARN, "a changed", "do this about it")
+    line = messages.Message(messages.WARN, "a changed", "do this about it")
     assert str(line) == "a changed"  # the facts, whatever the mode, without the mark
 
     messages.notice(line)

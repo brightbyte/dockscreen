@@ -70,9 +70,9 @@ class Decisions(NamedTuple):
         return cls(project, project_policy, local, decided, report,
                    tuple(changes(project, decided, project_policy)))
 
-    def describe(self) -> list[messages.Marked]:
+    def describe(self) -> list[messages.Message]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
-        lines: list[messages.Marked] = []
+        lines: list[messages.Message] = []
         decisions = self.decisions
         for name in sorted(self.project.services_without_user):
             decision = decisions.get(name)
@@ -84,7 +84,7 @@ class Decisions(NamedTuple):
                 continue
             text = f"no user set; image {decision.image.reference} {verdict.outcome(decision, self.local)}"
             if decision.accepted:
-                lines.append(messages.Marked(verdict.dot(decision), f"service {name}: {text}"))
+                lines.append(messages.Message(verdict.dot(decision), f"service {name}: {text}"))
             elif decision.replaces_root and not decision.refused:
                 lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
             for note in decision.notes:

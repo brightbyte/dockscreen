@@ -44,7 +44,7 @@ BRIEF = "--brief"
 # dockscreen's own options before the docker command
 OWN_OPTIONS = frozenset({SKIP_SCREENING, ALLOW_ME, STRICT_SCREEN, HELPFUL, VERBOSE})
 
-AS_ME_MESSAGE = messages.Marked(
+AS_ME_MESSAGE = messages.Message(
     messages.BAD, "--as-me goes after run or exec, before the service",
     "for up, give --allow-me before the subcommand, and user: \"${UID}:${GID}\" to the services that should "
     "run as you")

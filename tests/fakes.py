@@ -38,7 +38,7 @@ SUBCOMMANDS = ("pull", "build", "up", "run", "create", "watch", "scale")
 
 def marked(lines):
     """Each line as it is shown with its mark, `MARK text`, if it has one."""
-    return [f"{line.mark} {line}" if isinstance(line, messages.Marked) else str(line) for line in lines]
+    return [f"{line.mark} {line}" if isinstance(line, messages.Message) else str(line) for line in lines]
 
 
 def project_of(definition, directory="/p", origins=None):

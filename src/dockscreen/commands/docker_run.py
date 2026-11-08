@@ -297,17 +297,17 @@ def _report_assessment(screener: Screener, image: str, assessment: Assessment) -
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
     name, dot = printable(image), verdict.dot(assessment)
     if assessment.origin is Origin.COMMAND_LINE:
-        messages.out(messages.Marked(
+        messages.out(messages.Message(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        messages.out(messages.Marked(dot, f"image {name}: {verdict.outcome(assessment, screener.local)}"))
+        messages.out(messages.Message(dot, f"image {name}: {verdict.outcome(assessment, screener.local)}"))
         for note in assessment.notes:
             messages.out(Finding(f"note: {note}", Severity.NOTABLE))
     if assessment.refused:
         if not assessment.failed:
-            messages.out(messages.Marked(messages.HINT, CHOOSE_HINT))
+            messages.out(messages.Message(messages.HINT, CHOOSE_HINT))
             hint = verdict.config_hint(image, screener.runtime.config_file)
-            messages.out(messages.Marked(messages.HINT, hint))
+            messages.out(messages.Message(messages.HINT, hint))
         return
     if assessment.pins_user:
         user = ids.format_user(assessment.pinned_user)
@@ -322,7 +322,7 @@ def _report_findings(found: list[Finding]) -> None:
     for finding in findings.about(found, "command line"):
         messages.out(finding)
     if any(not finding.fatal for finding in found):
-        messages.out(messages.Marked(messages.HINT, "docker run allows these because you gave them; "
+        messages.out(messages.Message(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))
 
 
