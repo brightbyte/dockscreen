@@ -36,18 +36,17 @@ COMPOSE_VALUE_FLAGS = {
 
 class GivenUsers:
     """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
-    the command to run with. It holds each user option given, whether a user was chosen, whether the caller's
-    own ids are allowed, the notices that resolving names produced, and the options that take a value.
+    the command to run with. It holds each user option given, whether a user was chosen, the notices that
+    resolving names produced, and the options that take a value.
 
     The three are lists that only its own methods add to; callers must not change them.
 
     The parsers of this module and of runargs create and fill it, turning each user option into
-    `--user=uid:gid` through its methods (allow records --allow-me); nothing changes it after they return,
+    `--user=uid:gid` through its methods; nothing changes it after they return,
     though nothing enforces that.
 
     Attributes:
     - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
-    - allow_me: whether the caller's own ids are allowed (--as-me, or --allow-me for `docker run`)
     - notices: what resolving user names on this host did, for the caller to print
     - given: the user options given, as UserOption records
     - values: each option that takes a value, with it, as docker gets it
@@ -63,7 +62,6 @@ class GivenUsers:
         self.callers_ids = me
         self.accounts = accounts
         self.chosen = False
-        self.allow_me = False
         self.notices: list[str] = []
         self.given: list[UserOption] = []
         self.values: list[tuple[str, str]] = []
@@ -96,13 +94,9 @@ class GivenUsers:
         self.value("--user", ids.format_user(account))
         return f"--user={ids.format_user(account)}"
 
-    def allow(self) -> None:
-        """Records that the caller's own ids are allowed (--allow-me), without choosing a user."""
-        self.allow_me = True
-
     def me(self) -> str:
-        """Returns `--user=` with the caller's own ids (--as-me), and records that those are allowed."""
-        self.chosen = self.allow_me = True
+        """Returns `--user=` with the caller's own ids (--as-me), and records that a user was chosen."""
+        self.chosen = True
         self.value("--user", ids.format_user(self.callers_ids))
         return f"--user={ids.format_user(self.callers_ids)}"
 

@@ -35,7 +35,7 @@ from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
-AUDIT_USAGE = ("usage: dockscreen [--allow-me] [--strict-screen] audit [--brief] [docker run options] "
+AUDIT_USAGE = ("usage: dockscreen [--strict-screen] audit [--brief] [docker run options] "
                "IMAGE [COMMAND]")
 
 
@@ -52,7 +52,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    screener = Screener(runtime, parent_cli.allow_me)
+    screener = Screener(runtime)
     remote = is_remote(parent_cli.lead_args, runtime.docker)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
@@ -69,7 +69,6 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     for message in [*parsed.users.notices, root_default, defaults_notice()]:
         if message:
             messages.notice(message)
-    screener = screener.with_allow_me(parsed.users.allow_me)
 
     created = _create_checked(screener, parsed, [])
     if isinstance(created, int):
@@ -248,7 +247,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has_own(commandline.BRIEF), line.argv
-    screener = Screener(runtime, line.allow_me)
+    screener = Screener(runtime)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
                                                                             runtime.docker)))
     if not daemon.passed:
@@ -265,7 +264,6 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if not brief:
         for message in parsed.users.notices:
             messages.notice(message)
-    screener = screener.with_allow_me(parsed.users.allow_me)
 
     try:
         _, created = check(screener, parsed, [])
@@ -333,7 +331,7 @@ def help(name: str) -> helptext.HelpTopic:
     """
     if name == "audit":
         return helptext.HelpTopic(
-            f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
+            f"dockscreen [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
             "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
             "Say what run would do with the same arguments, without starting anything",
             (("The container is created as run would create it, pulling the image if run would, judged, and "
@@ -344,12 +342,12 @@ def help(name: str) -> helptext.HelpTopic:
             (helptext.BRIEF,
              helptext.HelpOption(commandline.STRICT_SCREEN,
                                  "(before audit) Deny for what the command line asks for, too"),
-             helptext.ALLOW_ME, *helptext.USER_OPTIONS),
+             *helptext.USER_OPTIONS),
             docker_help=False)
     assert name == "run"
     return helptext.HelpTopic(
-        f"dockscreen [{commandline.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
+        "dockscreen run [OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Create and run a container, after checking the user its image runs as",
         ("dockscreen creates the container, checks it, and only then starts it:", *helptext.IMAGE_RULES,
          helptext.DEFAULTS, helptext.VERDICT),
-        (helptext.ALLOW_ME, *helptext.USER_OPTIONS), aliases=("dockscreen container run", "dockscreen run"))
+        helptext.USER_OPTIONS, aliases=("dockscreen container run", "dockscreen run"))

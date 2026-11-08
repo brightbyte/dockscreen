@@ -54,7 +54,7 @@ Who a container runs as is the decision dockscreen spends most of its effort on.
 - **nobody range**: ids any project or image may use, mounts or not. `nobody_range`, 65530–65534 by default.
 - **default user**: what replaces an image's root user. `default_user`, 65534:65534 by default. It also gets `HOME` set to `default_home`, `/tmp` by default (not when it is root, nor when `default_home` is `""`), because the image's own `HOME` is root's. A `HOME` that the command line, an env file or the service sets stays: for `docker run`, a `HOME` in the created container that differs from the image's `ENV` counts as set by the caller. The image's own user and a configured user keep the home docker finds in passwd.
 - **configured user**: a `uid:gid` that `user` sets in the config file, at the top level or in the image's or project's section.
-- **allowed ids**: the nobody range, the default user, the uid and the gid of the configured user that applies to the service, and me when `--allow-me` was given (`--as-me` implies it for `docker run`). Each id is allowed on its own: with a configured `900:900`, `900:65534` passes too. A top-level `user` makes its ids allowed for every service of every project.
+- **allowed ids**: the nobody range, the default user, the uid and the gid of the configured user that applies to the service, and me when `--allow-me` was given (compose only). Each id is allowed on its own: with a configured `900:900`, `900:65534` passes too. A top-level `user` makes its ids allowed for every service of every project.
 - **host mounts**: bind mounts, devices, `volumes_from`, secrets and configs, and a named volume whose `driver_opts` mount a device or a host path (`mounts.service_reaches_host`, `mounts.container_reaches_host`). Other named volumes and tmpfs are not.
 
 ### Forms
@@ -123,8 +123,8 @@ A project section (`[projects."DIRECTORY"]`) applies to the compose project dire
 |---|---|---|
 | `--user uid:gid`, `-u uid:gid` | `docker run`, `create`, `exec`, `audit`; compose `run`, `exec` | that user, as given |
 | `--as NAME` | the same | `--user=uid:gid` of that account on this host |
-| `--as-me` | the same | `--user=` my `uid:gid`; for `docker run` and `audit` it also implies `--allow-me` |
-| `--allow-me` | before the subcommand; for `docker run` and `audit` also before the image | me becomes an allowed id: in `user:` (literal, name or `${UID}`), and as an image's own user |
+| `--as-me` | the same | `--user=` my `uid:gid` |
+| `--allow-me` | before the compose subcommand only; docker's commands refuse it, and `audit`, `create` and `run` take `--as-me`, `--as` or `--user` | me becomes an allowed id: in `user:` (literal, name or `${UID}`), and as an image's own user |
 
 `--as`, `--as-me` and `--allow-me` are dockscreen's own: docker and compose never see them. The user options go after the subcommand and before the image, service or container.
 
@@ -256,7 +256,7 @@ Mount dirs and the project directory are checked against sensitive paths (system
 
 | Option, before the subcommand | Effect |
 |---|---|
-| `--allow-me` | the caller's own ids become allowed ids, for this run |
+| `--allow-me` | the caller's own ids become allowed ids, for this run; compose only |
 | `--strict-screen` | the command line is untrusted too (`origin.STRICT`): `audit`, `run`, `start` and `restart` refuse what it asks for that a project could not have (`Policy.check_container`), and so does `compose run`, which judges the service as its options change it (`runoptions`, substitutions with the command line as their origin); `create` and `buildx bake` accept it, since create's container is judged when it starts and bake judges its whole definition anyway; refused before any other subcommand until it is supported there; help is given either way |
 | `--skip-screening` | no checks, no defaults, and a warning on every use |
 

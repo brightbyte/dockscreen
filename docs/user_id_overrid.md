@@ -8,7 +8,7 @@ Goal: running as root is rare and strictly opt-in. Running as the calling user (
 
 | Source | Trusted | Checked |
 |---|---|---|
-| Command line: `--user`, `--as`, `--as-me` (`docker run` only), `--allow-me`; `run -u` and `exec -u` for compose | yes | form only (see [Forms](#forms)) |
+| Command line: `--user`, `--as`, `--as-me`, `--allow-me` (compose only); `run -u` and `exec -u` for compose | yes | form only (see [Forms](#forms)) |
 | Config file | yes | ownership and permissions of the file (see [Config file](#config-file)) |
 | Compose file: `user:`, hook `user:`, `group_add`, including values from `.env` | no | full rules |
 | Image: its `USER` and its `/etc/passwd` and `/etc/group` | no | full rules |
@@ -21,7 +21,7 @@ Environment variables no longer configure dockscreen: `DCOMPOSE_UID`, `DCOMPOSE_
 - **nobody range**: ids that any image or project may use. Comes from the config file. Defaults to 65530–65534.
 - **default user**: what a service or container runs as when nothing chose a user and the image's own user is root. Comes from the config file. Defaults to nobody (65534:65534).
 - **image user**: a `uid:gid` from the config file for one image repository. It replaces the image's own user when nothing else chose a user.
-- **allowed ids**: the nobody range, the default user, and the matching image user. Also me, when `--allow-me` was given, or `--as-me` on `docker run`.
+- **allowed ids**: the nobody range, the default user, and the matching image user. Also me, when `--allow-me` was given (compose only).
 
 ## Forms
 
@@ -67,11 +67,11 @@ Hook `user:` follows step 1.
 - `--user`, `--as` or `--as-me` before the image: used as given, with no checks beyond the form.
 - Otherwise, the same as compose steps 2 and 3.
 
-`--allow-me` makes an image whose own user is me acceptable.
+An image whose own user is me is refused here: choose the user with `--as-me`, `--as` or `--user`. `--allow-me` is not supported for `docker run`, `create` and `audit`.
 
 ### `docker start` and `restart`
 
-An existing container cannot be rewritten. A container whose user would be replaced or rejected under the rules above is rejected.
+An existing container cannot be rewritten. A container whose user would be replaced or rejected under the rules above is rejected. It keeps the user it was created with, so choosing one on the command line is no way out: the message points to a `user` in the image's section of the config file instead, which applies to an image pulled from a registry.
 
 ### `docker exec` and `compose exec`
 
@@ -93,8 +93,8 @@ Images built locally have no repository to check against, so a setting cannot ma
 
 | Flag | Effect |
 |---|---|
-| `--allow-me` | me becomes an allowed id: in `user:` (literal, name or `${UID}`), and as an image's own user |
-| `--as-me` | `docker run` only: stands for `--user=` my `uid:gid`, and implies `--allow-me`. Compose refuses it with a message pointing to `--allow-me`: deciding for every service at once makes no sense, and the services that should run as me say so with `user: "${UID}:${GID}"` |
+| `--allow-me` | compose only: me becomes an allowed id: in `user:` (literal, name or `${UID}`), and as an image's own user. docker's commands refuse it |
+| `--as-me` | after `run` or `exec`: stands for `--user=` my `uid:gid`. Before a compose subcommand it is refused with a message pointing to `--allow-me`: deciding for every service at once makes no sense, and the services that should run as me say so with `user: "${UID}:${GID}"` |
 
 ## Variables for compose files
 

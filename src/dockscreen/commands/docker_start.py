@@ -21,7 +21,7 @@ from dockscreen.screen import findings, verdict
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import explain
+from dockscreen.screen.userdecisionview import explain_existing
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -51,12 +51,12 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
     or a configured one) is refused like one whose user is not accepted, unless it already runs as that user.
 
     Parameters:
-    - cli: the docker command line, with `start` or `restart` as its command. With --allow-me in it, the
-      caller's own ids are allowed; with --strict-screen, what the command line that created a container
-      asked for is judged as a project's would be, and refused (Policy.check_container)
+    - cli: the docker command line, with `start` or `restart` as its command. With --strict-screen, what
+      the command line that created a container asked for is judged as a project's would be, and refused
+      (Policy.check_container)
     - runtime: the Runtime of the command
     """
-    screener = Screener(runtime, cli.allow_me)
+    screener = Screener(runtime)
     if is_remote(cli.lead_args, runtime.docker):
         return screener.policy(None).check_daemon(True)
     problems: list[Finding] = []
@@ -71,8 +71,8 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
                     f"cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
             else:
-                explained = explain(decision, runtime.config_file)
-                problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
+                explained = explain_existing(decision, runtime.config_file)
+                problems += findings.about(explained, ref)
             if cli.strict:
                 chosen = decision.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE

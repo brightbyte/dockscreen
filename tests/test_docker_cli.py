@@ -70,7 +70,7 @@ def test_run_dash_h_is_the_hostname_as_in_docker(capsys):
 def test_audit_gets_only_our_help(capsys, argv):
     assert dispatch(argv) == (0, [])
     out = capsys.readouterr().out
-    assert out.startswith("Usage:  dockscreen [--allow-me] [--strict-screen] audit") and "Exit status" in out
+    assert out.startswith("Usage:  dockscreen [--strict-screen] audit") and "Exit status" in out
 
 
 @pytest.mark.parametrize("argv", [["help", "ps"], ["ps", "--help"]])
@@ -121,10 +121,18 @@ def test_our_options_before_compose_reach_compose(tmp_path):
     assert recorder.children[-1][-1] == "up" and runtime.docker.forwarded == []
 
 
-def test_allow_me_before_the_subcommand_reaches_the_gate_and_not_docker():
-    own = FakeDocker(image_user="4242:4343")  # fakes.ME
-    assert dispatch(["--allow-me", "run", "img"], own) == (42, [])
+def test_allow_me_before_a_compose_command_is_not_passed_to_docker():
     assert dispatch(["--allow-me", "compose", "ps"])[1] == [["compose", "ps"]]
+
+
+@pytest.mark.parametrize("argv", [
+    ["run", "img"], ["create", "img"], ["audit", "img"], ["container", "run", "img"], ["start", "c"],
+    ["restart", "c"], ["exec", "c", "sh"]])
+def test_allow_me_is_refused_for_every_docker_command(argv, capsys):
+    own = FakeDocker(image_user="4242:4343")  # fakes.ME
+    # refused, not ignored, and nothing is handed to docker
+    assert dispatch(["--allow-me", *argv], own) == (1, [])
+    assert "--allow-me is only supported for compose" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("argv, expected", [
@@ -233,7 +241,7 @@ def test_help_is_given_under_strict_screen_too(argv, routed_argv, capsys):
 
 def test_docker_audit_without_an_image_prints_usage(capsys):
     assert dispatch(["audit"])[0] == 2
-    assert "usage: dockscreen [--allow-me] [--strict-screen] audit" in capsys.readouterr().err
+    assert "usage: dockscreen [--strict-screen] audit" in capsys.readouterr().err
 
 
 def test_docker_audit_needs_a_local_daemon(monkeypatch, capsys):

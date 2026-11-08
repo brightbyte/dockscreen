@@ -67,7 +67,7 @@ def test_the_webapp_passes_with_allow_me_and_says_what_it_changes(world, webapp)
 def test_an_image_that_runs_as_the_caller_is_refused_without_allow_me(world, webapp):
     when_dockscreen(world, "compose", "audit")
     then_refused(world, f"service app: image {WEBAPP_APP}: the image's uid {me_user().split(':')[0]} is "
-                        "yours; pass --allow-me")
+                        "yours; --allow-me allows it")
 
 
 def test_a_static_dir_from_dotenv_outside_the_project_is_refused_before_anything_is_pulled(world):

@@ -16,7 +16,6 @@ from steps import (
     given_config,
     given_image,
     given_outside_dir,
-    me_user,
     my_ids,
     my_name,
     then_nothing_handed_off,
@@ -102,14 +101,16 @@ def test_strict_screening_is_refused_for_the_commands_that_do_not_support_it(wor
     then_nothing_handed_off(world)
 
 
-def test_an_image_that_runs_as_the_caller_needs_allow_me(world, own_ids_image):
+def test_an_image_that_runs_as_the_caller_is_refused_and_says_how_to_choose_the_user(world, own_ids_image):
     when_dockscreen(world, "audit", own_ids_image)
-    then_refused(world, f"the image's uid {my_ids()[0]} is yours; pass --allow-me")
+    then_refused(world, f"the image's uid {my_ids()[0]} is yours; --allow-me allows it")
     then_said(world, "pass --user UID:GID, --as NAME or --as-me to choose a user")
 
+
+def test_allow_me_is_refused_for_audit(world, own_ids_image):
     when_dockscreen(world, "--allow-me", "audit", own_ids_image)
-    then_passed(world)
-    then_said(world, f"docker run would create it again with --user={me_user()}, as numbers")
+    then_status(world, 1)
+    then_said(world, "--allow-me is only supported for compose")
 
 
 def test_an_image_user_from_a_subordinate_range_is_refused(world, subordinate_image):

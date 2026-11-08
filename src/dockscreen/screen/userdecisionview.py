@@ -69,6 +69,20 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
     return [r.with_help(help) for r in decision.reasons]
 
 
+def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
+    """Returns the decision's reasons, with how config_file can give the image a user if they come from the
+    image's user. A container that exists keeps the user it was created with, so choosing one is no way out.
+
+    Parameters:
+    - decision: the UserDecision of the image of the container
+    - config_file: where an image section can give the image a user
+    """
+    hint = section_hint(decision.image.reference, config_file, decision.image.built)
+    if not decision.identity or hint is None:
+        return decision.reasons
+    return [r.with_help(f"for an image pulled from a registry, {hint}") for r in decision.reasons]
+
+
 def config_hint(image: str, config_file: str) -> str:
     """Returns the hint how config_file can give image a user, for an image pulled from a registry."""
     return f"or, for an image pulled from a registry, {section_hint(image, config_file)}"

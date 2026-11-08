@@ -49,7 +49,6 @@ class HelpTopic(NamedTuple):
     docker_help: bool = True
 
 
-ALLOW_ME = HelpOption(commandline.ALLOW_ME, "Allow your own ids as the image's user (--as-me implies it)")
 USER_OPTIONS = (
     HelpOption(commandline.AS, "Run as the local user NAME, resolved on this host", value="string"),
     HelpOption(commandline.AS_ME, "Run as yourself"),
@@ -68,7 +67,6 @@ VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖
           "✘ audit failed."
 
 DOCKER_OPTIONS = (
-    HelpOption(commandline.ALLOW_ME, "Allow containers to run as you"),
     HelpOption(commandline.HELPFUL,
                "Say what to do about a message too (also --verbose, which is not passed on)"),
     HelpOption(commandline.SKIP_SCREENING, "Turn all checks off; warns every time"),

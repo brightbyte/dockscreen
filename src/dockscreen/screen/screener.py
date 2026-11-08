@@ -9,7 +9,7 @@ that existed before, since docker does not record where it was created.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, NamedTuple, Self
+from typing import Any, NamedTuple
 
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
@@ -31,11 +31,11 @@ class Screener(NamedTuple):
     looks at images through docker and has them judged (look, assess, decide). It holds the runtime and
     whether the caller's own ids are allowed.
 
-    Create one per command from its Runtime; with_allow_me gives a copy once the command line asks for it.
+    Create one per command from its Runtime, with allow_me if the command line asks for it.
 
     Attributes:
     - runtime: the Runtime of the command
-    - allow_me: whether --allow-me (or --as-me) allows the caller's own ids
+    - allow_me: whether --allow-me allows the caller's own ids
     """
     runtime: Runtime
     allow_me: bool = False
@@ -167,7 +167,3 @@ class Screener(NamedTuple):
             group = self.docker.read_file(container, "/etc/group") or ""
             inspected = inspected.with_user_files(passwd, group)
         return inspected, image_policy
-
-    def with_allow_me(self, allow_me: bool) -> Self:
-        """Returns this screener with the caller's own ids allowed too if allow_me (--allow-me, --as-me)."""
-        return self._replace(allow_me=True) if allow_me else self

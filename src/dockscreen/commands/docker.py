@@ -77,6 +77,8 @@ class DockerCommand:
         target = _help_request(cli)
         if target is not None:
             return self.show_help(cli, target)
+        if cli.allow_me and cmd != "compose":
+            return verdict.report(Report.refusal(commandline.ALLOW_ME_REFUSAL))
         if cmd == "audit":
             return docker_run.audit(cli, self.runtime)
         if cmd == "compose":

@@ -134,8 +134,6 @@ def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
     name, has_value, value = token.partition("=")
     if name == commandline.AS_ME:
         state.kept.append(state.users.me())
-    elif name == commandline.ALLOW_ME:  # not a docker option: dropped
-        state.users.allow()
     elif name == commandline.AS:
         if not has_value:
             i += 1

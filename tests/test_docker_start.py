@@ -63,6 +63,9 @@ def test_existing_containers_are_checked_by_the_same_rule():
     bad = FakeDocker(image_user="web")
     problems = docker_start.check(start_line("web1"), runtime(bad))
     assert "web1: the image's uid 1000 exists on this host" in problems[0]
+    # a container that exists keeps its user, so the way out is the config file, not the command line
+    assert problems[0].help.startswith("for an image pulled from a registry, set user under [images.")
+    assert "--user" not in problems[0].help
     assert "no such" in docker_start.check(start_line("gone"), runtime(bad))[0].lower()
 
 

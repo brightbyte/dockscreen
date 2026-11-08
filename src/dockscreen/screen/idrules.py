@@ -38,11 +38,11 @@ class IdRules(NamedTuple):
     caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
     this host's accounts and subordinate ranges.
 
-    Instances come from for_runtime; with_settings and with_allow_me give copies.
+    Instances come from for_runtime; with_settings gives a copy.
 
     Attributes:
     - me: the caller's (uid, gid)
-    - allow_me: whether the caller's ids are allowed (--allow-me, or --as-me on docker run)
+    - allow_me: whether the caller's ids are allowed (--allow-me)
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose
     - default_user: the (uid, gid) that replaces root
     - local: the accounts on this host (HostAccounts)
@@ -69,10 +69,6 @@ class IdRules(NamedTuple):
     def with_settings(self, settings: configuration.Config) -> Self:
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
-
-    def with_allow_me(self, allow_me: bool) -> Self:
-        """Returns these rules with the caller's own ids allowed if allow_me, else not."""
-        return self._replace(allow_me=allow_me)
 
     def _allowed(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
         """Tells whether value is an allowed id of kind ("uid" or "gid").
@@ -107,7 +103,7 @@ class IdRules(NamedTuple):
             return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
         # before the account lookup, which finds the caller too but cannot give the --allow-me hint
         if value == self.me[0 if base == "uid" else 1]:
-            return f"{kind} {value} is yours; pass --allow-me to allow it"
+            return f"{kind} {value} is yours; --allow-me allows it for compose"
         name = self.local.user_name(value) if base == "uid" else self.local.group_name(value)
         if name is not None:
             account = "user" if base == "uid" else "group"

@@ -102,11 +102,11 @@ A `mount_dirs` entry that contains your home directory, a system directory, the 
 
 ## Options
 
-Before the subcommand, such as `dockscreen --allow-me compose up` or `dockscreen --allow-me run IMAGE`:
+Before the subcommand, such as `dockscreen --allow-me compose up`:
 
 | Option | |
 |---|---|
-| `--allow-me` | containers may run as you: in `user:`, and as an image's own user |
+| `--allow-me` | containers may run as you: in `user:`, and as an image's own user. Compose only: docker's commands refuse it, and `run`, `audit` and `create` take `--as-me` instead |
 | `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. `--verbose` is taken by dockscreen, not passed on, so docker and compose stay quiet |
 | `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten; for `compose run` (`dockscreen --strict-screen compose run …`), in the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept it: create's container is judged when it starts, and bake judges the whole definition anyway. Refused before any other subcommand |
 | `--skip-screening` | turns off all checks and defaults, and prints a warning each time |
@@ -117,7 +117,7 @@ After `run` or `exec` (compose or docker, and `create` and `audit`), before the 
 |---|---|
 | `--user UID:GID` / `-u UID:GID` | numeric ids only |
 | `--as NAME` | a local user, resolved on this host |
-| `--as-me` | yourself; for `run` and `audit` (not compose), also `--allow-me` |
+| `--as-me` | yourself |
 
 `up` takes none of these; `--as-me` before the subcommand is refused.
 
@@ -133,7 +133,7 @@ After `run` or `exec` (compose or docker, and `create` and `audit`), before the 
 - `create` gets the hardening defaults.
 - Remote daemons are refused, here and for `dockscreen compose`.
 
-Choosing a user (see [Options](#options)) skips the image check. `--allow-me` also works before the image name.
+Choosing a user (see [Options](#options)) skips the image check. To run an image that runs as you, choose the user with `--as-me`.
 
 `dockscreen audit` takes the arguments of `dockscreen run` and says what `run` would do with them, without starting anything. It creates the container as `run` would, pulling the image if `run` would, judges the image's user with the mounts you gave, and removes the container. It exits with 1 if `run` would refuse.
 

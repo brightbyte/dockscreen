@@ -7,7 +7,8 @@ Before the subcommand (main_commandline and CommandLine.subcommand take them out
   not recognised, so docker or compose rejects it, which is the safe direction. The warning is
   printed every time and cannot be silenced, because the flag may have been copied into a script or
   an alias.
-- --allow-me lets services and images run as the caller's own ids (see idrules).
+- --allow-me lets services and images run as the caller's own ids (see idrules), for compose. Docker's
+  commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user instead.
 - --helpful (or --verbose) adds the second part of messages that have one: why, and what it costs.
   The audit commands do that anyway. --verbose is taken here, not passed on, so that it does not
   make docker or compose noisy as well.
@@ -20,7 +21,7 @@ After `audit`, for compose and docker alike: --brief prints only the verdict, in
 
 After `run` or `exec` (userargs and runargs replace them by `--user=uid:gid`):
 - --as NAME: a local user by name, resolved on this host.
-- --as-me: the caller's own ids; with `docker run` it implies --allow-me.
+- --as-me: the caller's own ids.
 
 The helpers are not full parsers: each knows which options take a value only from the set it is given,
 and the callers are written so that a misreading refuses or changes nothing.
@@ -38,6 +39,9 @@ STRICT_SCREEN = "--strict-screen"
 # What --strict-screen is refused with before a command that does not support it.
 STRICT_REFUSAL = (f"{STRICT_SCREEN} is only supported for audit, create, restart, run, start, buildx bake "
                   "and compose run so far")
+# What --allow-me is refused with before a command that does not support it.
+ALLOW_ME_REFUSAL = (f"{ALLOW_ME} is only supported for compose; for run, audit and create, choose the user "
+                    f"after the command with {AS_ME}, {AS} NAME or --user UID:GID")
 HELPFUL = "--helpful"
 VERBOSE = "--verbose"
 BRIEF = "--brief"
