@@ -2,7 +2,7 @@
 where it is, for the services in it, and for what was found of their images.
 
 Every path below the project directory can be bind-mounted, so the directory must be the one compose
-uses, and must not hold anything that may not be mounted (Location).
+uses, and must not hold anything that may not be mounted (ProjectLocation).
 
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
@@ -20,7 +20,7 @@ from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 
 
-class Location(NamedTuple):
+class ProjectLocation(NamedTuple):
     """Record of where a compose project is, as compose would find it, and what makes that directory unfit to
     be a project's. It holds the directory and what was found against it.
 
@@ -48,12 +48,12 @@ class Project(NamedTuple):
     Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not
       be changed in place: with_definition gives a project with another one
-    - location: where it is (Location)
+    - location: where it is (ProjectLocation)
     - origins: by service and key, where the values dockscreen set come from, where that is not the project
       (with_origins)
     """
     definition: dict[str, Any]
-    location: Location
+    location: ProjectLocation
     origins: Mapping[str, Mapping[str, Origin]] = MappingProxyType({})
 
     @property
@@ -103,7 +103,7 @@ class Project(NamedTuple):
 
 
 class Service(NamedTuple):
-    """View of one service of a Project, for judging its keys (Subject). It holds the project and the
+    """View of one service of a Project, for judging its keys (JudgedService). It holds the project and the
     service's name; its keys, and what follows from them, are read from the project.
 
     Get one from Project.service or Project.services.

@@ -44,7 +44,7 @@ class HostAccounts:
             return None
 
 
-class Subordinate:
+class SubordinateRanges:
     """Table of the subordinate id ranges of this host, for telling whether an id belongs to rootless
     containers (contains). It holds the ranges of /etc/subuid and /etc/subgid, read once on construction with
     malformed lines skipped, and does not change afterwards, though nothing enforces that.
@@ -57,7 +57,7 @@ class Subordinate:
 
     @classmethod
     def new_for_testing(cls, uid_file: str, gid_file: str) -> Self:
-        """Returns a Subordinate read from the given files instead of this host's."""
+        """Returns a SubordinateRanges read from the given files instead of this host's."""
         subordinate = cls.__new__(cls)
         subordinate._read(uid_file, gid_file)
         return subordinate

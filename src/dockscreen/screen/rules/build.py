@@ -6,9 +6,9 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.model.build import BakeDefinition, Build, fields
+from dockscreen.model.build import BakeDefinition, ImageBuild, fields
 from dockscreen.screen.findings import Finding, refused
-from dockscreen.screen.rules.base import RuleBase, Subject, directory_of, is_inside, unknown_keys
+from dockscreen.screen.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
 
 BUILD_HARMLESS_KEYS = frozenset({
     "args", "dockerfile_inline", "extra_hosts", "isolation", "labels", "no_cache", "platforms",
@@ -33,11 +33,11 @@ BAKE_CACHE_TO_TYPES = frozenset({"inline", "registry"})
 class BuildRules(RuleBase):
     """Mixin of Policy with the rules for builds of images, not used on its own."""
 
-    def _check_build(self, value: Any, service: Subject) -> list[str]:
+    def _check_build(self, value: Any, service: JudgedService) -> list[str]:
         """Checks a service's build; returns unknown keys, sources outside the project, and escapes from
         it.
         """
-        build = Build.from_compose(value, directory_of(service))
+        build = ImageBuild.from_compose(value, directory_of(service))
         # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
         # set outputs and cache destinations on the host. Compose's own build does not pass it on.
         problems = unknown_keys(build.definition, BUILD_KEYS, "build key", extensions=False)
@@ -46,14 +46,14 @@ class BuildRules(RuleBase):
             problems.append("build privileged is not allowed")
         return problems
 
-    def check_build(self, build: Build, prefix: str = "") -> list[str]:
+    def check_build(self, build: ImageBuild, prefix: str = "") -> list[str]:
         """Checks what a build reaches on this host, however it is defined; returns the problems: its
         context, Dockerfile and named contexts outside its directory, a network, and the SSH agent.
 
         Only sources that are paths on this host are checked, not URLs or services.
 
         Parameters:
-        - build: the build (Build)
+        - build: the build (ImageBuild)
         - prefix: before each key in the problems
         """
         context_key, dockerfile_key, contexts_key = build.keys
@@ -83,7 +83,7 @@ class BuildRules(RuleBase):
             problems += [f"target {name}: {p}" for p in self._check_bake_target(build)]
         return refused(problems)
 
-    def _check_bake_target(self, build: Build) -> list[str]:
+    def _check_bake_target(self, build: ImageBuild) -> list[str]:
         """Returns the problems with a bake target: unknown keys, what it reaches (check_build), and what
         it writes to or reads from the host besides.
         """

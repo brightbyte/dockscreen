@@ -7,7 +7,7 @@ from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
-from dockscreen.model.project import Location
+from dockscreen.model.project import ProjectLocation
 from dockscreen.screen import policy
 from dockscreen.screen.findings import Severity
 from dockscreen.screen.policy import Policy
@@ -163,11 +163,11 @@ def test_with_host_mounts_only_allowed_ids_pass(project):
 
 
 def test_subordinate_ids_are_refused(project):
-    class Subordinate:
+    class SubordinateRanges:
         def contains(self, kind, value):
             return 100000 <= value < 165536
 
-    policy = Policy(rules(subordinate=Subordinate()))
+    policy = Policy(rules(subordinate=SubordinateRanges()))
     definition = {"name": "proj", "services": {"web": service(user="100000:5000")}}
     problems = policy.check_project(project_of(definition, project))
     assert_refused(problems, "uid 100000 is in a subordinate id range")
@@ -569,9 +569,10 @@ def test_a_daemon_that_may_not_be_this_hosts_is_refused():
 
 
 def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
-    assert policy.Policy(rules()).check_location(Location("/p")) == []
+    assert policy.Policy(rules()).check_location(ProjectLocation("/p")) == []
 
-    location = Location("/home/me", foreign=True, redirects=("/home/me/.env",), sensitive=("/home/me",))
+    location = ProjectLocation("/home/me", foreign=True, redirects=("/home/me/.env",),
+                               sensitive=("/home/me",))
     found = policy.Policy(rules()).check_location(location)
 
     assert [f.severity for f in found] == [Severity.REFUSED] * 3

@@ -8,7 +8,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
-from dockscreen.model.project import Location
+from dockscreen.model.project import ProjectLocation
 from dockscreen.screen.findings import Finding, Severity, refused
 from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 
@@ -127,7 +127,7 @@ class ProjectRules(RuleBase):
         """
         return [Finding(REMOTE_MESSAGE)] if remote else []
 
-    def check_location(self, location: Location) -> list[Finding]:
+    def check_location(self, location: ProjectLocation) -> list[Finding]:
         """Checks where a project is; returns a refusal for each reason its directory cannot be the one its
         bind mounts are judged against.
         """

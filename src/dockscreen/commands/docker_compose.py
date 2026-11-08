@@ -64,11 +64,11 @@ COMMANDS: Mapping[str, Callable[[commandline.CommandLine, Runtime], int]] = Mapp
 })
 ALIASES = MappingProxyType({"fix": "harden"})  # alias -> command it stands for
 # the help of each command dockscreen has its own help for: of its own commands, and of the screened ones
-COMMAND_HELP: Mapping[str, Callable[[str], helptext.Topic]] = MappingProxyType({
+COMMAND_HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyType({
     "audit": compose_audit.help,
     "harden": compose_harden.help,
 })
-SCREENED_HELP: Mapping[str, Callable[[str], helptext.Topic]] = MappingProxyType({
+SCREENED_HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyType({
     "up": compose_up.help, "watch": compose_up.help, "scale": compose_up.help, "alpha": compose_up.help,
     "create": compose_create.help,
     "run": compose_run.help,
@@ -201,12 +201,12 @@ def supports_strict(sub: str | None) -> bool:
     return sub == "run"
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name, as the overview of docker's commands lists it.
 
     Parameters:
     - name: the command, as the dispatcher knows it: compose
     """
     assert name == "compose"
-    return helptext.Topic("dockscreen compose [OPTIONS] COMMAND",
-                          "Docker Compose, with projects audited before they run")
+    return helptext.HelpTopic("dockscreen compose [OPTIONS] COMMAND",
+                              "Docker Compose, with projects audited before they run")

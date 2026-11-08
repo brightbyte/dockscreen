@@ -36,13 +36,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
                                           parent_cli.allow_me, parent_cli.strict)
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it
     """
     assert name == "run"
-    return helptext.Topic("dockscreen compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]",
-                          "Run a one-off command, after the project passes the audit",
-                          helptext.SCREENED_COMPOSE, helptext.USER_OPTIONS)
+    return helptext.HelpTopic("dockscreen compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]",
+                              "Run a one-off command, after the project passes the audit",
+                              helptext.SCREENED_COMPOSE, helptext.USER_OPTIONS)

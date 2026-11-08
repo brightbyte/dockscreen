@@ -6,7 +6,7 @@ from dockscreen.host import config
 from dockscreen.util import commandline
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
-IMG_USERS = config.Config(images={"docker.io/library/img": config.Section(user=(999, 999))})
+IMG_USERS = config.Config(images={"docker.io/library/img": config.ConfigSection(user=(999, 999))})
 
 
 def start_line(container, strict=False):
@@ -96,7 +96,7 @@ def test_an_existing_container_is_judged_without_the_current_directory_which_did
     here = str(tmp_path)
     bind = {"HostConfig": HARDENED, "Mounts": [{"Type": "bind", "Source": here, "Destination": "/w"}]}
     docker = FakeDocker(image_user="nobody", info_extra=bind)
-    settings = config.Config(projects={here: config.Section(user=(999, 999))})
+    settings = config.Config(projects={here: config.ConfigSection(user=(999, 999))})
 
     # the project section of the current directory does not decide the user
     assert docker_start.check(start_line("c1"),

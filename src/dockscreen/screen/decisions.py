@@ -16,15 +16,16 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import userdecisionview, substitutions
-from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen import substitutions, userdecisionview
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.policy import Policy
-from dockscreen.screen.substitutions import Group, Substitution
+from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
+from dockscreen.screen.userdecision import UserDecision
 from dockscreen.util import ids, messages
 
-PINNED = Group("services {services}: user, image id and pull_policy: never fixed to what was checked, "
-               "in the generated file only")
+PINNED = SubstitutionGroup(
+    "services {services}: user, image id and pull_policy: never fixed to what was checked, "
+    "in the generated file only")
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
              "volumes set up for root")
 
@@ -124,7 +125,7 @@ def changes(project: Project, decisions: Mapping[str, UserDecision], project_pol
 
 
 def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, origin: Origin | None,
-          text: str | None = None, group: Group | None = None) -> list[Substitution]:
+          text: str | None = None, group: SubstitutionGroup | None = None) -> list[Substitution]:
     """Returns the substitutions that set the service's user to the default one, which comes from origin,
     reported by text if given, and the HOME that comes with it (default_home) unless the service sets HOME.
     """

@@ -39,7 +39,7 @@ GATES = MappingProxyType({
 
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
 # the help of each command dockscreen has its own help for
-HELP: Mapping[str, Callable[[str], helptext.Topic]] = MappingProxyType({
+HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyType({
     "run": docker_run.help,
     "create": docker_create.help,
     "start": docker_start.help,

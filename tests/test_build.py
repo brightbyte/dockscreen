@@ -1,13 +1,14 @@
-from dockscreen.model.build import BakeDefinition, Build, fields
+from dockscreen.model.build import BakeDefinition, ImageBuild, fields
 
 
 def test_compose_and_bake_name_the_sources_of_a_build_differently():
-    compose = Build.from_compose({"context": ".", "dockerfile": "D", "additional_contexts": {"a": "x"}}, "/p")
-    bake = Build.from_bake({"context": ".", "dockerfile": "D", "contexts": {"a": "x"}}, "/p")
+    compose = ImageBuild.from_compose(
+        {"context": ".", "dockerfile": "D", "additional_contexts": {"a": "x"}}, "/p")
+    bake = ImageBuild.from_bake({"context": ".", "dockerfile": "D", "contexts": {"a": "x"}}, "/p")
 
     assert (compose.context, compose.dockerfile, compose.contexts) == (".", "D", {"a": "x"})
     assert (bake.context, bake.dockerfile, bake.contexts) == (".", "D", {"a": "x"})
-    assert Build.from_compose("./app", "/p").context == "./app"  # `build: ./app` is a context alone
+    assert ImageBuild.from_compose("./app", "/p").context == "./app"  # `build: ./app` is a context alone
 
 
 def test_a_bake_definition_has_a_build_per_target():

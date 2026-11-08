@@ -1,9 +1,9 @@
-"""This module defines the Build class, a view of the build of one image as screening sees it, from compose's
-`build:` section or from a target of `docker buildx bake`, and BakeDefinition, bake's definition of its
-builds.
+"""This module defines the ImageBuild class, a view of the build of one image as screening sees it, from
+compose's `build:` section or from a target of `docker buildx bake`, and BakeDefinition, bake's definition
+of its builds.
 
 Both read a context, a Dockerfile and named contexts from this host, and may use a network and the SSH
-agent; they give these different names (Build.keys). Bake also says where a build writes (`output`,
+agent; they give these different names (ImageBuild.keys). Bake also says where a build writes (`output`,
 `cache-to`) and what it reads besides (`cache-from`, `secret`), as `key=value,...` entries (fields).
 """
 
@@ -15,7 +15,7 @@ COMPOSE_KEYS = ("context", "dockerfile", "additional_contexts")
 BAKE_KEYS = ("context", "dockerfile", "contexts")
 
 
-class Build(NamedTuple):
+class ImageBuild(NamedTuple):
     """View of the definition of one image build, from compose's `build:` or a target of `docker buildx bake`,
     for judging what the build reads on this host. It holds the definition, what it calls the context, the
     Dockerfile and the named contexts, and the directory its relative paths are relative to.
@@ -79,10 +79,10 @@ class BakeDefinition(NamedTuple):
     directory: str
 
     @property
-    def targets(self) -> dict[str, Build]:
+    def targets(self) -> dict[str, ImageBuild]:
         """Returns its targets' builds, by target name."""
         targets = self.definition.get("target") or {}
-        return {name: Build.from_bake(target, self.directory) for name, target in targets.items()}
+        return {name: ImageBuild.from_bake(target, self.directory) for name, target in targets.items()}
 
 
 def fields(entry: Any) -> dict[str, str] | None:

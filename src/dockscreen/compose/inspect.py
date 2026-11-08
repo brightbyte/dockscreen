@@ -11,7 +11,7 @@ from typing import Any
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.project import Location, Project
+from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import policy, verdict
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.rules.base import is_inside
@@ -25,7 +25,7 @@ SENSITIVE_DIRS = ("/", "/etc", "/usr", "/var", "/boot", "/root", "/run", "/proc"
 DOCKER_SOCKET = "/var/run/docker.sock"
 
 
-class Refused(Exception):
+class ProjectRefused(Exception):
     """Exception raised when the policy refuses a project before its config is looked at. It holds the
     policy's findings.
 
@@ -41,7 +41,7 @@ class Refused(Exception):
 def project(args: Sequence[str], runtime: Runtime) -> Project:
     """Returns the project args select, with its definition as compose resolves it.
 
-    Raises Refused if the policy refuses where the project is (Policy.check_location); DockerError if
+    Raises ProjectRefused if the policy refuses where the project is (Policy.check_location); DockerError if
     compose cannot give the definition.
 
     Parameters:
@@ -51,11 +51,11 @@ def project(args: Sequence[str], runtime: Runtime) -> Project:
     location = locate(args, runtime)
     refusals = Screener(runtime).policy(location.directory).check_location(location)
     if refusals:
-        raise Refused(refusals)
+        raise ProjectRefused(refusals)
     return Project(_load_config(args, runtime.docker), location)
 
 
-def locate(args: Sequence[str], runtime: Runtime) -> Location:
+def locate(args: Sequence[str], runtime: Runtime) -> ProjectLocation:
     """Returns where the project args select is, as compose would find it.
 
     Raises DockerError if that cannot be found: the compose file is read from stdin, or there is none.
@@ -102,7 +102,7 @@ def passes(args: Sequence[str], runtime: Runtime,
         found = project(args, runtime)
     except DockerError as e:
         return verdict.screened(Report.failure(e))
-    except Refused as e:
+    except ProjectRefused as e:
         return verdict.screened(Report.of(e.findings))
     project_policy = Screener(runtime).project_policy(found)
     return verdict.screened(Report.of(rules(project_policy, found)))
@@ -183,7 +183,7 @@ def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
     return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
 
 
-def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Location:
+def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> ProjectLocation:
     """Determines the project directory as docker compose would from args and cwd.
 
     Raises DockerError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
@@ -191,7 +191,7 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Locati
     env = runtime.env
     explicit = commandline.option_values(args, "--project-directory", None)
     if explicit:  # the last one wins, as in compose
-        return Location(os.path.realpath(os.path.join(cwd, explicit[-1])))
+        return ProjectLocation(os.path.realpath(os.path.join(cwd, explicit[-1])))
 
     files = commandline.option_values(args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
@@ -199,13 +199,13 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Locati
     if "-" in files:
         raise DockerError("a compose file read from stdin cannot be inspected")
     if files:  # compose takes the project directory from the first file
-        return Location(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
+        return ProjectLocation(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
 
     env_files = commandline.option_values(args, "--env-file", None)
     return _find_compose_dir(cwd, env_files, runtime.home, runtime.me[0])
 
 
-def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> Location:
+def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> ProjectLocation:
     """Finds the directory of the nearest compose file, walking up from start as compose does, with the .env
     files on the way (and the env_files entries) that could send compose elsewhere.
 
@@ -220,12 +220,12 @@ def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int)
         has_file = any(os.path.exists(os.path.join(directory, n)) for n in COMPOSE_FILE_NAMES)
         if directory != os.path.realpath(start) and (directory == home or os.stat(directory).st_uid != uid):
             if has_file:
-                return Location(directory, foreign=True, redirects=tuple(redirects))
+                return ProjectLocation(directory, foreign=True, redirects=tuple(redirects))
             raise DockerError("no compose file found")
         if _sets_compose_vars(env_file := os.path.join(directory, ".env")):
             redirects.append(env_file)
         if has_file:
-            return Location(directory, redirects=tuple(redirects))
+            return ProjectLocation(directory, redirects=tuple(redirects))
         parent = os.path.dirname(directory)
         if parent == directory:
             raise DockerError("no compose file found")

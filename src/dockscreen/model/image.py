@@ -7,7 +7,7 @@ between does not change what runs.
 
 The user an image runs as is looked at through a container created from it and never started
 (Inspected): docker shows the user it would run, and the image's passwd and group files can be read from
-it, which decide what that user's ids are (Identity).
+it, which decide what that user's ids are (UserIdentity).
 
 A reference is read as docker reads it, normalised (split_reference): `mariadb` is
 docker.io/library/mariadb.
@@ -86,7 +86,7 @@ class Unseen(NamedTuple):
     reason: str
 
 
-class Identity(NamedTuple):
+class UserIdentity(NamedTuple):
     """Value object for the set of ids a process runs as. It holds a uid, a primary gid and the supplementary
     gids.
 

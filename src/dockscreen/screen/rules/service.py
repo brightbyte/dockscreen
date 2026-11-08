@@ -11,8 +11,8 @@ from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 from dockscreen.screen.rules.base import (
+    JudgedService,
     RuleBase,
-    Subject,
     directory_of,
     is_inside,
     is_inside_any,
@@ -84,7 +84,7 @@ SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option 
 class ServiceRules(RuleBase):
     """Mixin of Policy with the rules for the keys of a service, not used on its own."""
 
-    def check_user(self, value: Any, service: Subject) -> list[str]:
+    def check_user(self, value: Any, service: JudgedService) -> list[str]:
         """Checks a `user:` of service as hardening left it; returns the problems, empty for an acceptable
         `uid:gid`.
 
@@ -93,7 +93,7 @@ class ServiceRules(RuleBase):
 
         Parameters:
         - value: the value of `user:`; None if it is missing
-        - service: the service (Subject)
+        - service: the service (JudgedService)
         """
         if not value:
             return ["user is not set, the image default may be root"]
@@ -110,14 +110,14 @@ class ServiceRules(RuleBase):
         return [f"user {value!r}: {p}"
                 for p in self.ids.problems(uid, gid, mounts=service.reaches_host, extra=configured)]
 
-    def check_security_opt(self, value: Any, service: Subject) -> list[str]:
+    def check_security_opt(self, value: Any, service: JudgedService) -> list[str]:
         """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
 
         Allowed are no-new-privileges and the configured security_opts.
 
         Parameters:
         - value: the value of security_opt; None if it is missing
-        - service: the service (Subject)
+        - service: the service (JudgedService)
         """
         options = [str(o) for o in value or []]
         allowed = NO_NEW_PRIVILEGES | set(self.security_opts)
@@ -127,20 +127,20 @@ class ServiceRules(RuleBase):
             problems.append(f"security_opt must include {SECURITY_OPT}")
         return problems
 
-    def check_cap_drop(self, value: Any, service: Subject) -> list[str]:
+    def check_cap_drop(self, value: Any, service: JudgedService) -> list[str]:
         """Checks cap_drop; returns a problem unless it drops ALL.
 
         Parameters:
         - value: the value of cap_drop; None if it is missing
-        - service: the service (Subject)
+        - service: the service (JudgedService)
         """
         return [] if drops_all(value) else [f"cap_drop must include {CAP_DROP}"]
 
-    def _check_runtime(self, value: Any, service: Subject) -> list[str]:
+    def _check_runtime(self, value: Any, service: JudgedService) -> list[str]:
         """Checks runtime; returns a problem unless it is runc or unset."""
         return [] if value in (None, "", "runc") else [f"runtime {value!r} is not allowed"]
 
-    def _check_volumes_from(self, value: Any, service: Subject) -> list[str]:
+    def _check_volumes_from(self, value: Any, service: JudgedService) -> list[str]:
         """Checks volumes_from; returns a problem for each source that is a container, not a service."""
         return [
             f"volumes_from {source!r} reaches a container outside the project"
@@ -148,7 +148,7 @@ class ServiceRules(RuleBase):
             if str(source).startswith("container:")
         ]
 
-    def _check_mounts(self, value: Any, service: Subject) -> list[str]:
+    def _check_mounts(self, value: Any, service: JudgedService) -> list[str]:
         """Checks a service's volumes; returns their unknown keys and types, and bind mounts outside the
         mount roots.
         """
@@ -165,7 +165,7 @@ class ServiceRules(RuleBase):
                 problems.append(f"mount type {kind!r} is not allowed")
         return problems
 
-    def _check_develop(self, value: Any, service: Subject) -> list[str]:
+    def _check_develop(self, value: Any, service: JudgedService) -> list[str]:
         """Checks develop; returns unknown keys, and watch rules with bad actions or paths outside the
         project.
         """
@@ -179,7 +179,7 @@ class ServiceRules(RuleBase):
                 problems.append(f"develop.watch path {rule.get('path')!r} is outside {directory}")
         return problems
 
-    def _check_deploy(self, value: Any, service: Subject) -> list[str]:
+    def _check_deploy(self, value: Any, service: JudgedService) -> list[str]:
         """Checks deploy; returns unknown keys, and reservations of host devices."""
         value = value or {}
         problems = unknown_keys(value, DEPLOY_KEYS, "deploy key")
@@ -192,7 +192,7 @@ class ServiceRules(RuleBase):
 
 
 # A check of one service key: takes the Policy, the value and the service, returns the problems.
-Check = Callable[["Policy", Any, Subject], list[str]]
+Check = Callable[["Policy", Any, JudgedService], list[str]]
 
 
 def _forbidden(key: str) -> Check:
@@ -202,7 +202,7 @@ def _forbidden(key: str) -> Check:
 
 def _check_namespace(key: str) -> Check:
     """Returns a check for the namespace key that refuses the host's namespace and other containers'."""
-    def check(policy: "Policy", value: Any, service: Subject) -> list[str]:
+    def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         text = str(value)
         if text == "host" or text.startswith("container:"):
             return [f"{key}: {text} shares a namespace outside the project"]
@@ -215,7 +215,7 @@ def _check_host_files(key: str) -> Check:
 
     These keys only show up in the definition when it is loaded without env resolution.
     """
-    def check(policy: "Policy", value: Any, service: Subject) -> list[str]:
+    def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems, directory = [], directory_of(service)
         for entry in [value] if isinstance(value, (str, dict)) else value or []:
             path = entry.get("path") if isinstance(entry, dict) else entry
@@ -230,7 +230,7 @@ def _check_hooks(key: str) -> Check:
 
     Those are hooks with unknown keys, privileged ones, and ones whose user Policy.check_user refuses.
     """
-    def check(policy: "Policy", value: Any, service: Subject) -> list[str]:
+    def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems = []
         for hook in value or []:
             problems += unknown_keys(hook, HOOK_KEYS, f"{key} key")

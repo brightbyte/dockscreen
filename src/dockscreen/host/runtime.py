@@ -26,7 +26,7 @@ class Runtime(NamedTuple):
     - settings: the caller's settings (Config)
     - docker: the real docker (Docker)
     - accounts: the accounts on this host (HostAccounts)
-    - subordinate: the ranges in /etc/subuid and /etc/subgid (Subordinate)
+    - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
     - me: the caller's real (uid, gid)
     - env: the environment, which compose and docker inherit; it must not be changed in place, and
       with_docker_env gives a runtime whose docker passes more variables
@@ -36,7 +36,7 @@ class Runtime(NamedTuple):
     settings: config.Config
     docker: Docker
     accounts: hostusers.HostAccounts
-    subordinate: hostusers.Subordinate
+    subordinate: hostusers.SubordinateRanges
     me: tuple
     env: MutableMapping
     home: str
@@ -71,7 +71,7 @@ def load_runtime() -> Runtime:
         settings=settings,
         docker=Docker(_real_docker(settings, env)),
         accounts=hostusers.HostAccounts(),
-        subordinate=hostusers.Subordinate(),
+        subordinate=hostusers.SubordinateRanges(),
         me=me,
         env=env,
         home=home,

@@ -22,12 +22,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd is not None
-    parsed = userargs.Parsed.unread(list(parent_cli.args), runtime)
+    parsed = userargs.UserArgs.unread(list(parent_cli.args), runtime)
     return projectscreening.check_and_run(list(parent_cli.lead_args), parent_cli.cmd, parsed, runtime,
                                           parent_cli.allow_me)
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
@@ -40,4 +40,4 @@ def help(name: str) -> helptext.Topic:
         "scale": ("[SERVICE=REPLICAS...]", "Scale services, after the project passes the audit"),
         "alpha": ("COMMAND", "Experimental commands, audited like up"),
     }[name]
-    return helptext.Topic(f"dockscreen compose {name} {usage}", summary, helptext.SCREENED_COMPOSE)
+    return helptext.HelpTopic(f"dockscreen compose {name} {usage}", summary, helptext.SCREENED_COMPOSE)

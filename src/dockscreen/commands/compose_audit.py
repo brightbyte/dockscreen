@@ -39,7 +39,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         loaded = projectscreening.load_project(global_args, runtime)
     except DockerError as e:
         return verdict.report(Report.failure(e), brief)
-    except inspect.Refused as e:
+    except inspect.ProjectRefused as e:
         return verdict.report(Report.of(e.findings), brief)
     except ValueError as e:
         return verdict.report(Report.refusal(str(e)), brief)
@@ -55,7 +55,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     return verdict.report(outcome, brief)
 
 
-def _audit_images(loaded: projectscreening.Loaded, screener: Screener, brief: bool
+def _audit_images(loaded: projectscreening.LoadedProject, screener: Screener, brief: bool
                   ) -> tuple[Report, Sequence[str]]:
     """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
     if the checks before them pass.
@@ -75,7 +75,7 @@ def _audit_images(loaded: projectscreening.Loaded, screener: Screener, brief: bo
     return (runnable if isinstance(runnable, Report) else runnable.report), decided.describe()
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name, from the docstring of audit.
 
     Parameters:

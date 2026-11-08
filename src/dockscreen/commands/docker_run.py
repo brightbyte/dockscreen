@@ -26,12 +26,12 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import userdecisionview, findings, verdict
-from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice
+from dockscreen.screen import findings, userdecisionview, verdict
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.screener import Screener
+from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -138,7 +138,7 @@ def _fallback_notice(decision: UserDecision) -> Finding:
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
-def _create_checked(screener: Screener, parsed: runargs.ParsedRun, extra: list[str],
+def _create_checked(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
                     decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
     """Creates the container (check); returns it with the decision of its user, or the exit status if it
     may not start.
@@ -158,8 +158,8 @@ def _create_checked(screener: Screener, parsed: runargs.ParsedRun, extra: list[s
     return created
 
 
-def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decided: UserDecision | None = None
-          ) -> tuple[int, tuple[Container, UserDecision] | None]:
+def check(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
+          decided: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
@@ -206,7 +206,7 @@ def _command_line_findings(screener: Screener, container: Container, decision: U
     return screener.policy(screener.runtime.cwd, decision.section, trust).check_container(container)
 
 
-def _user_origin(parsed: runargs.ParsedRun, decided: UserDecision | None) -> Origin:
+def _user_origin(parsed: runargs.RunArgs, decided: UserDecision | None) -> Origin:
     """Returns where the user of the container comes from: where the decided one does, for a container
     re-created with it (check), else the command line if it gives one, else the image.
     """
@@ -215,7 +215,7 @@ def _user_origin(parsed: runargs.ParsedRun, decided: UserDecision | None) -> Ori
     return Origin.COMMAND_LINE if parsed.users.chosen else Origin.IMAGE
 
 
-def _verify_split(info: dict[str, Any], parsed: runargs.ParsedRun) -> list[Finding]:
+def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs) -> list[Finding]:
     """Checks that our reading of the command line matches the container the daemon created.
 
     Returns the problem if it does not, else an empty list.
@@ -327,14 +327,14 @@ def _report_findings(found: list[Finding]) -> None:
                                                    "--strict-screen makes them fail the audit"))
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it: run or audit
     """
     if name == "audit":
-        return helptext.Topic(
+        return helptext.HelpTopic(
             f"dockscreen [{commandline.ALLOW_ME}] [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
             "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
             "Say what run would do with the same arguments, without starting anything",
@@ -344,12 +344,12 @@ def help(name: str) -> helptext.Topic:
              ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
               "image could not be pulled or created).")),
             (helptext.BRIEF,
-             helptext.Option(commandline.STRICT_SCREEN,
-                             "(before audit) Deny for what the command line asks for, too"),
+             helptext.HelpOption(commandline.STRICT_SCREEN,
+                                 "(before audit) Deny for what the command line asks for, too"),
              helptext.ALLOW_ME, *helptext.USER_OPTIONS),
             docker_help=False)
     assert name == "run"
-    return helptext.Topic(
+    return helptext.HelpTopic(
         f"dockscreen [{commandline.ALLOW_ME}] run [OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Create and run a container, after checking the user its image runs as",
         ("dockscreen creates the container, checks it, and only then starts it:", *helptext.IMAGE_RULES,

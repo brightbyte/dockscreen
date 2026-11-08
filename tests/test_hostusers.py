@@ -12,5 +12,5 @@ def test_host_accounts_use_nss():
 
 
 def test_missing_subordinate_files_mean_no_ranges(tmp_path):
-    subordinate = hostusers.Subordinate.new_for_testing(str(tmp_path / "none"), str(tmp_path / "none"))
+    subordinate = hostusers.SubordinateRanges.new_for_testing(str(tmp_path / "none"), str(tmp_path / "none"))
     assert not subordinate.contains("uid", 100000)

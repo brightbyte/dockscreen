@@ -1,5 +1,6 @@
 """This module provides functions for reading command lines that run something in a container (`docker compose
-run` and `exec`, `docker exec`) just far enough to find the user and the service or container.
+run` and `exec`, `docker exec`) just far enough to find the user and the service or container. `docker run`
+is read by runargs, which uses the same GivenUsers.
 
 The command line is trusted, so the user it gives is not checked against the id rules, only for its
 form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. A name would be
@@ -107,10 +108,17 @@ class GivenUsers:
         return f"--user={ids.format_user(self.callers_ids)}"
 
 
-class Parsed(NamedTuple):
-    """Record of what a command line that runs something in a container asks for, read far enough to find the
-    service or container and the user. It holds the service or container it names, its arguments with --as and
-    --as-me replaced by ids, and what it says about the user.
+class UserArgs(NamedTuple):
+    """Record of what a command line that runs something in a container says about the service or container
+    it names and about the user, read only far enough to find those. It holds the service or container, the
+    arguments with --as and --as-me replaced by ids, and the users it gives.
+
+    It is for the commands that name a service or container: `docker compose run` keeps it, because the
+    service it names is the one whose user the command line chooses, so the image does not decide it, and
+    because its options are applied to that service (compose.runoptions). `docker compose up` and `create`
+    keep one that names no service. `exec`, for compose and docker alike, only needs the rewritten arguments
+    (resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also holds the image
+    and the options only `run` has; both keep the users in a GivenUsers, which resolves and collects them.
 
     Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
     nor a user.
@@ -125,7 +133,7 @@ class Parsed(NamedTuple):
     users: GivenUsers
 
     @classmethod
-    def unread(cls, args: list[str], runtime: Runtime) -> "Parsed":
+    def unread(cls, args: list[str], runtime: Runtime) -> "UserArgs":
         """Returns args as a command line that names no service and gives no user, for a subcommand that
         takes neither (`up`, `create`).
         """
@@ -133,10 +141,10 @@ class Parsed(NamedTuple):
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
-          accounts: hostusers.HostAccounts) -> Parsed:
+          accounts: hostusers.HostAccounts) -> UserArgs:
     """Parses args far enough to find the service or container, and whether a user is given.
 
-    Returns a Parsed, with --as and --as-me replaced by ids, and the users given.
+    Returns a UserArgs, with --as and --as-me replaced by ids, and the users given.
 
     Parameters:
     - args: the subcommand's arguments
@@ -150,7 +158,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     while i < len(args):
         token = args[i]
         if token == "--":
-            return Parsed(args[i + 1] if i + 1 < len(args) else None, (*kept, *args[i:]), users)
+            return UserArgs(args[i + 1] if i + 1 < len(args) else None, (*kept, *args[i:]), users)
         if token == commandline.AS_ME:
             kept.append(users.me())
             i += 1
@@ -159,13 +167,13 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         elif token.startswith("-") and token != "-":
             i = _parse_short(args, i, value_flags, users, kept)
         else:
-            return Parsed(token, (*kept, *args[i:]), users)
-    return Parsed(None, tuple(kept), users)
+            return UserArgs(token, (*kept, *args[i:]), users)
+    return UserArgs(None, tuple(kept), users)
 
 
 
 def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
-                  accounts: hostusers.HostAccounts) -> Parsed:
+                  accounts: hostusers.HostAccounts) -> UserArgs:
     """Returns parse of the arguments of `docker compose run` or `exec`.
 
     Parameters:

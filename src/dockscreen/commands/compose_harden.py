@@ -64,7 +64,7 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     assert parent_cli.cmd in ("harden", "fix")
     try:
         loaded = projectscreening.load_project(list(parent_cli.lead_args), runtime)
-    except inspect.Refused as e:
+    except inspect.ProjectRefused as e:
         for refusal in e.findings:
             messages.notice(refusal)
         return 1
@@ -98,7 +98,7 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     return 1 if remaining else 0
 
 
-def _fix_image_users(cleared: projectscreening.Cleared, screener: Screener, fixed: dict[str, Any],
+def _fix_image_users(cleared: projectscreening.ClearedProject, screener: Screener, fixed: dict[str, Any],
                      notes: list[str]) -> tuple[list[Finding], list[str]]:
     """Sets a user in fixed on the services whose image chose one that is not acceptable.
 
@@ -258,7 +258,7 @@ def _render_value(value: Any) -> str:
     return json.dumps(value)
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name, from the docstring of harden.
 
     Parameters:

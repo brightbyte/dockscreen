@@ -3,8 +3,8 @@ compose config before running it, for applying them and for reporting them. It d
 
 Each change sets one key of one service. Everything dockscreen changes in what it runs is said: a change
 that alters what the project chose is notable, the others are routine, and routine changes of the same
-kind are reported together in one line that names their services (Group), since the line would be the
-same for each. A change with no text and no group is part of another that is reported, such as the HOME
+kind are reported together in one line that names their services (SubstitutionGroup), since the line would
+be the same for each. A change with no text and no group is part of another that is reported, such as the HOME
 that comes with the default user.
 
 A change that sets a value someone else chose names where that value comes from (origins), so the policy
@@ -20,7 +20,7 @@ from dockscreen.model.project import Project
 from dockscreen.screen.findings import Finding, Severity
 
 
-class Group(NamedTuple):
+class SubstitutionGroup(NamedTuple):
     """Record of a kind of routine change that is reported once for all the services it was made to. It holds
     the line and what to do about it.
 
@@ -55,7 +55,7 @@ class Substitution(NamedTuple):
     text: str | None = None
     notable: bool = False
     help: str | None = None
-    group: Group | None = None
+    group: SubstitutionGroup | None = None
     origin: Origin | None = None
 
 
@@ -99,7 +99,7 @@ def grouped(substitutions: Iterable[Substitution]) -> list[Finding]:
     """Describes the groups of the substitutions, one line each naming its services, in the order the groups
     first appear.
     """
-    services: dict[Group, list[str]] = {}
+    services: dict[SubstitutionGroup, list[str]] = {}
     for s in substitutions:
         if s.group:
             services.setdefault(s.group, []).append(s.service)

@@ -50,10 +50,14 @@ class ParseError(Exception):
     """
 
 
-class ParsedRun(NamedTuple):
+class RunArgs(NamedTuple):
     """Record of what a `docker run` command line asks for, read far enough to run it as `docker create` and
     `docker start`. It holds the arguments for `create`, the image and its command, the options only `run`
     has, and what the command line says about the user.
+
+    It is the counterpart of userargs.UserArgs for `docker run`, which names an image where the others name a
+    service or container, and has the options `create` lacks; the users it gives are kept in the same
+    GivenUsers.
 
     Instances come from parse.
 
@@ -82,7 +86,7 @@ class _State:
         self.detach_keys: str | None = None
 
 
-def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> ParsedRun:
+def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> RunArgs:
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
     the options `create` lacks, with users given as ids.
 
@@ -120,8 +124,8 @@ def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAcco
             break
     if i >= len(args):
         raise ParseError("no image found in the command line")
-    return ParsedRun((*state.kept, *args[i:]), args[i], tuple(args[i + 1:]), state.detach, state.detach_keys,
-                     users)
+    return RunArgs((*state.kept, *args[i:]), args[i], tuple(args[i + 1:]), state.detach,
+                   state.detach_keys, users)
 
 
 def _parse_long(args: Sequence[str], i: int, state: _State) -> int:

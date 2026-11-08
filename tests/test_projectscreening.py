@@ -331,7 +331,7 @@ def test_a_context_option_is_refused_too(tmp_path, capsys):
 
 # --- image and project sections of the config file ---------------------------------
 
-X_DIRS = config.Config(images={"docker.io/library/x": config.Section(mount_dirs=("/srv/x",))})
+X_DIRS = config.Config(images={"docker.io/library/x": config.ConfigSection(mount_dirs=("/srv/x",))})
 X_MOUNT = {"volumes": [{"type": "bind", "source": "/srv/x/data", "target": "/data"}]}
 
 
@@ -357,18 +357,18 @@ def test_an_image_section_that_its_image_does_not_prove_is_refused_before_anythi
 
 
 def test_a_project_section_applies_to_its_directory(tmp_path, capsys):
-    settings = config.Config(projects={str(tmp_path): config.Section(mount_dirs=("/srv/x",))})
+    settings = config.Config(projects={str(tmp_path): config.ConfigSection(mount_dirs=("/srv/x",))})
     runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT),
                                  FakeImages(users={"x:1": "app"}), settings=settings)
     assert up(["up"], 0, runtime) == 0
 
-    elsewhere = config.Config(projects={"/elsewhere": config.Section(mount_dirs=("/srv/x",))})
+    elsewhere = config.Config(projects={"/elsewhere": config.ConfigSection(mount_dirs=("/srv/x",))})
     runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT), FakeImages(users={"x:1": "app"}),
                                  settings=elsewhere)
     assert up(["up"], 0, runtime) == 1
 
 
-X_USER = config.Config(images={"docker.io/library/x": config.Section(user=(900, 900))})
+X_USER = config.Config(images={"docker.io/library/x": config.ConfigSection(user=(900, 900))})
 
 
 def inside(project):

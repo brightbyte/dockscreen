@@ -40,14 +40,14 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *runargs.DEFAULTS, *resolved])
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it
     """
     assert name == "create"
-    return helptext.Topic(
+    return helptext.HelpTopic(
         "dockscreen create [OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Create a container, with the hardening defaults added",
         (helptext.DEFAULTS, "The container is checked when dockscreen starts it."),

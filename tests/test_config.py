@@ -62,15 +62,15 @@ nobody_range = [80000, 80010]
     assert settings.docker == "/usr/local/bin/docker"
     assert settings.configured == config.SETTINGS  # docker is not a setting the sections can have
     assert dict(settings.images) == {
-        "docker.io/library/mariadb": config.Section(user=(999, 999), mount_dirs=("/srv/db",)),
-        "ghcr.io/acme/app": config.Section(security_opts=("apparmor=acme",)),
-        "ghcr.io/acme/tool": config.Section(default_home="")}  # "" is a choice: no HOME
+        "docker.io/library/mariadb": config.ConfigSection(user=(999, 999), mount_dirs=("/srv/db",)),
+        "ghcr.io/acme/app": config.ConfigSection(security_opts=("apparmor=acme",)),
+        "ghcr.io/acme/tool": config.ConfigSection(default_home="")}  # "" is a choice: no HOME
     assert dict(settings.projects) == {
-        "/home/me/src/shop": config.Section(default_user=(5000, 5000), nobody_range=(80000, 80010))}
+        "/home/me/src/shop": config.ConfigSection(default_user=(5000, 5000), nobody_range=(80000, 80010))}
 
 
 def test_the_settings_a_section_sets_count_as_configured_where_it_applies():
-    settings = config.Config(projects=MappingProxyType({"/p": config.Section(default_user=(5, 5))}))
+    settings = config.Config(projects=MappingProxyType({"/p": config.ConfigSection(default_user=(5, 5))}))
     assert config.effective(settings).configured == frozenset()
     assert config.effective(settings, None, "/p/sub").configured == {"default_user"}
 
@@ -93,8 +93,8 @@ user = "5000:5000"
     settings = load(system, user)
     assert settings.default_user == (4000, 4000) and settings.mount_dirs == ("/data",)
     assert dict(settings.images) == {
-        "docker.io/library/mariadb": config.Section(user=(999, 999)),
-        "docker.io/library/redis": config.Section(user=(5000, 5000))}  # the whole section is replaced
+        "docker.io/library/mariadb": config.ConfigSection(user=(999, 999)),
+        "docker.io/library/redis": config.ConfigSection(user=(5000, 5000))}  # the whole section is replaced
 
 
 def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tmp_path):
@@ -102,9 +102,9 @@ def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tm
     (shop / "web").mkdir(parents=True)
     settings = config.Config(
         user=(1, 1), mount_dirs=("/top",), security_opts=("a",),
-        images={"docker.io/library/mariadb": config.Section(user=(999, 999), mount_dirs=("/img",))},
-        projects={str(tmp_path / "src"): config.Section(user=(2, 2), mount_dirs=("/src",)),
-                  str(shop): config.Section(security_opts=("b", "a"), default_user=(3, 3))})
+        images={"docker.io/library/mariadb": config.ConfigSection(user=(999, 999), mount_dirs=("/img",))},
+        projects={str(tmp_path / "src"): config.ConfigSection(user=(2, 2), mount_dirs=("/src",)),
+                  str(shop): config.ConfigSection(security_opts=("b", "a"), default_user=(3, 3))})
 
     found = config.effective(settings, "docker.io/library/mariadb", str(shop / "web"))
     assert found.user == (2, 2)                       # replaced: the outer project's comes after the image's
@@ -228,12 +228,12 @@ def test_an_existing_user_file_is_left_alone(tmp_path):
     assert not (tmp_path / "elsewhere.toml").exists()
 
 
-IMAGE_SECTION = config.Config(images={"docker.io/library/mariadb": config.Section(user=(999, 999))})
+IMAGE_SECTION = config.Config(images={"docker.io/library/mariadb": config.ConfigSection(user=(999, 999))})
 
 
 def test_an_image_pulled_from_the_sections_repository_gets_the_section():
     match = config.section_for(IMAGE_SECTION, "mariadb:11", ["mariadb@sha256:abc"], built=False)
-    assert match == config.Match("docker.io/library/mariadb", None)
+    assert match == config.SectionMatch("docker.io/library/mariadb", None)
     # the digest may be recorded under any spelling of the repository
     match = config.section_for(IMAGE_SECTION, "docker.io/library/mariadb",
                                ["docker.io/library/mariadb@sha256:a"], built=False)
@@ -256,4 +256,4 @@ def test_an_image_that_only_has_the_name_does_not_get_the_section(reference, dig
 @pytest.mark.parametrize("reference", ["redis", "evil.example/mariadb", "someone/mariadb", "sha256:abc"])
 def test_other_repositories_have_no_section(reference):
     match = config.section_for(IMAGE_SECTION, reference, ["x@sha256:a"], built=False)
-    assert match == config.Match(None, None)
+    assert match == config.SectionMatch(None, None)

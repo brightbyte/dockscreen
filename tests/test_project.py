@@ -1,9 +1,9 @@
 from dockscreen.model.origin import Origin
-from dockscreen.model.project import Location, Project
+from dockscreen.model.project import Project, ProjectLocation
 
 
 def project(**services):
-    return Project({"name": "p", "services": services, "volumes": {"data": {}}}, Location("/p"))
+    return Project({"name": "p", "services": services, "volumes": {"data": {}}}, ProjectLocation("/p"))
 
 
 def test_a_service_is_its_projects_view_of_its_keys():

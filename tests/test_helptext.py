@@ -4,9 +4,9 @@ import shutil
 from dockscreen.commands import docker, docker_exec, docker_run, helptext
 from dockscreen.util import messages
 
-OPTIONS = (helptext.Option("--long-option", "Some text that is long enough to need wrapping at a narrow "
+OPTIONS = (helptext.HelpOption("--long-option", "Some text that is long enough to need wrapping at a narrow "
                                            "width"),
-           helptext.Option("--user", "Short", short="u", value="string"))
+           helptext.HelpOption("--user", "Short", short="u", value="string"))
 
 
 def test_tables_wrap_descriptions_under_their_own_column():

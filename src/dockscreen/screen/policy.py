@@ -13,7 +13,7 @@ added tomorrow is denied until someone has reviewed it. Every structure that can
 with `x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
 BuildRules._check_build).
 
-A Policy holds the settings the rules apply with, such as the id rules (idrules.Rules) that decide which
+A Policy holds the settings the rules apply with, such as the id rules (idrules.IdRules) that decide which
 uids and gids a project may choose; what is known about the thing judged belongs to it, not to the
 policy, down to the directory its paths are judged against. Every rule is a method of Policy, whether it
 reads the settings or not. The checks of a whole target turn the problems of each rule into findings
@@ -32,9 +32,8 @@ from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules
-from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.findings import Finding, about, judged, refused
-from dockscreen.screen.rules.base import Subject, unknown_keys
+from dockscreen.screen.rules.base import JudgedService, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
 from dockscreen.screen.rules.commandline import CommandLineRules
 from dockscreen.screen.rules.image import ImageRules, image_problem
@@ -45,6 +44,7 @@ from dockscreen.screen.rules.service import (
     SERVICE_CHECKS,
     ServiceRules,
 )
+from dockscreen.screen.userdecision import UserDecision
 
 
 @dataclasses.dataclass(frozen=True)
@@ -57,7 +57,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:
-    - ids: the id rules (idrules.Rules)
+    - ids: the id rules (idrules.IdRules)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
       instead (with_trust)
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
@@ -67,7 +67,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
     """
-    ids: idrules.Rules
+    ids: idrules.IdRules
     extra_dirs: tuple = ()  # mount_dirs from the config file
     trust: frozenset[Origin] = TRUSTED
     config_file: str | None = None
@@ -78,13 +78,13 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN
-    section: configuration.Match = configuration.NO_SECTION
+    section: configuration.SectionMatch = configuration.NO_SECTION
     # The policy for each service of the project this one is for, with the settings of its image section
     # if one applies, by service name; a service that is not in it gets this one.
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, rules: idrules.Rules,
+    def for_settings(cls, settings: configuration.Config, rules: idrules.IdRules,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 
@@ -106,7 +106,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         found = self.per_service.get(name)
         return found.with_trust(self.trust) if found else self
 
-    def with_section(self, section: configuration.Match) -> Self:
+    def with_section(self, section: configuration.SectionMatch) -> Self:
         """Returns this policy for an image that section says which image section applies to."""
         return dataclasses.replace(self, section=section)
 
@@ -157,7 +157,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         # build secrets refer to these
         return problems + self._check_file_sources(project.definition, project.directory)
 
-    def check_service(self, service: Subject) -> list[Finding]:
+    def check_service(self, service: JudgedService) -> list[Finding]:
         """Checks one service; returns what it finds, empty if there is nothing.
 
         A problem is refused, or notable if its value comes from an origin that this policy trusts

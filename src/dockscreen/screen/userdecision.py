@@ -10,8 +10,8 @@ has no user, and so no origin.
 
 from typing import NamedTuple, Self
 
-from dockscreen.host.config import NO_SECTION, Match
-from dockscreen.model.image import Identity, Image
+from dockscreen.host.config import NO_SECTION, SectionMatch
+from dockscreen.model.image import Image, UserIdentity
 from dockscreen.model.origin import Origin
 from dockscreen.screen.findings import Finding, Severity
 
@@ -29,16 +29,16 @@ class UserDecision(NamedTuple):
     - findings: refusals, failures to look, and notable findings
     - identity: the ids read from the image, or None
     - user: the (uid, gid) dockscreen pins (pins_user), or None
-    - section: which image section of the config file applied (Match)
+    - section: which image section of the config file applied (SectionMatch)
     - home: the HOME to set for the default user that replaces root; "" leaves it alone
     - replaces_root: whether the default user runs instead of the image's root
     """
     origin: Origin | None
     image: Image
     findings: tuple[Finding, ...] = ()
-    identity: Identity | None = None
+    identity: UserIdentity | None = None
     user: tuple[int, int] | None = None
-    section: Match = NO_SECTION
+    section: SectionMatch = NO_SECTION
     home: str = ""
     replaces_root: bool = False
 

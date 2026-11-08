@@ -1,12 +1,12 @@
 from fakes import marked
 
 from dockscreen.model.origin import Origin
-from dockscreen.model.project import Location, Project
+from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import substitutions
-from dockscreen.screen.substitutions import Group, Substitution
+from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.util import messages
 
-PINNED = Group("services {services}: pinned", "nothing to do")
+PINNED = SubstitutionGroup("services {services}: pinned", "nothing to do")
 
 
 def test_apply_sets_each_key_on_a_copy():
@@ -51,7 +51,7 @@ def test_describe_gives_a_line_each_then_one_per_group_naming_its_services_once(
 
 
 def test_applied_makes_them_in_a_projects_definition_with_their_origins():
-    found = Project({"services": {"web": {}}}, Location("/p"))
+    found = Project({"services": {"web": {}}}, ProjectLocation("/p"))
 
     changed = substitutions.applied(found, [Substitution("web", "user", "1:1", origin=Origin.CONFIG)])
 

@@ -7,7 +7,7 @@ from dockscreen.commands import docker_compose
 from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
-from dockscreen.model.project import Location, Project
+from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import idrules
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
@@ -43,7 +43,7 @@ def marked(lines):
 
 def project_of(definition, directory="/p", origins=None):
     """The compose project in directory with definition, and the origins of the values dockscreen set."""
-    return Project(definition, Location(str(directory))).with_origins(origins or {})
+    return Project(definition, ProjectLocation(str(directory))).with_origins(origins or {})
 
 
 class NoSubordinate:
@@ -57,13 +57,13 @@ ME = (4242, 4343)
 
 
 def rules(me=ME, allow_me=False, local=None, settings=None, subordinate=None):
-    """idrules.Rules for the host of Accounts, with the default config unless settings says otherwise.
+    """idrules.IdRules for the host of Accounts, with the default config unless settings says otherwise.
 
     The caller is ME.
     """
     settings = settings or config.Config()
-    return idrules.Rules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
-                         subordinate or NoSubordinate())
+    return idrules.IdRules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
+                           subordinate or NoSubordinate())
 
 
 class Accounts:

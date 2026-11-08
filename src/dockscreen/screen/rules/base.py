@@ -11,7 +11,7 @@ from dockscreen.model.origin import Origin
 from dockscreen.screen import idrules
 
 
-class Subject(Protocol):
+class JudgedService(Protocol):
     """Protocol of a service as Policy.check_service judges it, which a compose service (project.Service) and
     a container read back as one (container.Container) both implement. It gives the service's keys, the
     directory they are judged against, whether it reaches host files, and where each key's value comes from.
@@ -44,7 +44,7 @@ class RuleBase:
     """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
     which Policy holds and documents, and what follows from them for every group of rules.
     """
-    ids: idrules.Rules
+    ids: idrules.IdRules
     extra_dirs: tuple
     trust: frozenset[Origin]
     config_file: str | None
@@ -53,7 +53,7 @@ class RuleBase:
     default_user: tuple[int, int]
     default_home: str
     default_origin: Origin
-    section: configuration.Match
+    section: configuration.SectionMatch
 
     def mount_roots(self, directory: str | None) -> tuple[str, ...]:
         """Returns where bind mounts may come from for a project in directory: directory, then the configured
@@ -100,7 +100,7 @@ def _roots_text(directory: str | None, extra_dirs: Sequence[str]) -> str:
     return f"{directory}" + (" and the configured mount_dirs" if extra_dirs else "")
 
 
-def directory_of(service: Subject) -> str:
+def directory_of(service: JudgedService) -> str:
     """Returns the directory of a service that has keys with relative paths: a compose service. What a
     container asks for is read back without any (container.as_service), so its directory may be unknown.
     """

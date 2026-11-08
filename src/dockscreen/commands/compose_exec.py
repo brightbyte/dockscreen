@@ -27,13 +27,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved])
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it
     """
     assert name == "exec"
-    return helptext.Topic("dockscreen compose exec [OPTIONS] SERVICE COMMAND [ARGS...]",
-                          "Run a command in a running service; --as and --as-me choose the user", (),
-                          helptext.USER_OPTIONS)
+    return helptext.HelpTopic("dockscreen compose exec [OPTIONS] SERVICE COMMAND [ARGS...]",
+                              "Run a command in a running service; --as and --as-me choose the user", (),
+                              helptext.USER_OPTIONS)

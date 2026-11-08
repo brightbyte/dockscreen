@@ -7,14 +7,14 @@ from fakes import make_runtime
 from dockscreen.compose import inspect
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError
-from dockscreen.model.project import Location
+from dockscreen.model.project import ProjectLocation
 from dockscreen.screen.findings import Severity
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):
     runtime = make_runtime(env={})
     result = inspect._project_location(["-f", "a/x.yml", "-f", "b/y.yml"], str(tmp_path), runtime)
-    assert result == Location(str(tmp_path / "a"))
+    assert result == ProjectLocation(str(tmp_path / "a"))
 
 
 def test_project_directory_option_wins_over_file(tmp_path):
@@ -72,7 +72,7 @@ def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / "compose.yaml").write_text("")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(inspect.Refused) as refused:
+    with pytest.raises(inspect.ProjectRefused) as refused:
         inspect.project([], make_runtime())
     assert [f.severity for f in refused.value.findings] == [Severity.REFUSED]
     assert "contains" in refused.value.findings[0]
@@ -82,9 +82,9 @@ def test_the_walk_up_stops_at_the_home_directory(tmp_path):
     (tmp_path / "compose.yaml").write_text("")  # a stray file in "home"
     (tmp_path / "work").mkdir()
     stray = inspect._find_compose_dir(str(tmp_path / "work"), (), home=str(tmp_path), uid=os.getuid())
-    assert stray == Location(str(tmp_path), foreign=True)
+    assert stray == ProjectLocation(str(tmp_path), foreign=True)
     found = inspect._find_compose_dir(str(tmp_path / "work"), (), home="/elsewhere", uid=os.getuid())
-    assert found == Location(str(tmp_path))
+    assert found == ProjectLocation(str(tmp_path))
 
 
 def test_the_walk_up_stops_at_a_directory_owned_by_someone_else(tmp_path):
@@ -97,7 +97,7 @@ def test_the_walk_up_stops_at_a_directory_owned_by_someone_else(tmp_path):
 def test_the_starting_directory_is_used_whoever_owns_it(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     found = inspect._find_compose_dir(str(tmp_path), (), home="/elsewhere", uid=12345)
-    assert found == Location(str(tmp_path))
+    assert found == ProjectLocation(str(tmp_path))
 
 
 @pytest.mark.parametrize("line", [
@@ -116,18 +116,19 @@ def test_dotenv_in_a_directory_on_the_way_up_is_scanned_too(tmp_path):
     (tmp_path / "sub" / ".env").write_text("COMPOSE_FILE=elsewhere.yml\n")
     mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))  # the directories walked must be the caller's
     location = inspect._project_location([], str(tmp_path / "sub"), mine)
-    assert location == Location(str(tmp_path), redirects=(str(tmp_path / "sub" / ".env"),))
+    assert location == ProjectLocation(str(tmp_path), redirects=(str(tmp_path / "sub" / ".env"),))
 
 
 def test_unrelated_dotenv_variables_are_fine_and_explicit_files_skip_the_scan(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / ".env").write_text("MY_COMPOSE_FILE=x\nPASSWORD=y\n")
-    assert inspect._project_location([], str(tmp_path), make_runtime(env={})) == Location(str(tmp_path))
+    found = inspect._project_location([], str(tmp_path), make_runtime(env={}))
+    assert found == ProjectLocation(str(tmp_path))
 
     (tmp_path / ".env").write_text("COMPOSE_FILE=elsewhere.yml\n")
     runtime = make_runtime(env={})
     location = inspect._project_location(["-f", "compose.yaml"], str(tmp_path), runtime)
-    assert location == Location(str(tmp_path))
+    assert location == ProjectLocation(str(tmp_path))
 
 
 def test_config_is_loaded_without_env_resolution(monkeypatch):

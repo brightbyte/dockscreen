@@ -36,8 +36,8 @@ SERVICE_FIELDS = {
 
 class Container(NamedTuple):
     """View of a container as docker inspect shows it, for judging what it asks for as a compose service is
-    judged (Subject). It holds what docker inspect shows, the directory its bind mounts are judged against,
-    and where its user comes from.
+    judged (JudgedService). It holds what docker inspect shows, the directory its bind mounts are judged
+    against, and where its user comes from.
 
     Everything else it has comes from the command line that created it. A container that could not be
     inspected comes from uninspected and has only its id.

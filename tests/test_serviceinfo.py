@@ -251,7 +251,8 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
 
     assert policy.check_project(project_of(final, origins=origins)) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
-    settings = configuration.Config(images={"docker.io/library/db": configuration.Section(user=(1000, 1000))})
+    section = configuration.ConfigSection(user=(1000, 1000))
+    settings = configuration.Config(images={"docker.io/library/db": section})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, origins = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
@@ -315,7 +316,8 @@ def test_with_mounts_a_root_image_still_runs_as_the_default_user():
 
 # --- users the config file sets ----------------------------------------------------
 
-MARIADB = configuration.Config(images={"docker.io/library/mariadb": configuration.Section(user=(999, 999))})
+MARIADB = configuration.Config(
+    images={"docker.io/library/mariadb": configuration.ConfigSection(user=(999, 999))})
 
 
 def mariadb_project(**fields):

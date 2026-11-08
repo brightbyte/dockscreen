@@ -1,5 +1,5 @@
-"""This module defines the Rules class, for deciding which uids and gids a project or an image may choose for
-a container.
+"""This module defines the IdRules class, for deciding which uids and gids a project or an image may choose
+for a container.
 
 Applies to every id that comes from an untrusted source: `user:` and hook users in a compose
 file, and the user an image runs as. Ids from the command line and the config file are trusted and are
@@ -33,7 +33,7 @@ from dockscreen.host.runtime import Runtime
 MAX_ID = 2**31 - 1
 
 
-class Rules(NamedTuple):
+class IdRules(NamedTuple):
     """Value object for deciding which uids and gids a project or an image may choose (problems). It holds the
     caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
     this host's accounts and subordinate ranges.
@@ -46,14 +46,14 @@ class Rules(NamedTuple):
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose
     - default_user: the (uid, gid) that replaces root
     - local: the accounts on this host (HostAccounts)
-    - subordinate: the ranges in /etc/subuid and /etc/subgid (Subordinate)
+    - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
     """
     me: tuple
     allow_me: bool
     nobody_range: tuple
     default_user: tuple
     local: hostusers.HostAccounts
-    subordinate: hostusers.Subordinate
+    subordinate: hostusers.SubordinateRanges
 
     @classmethod
     def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:

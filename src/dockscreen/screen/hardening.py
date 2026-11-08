@@ -15,7 +15,7 @@ from typing import Any
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
 from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
-from dockscreen.screen.substitutions import Group, Substitution
+from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.util import ids
 
 
@@ -124,8 +124,9 @@ DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, a
 RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
-DEFAULTS = Group(f'added cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where missing, '
-                 "in services {services}", DEFAULTS_HELP)
+DEFAULTS = SubstitutionGroup(
+    f'added cap_drop: ["{CAP_DROP}"] and security_opt: ["{SECURITY_OPT}"] where missing, '
+    "in services {services}", DEFAULTS_HELP)
 
 
 def defaults_note() -> str:

@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.host import hostusers
-from dockscreen.model.image import Identity
+from dockscreen.model.image import UserIdentity
 
 # What Go's unicode.IsSpace trims; Python's str.strip() differs (it also strips \x1c to \x1f).
 GO_SPACE = "\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009" \
@@ -61,8 +61,8 @@ def _parse_group(text: str) -> list[tuple[str, int, list[str]]]:
     return entries
 
 
-def resolve(spec: str | None, passwd_text: str, group_text: str) -> Identity:
-    """Resolves a `user[:group]` spec to the Identity docker would run it as, using the image's files.
+def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity:
+    """Resolves a `user[:group]` spec to the UserIdentity docker would run it as, using the image's files.
 
     A numeric user or group is an id, never a name (moby looks it up by number only). A numeric
     uid without a passwd entry gets gid 0. Raises ValueError for a name the image does not define,
@@ -99,7 +99,7 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> Identity:
         raise ValueError("the image's user has a negative id")
     # moby finds supplementary groups by user name, so a uid without a passwd entry has none
     supplementary = tuple(sorted({g[1] for g in groups if username and username in g[2]}))
-    return Identity(uid, gid, supplementary)
+    return UserIdentity(uid, gid, supplementary)
 
 
 def _find(entries: Sequence[tuple[Any, ...]], arg: str) -> tuple[Any, ...] | None:
@@ -117,7 +117,7 @@ def _is_id(text: str) -> bool:
     return bool(digits) and all(c in "0123456789" for c in digits)
 
 
-def describe(identity: Identity, local: hostusers.HostAccounts | None = None) -> str:
+def describe(identity: UserIdentity, local: hostusers.HostAccounts | None = None) -> str:
     """Describes the identity in words, and which local accounts the ids are.
 
     Parameters:

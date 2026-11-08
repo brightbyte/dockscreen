@@ -49,7 +49,7 @@ def check(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     try:
         project = inspect.project(global_args, runtime)
-    except (inspect.Refused, DockerError):
+    except (inspect.ProjectRefused, DockerError):
         return []
     if not project.name:
         return []

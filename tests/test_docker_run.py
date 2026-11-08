@@ -165,7 +165,7 @@ def test_the_default_home_comes_from_the_config_file_and_may_be_left_out():
 
 
 def test_an_image_section_can_choose_the_home_of_the_default_user():
-    settings = config.Config(images={"docker.io/library/img": config.Section(default_home="/work")})
+    settings = config.Config(images={"docker.io/library/img": config.ConfigSection(default_home="/work")})
     docker = FakeDocker(image_user="", repo_digests=["img@sha256:abc"])
     assert docker_run.gate(docker_line("run", "img"), runtime(docker, settings)) == 42
     assert created_env(docker) == ["HOME=/work"]
@@ -216,7 +216,7 @@ def test_a_root_default_user_is_announced_on_every_run(capsys):
 
 # --- users the config file sets for an image repository -----------------------------
 
-IMG_USERS = config.Config(images={"docker.io/library/img": config.Section(user=(999, 999))})
+IMG_USERS = config.Config(images={"docker.io/library/img": config.ConfigSection(user=(999, 999))})
 
 
 def test_a_configured_image_user_replaces_the_images_own(capsys):
@@ -359,7 +359,8 @@ def test_user_with_a_name_is_refused_before_anything_is_created(flags, capsys):
 # --- image and project sections of the config file ---------------------------------
 
 def test_an_image_section_changes_the_rules_for_that_image():
-    settings = config.Config(images={"docker.io/library/img": config.Section(default_user=(65533, 65533))})
+    section = config.ConfigSection(default_user=(65533, 65533))
+    settings = config.Config(images={"docker.io/library/img": section})
     docker = FakeDocker(image_user="", repo_digests=["img@sha256:abc"])
     assert docker_run.gate(docker_line("run", "img"), runtime(docker, settings)) == 42
     assert "--user=65533:65533" in docker.calls[3][1]
@@ -367,7 +368,7 @@ def test_an_image_section_changes_the_rules_for_that_image():
 
 def test_a_project_section_applies_in_its_directory(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    settings = config.Config(projects={str(tmp_path): config.Section(user=(65532, 65532))})
+    settings = config.Config(projects={str(tmp_path): config.ConfigSection(user=(65532, 65532))})
     docker = FakeDocker(image_user="app")
     assert docker_run.gate(docker_line("run", "img"), runtime(docker, settings)) == 42
     assert "--user=65532:65532" in docker.calls[3][1]  # configured: the image's own user is not used
@@ -575,7 +576,7 @@ def test_audit_takes_as_and_refuses_names_for_user(capsys):
     ([], ["command line: security_opt 'seccomp=unconfined' is not allowed"]),
 ])
 def test_an_image_sections_security_opts_apply_to_what_audit_points_out(digests, findings, capsys):
-    section = config.Section(security_opts=("seccomp=unconfined",))
+    section = config.ConfigSection(security_opts=("seccomp=unconfined",))
     settings = config.Config(images={"docker.io/library/img": section})
     host = {"SecurityOpt": ["no-new-privileges:true", "seccomp=unconfined"], "CapDrop": ["ALL"]}
     docker = FakeDocker(image_user="nobody", repo_digests=digests, info_extra={"HostConfig": host})
@@ -585,7 +586,7 @@ def test_an_image_sections_security_opts_apply_to_what_audit_points_out(digests,
 
 
 def test_audit_does_not_point_out_a_user_the_config_file_sets_for_the_image(capsys):
-    settings = config.Config(images={"docker.io/library/img": config.Section(user=(900, 900))})
+    settings = config.Config(images={"docker.io/library/img": config.ConfigSection(user=(900, 900))})
     docker = FakeDocker(image_user="", container_user="900:900", repo_digests=["img@sha256:abc"],
                         info_extra=BIND)  # with mounts, 900 is only allowed because the config says so
     assert audited_with(docker, settings, "--user", "900:900", "-v", "/p:/p", "img") == 0

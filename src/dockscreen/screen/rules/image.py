@@ -18,12 +18,12 @@ runtime's can at worst refuse a good image, never run root.
 
 from typing import Any
 
-from dockscreen.model.image import Identity, Inspected, section_hint
+from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.rules.base import RuleBase
+from dockscreen.screen.userdecision import UserDecision
 
 
 class ImageRules(RuleBase):
@@ -54,8 +54,8 @@ class ImageRules(RuleBase):
         if origin is not Origin.IMAGE:
             return UserDecision(origin, image, notes, **found)
         if self.configured_user:
-            return UserDecision(Origin.CONFIG, image, notes, Identity(*self.configured_user),
-                              user=self.configured_user, **found)
+            return UserDecision(Origin.CONFIG, image, notes, UserIdentity(*self.configured_user),
+                                user=self.configured_user, **found)
         assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
         try:
             identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
@@ -63,12 +63,12 @@ class ImageRules(RuleBase):
             return UserDecision(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
         if identity.involves_root:
             return UserDecision(self.default_origin, image, notes, identity, user=self.default_user,
-                              home=self.default_home, replaces_root=True, **found)
+                                home=self.default_home, replaces_root=True, **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
         return UserDecision(Origin.IMAGE, image, (*notes, *refusals), identity,
-                          user=(identity.uid, identity.gid), **found)
+                            user=(identity.uid, identity.gid), **found)
 
 
 def image_problem(name: str, decision: UserDecision, config_file: str | None = None) -> Finding:

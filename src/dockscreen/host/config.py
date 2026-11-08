@@ -44,7 +44,7 @@ class ConfigError(Exception):
     """Exception raised when a config file cannot be trusted or read, which stops dockscreen from running."""
 
 
-class Section(NamedTuple):
+class ConfigSection(NamedTuple):
     """Record of the settings of one image or project section of the config files. It holds the settings the
     section sets; None, or () for a list, leaves a setting to the levels above.
 
@@ -75,8 +75,8 @@ class Config(NamedTuple):
     - mount_dirs: the absolute directories bind mounts may come from
     - security_opts: the security options allowed besides no-new-privileges
     - docker: the absolute path of the real docker, or None
-    - images: the image sections, by normalised repository (Section)
-    - projects: the project sections, by absolute directory (Section)
+    - images: the image sections, by normalised repository (ConfigSection)
+    - projects: the project sections, by absolute directory (ConfigSection)
     - configured: the names of the settings a config file sets; the others are defaults
     """
     user: tuple[int, int] | None = None
@@ -91,7 +91,7 @@ class Config(NamedTuple):
     configured: frozenset = frozenset()
 
 
-class Match(NamedTuple):
+class SectionMatch(NamedTuple):
     """Record of which image section of the config file applies to an image, or why the one for its repository
     does not.
 
@@ -105,7 +105,7 @@ class Match(NamedTuple):
     problem: str | None
 
 
-NO_SECTION = Match(None, None)  # for what is not an image, or an image no section is for
+NO_SECTION = SectionMatch(None, None)  # for what is not an image, or an image no section is for
 
 
 def effective(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
@@ -132,7 +132,7 @@ def effective(config: Config, repository: str | None = None, directory: str | No
     return result
 
 
-def _amend(config: Config, section: Section) -> Config:
+def _amend(config: Config, section: ConfigSection) -> Config:
     """Returns config with section applied: the values it sets replace, the lists it gives are added to."""
     changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
@@ -150,8 +150,9 @@ def all_mount_dirs(config: Config) -> tuple[str, ...]:
     return tuple(dict.fromkeys([*config.mount_dirs, *(d for s in sections for d in s.mount_dirs)]))
 
 
-def section_for(config: Config, reference: str, repo_digests: Iterable[str] | None, built: bool) -> Match:
-    """Determines which image section of the config file applies to this image, as a Match.
+def section_for(config: Config, reference: str, repo_digests: Iterable[str] | None, built: bool
+                ) -> SectionMatch:
+    """Determines which image section of the config file applies to this image, as a SectionMatch.
 
     Parameters:
     - config: the settings of the config file
@@ -161,12 +162,13 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
     """
     name = repository(reference)
     if name not in config.images:
-        return Match(None, None)
+        return SectionMatch(None, None)
     if built:
-        return Match(None, f"the config has a section for {name}, but the service builds its image")
+        return SectionMatch(None, f"the config has a section for {name}, but the service builds its image")
     if not any(repository(d) == name for d in repo_digests or []):
-        return Match(None, f"the config has a section for {name}, but this image was not pulled from there")
-    return Match(name, None)
+        return SectionMatch(
+            None, f"the config has a section for {name}, but this image was not pulled from there")
+    return SectionMatch(name, None)
 
 
 def name_matches(config: Config, reference: str, built: bool) -> str | None:
@@ -270,8 +272,8 @@ def _table(path: str, key: str, value: object) -> dict[str, Any]:
     return value
 
 
-def _section(path: str, where: str, data: object) -> Section:
-    """Returns the Section that data sets; raises ConfigError for an unknown key or an invalid value.
+def _section(path: str, where: str, data: object) -> ConfigSection:
+    """Returns the ConfigSection that data sets; raises ConfigError for an unknown key or an invalid value.
 
     where: names the section in errors ("" for the top level).
     """
@@ -302,7 +304,7 @@ def _section(path: str, where: str, data: object) -> Section:
         if not isinstance(value, list) or not all(isinstance(o, str) and o for o in value):
             raise ConfigError(f"{prefix}security_opts must be a list of security options")
         fields["security_opts"] = tuple(value)
-    return Section(**fields)
+    return ConfigSection(**fields)
 
 
 def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, Any] | None:

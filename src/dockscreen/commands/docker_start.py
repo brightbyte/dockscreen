@@ -18,10 +18,10 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings, verdict
-from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import explain
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.screener import Screener
+from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.userdecisionview import explain
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -89,20 +89,20 @@ def _runs_as_pinned_user(info: dict[str, Any], decision: UserDecision) -> bool:
     return ids.parse_user(info["Config"].get("User") or "") == decision.user
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it: start or restart
     """
     if name == "restart":
-        return helptext.Topic(
+        return helptext.HelpTopic(
             "dockscreen restart [OPTIONS] CONTAINER [CONTAINER...]",
             "Restart containers, denied if they would fail the check of run",
             ("As for start.", helptext.VERDICT),
             aliases=("dockscreen container restart", "dockscreen restart"))
     assert name == "start"
-    return helptext.Topic(
+    return helptext.HelpTopic(
         "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
         "Start containers, denied if they would fail the check of run",
         (("An existing container cannot be changed, so one whose image's user dockscreen would replace or "

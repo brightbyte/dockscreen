@@ -21,17 +21,18 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "create"
-    parsed = userargs.Parsed.unread(list(parent_cli.args), runtime)
+    parsed = userargs.UserArgs.unread(list(parent_cli.args), runtime)
     return projectscreening.check_and_run(list(parent_cli.lead_args), "create", parsed, runtime,
                                           parent_cli.allow_me)
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it
     """
     assert name == "create"
-    return helptext.Topic("dockscreen compose create [OPTIONS] [SERVICE...]",
-                          "Create containers, after the project passes the audit", helptext.SCREENED_COMPOSE)
+    return helptext.HelpTopic("dockscreen compose create [OPTIONS] [SERVICE...]",
+                              "Create containers, after the project passes the audit",
+                              helptext.SCREENED_COMPOSE)

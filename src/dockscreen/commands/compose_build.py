@@ -29,17 +29,18 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])
 
 
-def help(name: str) -> helptext.Topic:
+def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
     - name: the command, as the dispatcher knows it: build or bake
     """
     if name == "bake":
-        return helptext.Topic("dockscreen compose bake [OPTIONS] [SERVICE...]",
-                              "Build with bake, after checking what the builds can reach",
-                              (*helptext.BUILD_RULES,
+        return helptext.HelpTopic("dockscreen compose bake [OPTIONS] [SERVICE...]",
+                                  "Build with bake, after checking what the builds can reach",
+                                  (*helptext.BUILD_RULES,
                                "x- keys in build are refused, because bake reads x-bake."))
     assert name == "build"
-    return helptext.Topic("dockscreen compose build [OPTIONS] [SERVICE...]",
-                          "Build services, after checking what the builds can reach", helptext.BUILD_RULES)
+    return helptext.HelpTopic("dockscreen compose build [OPTIONS] [SERVICE...]",
+                              "Build services, after checking what the builds can reach",
+                              helptext.BUILD_RULES)
