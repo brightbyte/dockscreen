@@ -2,7 +2,7 @@ import pytest
 from fakes import rules
 
 from dockscreen.host import config, hostusers
-from dockscreen.screen import idrules
+from dockscreen.screen.rules import idrules
 
 
 class Accounts:

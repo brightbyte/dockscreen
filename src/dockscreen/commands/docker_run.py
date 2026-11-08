@@ -26,10 +26,11 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, idrules, userdecisionview
+from dockscreen.screen import findings, userdecisionview
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.report import Report
+from dockscreen.screen.rules import idrules
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice

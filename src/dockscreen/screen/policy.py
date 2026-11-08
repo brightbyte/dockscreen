@@ -31,8 +31,8 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import idrules
 from dockscreen.screen.findings import Finding, about, judged, refused
+from dockscreen.screen.rules import idrules
 from dockscreen.screen.rules.base import JudgedService, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
 from dockscreen.screen.rules.commandline import CommandLineRules

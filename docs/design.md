@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `project` (a compose project, where it is, and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image` (an image, its reference as docker reads it, what was seen of it, and the identity its user resolves to). What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `screener`, `decision`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `report`.
+4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, the id rules in `idrules`, and what they share in `base`), `screener`, `decision`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `report`.
 5. `cli`: reading the command line: `userargs` (with compose's `run` and `exec`), `runargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`projectscreening`), what screening needs to know about the services (`serviceinfo`), the users their images would run them as (`imageusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`, `docker_compose`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`), the dispatchers that choose among them (`docker` for `docker`, `docker_compose` also for `docker compose`), and their `helptext`.
@@ -212,7 +212,7 @@ Every structure has its own key list: service, mount, build, volume, network, se
 | `x-` keys | ignored, as compose does, except in `build` |
 | service names | no leading `-`, because names go to compose as arguments; `pull` and `build` of the images get `--` before them |
 
-### Users (`idrules`, `hostusers`, `image`, `imageuser`, `rules.image`)
+### Users (`rules.idrules`, `hostusers`, `image`, `imageuser`, `rules.image`)
 
 `idrules.IdRules` implements [the id rules](#ids-the-project-and-the-image-may-not-choose). It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 

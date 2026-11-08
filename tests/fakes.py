@@ -8,7 +8,7 @@ from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Project, ProjectLocation
-from dockscreen.screen import idrules
+from dockscreen.screen.rules import idrules
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
