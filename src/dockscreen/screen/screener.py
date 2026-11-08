@@ -30,16 +30,19 @@ from dockscreen.screen.userdecision import UserDecision
 class Screener(NamedTuple):
     """Judge of what one command runs: a factory of the policies its checks need, and a service object that
     looks at images through docker and has them judged (look, assess, decide). It holds the runtime and
-    whether the caller's own ids are allowed.
+    whether the caller's own ids are allowed and how a refusal says to allow them.
 
-    Create one per command from its Runtime, with allow_me if the command line asks for it.
+    Create one per command from its Runtime, with allow_me if the command line asks for it, and with the
+    own_ids_hint of commands that allow the caller's ids another way than compose does.
 
     Attributes:
     - runtime: the Runtime of the command
     - allow_me: whether --allow-me allows the caller's own ids
+    - own_ids_hint: how the command allows them, said when they are refused (idrules.IdRules)
     """
     runtime: Runtime
     allow_me: bool = False
+    own_ids_hint: str = idrules.COMPOSE_HINT
 
     @property
     def docker(self) -> Docker:
@@ -49,7 +52,7 @@ class Screener(NamedTuple):
     @property
     def ids(self) -> idrules.IdRules:
         """Returns the id rules with the config file's top-level settings."""
-        return idrules.IdRules.for_runtime(self.runtime, self.allow_me)
+        return idrules.IdRules.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
 
     @property
     def local(self) -> hostusers.HostAccounts:

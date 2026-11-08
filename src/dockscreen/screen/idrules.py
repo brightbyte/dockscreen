@@ -18,7 +18,7 @@ With host mounts (bind mounts, devices, volumes_from, secrets, configs) the id m
 because what the container can write on the host depends on it.
 
 Allowed ids: the nobody range and the default user from the config file, ids the caller adds for one
-check (a configured image user), and the caller's own ids when --allow-me was given.
+check (a configured image user), and the caller's own ids when --allow-me was given (compose).
 """
 
 from collections.abc import Collection, Iterable
@@ -27,10 +27,15 @@ from typing import NamedTuple, Self
 from dockscreen.host import config as configuration
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
+from dockscreen.util import commandline
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
 # caller's own uid, so they are refused here with or without host mounts.
 MAX_ID = 2**31 - 1
+
+# What an id of the caller's is refused with, by the command: how it can be allowed there.
+COMPOSE_HINT = f"pass {commandline.ALLOW_ME} to allow it"
+RUN_HINT = f"pass {commandline.AS_ME} to run as you"
 
 
 class IdRules(NamedTuple):
@@ -47,6 +52,7 @@ class IdRules(NamedTuple):
     - default_user: the (uid, gid) that replaces root
     - local: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
+    - own_ids_hint: how the command allows the caller's ids, said after refusing them; empty if it has no way
     """
     me: tuple
     allow_me: bool
@@ -54,17 +60,19 @@ class IdRules(NamedTuple):
     default_user: tuple
     local: hostusers.HostAccounts
     subordinate: hostusers.SubordinateRanges
+    own_ids_hint: str = COMPOSE_HINT
 
     @classmethod
-    def for_runtime(cls, runtime: Runtime, allow_me: bool = False) -> Self:
+    def for_runtime(cls, runtime: Runtime, allow_me: bool = False, own_ids_hint: str = COMPOSE_HINT) -> Self:
         """Returns the id rules for the config file's settings.
 
         Parameters:
         - runtime: the Runtime of the command, whose settings and caller give the rules
         - allow_me: the caller's own ids are allowed
+        - own_ids_hint: how the command allows them, for the refusal
         """
         return cls(runtime.me, allow_me, runtime.settings.nobody_range, runtime.settings.default_user,
-                   runtime.accounts, runtime.subordinate)
+                   runtime.accounts, runtime.subordinate, own_ids_hint)
 
     def with_settings(self, settings: configuration.Config) -> Self:
         """Returns these rules with the nobody range and default user of settings (config.effective)."""
@@ -103,7 +111,7 @@ class IdRules(NamedTuple):
             return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
         # before the account lookup, which finds the caller too but cannot give the --allow-me hint
         if value == self.me[0 if base == "uid" else 1]:
-            return f"{kind} {value} is yours; --allow-me allows it for compose"
+            return f"{kind} {value} is yours" + (f"; {self.own_ids_hint}" if self.own_ids_hint else "")
         name = self.local.user_name(value) if base == "uid" else self.local.group_name(value)
         if name is not None:
             account = "user" if base == "uid" else "group"

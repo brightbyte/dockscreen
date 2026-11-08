@@ -26,7 +26,7 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, userdecisionview
+from dockscreen.screen import findings, idrules, userdecisionview
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.report import Report
@@ -53,7 +53,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    screener = Screener(runtime)
+    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
     remote = is_remote(parent_cli.lead_args, runtime.docker)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
@@ -250,7 +250,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has_own(commandline.BRIEF), line.argv
-    screener = Screener(runtime)
+    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
                                                                             runtime.docker)))
     if not daemon.passed:

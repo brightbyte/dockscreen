@@ -103,7 +103,7 @@ def test_strict_screening_is_refused_for_the_commands_that_do_not_support_it(wor
 
 def test_an_image_that_runs_as_the_caller_is_refused_and_says_how_to_choose_the_user(world, own_ids_image):
     when_dockscreen(world, "audit", own_ids_image)
-    then_refused(world, f"the image's uid {my_ids()[0]} is yours; --allow-me allows it")
+    then_refused(world, f"the image's uid {my_ids()[0]} is yours; pass --as-me to run as you")
     then_said(world, "pass --user UID:GID, --as NAME or --as-me to choose a user")
 
 

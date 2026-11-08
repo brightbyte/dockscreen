@@ -80,17 +80,15 @@ def test_how_docker_start_is_called_follows_the_run_options(world):
     assert then_handed_off(world).argv[:-1] == ["start", "--attach", "--"], world.report()
 
 
-def test_an_image_that_runs_as_the_caller_needs_allow_me(world, own_ids_image):
+def test_an_image_that_runs_as_the_caller_is_refused(world, own_ids_image):
     when_dockscreen(world, "run", own_ids_image)
-    then_refused(world, f"the image's uid {my_ids()[0]} is yours; pass --allow-me to allow it")
+    then_refused(world, f"the image's uid {my_ids()[0]} is yours; pass --as-me to run as you")
     then_nothing_handed_off(world)
     assert all(world.docker("container", "inspect", c).status != 0 for c in world.containers), world.report()
 
-    for allow_me in (["--allow-me", "run"], ["run", "--allow-me"]):
-        when_dockscreen(world, *allow_me, own_ids_image)
-        then_passed(world)
-        then_said(world, f"image {own_ids_image} runs as {me_user()}, passed to docker as numbers")
-        assert then_started_container(world)["Config"]["User"] == me_user()
+    when_dockscreen(world, "run", "--as-me", own_ids_image)
+    then_passed(world)
+    assert then_started_container(world)["Config"]["User"] == me_user()
 
 
 def test_an_image_user_that_is_a_local_account_is_refused_unless_the_config_file_sets_it(world):

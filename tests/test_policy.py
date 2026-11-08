@@ -149,7 +149,7 @@ def test_disallowed_users(project, user, reasons):
 
 def test_the_callers_own_ids_need_allow_me(project):
     assert_refused(problems_for(project, allow_me=False, user=OWN),
-                   "uid 4242 is yours; --allow-me allows it", "gid 4343 is yours; --allow-me allows it")
+                   "uid 4242 is yours; pass --allow-me", "gid 4343 is yours; pass --allow-me")
 
 
 def test_with_host_mounts_only_allowed_ids_pass(project):

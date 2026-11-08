@@ -241,7 +241,7 @@ def test_a_configured_user_needs_the_image_to_have_been_pulled_from_that_reposit
 def test_an_image_whose_user_is_the_caller_is_refused(capsys):
     docker = FakeDocker(image_user="4242:4343")
     assert docker_run.gate(docker_line("run", "img"), runtime(docker)) == 1
-    assert "the image's uid 4242 is yours; --allow-me allows it for compose" in capsys.readouterr().err
+    assert "the image's uid 4242 is yours; pass --as-me to run as you" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("image_user", ["", "root", "0:0", "424242"])  # the last gets gid 0: no passwd entry

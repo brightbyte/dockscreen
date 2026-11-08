@@ -57,7 +57,7 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
       (Policy.check_container)
     - runtime: the Runtime of the command
     """
-    screener = Screener(runtime)
+    screener = Screener(runtime, own_ids_hint="")  # the image's user is set in the config file, see the hint
     if is_remote(cli.lead_args, runtime.docker):
         return screener.policy(None).check_daemon(True)
     problems: list[Finding] = []

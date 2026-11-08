@@ -60,13 +60,11 @@ def test_every_container_is_checked_before_any_starts(world):
     then_nothing_handed_off(world)
 
 
-def test_a_container_of_an_image_that_runs_as_the_caller_needs_allow_me(world, own_ids_image):
+def test_a_container_of_an_image_that_runs_as_the_caller_is_refused(world, own_ids_image):
     container = given_container(world, own_ids_image)
     when_dockscreen(world, "start", container)
-    then_refused(world, f"{container}: the image's uid {my_ids()[0]} is yours; pass --allow-me")
-    when_dockscreen(world, "--allow-me", "start", container)
-    then_passed(world)
-    then_handed_off(world, "start", container)
+    then_refused(world, f"{container}: the image's uid {my_ids()[0]} is yours")
+    then_nothing_handed_off(world)
 
 
 def test_a_container_that_is_not_there_is_refused(world):

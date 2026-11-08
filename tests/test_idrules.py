@@ -2,6 +2,7 @@ import pytest
 from fakes import rules
 
 from dockscreen.host import config, hostusers
+from dockscreen.screen import idrules
 
 
 class Accounts:
@@ -68,9 +69,19 @@ def test_the_nobody_range_and_the_default_user_are_allowed_even_where_they_exist
 
 def test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with_it():
     assert rules(me=(1000, 1000), local=Accounts()).problems(1000, 1000) == [
-        "uid 1000 is yours; --allow-me allows it for compose",
-        "gid 1000 is yours; --allow-me allows it for compose"]
+        "uid 1000 is yours; pass --allow-me to allow it",
+        "gid 1000 is yours; pass --allow-me to allow it"]
     assert rules(me=(1000, 1000), allow_me=True, local=Accounts()).problems(1000, 1000, mounts=True) == []
+
+
+@pytest.mark.parametrize("hint, said", [
+    (idrules.RUN_HINT, "uid 1000 is yours; pass --as-me to run as you"),
+    ("", "uid 1000 is yours"),  # a command that has no way to allow them
+])
+def test_what_the_refusal_of_the_callers_ids_says_depends_on_the_command(hint, said):
+    found = rules(me=(1000, 1000), local=Accounts())._replace(own_ids_hint=hint)
+
+    assert found.problems(1000, None) == [said]
 
 
 def test_with_mounts_only_allowed_ids_pass():
