@@ -10,7 +10,6 @@ from dockscreen.cli import userargs
 from dockscreen.commands import helptext
 from dockscreen.compose import projectscreening
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
@@ -27,7 +26,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "run"
     parsed = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
-    if not verdict.screened(Screener(runtime).check_given_users(parsed.users.given)):
+    refused = Screener(runtime).check_given_users(parsed.users.given)
+    if not refused.passed:
+        refused.show()
         return 1
     return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
                                           parent_cli.allow_me, parent_cli.strict)

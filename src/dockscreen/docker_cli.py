@@ -9,8 +9,7 @@ from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerNotFound
 from dockscreen.host.runtime import load_runtime
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Report
+from dockscreen.screen.report import Report
 from dockscreen.util import commandline, messages
 
 
@@ -28,7 +27,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # a config file that cannot be trusted stops everything, before any docker runs
         return DockerCommand(cli, load_runtime()).dispatch()
     except config.ConfigError as e:
-        return verdict.report(Report.refusal(f"config file {e}"))
+        return Report.refusal(f"config file {e}").show()
     except DockerNotFound as e:
         messages.notice(e)
         return 1

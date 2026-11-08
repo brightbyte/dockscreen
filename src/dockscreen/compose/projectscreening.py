@@ -34,9 +34,10 @@ from dockscreen.host.dockerclient import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import hardening, policy, substitutions, userdecisionview, verdict
+from dockscreen.screen import hardening, policy, substitutions, userdecisionview
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.substitutions import Substitution
 from dockscreen.util import commandline, messages
@@ -153,7 +154,7 @@ def check(loaded: LoadedProject, screener: Screener) -> ClearedProject | Report:
     found = Report.of([*static_policy.check_project(loaded.static()),
                        *static_policy.check_daemon(loaded.remote)])
     if found.passed:  # asking docker about the name is left until nothing else stands in the way
-        found = Report.of([*found.findings, *_name_conflicts(loaded, static_policy, screener)])
+        found = found.with_more_findings(_name_conflicts(loaded, static_policy, screener))
     return ClearedProject(loaded) if found.passed else found
 
 
@@ -240,13 +241,13 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, r
     try:
         loaded = load_project(global_args, runtime)
     except DockerError as e:
-        verdict.screened(Report.failure(e))
+        Report.failure(e).show_screening()
         return 1
     except inspect.ProjectRefused as e:
-        verdict.screened(Report.of(e.findings))
+        Report.of(e.findings).show_screening()
         return 1
     except ValueError as e:
-        verdict.screened(Report.refusal(str(e)))
+        Report.refusal(str(e)).show_screening()
         return 1
 
     screener = Screener(runtime, allow_me)
@@ -255,18 +256,18 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, r
              *substitutions.describe(loaded.hardening)]
     cleared = check(loaded, screener)
     if isinstance(cleared, Report):
-        verdict.screened(cleared)
+        cleared.show_screening()
         return 1
     with loaded.generated(screener.docker.binary) as command:
         decided = decide(cleared, screener, command, parsed.args, _chosen(parsed))
         runnable = finish(cleared, decided, screener, parsed, strict)
         if isinstance(runnable, Report):
-            verdict.screened(runnable)
+            runnable.show_screening()
             return 1
         for line in [*lines, *decided.notices()]:
             if line:
                 messages.notice(line)
-        verdict.screened(runnable.report)
+        runnable.report.show_screening()
         return screener.docker.run_child([*command(runnable.project.definition), sub, *parsed.args])
 
 

@@ -23,8 +23,7 @@ from dockscreen.commands import (
 )
 from dockscreen.host import shellenv
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Report
+from dockscreen.screen.report import Report
 from dockscreen.util import commandline, messages
 
 # dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
@@ -131,7 +130,7 @@ class ComposeCommand:
             return self.show_help(target)
         if cli.strict and not supports_strict(sub):
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
-            return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
+            return Report.refusal(commandline.STRICT_REFUSAL).show()
         if sub is None:
             return self._passthrough(cli.argv)
         if sub in COMMANDS:

@@ -9,8 +9,9 @@ from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
 from dockscreen.screen import decisions, policy, substitutions
-from dockscreen.screen.findings import Severity, Verdict
+from dockscreen.screen.findings import Severity
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.report import Verdict
 from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN

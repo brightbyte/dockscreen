@@ -19,7 +19,6 @@ from typing import NamedTuple
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
 from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
@@ -189,7 +188,9 @@ def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime
     - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    if not verdict.screened(Screener(runtime).check_given_users(parsed.users.given)):
+    refused = Screener(runtime).check_given_users(parsed.users.given)
+    if not refused.passed:
+        refused.show()
         return None
     for notice in parsed.users.notices:
         messages.notice(notice)

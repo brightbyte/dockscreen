@@ -11,8 +11,8 @@ from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import substitutions, verdict
-from dockscreen.screen.findings import Report
+from dockscreen.screen import substitutions
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -23,7 +23,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
-    (verdict). --brief prints only the verdict, in one line.
+    (Report.verdict). --brief prints only the verdict, in one line.
 
     Parameters:
     - parent_cli: the compose command line, with `audit` as its command; its arguments are none, or --brief
@@ -38,11 +38,11 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     try:
         loaded = projectscreening.load_project(global_args, runtime)
     except DockerError as e:
-        return verdict.report(Report.failure(e), brief)
+        return Report.failure(e).show(brief)
     except inspect.ProjectRefused as e:
-        return verdict.report(Report.of(e.findings), brief)
+        return Report.of(e.findings).show(brief)
     except ValueError as e:
-        return verdict.report(Report.refusal(str(e)), brief)
+        return Report.refusal(str(e)).show(brief)
 
     screener = Screener(runtime, parent_cli.allow_me)
     outcome, lines = _audit_images(loaded, screener, brief)
@@ -52,7 +52,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             messages.out(line)
         if outcome.reasons or loaded.hardening:
             messages.out(messages.Message(messages.HINT, HARDEN_HINT))
-    return verdict.report(outcome, brief)
+    return outcome.show(brief)
 
 
 def _audit_images(loaded: projectscreening.LoadedProject, screener: Screener, brief: bool

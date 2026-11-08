@@ -12,8 +12,9 @@ from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
-from dockscreen.screen import policy, verdict
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen import policy
+from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.report import Report
 from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
@@ -101,11 +102,11 @@ def passes(args: Sequence[str], runtime: Runtime,
     try:
         found = project(args, runtime)
     except DockerError as e:
-        return verdict.screened(Report.failure(e))
+        return Report.failure(e).show_screening()
     except ProjectRefused as e:
-        return verdict.screened(Report.of(e.findings))
+        return Report.of(e.findings).show_screening()
     project_policy = Screener(runtime).project_policy(found)
-    return verdict.screened(Report.of(rules(project_policy, found)))
+    return Report.of(rules(project_policy, found)).show_screening()
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:

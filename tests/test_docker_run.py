@@ -236,22 +236,12 @@ def test_a_configured_user_needs_the_image_to_have_been_pulled_from_that_reposit
     assert "--user=65534:65534" in docker.calls[3][1]  # an image tagged img locally: the normal rules
 
 
-# --- --allow-me ------------------------------------------------------------------
+# --- an image whose user is the caller's -----------------------------------------
 
-def test_an_image_whose_user_is_the_caller_needs_allow_me(capsys):
+def test_an_image_whose_user_is_the_caller_is_refused(capsys):
     docker = FakeDocker(image_user="4242:4343")
     assert docker_run.gate(docker_line("run", "img"), runtime(docker)) == 1
-    assert "the image's uid 4242 is yours; pass --allow-me to allow it" in capsys.readouterr().err
-
-    docker = FakeDocker(image_user="4242:4343")
-    assert docker_run.gate(docker_line("run", "--allow-me", "img"), runtime(docker)) == 42
-    assert docker.calls[0][1] == [*DEFAULTS, "img"]  # --allow-me is dockscreen's, not docker's
-    assert docker.calls[3][1][:3] == [*DEFAULTS, "--user=4242:4343"]
-
-
-def test_allow_me_applies_with_mounts_too():
-    docker = FakeDocker(image_user="4242:4343", info_extra=BIND)
-    assert docker_run.gate(docker_line("--allow-me", "run", "img"), runtime(docker)) == 42
+    assert "the image's uid 4242 is yours; --allow-me allows it for compose" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("image_user", ["", "root", "0:0", "424242"])  # the last gets gid 0: no passwd entry
@@ -449,11 +439,6 @@ def test_run_refusals_name_the_config_file_when_helpful(capsys, helpful):
     assert f'[images."img"] in {make_runtime().config_file}' in capsys.readouterr().err
 
 
-def test_audit_takes_allow_me(capsys):
-    assert audited(FakeDocker(image_user="4242:4343"), "img") == 1
-    assert audited(FakeDocker(image_user="4242:4343"), "--allow-me", "img") == 0
-
-
 def test_audit_takes_the_whole_run_command_line(capsys):
     docker = FakeDocker(image_user="app", command=["ls", "-l"])
     assert audited(docker, "--rm", "--name", "x", "-e", "A=1", "img", "ls", "-l") == 0
@@ -539,7 +524,7 @@ def test_brief_with_strict_screen_names_the_command_line_finding(capsys):
 @pytest.mark.parametrize("args", [[], ["--rm"], ["--name"]])
 def test_audit_needs_an_image(args, capsys):
     assert audited(FakeDocker(), *args) == 2
-    assert "usage: dockscreen [--allow-me] [--strict-screen] audit" in capsys.readouterr().err
+    assert "usage: dockscreen [--strict-screen] audit" in capsys.readouterr().err
 
 
 def test_audit_fails_and_removes_the_container_when_inspection_fails(capsys):

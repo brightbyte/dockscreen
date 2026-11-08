@@ -2,12 +2,8 @@ import pytest
 
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding, Report, Severity, Verdict
+from dockscreen.screen.findings import Finding, Severity
 from dockscreen.util import messages
-
-
-def test_exit_statuses_leave_two_for_usage_errors():
-    assert [int(v) for v in Verdict] == [0, 1, 3]
 
 
 def test_a_finding_reads_as_its_subject_and_text():
@@ -61,20 +57,6 @@ def test_of_a_finding_keeps_its_subject_in_the_text():
     inner = Finding("uid 0 is root", subject="hook")
 
     assert Finding.of(inner, subject="service web") == "service web: hook: uid 0 is root"
-
-
-@pytest.mark.parametrize("severities, outcome", [
-    ([], Verdict.PASSED),
-    ([Severity.ROUTINE, Severity.NOTABLE], Verdict.PASSED),
-    ([Severity.NOTABLE, Severity.REFUSED], Verdict.REFUSED),
-    ([Severity.REFUSED, Severity.FAILED], Verdict.FAILED),  # it could not look at everything
-])
-def test_the_verdict_follows_from_the_worst_finding(severities, outcome):
-    found = Report.of(Finding(s.value, s) for s in severities)
-
-    assert found.verdict is outcome
-    assert found.passed == (outcome is Verdict.PASSED)
-    assert found.reasons == [f for f in found.findings if f.severity in (Severity.REFUSED, Severity.FAILED)]
 
 
 def test_refused_and_failed_make_findings_about_one_subject():

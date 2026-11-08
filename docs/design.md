@@ -151,7 +151,7 @@ The code is in layers, one package each, and each imports only its own and the o
 1. `util`: the shared vocabulary: `messages`, `ids`, `commandline`.
 2. `model`: the concepts screening judges, without reaching the host or docker: `origin`, `mounts`, `project` (a compose project, where it is, and its services), `container`, `build` (a compose build or a bake target, and bake's definition), `image` (an image, its reference as docker reads it, what was seen of it, and the identity its user resolves to). What is known about the thing being checked (where it is, which daemon it uses, where its values come from, whether it reaches host files) belongs to it, not to the policy.
 3. `host`: what describes this host and the caller: `config`, `dockerclient`, `hostusers`, `runtime`, `shellenv`.
-4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `screener`, `decision`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `verdict`.
+4. `screen`: the checks and their verdict: `policy`, whose rules are grouped by what they judge in `rules` (`service`, `project`, `build`, `image`, `commandline`, and what they share in `base`), `idrules`, `screener`, `decision`, `imageuser`, `hardening`, `substitutions`, `decisions`, `findings`, `report`.
 5. `cli`: reading the command line: `userargs` (with compose's `run` and `exec`), `runargs`.
 6. `compose`: what the compose commands share: loading and checking the project (`projectscreening`), what screening needs to know about the services (`serviceinfo`), the users their images would run them as (`imageusers`), and `inspect`, which reads the config compose resolves.
 7. `commands`: one module per command dockscreen gates, named after it (`docker_run`, `docker_create`, `docker_start`, `docker_exec`, `docker_bake`, `docker_compose`; `compose_up`, `compose_create`, `compose_run`, `compose_build`, `compose_exec`, `compose_lifecycle`, `compose_audit`, `compose_harden`), the dispatchers that choose among them (`docker` for `docker`, `docker_compose` also for `docker compose`), and their `helptext`.
@@ -188,7 +188,7 @@ For `up`, `create`, `run`, `watch`, `scale` and `alpha`, the project (`project.P
 - no `ssh`, no host network, no `privileged`;
 - no `x-` keys in `build`, because `buildx bake` reads `x-bake` and can write to the host.
 
-`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`findings.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `dockerclient.DockerError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments. The patched project goes through the same stages, name check included, before its images are looked at.
+`audit` (`compose_audit`) runs the same stages and reports, ending with a verdict (`report.Report.verdict`): passed, refused (the policy says no) or failed (the config could not be read, `dockerclient.DockerError`, or an image could not be pulled, built or looked at, `decisions.Decisions.report`). `harden` (`compose_harden`) prints a compose override that fixes what has a mechanical fix and lists the rest as comments. The patched project goes through the same stages, name check included, before its images are looked at.
 
 ### Origins and trust (`origin`, `findings`)
 

@@ -20,8 +20,9 @@ from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen import idrules
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.report import Report
 from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.userdecision import UserDecision
 

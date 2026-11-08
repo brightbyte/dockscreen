@@ -17,8 +17,9 @@ from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import substitutions, userdecisionview
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.report import Report
 from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.util import ids, messages

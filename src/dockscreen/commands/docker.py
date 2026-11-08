@@ -19,8 +19,7 @@ from dockscreen.commands import (
     helptext,
 )
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Report
+from dockscreen.screen.report import Report
 from dockscreen.util import commandline, messages
 
 # Global `docker` options that consume the following token as their value.
@@ -78,7 +77,7 @@ class DockerCommand:
         if target is not None:
             return self.show_help(cli, target)
         if cli.allow_me and cmd != "compose":
-            return verdict.report(Report.refusal(commandline.ALLOW_ME_REFUSAL))
+            return Report.refusal(commandline.ALLOW_ME_REFUSAL).show()
         if cmd == "audit":
             return docker_run.audit(cli, self.runtime)
         if cmd == "compose":
@@ -94,7 +93,7 @@ class DockerCommand:
         if cli.strict:
             # refused, not ignored: a caller who asks for strict screening must not get the lenient kind.
             # Every command above that does not support it refuses it itself.
-            return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
+            return Report.refusal(commandline.STRICT_REFUSAL).show()
         return _passthrough(argv, self.runtime)
 
     def show_help(self, cli: commandline.CommandLine, target: str) -> int:

@@ -17,8 +17,9 @@ from dockscreen.host.dockerclient import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
-from dockscreen.screen import findings, verdict
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen import findings
+from dockscreen.screen.findings import Finding
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import explain_existing
@@ -38,7 +39,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd in ("start", "restart")
-    if not verdict.screened(Report.of(check(parent_cli, runtime))):
+    if not Report.of(check(parent_cli, runtime)).show_screening():
         return 1
     runtime.docker.exec(parent_cli.argv)
 

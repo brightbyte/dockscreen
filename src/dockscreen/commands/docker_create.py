@@ -9,7 +9,6 @@ from collections.abc import Sequence
 from dockscreen.cli import runargs
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -31,7 +30,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     else:
         refused = Screener(runtime).check_given_users(parsed.users.given)
         if not refused.passed:
-            return verdict.report(refused)
+            return refused.show()
         for message in parsed.users.notices:
             messages.notice(message)
         resolved = parsed.create_args

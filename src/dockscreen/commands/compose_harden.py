@@ -27,7 +27,8 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy
-from dockscreen.screen.findings import Finding, Report, failure_of
+from dockscreen.screen.findings import Finding, failure_of
+from dockscreen.screen.report import Report
 from dockscreen.screen.rules import service as service_rules
 from dockscreen.screen.rules.base import is_inside_any
 from dockscreen.screen.rules.image import image_problem

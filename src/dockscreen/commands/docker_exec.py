@@ -7,8 +7,7 @@ The command line is trusted, and the container was checked when it started (dock
 from dockscreen.cli import runargs, userargs
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Report
+from dockscreen.screen.report import Report
 from dockscreen.util import commandline
 
 
@@ -23,7 +22,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "exec"
     if parent_cli.strict:
-        return verdict.report(Report.refusal(commandline.STRICT_REFUSAL))
+        return Report.refusal(commandline.STRICT_REFUSAL).show()
 
     resolved = userargs.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
     if resolved is None:

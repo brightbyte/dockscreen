@@ -8,7 +8,7 @@ from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import projectscreening
 from dockscreen.host import config
 from dockscreen.host.dockerclient import Docker
-from dockscreen.screen.findings import Report
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
@@ -99,7 +99,7 @@ def test_the_callers_own_ids_need_allow_me(tmp_path, capsys):
                                         FakeImages(users={"x:1": "app"}))
 
     assert up(["up"], 0, runtime) == 1
-    assert f"uid {UID} is yours; pass --allow-me to allow it" in capsys.readouterr().err
+    assert f"uid {UID} is yours; --allow-me allows it for compose" in capsys.readouterr().err
     assert recorder.children == []
 
     assert up(["up"], 0, runtime, allow_me=True) == 0

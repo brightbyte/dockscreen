@@ -1,5 +1,5 @@
-"""This module defines classes for recording what screening finds out about what it screens, and the verdict
-that follows from it.
+"""This module defines classes for recording what screening finds out about what it screens (see report for
+the verdict that follows from it).
 
 A finding says one thing about one subject (a service, an image, a container, the command line) and how
 much it matters: routine and notable findings are reported, refused and failed ones stop the command.
@@ -8,8 +8,6 @@ matters, notable if it can change how something runs.
 Refused means the policy says no. Failed means screening could not get far enough to judge: docker, the
 image or the compose config was not there, or pulling or building failed. A refusal is about the project,
 image or command line; a failure is about getting to them, and may go away when retried.
-
-The verdict is also the exit status of an audit. Exit status 2 is left for usage errors.
 """
 
 import enum
@@ -151,65 +149,3 @@ def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], s
     """
     severity = Severity.NOTABLE if origin in trust else Severity.REFUSED
     return [Finding.of(r, severity, subject) for r in reasons]
-
-
-class Verdict(enum.IntEnum):
-    """Enum of the outcomes of an audit, or of the screening before a command runs. Its value is the exit
-    status.
-    """
-    PASSED = 0
-    REFUSED = 1
-    FAILED = 3
-
-
-class Report(NamedTuple):
-    """Record of what one screening found, from which its verdict follows. It holds the findings, in their
-    order.
-
-    Build one with of, or with refusal or failure for a single reason.
-
-    Attributes:
-    - findings: what was found
-    """
-    findings: tuple[Finding, ...] = ()
-
-    @classmethod
-    def of(cls, findings: Iterable[Finding]) -> Self:
-        """Returns the report of findings, in their order."""
-        return cls(tuple(findings))
-
-    @classmethod
-    def refusal(cls, reason: object) -> Self:
-        """Returns the report of a single refusal (Finding.of)."""
-        return cls((Finding.of(reason, Severity.REFUSED),))
-
-    @classmethod
-    def failure(cls, reason: object) -> Self:
-        """Returns the report of a single failure to look.
-
-        Parameters:
-        - reason: an error (failure_of), or a text
-        """
-        if isinstance(reason, BaseException):
-            return cls((failure_of(reason),))
-        return cls((Finding.of(reason, Severity.FAILED),))
-
-    @property
-    def verdict(self) -> Verdict:
-        """Returns FAILED if anything could not be looked at, else REFUSED if anything is refused, else
-        PASSED.
-        """
-        severities = {f.severity for f in self.findings}
-        if Severity.FAILED in severities:
-            return Verdict.FAILED
-        return Verdict.REFUSED if Severity.REFUSED in severities else Verdict.PASSED
-
-    @property
-    def reasons(self) -> list[Finding]:
-        """Returns the findings that stop the command, in their order."""
-        return [f for f in self.findings if f.fatal]
-
-    @property
-    def passed(self) -> bool:
-        """Tells whether the command may run."""
-        return self.verdict is Verdict.PASSED

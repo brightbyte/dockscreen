@@ -3,9 +3,8 @@ import os
 from fakes import FakeImages, compose_line, compose_project, project_of, rules
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Report
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.report import Report
 from dockscreen.util.messages import printable
 
 UID, GID = os.getuid(), os.getgid()
@@ -39,7 +38,7 @@ def test_patch_quotes_unusual_keys():
 
 
 def test_refusal_output_cannot_forge_lines_or_move_the_cursor(capsys):
-    verdict.report(Report.refusal("bind mount '/x\n[dockscreen] audit passed\x1b[2K' is outside /p"))
+    Report.refusal("bind mount '/x\n[dockscreen] audit passed\x1b[2K' is outside /p").show()
     err = capsys.readouterr().err
     assert err.count("\n") == 2  # the refusal's and the closing line's print() newlines
     assert "\x1b" not in err.replace("\\x1b", "")

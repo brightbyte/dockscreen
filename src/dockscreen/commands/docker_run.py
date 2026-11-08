@@ -26,9 +26,10 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, userdecisionview, verdict
+from dockscreen.screen import findings, userdecisionview
 from dockscreen.screen.decisions import default_home
-from dockscreen.screen.findings import Finding, Report, Severity
+from dockscreen.screen.findings import Finding, Severity
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice
@@ -56,14 +57,16 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     remote = is_remote(parent_cli.lead_args, runtime.docker)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
-        return verdict.report(daemon)
+        return daemon.show()
     try:
         parsed = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
-        verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
-                                            help="use the real docker for this one")]))
+        finding = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
+        Report.of([finding]).show_screening()
         return 1
-    if not verdict.screened(screener.check_given_users(parsed.users.given)):
+    refused = screener.check_given_users(parsed.users.given)
+    if not refused.passed:
+        refused.show()
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     for message in [*parsed.users.notices, root_default, defaults_notice()]:
@@ -78,7 +81,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         found = Report.of(_command_line_findings(screener, container, decision, STRICT))
         if not found.passed:
             screener.docker.remove(container.id)
-            verdict.screened(found)
+            found.show_screening()
             return 1
 
     if decision.pins_user:
@@ -99,7 +102,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             return created
         container, decision = created
 
-    verdict.screened(Report())
+    Report().show_screening()
     return screener.docker.start(
         container.id,
         attach=not parsed.detach,
@@ -145,12 +148,12 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs, extra: list[str
     """
     code, created = check(screener, parsed, extra, decided)
     if created is None:  # docker said why
-        verdict.screened(Report.failure(f"docker could not create a container for {parsed.image}"))
+        Report.failure(f"docker could not create a container for {parsed.image}").show_screening()
         return code
     container, decision = created
     if decision.refused:
         screener.docker.remove(container.id)
-        verdict.screened(Report.of(explain(decision, screener.runtime.config_file)))
+        Report.of(explain(decision, screener.runtime.config_file)).show_screening()
         return 1
     return created
 
@@ -251,7 +254,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
                                                                             runtime.docker)))
     if not daemon.passed:
-        return verdict.report(daemon, brief)
+        return daemon.show(brief)
     try:
         parsed = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
@@ -260,7 +263,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return 2
     refused = screener.check_given_users(parsed.users.given)
     if not refused.passed:
-        return verdict.report(refused, brief)
+        return refused.show(brief)
     if not brief:
         for message in parsed.users.notices:
             messages.notice(message)
@@ -268,10 +271,10 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     try:
         _, created = check(screener, parsed, [])
     except DockerNotFound as e:
-        return verdict.report(Report.failure(str(e)), brief)
+        return Report.failure(str(e)).show(brief)
     if created is None:
         reason = f"docker could not create a container for {parsed.image}"
-        return verdict.report(Report.failure(reason), brief)
+        return Report.failure(reason).show(brief)
     container, decision = created
     try:
         found = _command_line_findings(screener, container, decision, STRICT if line.strict else TRUSTED)
@@ -281,11 +284,11 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     refused = explain(decision, screener.runtime.config_file)
     outcome = Report.of([*refused, *found])
     if brief:
-        messages.out(verdict.brief(outcome), indent=False)
+        messages.out(outcome.brief, indent=False)
     else:
         _report_decision(screener, parsed.image, decision)
         _report_findings(found)
-        messages.notice(verdict.line(outcome.verdict))
+        messages.notice(outcome.closing_line)
     return int(outcome.verdict)
 
 

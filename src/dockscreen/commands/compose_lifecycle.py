@@ -11,8 +11,8 @@ from collections.abc import Sequence
 from dockscreen.compose import inspect
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import verdict
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen.findings import Finding
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
@@ -30,7 +30,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     global_args = parent_cli.lead_args
     reasons = check(global_args, runtime)
     if reasons:
-        verdict.screened(Report.of(reasons))
+        Report.of(reasons).show_screening()
         return 1
     runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])
 

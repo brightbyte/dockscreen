@@ -17,8 +17,9 @@ from typing import Any
 from dockscreen.host.dockerclient import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.build import BakeDefinition
-from dockscreen.screen import findings, policy, verdict
-from dockscreen.screen.findings import Finding, Report
+from dockscreen.screen import findings, policy
+from dockscreen.screen.findings import Finding
+from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
@@ -61,7 +62,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     assert parent_cli.cmd == "bake"
     if _wants_screening(parent_cli.args):
         bake_policy = Screener(runtime).policy(runtime.cwd)
-        if not verdict.screened(Report.of(check(runtime.docker, parent_cli, bake_policy, runtime.cwd))):
+        if not Report.of(check(runtime.docker, parent_cli, bake_policy, runtime.cwd)).show_screening():
             return 1
     runtime.docker.exec(parent_cli.full_argv)
 
