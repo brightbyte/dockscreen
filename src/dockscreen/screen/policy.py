@@ -32,7 +32,7 @@ from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import idrules
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.findings import Finding, about, judged, refused
 from dockscreen.screen.rules.base import Subject, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
@@ -192,12 +192,12 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         Parameters:
         - inspected: by service, what was seen of the images (Inspected, or Unseen)
         """
-        return [image_problem(name, assessment, self.config_file)
-                for name, assessment in self.assess_images(inspected).items() if assessment.refused]
+        return [image_problem(name, decision, self.config_file)
+                for name, decision in self.assess_images(inspected).items() if decision.refused]
 
-    def assess_images(self, inspected: Mapping[str, Inspected | Unseen]) -> dict[str, Assessment]:
+    def assess_images(self, inspected: Mapping[str, Inspected | Unseen]) -> dict[str, UserDecision]:
         """Decides the user of each service of a project whose image decides it, from its image as it was
-        looked at, with the policy for that service (for_service); returns the Assessments by service.
+        looked at, with the policy for that service (for_service); returns the UserDecisions by service.
 
         Parameters:
         - inspected: by service, what was seen of the images (Inspected, or Unseen)
@@ -205,7 +205,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
         found = {}
         for name, image in inspected.items():
             if isinstance(image, Unseen):
-                found[name] = Assessment.failure(image.image, image.reason)
+                found[name] = UserDecision.failure(image.image, image.reason)
             else:
                 service_policy = self.for_service(name)
                 found[name] = service_policy.check_image(image, Origin.IMAGE)

@@ -19,7 +19,7 @@ from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen import idrules
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding
 from dockscreen.screen.policy import Policy
@@ -112,12 +112,12 @@ class Screener(NamedTuple):
 
     def assess(self, directory: str | None, container: str, info: dict[str, Any],
                origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,
-               built: bool = False) -> Assessment:
+               built: bool = False) -> UserDecision:
         """Decides which user the container's image may run as (rules.image), for the project in directory
         (the current one for what a command line runs, None for a container that existed before): looks at
         the image as far as the policy needs (look), which then judges it (Policy.check_image).
 
-        Returns an Assessment, with the container's user's origin if it does not come from the image. Raises
+        Returns a UserDecision, with the container's user's origin if it does not come from the image. Raises
         DockerError if the image cannot be inspected or its passwd or group file is too large.
 
         Parameters:

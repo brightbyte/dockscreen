@@ -34,7 +34,7 @@ from dockscreen.host.dockerclient import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import hardening, policy, substitutions, verdict
+from dockscreen.screen import userdecisionview, hardening, policy, substitutions, verdict
 from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.screener import Screener
@@ -250,7 +250,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.Parsed, run
 
     screener = Screener(runtime, allow_me)
     lines = [*parsed.users.notices, *surroundings(loaded, screener),
-             verdict.root_default_notice(screener.policy(loaded.directory).default_user),
+             userdecisionview.root_default_notice(screener.policy(loaded.directory).default_user),
              *substitutions.describe(loaded.hardening)]
     cleared = check(loaded, screener)
     if isinstance(cleared, Report):

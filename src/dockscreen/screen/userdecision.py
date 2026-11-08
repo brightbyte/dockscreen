@@ -1,4 +1,4 @@
-"""This module defines the Assessment class, a record of a judgement of the user a container would run as,
+"""This module defines the UserDecision class, a record of a judgement of the user a container would run as,
 which Policy.check_image returns.
 
 Where that user comes from is an origin like any other value's: the image's own user (Origin.IMAGE),
@@ -16,7 +16,7 @@ from dockscreen.model.origin import Origin
 from dockscreen.screen.findings import Finding, Severity
 
 
-class Assessment(NamedTuple):
+class UserDecision(NamedTuple):
     """Record of a judgement of the user a container would run as. It holds where that user comes from, the
     image, what was found, the identity read from the image, and the user dockscreen pins.
 
@@ -44,7 +44,7 @@ class Assessment(NamedTuple):
 
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:
-        """Returns the assessment of an image that could not be looked at, for reason."""
+        """Returns the decision of an image that could not be looked at, for reason."""
         return cls(None, image, (Finding.of(reason, Severity.FAILED),))
 
     @property
@@ -83,6 +83,6 @@ class Assessment(NamedTuple):
 
     @property
     def pinned_user(self) -> tuple[int, int]:
-        """Returns the (uid, gid) dockscreen decided; only for an assessment that pins_user."""
-        assert self.user is not None, f"an assessment of a user from {self.origin} pins none"
+        """Returns the (uid, gid) dockscreen decided; only for a decision that pins_user."""
+        assert self.user is not None, f"a decision of a user from {self.origin} pins none"
         return self.user

@@ -144,8 +144,8 @@ def test_listing_the_services_can_fail_closed():
 def test_the_images_own_user_is_judged_as_docker_run_does(image_user, replaces_root, refused):
     prepared, _, images = prepare(project(), FakeImages(users={"web:1": image_user}))
 
-    assessment = prepared.decisions["web"]
-    assert (assessment.replaces_root, assessment.refused) == (replaces_root, refused)
+    decision = prepared.decisions["web"]
+    assert (decision.replaces_root, decision.refused) == (replaces_root, refused)
     assert prepared.report.passed is not refused
     assert [call for call in images.calls if call[0] == "remove"] == [("remove", "c1")]  # nothing is left
 
@@ -346,8 +346,8 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
     config = mariadb_project(**fields)
     prepared, _, _ = prepare(config, images, active=("db",), settings=MARIADB)
 
-    assessment = prepared.decisions["db"]
-    assert assessment.replaces_root  # the normal rules: root runs as the default user
+    decision = prepared.decisions["db"]
+    assert decision.replaces_root  # the normal rules: root runs as the default user
     lines = marked(prepared.describe())
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
             f"but {why}") in lines

@@ -26,12 +26,12 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, verdict
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen import userdecisionview, findings, verdict
+from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.screener import Screener
-from dockscreen.screen.verdict import CHOOSE_HINT, explain, instead_of_root, root_default_notice
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -76,31 +76,31 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     created = _create_checked(screener, parsed, [])
     if isinstance(created, int):
         return created
-    container, assessment = created
+    container, decision = created
     if parent_cli.strict:
-        found = Report.of(_command_line_findings(screener, container, assessment, STRICT))
+        found = Report.of(_command_line_findings(screener, container, decision, STRICT))
         if not found.passed:
             screener.docker.remove(container.id)
             verdict.screened(found)
             return 1
 
-    if assessment.pins_user:
+    if decision.pins_user:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
-        user = ids.format_user(assessment.pinned_user)
-        if assessment.replaces_root:
-            messages.notice(_fallback_notice(assessment))
+        user = ids.format_user(decision.pinned_user)
+        if decision.replaces_root:
+            messages.notice(_fallback_notice(decision))
         else:
             messages.notice(Finding(f"image {parsed.image} runs as {user}, passed to docker as numbers",
                                     Severity.ROUTINE))
         extra = [f"--user={user}"]
-        if assessment.replaces_root:
-            extra += _home_args(screener, container, assessment)
-        created = _create_checked(screener, parsed, extra, assessment)
+        if decision.replaces_root:
+            extra += _home_args(screener, container, decision)
+        created = _create_checked(screener, parsed, extra, decision)
         if isinstance(created, int):
             return created
-        container, assessment = created
+        container, decision = created
 
     verdict.screened(Report())
     return screener.docker.start(
@@ -112,13 +112,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     )
 
 
-def _home_args(screener: Screener, container: Container, assessment: Assessment) -> list[str]:
+def _home_args(screener: Screener, container: Container, decision: UserDecision) -> list[str]:
     """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
 
     The container as created has the merged environment: a HOME that differs from the image's own
     was set by the person running it, and stays.
     """
-    home = default_home(assessment.pinned_user, assessment.home)
+    home = default_home(decision.pinned_user, decision.home)
     if not home:
         return []
     image_env = screener.docker.inspect_image(container.info["Image"])["Config"].get("Env")
@@ -127,40 +127,40 @@ def _home_args(screener: Screener, container: Container, assessment: Assessment)
     return ["-e", f"HOME={home}"]
 
 
-def _fallback_notice(assessment: Assessment) -> Finding:
+def _fallback_notice(decision: UserDecision) -> Finding:
     """Returns the notable finding that the default user replaces the image's root, and what to do about
     it.
     """
-    home = default_home(assessment.pinned_user, assessment.home)
+    home = default_home(decision.pinned_user, decision.home)
     return Finding(
-        instead_of_root(assessment), Severity.NOTABLE,
+        instead_of_root(decision), Severity.NOTABLE,
         help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
         "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
 
 
 def _create_checked(screener: Screener, parsed: runargs.ParsedRun, extra: list[str],
-                    decided: Assessment | None = None) -> tuple[Container, Assessment] | int:
-    """Creates the container (check); returns it with the assessment of its user, or the exit status if it
+                    decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
+    """Creates the container (check); returns it with the decision of its user, or the exit status if it
     may not start.
 
-    A container that would be refused is removed and the refusal printed. Any other assessment is
+    A container that would be refused is removed and the refusal printed. Any other decision is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
     code, created = check(screener, parsed, extra, decided)
     if created is None:  # docker said why
         verdict.screened(Report.failure(f"docker could not create a container for {parsed.image}"))
         return code
-    container, assessment = created
-    if assessment.refused:
+    container, decision = created
+    if decision.refused:
         screener.docker.remove(container.id)
-        verdict.screened(Report.of(explain(assessment, screener.runtime.config_file)))
+        verdict.screened(Report.of(explain(decision, screener.runtime.config_file)))
         return 1
     return created
 
 
-def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decided: Assessment | None = None
-          ) -> tuple[int, tuple[Container, Assessment] | None]:
-    """Creates the container as `docker run` would and returns (exit status, (container, assessment of its
+def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decided: UserDecision | None = None
+          ) -> tuple[int, tuple[Container, UserDecision] | None]:
+    """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
     The container is left for the caller to remove.
@@ -171,7 +171,7 @@ def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decid
     - screener: the Screener of the command
     - parsed: the `docker run` command line, as parsed
     - extra: arguments that go before the command line's own
-    - decided: the assessment of a first creation, whose user extra pins; the container is then not assessed
+    - decided: the decision of a first creation, whose user extra pins; the container is then not assessed
       again, only checked to be what the command line asked for, and its user comes from where the decided one
       does
     """
@@ -184,16 +184,16 @@ def check(screener: Screener, parsed: runargs.ParsedRun, extra: list[str], decid
         container = Container(screener.docker.inspect_container(created), here, _user_origin(parsed, decided))
         problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
         if problems:
-            assessment = Assessment(None, image, tuple(problems))
+            decision = UserDecision(None, image, tuple(problems))
         else:
-            assessment = decided or screener.assess(screener.runtime.cwd, container.id, container.info,
+            decision = decided or screener.assess(screener.runtime.cwd, container.id, container.info,
                                                     container.user_origin, reference=parsed.image)
     except (DockerError, ValueError, KeyError) as e:
-        assessment = Assessment.failure(image, messages.with_output(e))
-    return code, (container, assessment)
+        decision = UserDecision.failure(image, messages.with_output(e))
+    return code, (container, decision)
 
 
-def _command_line_findings(screener: Screener, container: Container, assessment: Assessment,
+def _command_line_findings(screener: Screener, container: Container, decision: UserDecision,
                            trust: frozenset[Origin]) -> list[Finding]:
     """Returns what the command line asks for, in the container it created (check, with no options of
     dockscreen's own), that a project or an image may not have: refused, or notable where trust trusts the
@@ -203,10 +203,10 @@ def _command_line_findings(screener: Screener, container: Container, assessment:
     """
     if not container.inspected:
         return []
-    return screener.policy(screener.runtime.cwd, assessment.section, trust).check_container(container)
+    return screener.policy(screener.runtime.cwd, decision.section, trust).check_container(container)
 
 
-def _user_origin(parsed: runargs.ParsedRun, decided: Assessment | None) -> Origin:
+def _user_origin(parsed: runargs.ParsedRun, decided: UserDecision | None) -> Origin:
     """Returns where the user of the container comes from: where the decided one does, for a container
     re-created with it (check), else the command line if it gives one, else the image.
     """
@@ -276,41 +276,42 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if created is None:
         reason = f"docker could not create a container for {parsed.image}"
         return verdict.report(Report.failure(reason), brief)
-    container, assessment = created
+    container, decision = created
     try:
-        found = _command_line_findings(screener, container, assessment, STRICT if line.strict else TRUSTED)
+        found = _command_line_findings(screener, container, decision, STRICT if line.strict else TRUSTED)
     finally:
         screener.docker.remove(container.id)
 
-    refused = explain(assessment, screener.runtime.config_file)
+    refused = explain(decision, screener.runtime.config_file)
     outcome = Report.of([*refused, *found])
     if brief:
         messages.out(verdict.brief(outcome), indent=False)
     else:
-        _report_assessment(screener, parsed.image, assessment)
+        _report_decision(screener, parsed.image, decision)
         _report_findings(found)
         messages.notice(verdict.line(outcome.verdict))
     return int(outcome.verdict)
 
 
-def _report_assessment(screener: Screener, image: str, assessment: Assessment) -> None:
+def _report_decision(screener: Screener, image: str, decision: UserDecision) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
-    name, dot = printable(image), verdict.dot(assessment)
-    if assessment.origin is Origin.COMMAND_LINE:
+    name, dot = printable(image), userdecisionview.dot(decision)
+    if decision.origin is Origin.COMMAND_LINE:
         messages.out(messages.Message(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        messages.out(messages.Message(dot, f"image {name}: {verdict.outcome(assessment, screener.local)}"))
-        for note in assessment.notes:
+        outcome = userdecisionview.outcome(decision, screener.local)
+        messages.out(messages.Message(dot, f"image {name}: {outcome}"))
+        for note in decision.notes:
             messages.out(Finding(f"note: {note}", Severity.NOTABLE))
-    if assessment.refused:
-        if not assessment.failed:
+    if decision.refused:
+        if not decision.failed:
             messages.out(messages.Message(messages.HINT, CHOOSE_HINT))
-            hint = verdict.config_hint(image, screener.runtime.config_file)
+            hint = userdecisionview.config_hint(image, screener.runtime.config_file)
             messages.out(messages.Message(messages.HINT, hint))
         return
-    if assessment.pins_user:
-        user = ids.format_user(assessment.pinned_user)
+    if decision.pins_user:
+        user = ids.format_user(decision.pinned_user)
         messages.out(f"  docker run would create it again with --user={user}, as numbers")
     messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
 

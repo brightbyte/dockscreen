@@ -110,12 +110,12 @@ def _fix_image_users(cleared: projectscreening.Cleared, screener: Screener, fixe
     if not decided.decisions:
         return decided.report.reasons, notes  # nothing could be looked at: pulling or building failed
     remaining: list[Finding] = []
-    for name, assessment in decided.decisions.items():
-        if assessment.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(image_problem(name, assessment))
-        elif assessment.refused:
+    for name, decision in decided.decisions.items():
+        if decision.failed:  # setting a user does not fix an image that could not be read
+            remaining.append(image_problem(name, decision))
+        elif decision.refused:
             fixed["services"][name]["user"] = _USER_TEMPLATE
-            notes.append(f"service {name}: image {assessment.image.reference} chose a user that is not "
+            notes.append(f"service {name}: image {decision.image.reference} chose a user that is not "
                          "acceptable, so user is set explicitly")
     return remaining, notes
 

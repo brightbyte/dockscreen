@@ -1,0 +1,74 @@
+"""This module provides functions for describing a UserDecision of the user a container would run as: how it
+is marked, what it means for running the image, why it is refused and how to get past that.
+"""
+
+from dockscreen.host import hostusers
+from dockscreen.model.image import section_hint
+from dockscreen.model.origin import Origin
+from dockscreen.screen import imageuser
+from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.findings import Finding, Severity
+from dockscreen.util import ids, messages
+from dockscreen.util.messages import printable
+
+CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
+
+
+def dot(decision: UserDecision) -> messages.Mark:
+    """Returns the mark for a decision of an image's user: BAD if refused, GOOD if accepted, else WARN."""
+    if decision.refused:
+        return messages.BAD
+    return messages.GOOD if decision.accepted else messages.WARN
+
+
+def outcome(decision: UserDecision, local: hostusers.HostAccounts) -> str:
+    """Describes what a decision of an image's user means for running it, after the image's name: what it
+    runs as if accepted, what runs instead of its root, or why it may not run.
+
+    Parameters:
+    - decision: the UserDecision of the image
+    - local: this host's accounts, for naming the image's user
+    """
+    who = imageuser.describe(decision.identity, local) if decision.identity else None
+    if decision.accepted and decision.origin is Origin.CONFIG:
+        return f"runs as {ids.format_user(decision.pinned_user)}, the user the config file sets for it"
+    if decision.accepted:
+        return f"runs as {who}; accepted"
+    if decision.replaces_root and not decision.refused:
+        return f"would run as {who}; {instead_of_root(decision)}"
+    reasons = "; ".join(printable(r.text) for r in decision.reasons)
+    if decision.failed:
+        return f"could not be assessed: {reasons}"
+    return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"
+
+
+def instead_of_root(decision: UserDecision) -> str:
+    """Describes what a decision that replaces_root does instead of running as root."""
+    return f"running as {ids.format_user(decision.pinned_user)} instead of root"
+
+
+def root_default_notice(default_user: tuple[int, int]) -> Finding | None:
+    """Returns the notable finding to give on every run if the configured default user is root, else None."""
+    if 0 in default_user:
+        default = ids.format_user(default_user)
+        return Finding(f"the configured default user is {default}: images that would run as root run as root",
+                       Severity.NOTABLE, help="set default_user in the config file to change it")
+    return None
+
+
+def explain(decision: UserDecision, config_file: str) -> list[Finding]:
+    """Returns the decision's reasons, with how to get past them if they come from the image's user;
+
+    Parameters:
+    - decision: the UserDecision of the image
+    - config_file: where an image section can give the image a user
+    """
+    if not decision.identity:
+        return decision.reasons
+    help = f"{CHOOSE_HINT}, {config_hint(decision.image.reference, config_file)}"
+    return [r.replace(help=help) for r in decision.reasons]
+
+
+def config_hint(image: str, config_file: str) -> str:
+    """Returns the hint how config_file can give image a user, for an image pulled from a registry."""
+    return f"or, for an image pulled from a registry, {section_hint(image, config_file)}"

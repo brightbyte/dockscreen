@@ -21,7 +21,7 @@ from typing import Any
 from dockscreen.model.image import Identity, Inspected, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.findings import Finding, Severity
 from dockscreen.screen.rules.base import RuleBase
 
@@ -36,9 +36,9 @@ class ImageRules(RuleBase):
         """
         return origin is Origin.IMAGE and not self.configured_user
 
-    def check_image(self, inspected: Inspected, origin: Origin) -> Assessment:
+    def check_image(self, inspected: Inspected, origin: Origin) -> UserDecision:
         """Decides which user the container that inspected looked through may run as, by the rules in this
-        module's docstring; returns the Assessment.
+        module's docstring; returns the UserDecision.
 
         The image section that applies is this policy's (section). The passwd and group files must have been
         read if needs_user_files says so.
@@ -46,43 +46,43 @@ class ImageRules(RuleBase):
         Parameters:
         - inspected: what was seen of the image (Inspected)
         - origin: where the container's user comes from; one that is not the image's is not judged here, and
-          is the assessment's origin
+          is the decision's origin
         """
         image, match = inspected.image, self.section
         notes = (Finding(match.problem, Severity.NOTABLE),) if match.problem else ()
         found: dict[str, Any] = {"section": match}
         if origin is not Origin.IMAGE:
-            return Assessment(origin, image, notes, **found)
+            return UserDecision(origin, image, notes, **found)
         if self.configured_user:
-            return Assessment(Origin.CONFIG, image, notes, Identity(*self.configured_user),
+            return UserDecision(Origin.CONFIG, image, notes, Identity(*self.configured_user),
                               user=self.configured_user, **found)
         assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
         try:
             identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
         except ValueError as e:
-            return Assessment(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
+            return UserDecision(Origin.IMAGE, image, (*notes, Finding(str(e))), **found)
         if identity.involves_root:
-            return Assessment(self.default_origin, image, notes, identity, user=self.default_user,
+            return UserDecision(self.default_origin, image, notes, identity, user=self.default_user,
                               home=self.default_home, replaces_root=True, **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
-        return Assessment(Origin.IMAGE, image, (*notes, *refusals), identity,
+        return UserDecision(Origin.IMAGE, image, (*notes, *refusals), identity,
                           user=(identity.uid, identity.gid), **found)
 
 
-def image_problem(name: str, assessment: Assessment, config_file: str | None = None) -> Finding:
-    """Returns, as one finding, why the service called name must not run, for an assessment of its image
+def image_problem(name: str, decision: UserDecision, config_file: str | None = None) -> Finding:
+    """Returns, as one finding, why the service called name must not run, for a decision of its image
     that refused or failed.
 
     Parameters:
     - name: the service's name
-    - assessment: the Assessment of its image
+    - decision: the UserDecision of its image
     - config_file: named in the hint for an image that is pulled, whose repository can be given a user
     """
-    image = assessment.image
-    text = f"image {image.reference}: {'; '.join(r.text for r in assessment.reasons)}"
-    if assessment.failed:
+    image = decision.image
+    text = f"image {image.reference}: {'; '.join(r.text for r in decision.reasons)}"
+    if decision.failed:
         return Finding(text, Severity.FAILED, f"service {name}")
     hint = section_hint(image.reference, config_file, image.built) if config_file else None
     return Finding(text, Severity.REFUSED, f"service {name}",

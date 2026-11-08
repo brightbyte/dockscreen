@@ -18,10 +18,10 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.screen import findings, verdict
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.userdecisionview import explain
 from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.screener import Screener
-from dockscreen.screen.verdict import explain
 from dockscreen.util import commandline, ids, messages
 
 # Options of `docker start` and `restart` that take a value.
@@ -63,20 +63,20 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
     for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
         try:
             info = screener.docker.inspect_container(ref)
-            assessment = screener.assess(None, info["Id"], info)
-            replaces_image_user = assessment.pins_user and assessment.origin is not Origin.IMAGE
-            if replaces_image_user and not _runs_as_pinned_user(info, assessment):
-                user = ids.format_user(assessment.pinned_user)
+            decision = screener.assess(None, info["Id"], info)
+            replaces_image_user = decision.pins_user and decision.origin is not Origin.IMAGE
+            if replaces_image_user and not _runs_as_pinned_user(info, decision):
+                user = ids.format_user(decision.pinned_user)
                 problems.append(Finding(
                     f"cannot change the user of an existing container; it would run as the "
                     f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
             else:
-                explained = explain(assessment, runtime.config_file)
+                explained = explain(decision, runtime.config_file)
                 problems += [Finding(p.text, subject=ref, help=p.help) for p in explained]
             if cli.strict:
-                chosen = assessment.origin is Origin.COMMAND_LINE
+                chosen = decision.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
-                strict_policy = screener.policy(None, assessment.section, STRICT)
+                strict_policy = screener.policy(None, decision.section, STRICT)
                 found = strict_policy.check_container(Container(info, None, user_origin))
                 problems += findings.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
@@ -84,9 +84,9 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Finding]:
     return problems
 
 
-def _runs_as_pinned_user(info: dict[str, Any], assessment: Assessment) -> bool:
+def _runs_as_pinned_user(info: dict[str, Any], decision: UserDecision) -> bool:
     """Tells whether the container was created with the numeric user dockscreen would have chosen."""
-    return ids.parse_user(info["Config"].get("User") or "") == assessment.user
+    return ids.parse_user(info["Config"].get("User") or "") == decision.user
 
 
 def help(name: str) -> helptext.Topic:

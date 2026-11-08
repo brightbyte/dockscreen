@@ -79,7 +79,7 @@ def test_a_member_of_the_root_group_counts_as_root(world, odd_image):
     assert then_generated_service(world)["user"] == "65534:65534"
 
 
-def test_a_passwd_file_too_large_to_read_fails_the_assessment(world, odd_image):
+def test_a_passwd_file_too_large_to_read_fails_the_decision(world, odd_image):
     image, _ = odd_image("dockscreen-e2e/odd:big-passwd")
     problem = "/etc/passwd in the image is larger than 1048576 bytes"
     when_dockscreen(world, "audit", image)

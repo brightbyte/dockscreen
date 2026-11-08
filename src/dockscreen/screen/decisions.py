@@ -16,8 +16,8 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import substitutions, verdict
-from dockscreen.screen.assessment import Assessment
+from dockscreen.screen import userdecisionview, substitutions
+from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.findings import Finding, Report, Severity
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.substitutions import Group, Substitution
@@ -39,7 +39,7 @@ class Decisions(NamedTuple):
     Attributes:
     - project: the project decided about
     - policy: the policy that decided, with image sections only where the images proved them
-    - decisions: by service, the Assessment of each started service that sets no user; a dict that must not
+    - decisions: by service, the UserDecision of each started service that sets no user; a dict that must not
       be changed in place
     - report: the failures to acquire the images, and the services whose image must not run
     - changes: the substitutions that make the project the one to run
@@ -48,7 +48,7 @@ class Decisions(NamedTuple):
     project: Project
     policy: Policy
     local: hostusers.HostAccounts
-    decisions: dict[str, Assessment]
+    decisions: dict[str, UserDecision]
     report: Report
     changes: tuple[Substitution, ...]
 
@@ -82,9 +82,10 @@ class Decisions(NamedTuple):
                         f"({default}) if it is started")
                 lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
                 continue
-            text = f"no user set; image {decision.image.reference} {verdict.outcome(decision, self.local)}"
+            outcome = userdecisionview.outcome(decision, self.local)
+            text = f"no user set; image {decision.image.reference} {outcome}"
             if decision.accepted:
-                lines.append(messages.Message(verdict.dot(decision), f"service {name}: {text}"))
+                lines.append(messages.Message(userdecisionview.dot(decision), f"service {name}: {text}"))
             elif decision.replaces_root and not decision.refused:
                 lines.append(Finding(text, Severity.NOTABLE, f"service {name}", USER_HELP))
             for note in decision.notes:
@@ -96,7 +97,7 @@ class Decisions(NamedTuple):
         return substitutions.describe(self.changes)
 
 
-def changes(project: Project, decisions: Mapping[str, Assessment], project_policy: Policy
+def changes(project: Project, decisions: Mapping[str, UserDecision], project_policy: Policy
             ) -> list[Substitution]:
     """Returns the substitutions that make project the one to run, by service name: services that start
     and set no user get the decided user (decisions), pinned to the image that was checked; those that do
@@ -105,7 +106,7 @@ def changes(project: Project, decisions: Mapping[str, Assessment], project_polic
 
     Parameters:
     - project: the project
-    - decisions: by service, the Assessment of each started service that sets no user
+    - decisions: by service, the UserDecision of each started service that sets no user
     - project_policy: the policy that decided, which gives the default user and default_home
     """
     found = []
@@ -134,21 +135,21 @@ def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, 
     return found
 
 
-def _pinned(name: str, service: dict[str, Any], assessment: Assessment) -> list[Substitution]:
-    """Returns the substitutions that pin a started service to what the assessment of its image checked:
+def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[Substitution]:
+    """Returns the substitutions that pin a started service to what the decision of its image checked:
     the user, as numbers, the image by id unless it is built, and pull_policy never.
     """
-    if assessment.replaces_root:
-        found = _user(name, service, assessment.pinned_user, assessment.home, assessment.origin,
-                      verdict.instead_of_root(assessment), PINNED)
+    if decision.replaces_root:
+        found = _user(name, service, decision.pinned_user, decision.home, decision.origin,
+                      userdecisionview.instead_of_root(decision), PINNED)
     else:  # the image's user, or the one its image section configures
-        found = [Substitution(name, "user", ids.format_user(assessment.pinned_user), group=PINNED,
-                              origin=assessment.origin)]
+        found = [Substitution(name, "user", ids.format_user(decision.pinned_user), group=PINNED,
+                              origin=decision.origin)]
     # the image checked is what runs
     found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
-    if assessment.image.id and "build" not in service:
+    if decision.image.id and "build" not in service:
         # ... even if the name is moved to another image
-        found.append(Substitution(name, "image", assessment.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
+        found.append(Substitution(name, "image", decision.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
     return found
 
 
