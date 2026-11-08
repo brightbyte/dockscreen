@@ -63,9 +63,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         verdict.screened(Report.of([Finding(f"cannot read the command line: {e}",
                                             help="use the real docker for this one")]))
         return 1
-    refusals = screener.policy(runtime.cwd).check_user_options(parsed.users.given)
-    if refusals:
-        verdict.screened(Report.of(refusals))
+    if not verdict.screened(screener.check_given_users(parsed.users.given)):
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     for message in [*parsed.users.notices, root_default, defaults_notice()]:
@@ -261,9 +259,9 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    refusals = screener.policy(runtime.cwd).check_user_options(parsed.users.given)
-    if refusals:
-        return verdict.report(Report.of(refusals), brief)
+    refused = screener.check_given_users(parsed.users.given)
+    if not refused.passed:
+        return verdict.report(refused, brief)
     if not brief:
         for message in parsed.users.notices:
             messages.notice(message)

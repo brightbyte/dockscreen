@@ -1,8 +1,9 @@
 import pytest
-from fakes import rules
+from fakes import make_runtime, rules
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
+from dockscreen.screen.screener import Screener
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value
@@ -88,6 +89,15 @@ def test_as_with_an_unknown_name_is_refused():
 def test_a_name_given_to_user_points_to_as():
     [refusal] = refusals(parse("exec", ["-u", "postgres", "web", "sh"]))
     assert "--as NAME runs as a local user" in refusal
+
+
+def test_check_given_users_reports_what_the_policy_refuses():
+    screener = Screener(make_runtime())
+
+    assert screener.check_given_users(parse("exec", ["-u", "1000:1000", "web"]).users.given).passed
+    refused = screener.check_given_users(parse("exec", ["-u", "postgres", "web"]).users.given)
+    # the same refusals as the policy gives, as a report that stops the command
+    assert not refused.passed and refused.reasons == refusals(parse("exec", ["-u", "postgres", "web"]))
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])

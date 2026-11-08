@@ -8,7 +8,7 @@ target's: a compose project's own, for what a command line runs the current one,
 that existed before, since docker does not record where it was created.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config, hostusers
@@ -20,8 +20,9 @@ from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen import idrules
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding
+from dockscreen.screen.findings import Finding, Report
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.rules.commandline import UserOption
 from dockscreen.screen.userdecision import UserDecision
 
 
@@ -67,6 +68,15 @@ class Screener(NamedTuple):
         settings = config.effective(self.runtime.settings, section.repository, directory)
         found = Policy.for_settings(settings, self.ids, self.runtime.config_file)
         return found.with_section(section).with_trust(trust)
+
+    def check_given_users(self, given: Iterable[UserOption]) -> Report:
+        """Returns the report of judging the users the command line gives by the policy for the current
+        directory (Policy.check_user_options): it holds their refusals, if any.
+
+        Parameters:
+        - given: the user options the command line gives (GivenUsers.given)
+        """
+        return Report.of(self.policy(self.runtime.cwd).check_user_options(given))
 
     def section_for(self, image: Image) -> config.SectionMatch:
         """Returns which image section applies to image, by its name and where it was pulled from
