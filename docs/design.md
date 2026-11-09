@@ -262,6 +262,33 @@ Mount dirs and the project directory are checked against sensitive paths (system
 
 Text from the project or the image is escaped (`messages.printable`) before it is printed or written into a `harden` patch, so it cannot forge output lines or send terminal control sequences.
 
+## Direction: one step from rule to change
+
+This section is for developers changing what dockscreen modifies in the things it runs. It describes where the code is going, not what it does yet.
+
+Every change dockscreen makes should come from a rule, and be applied in one step: a rule judges and says what to change, as findings, notices and changes; the command applies the changes to the thing it runs and reports them from the same objects. Reading the command line changes nothing.
+
+Compose works that way already: `hardening` and `decisions` give substitutions, and `projectscreening.finish` applies them. These places do not:
+
+- `docker run` and `create` assemble their extra arguments themselves (`runargs.DEFAULTS`, `--user`, `docker_run._home_args`).
+- `userargs.GivenUsers` replaces `--as` and `--as-me` with `--user=uid:gid` while the command line is read, and looks the account up there; the policy judges the users given separately.
+- The user decision (`Policy.check_image`) is turned into changes outside the rules: by `decisions.changes` for compose, by `docker_run` for `run`.
+
+Where it is going:
+
+- The thing to run is a compose service, or a `Call`: the arguments of `docker run` or `create`.
+- A change is a `Substitution`, which sets a key of a service, or an `Amendment`, which puts arguments before the user's own, so that the user's later options override them. They apply differently, which is why they are two things, but they are reported alike: both have a notice, a group and an origin.
+- `--as` and `--as-me` stay in the `Call` as they were read, and a rule resolves them in place, since their order against `--user` decides which one docker uses. A `Call` that still has one cannot be run.
+- The user rules (`rules.idrules`, `Policy.check_image`, and the name resolution of `hardening` and `userargs`) are one module of rules that gives findings, notices and changes. `UserDecision` stays the result of deciding, which each kind of thing to run turns into its own changes.
+
+The steps, each of which leaves the code working:
+
+1. `Call` and `Amendment`, and the changes for `run` and `create` made from the user decision and the defaults.
+2. Name resolution (`--as`, `--as-me`, names in `user:`) moved into the rules, and out of `GivenUsers`.
+3. The user rules gathered into one module.
+
+The point is less to keep in mind: one way from a rule to what runs. A step that adds more code or concepts than it takes away is to be reconsidered, not finished.
+
 ## Tradeoffs and decisions
 
 | Decision | Alternative rejected | Cost accepted |
