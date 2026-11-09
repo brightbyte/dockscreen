@@ -3,6 +3,7 @@ from fakes import marked
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import substitutions
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.util import messages
 
@@ -33,10 +34,11 @@ def test_origins_are_those_of_the_last_substitution_of_a_key_that_names_one():
 
 def test_describe_gives_a_line_each_then_one_per_group_naming_its_services_once():
     found = [
-        Substitution("web", "user", "1:1", "running as 1:1 instead of root", notable=True, help="set user:",
+        Substitution("web", "user", "1:1",
+                     Notice("running as 1:1 instead of root", NoticeSeverity.WARNING, help="set user:"),
                      group=PINNED),
         Substitution("web", "pull_policy", "never", group=PINNED),
-        Substitution("db", "user", "2:2", "user 'db' resolved to 2:2"),
+        Substitution("db", "user", "2:2", Notice("user 'db' resolved to 2:2")),
         Substitution("db", "pull_policy", "never", group=PINNED),
         Substitution("db", "environment", {"HOME": "/tmp"}),  # part of another change: not reported
     ]

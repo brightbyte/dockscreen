@@ -48,7 +48,7 @@ def test_existing_entries_are_kept_and_only_the_missing_one_is_added():
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["NET_RAW", "ALL"]
     assert web["security_opt"] == ["seccomp=unconfined", "no-new-privileges:true"]
-    assert [(a.key, a.text) for a in changes] == [
+    assert [(a.key, a.notice.text) for a in changes] == [
         ("cap_drop", 'cap_drop lacks ALL; added ["ALL"]'),
         ("security_opt", 'security_opt lacks no-new-privileges; added ["no-new-privileges:true"]'),
     ]

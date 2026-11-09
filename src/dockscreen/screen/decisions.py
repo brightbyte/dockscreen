@@ -131,8 +131,8 @@ def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, 
     """Returns the substitutions that set the service's user to the default one, which comes from origin,
     reported by text if given, and the HOME that comes with it (default_home) unless the service sets HOME.
     """
-    found = [Substitution(name, "user", ids.format_user(user), text, notable=bool(text),
-                          help=USER_HELP if text else None, group=group, origin=origin)]
+    notice = Notice(text, NoticeSeverity.WARNING, help=USER_HELP) if text else None
+    found = [Substitution(name, "user", ids.format_user(user), notice, group=group, origin=origin)]
     if home := default_home(user, home):
         found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
     return found

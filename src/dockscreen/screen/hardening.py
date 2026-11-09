@@ -14,6 +14,7 @@ from typing import Any
 
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.util import ids
@@ -56,7 +57,8 @@ def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks:
     if not declared:
         return Substitution(name, key, [value], group=DEFAULTS, origin=Origin.DOCKSCREEN)
     text = f"{key} {lacks}; added {json.dumps([value])}"
-    return Substitution(name, key, [*declared, value], text, notable=True, help=NOT_REMOVABLE)
+    notice = Notice(text, NoticeSeverity.WARNING, help=NOT_REMOVABLE)
+    return Substitution(name, key, [*declared, value], notice)
 
 
 def _resolve_user_names(name: str, service: dict[str, Any],
@@ -67,15 +69,20 @@ def _resolve_user_names(name: str, service: dict[str, Any],
         resolved = _resolve_spec(service["user"], accounts)
         if resolved != service["user"]:
             message = _resolved_message("user", service["user"], resolved)
-            found.append(Substitution(name, "user", resolved, message, help=RESOLVE_HELP))
+            found.append(Substitution(name, "user", resolved, _resolved_notice(message)))
     for key in ("post_start", "pre_stop"):
         hooks = service.get(key) or []
         resolved_hooks = [_with_resolved_user(hook, accounts) for hook in hooks]
         for hook, resolved_hook in zip(hooks, resolved_hooks):
             if resolved_hook is not hook:
                 message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
-                found.append(Substitution(name, key, resolved_hooks, message, help=RESOLVE_HELP))
+                found.append(Substitution(name, key, resolved_hooks, _resolved_notice(message)))
     return found
+
+
+def _resolved_notice(message: str) -> Notice:
+    """Returns the notice that message, a name resolved to ids, is reported by."""
+    return Notice(message, NoticeSeverity.INFO, help=RESOLVE_HELP)
 
 
 def _with_resolved_user(hook: Any, accounts: hostusers.HostAccounts) -> Any:

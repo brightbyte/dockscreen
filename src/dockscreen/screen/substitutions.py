@@ -2,7 +2,7 @@
 compose config before running it, for applying them and for reporting them. It does not decide what to change.
 
 Each change sets one key of one service. Everything dockscreen changes in what it runs is said: a change
-that alters what the project chose is notable, the others are routine, and routine changes of the same
+that alters what the project chose is a warning, the others are info, and routine changes of the same
 kind are reported together in one line that names their services (SubstitutionGroup), since the line would
 be the same for each. A change with no text and no group is part of another that is reported, such as the HOME
 that comes with the default user.
@@ -13,6 +13,7 @@ judges it as that origin's; one that only adds to, or respells, what the project
 
 import copy
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any, NamedTuple
 
 from dockscreen.model.origin import Origin
@@ -34,7 +35,7 @@ class SubstitutionGroup(NamedTuple):
 
 class Substitution(NamedTuple):
     """Record of one change dockscreen makes to a key of a compose service before running it, for applying it
-    to the definition and reporting it. It holds the key, its new value, how the change is reported, and where
+    to the definition and reporting it. It holds the key, its new value, the notice that reports it, and where
     the value comes from.
 
     Instances come from the functions that work out changes (hardening, decisions, runoptions).
@@ -43,18 +44,15 @@ class Substitution(NamedTuple):
     - service: the name of the service
     - key: the service key that is set
     - value: what the key is set to, which must not be changed in place; apply copies it into the definition
-    - text: what it was and what dockscreen does, if it is reported on its own line; None if not
-    - notable: whether it alters what the project chose
-    - help: what the project can do about it, or None
+    - notice: what it was and what dockscreen does, if it is reported on its own line, as a warning if it
+      alters what the project chose, else info, and without a subject, which is its service; None if not
     - group: the group it is reported together with, or None
     - origin: where the value comes from; None for where the key's own value came from
     """
     service: str
     key: str
     value: Any
-    text: str | None = None
-    notable: bool = False
-    help: str | None = None
+    notice: Notice | None = None
     group: SubstitutionGroup | None = None
     origin: Origin | None = None
 
@@ -87,12 +85,10 @@ def origins(substitutions: Iterable[Substitution]) -> dict[str, dict[str, Origin
 
 
 def individual(substitutions: Iterable[Substitution]) -> list[Notice]:
-    """Describes the substitutions that are reported on their own line, one notice each, in their order:
-    a warning if it alters what the project chose, else info.
+    """Describes the substitutions that are reported on their own line, one notice each, in their order,
+    about their service.
     """
-    severity = {True: NoticeSeverity.WARNING, False: NoticeSeverity.INFO}
-    return [Notice(s.text, severity[s.notable], f"service {s.service}", s.help)
-            for s in substitutions if s.text]
+    return [replace(s.notice, subject=f"service {s.service}") for s in substitutions if s.notice]
 
 
 def grouped(substitutions: Iterable[Substitution]) -> list[Notice]:
