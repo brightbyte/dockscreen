@@ -1,5 +1,5 @@
 import pytest
-from fakes import FakeImages, compose_line, compose_project, docker_dispatch, rules, texts
+from fakes import FakeImages, compose_line, compose_project, docker_dispatch, rules
 
 from dockscreen.commands import compose_up
 from dockscreen.compose import inspect

@@ -44,8 +44,8 @@ class RuleBase:
     """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
     which Policy holds and documents, and what follows from them for every group of rules.
 
-    The id rules (idrules) are not a mixin: they come with the host facts they judge ids by, which Policy holds
-    as one object, ids, for the groups of rules to call.
+    The id rules (idrules) are not a mixin: they come with the host facts they judge ids by, which Policy
+    holds as one object, ids, for the groups of rules to call.
     """
     ids: idrules.IdRules
     extra_dirs: tuple

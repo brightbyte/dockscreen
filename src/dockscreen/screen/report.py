@@ -14,7 +14,6 @@ from dockscreen.screen.notices import Notice
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
 
-
 ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
 
 # The closing line, the same for an audit, for --brief and for the check before a command runs.
