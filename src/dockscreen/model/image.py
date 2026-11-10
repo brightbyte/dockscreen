@@ -44,7 +44,8 @@ class Image(NamedTuple):
 class Inspected(NamedTuple):
     """Record of what was seen of an image through a container created from it and never started, for the
     policy to decide the user from. It holds the image, its own user, the container's user, whether the
-    container reaches host files, and the image's passwd and group files once they are read.
+    container reaches host files, whether its HOME was chosen, and the image's passwd and group files once
+    they are read.
 
     Instances come from Screener.look.
 
@@ -53,6 +54,8 @@ class Inspected(NamedTuple):
     - image_user: the user the image's config sets
     - user: the user the container was created with, as given to docker
     - reaches_host: whether the container, or the service it stands for, reaches host files
+    - home_chosen: whether the container's HOME differs from the image's, so the command line or an env file
+      chose it; never for a compose service, whose image is looked at without the service's environment
     - passwd, group: the image's passwd and group files as the container has them, "" for a missing one; None
       until they are read (with_user_files)
     """
@@ -60,6 +63,7 @@ class Inspected(NamedTuple):
     image_user: str
     user: str
     reaches_host: bool
+    home_chosen: bool = False
     passwd: str | None = None
     group: str | None = None
 

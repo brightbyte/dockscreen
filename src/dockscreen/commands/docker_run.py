@@ -23,12 +23,11 @@ from dockscreen.cli import runargs
 from dockscreen.commands import helptext
 from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.container import Container, env_value
+from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.screen import amendments, findings, hardening, userdecisionview
 from dockscreen.screen.amendments import Amendment
-from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
@@ -93,9 +92,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
         user = amendments.pinned_user(decision, parsed.image)
-        messages.notice(user.notice)
-        created = _create_checked(screener, parsed, [defaults, user, *_home(screener, container, decision)],
-                                  decision)
+        for notice in amendments.notices(user):
+            messages.notice(notice)
+        created = _create_checked(screener, parsed, [defaults, *user], decision)
         if isinstance(created, int):
             return created
         container, decision = created
@@ -108,22 +107,6 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         interactive=bool(container.info["Config"].get("OpenStdin")),
         detach_keys=parsed.detach_keys,
     )
-
-
-def _home(screener: Screener, container: Container, decision: UserDecision) -> list[Amendment]:
-    """Returns the amendment that sets HOME for the default user that replaces the image's root, unless the
-    command line or an env file chose a HOME; its notice is the default user's (amendments.pinned_user).
-
-    The container as created has the merged environment: a HOME that differs from the image's own
-    was set by the person running it, and stays.
-    """
-    home = default_home(decision.pinned_user, decision.home)  # "" unless the default user replaces root
-    if not home:
-        return []
-    image_env = screener.docker.inspect_image(container.info["Image"])["Config"].get("Env")
-    if env_value(container.info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
-        return []
-    return [Amendment(("-e", f"HOME={home}"))]
 
 
 def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendment],

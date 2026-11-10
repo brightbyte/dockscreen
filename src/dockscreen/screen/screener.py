@@ -14,6 +14,7 @@ from typing import Any, NamedTuple
 from dockscreen.host import config, hostusers
 from dockscreen.host.dockerclient import Docker
 from dockscreen.host.runtime import Runtime
+from dockscreen.model.container import env_value
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
@@ -163,8 +164,11 @@ class Screener(NamedTuple):
         image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
                       tuple(shown.get("RepoDigests") or ()))
         reaches_host = mounts if mounts is not None else container_reaches_host(info)
+        # the container has the merged environment: a HOME that differs from the image's was chosen for it
+        home_chosen = env_value(info["Config"].get("Env"), "HOME") != env_value(shown["Config"].get("Env"),
+                                                                                 "HOME")
         inspected = Inspected(image, shown["Config"].get("User") or "", info["Config"].get("User") or "",
-                              reaches_host)
+                              reaches_host, home_chosen)
         image_policy = self.policy(directory, self.section_for(image))
         if image_policy.needs_user_files(origin or inspected.user_origin):
             passwd = self.docker.read_file(container, "/etc/passwd") or ""

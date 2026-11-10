@@ -32,7 +32,8 @@ class UserDecision(NamedTuple):
     - identity: the ids read from the image, or None
     - user: the (uid, gid) dockscreen pins (pins_user), or None
     - section: which image section of the config file applied (SectionMatch)
-    - home: the HOME to set for the default user that replaces root; "" leaves it alone
+    - home: the HOME to set for the default user that replaces root; "" leaves it alone, as when the command
+      line or an env file chose one (Inspected.home_chosen)
     - replaces_root: whether the default user runs instead of the image's root
     """
     origin: Origin | None

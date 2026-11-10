@@ -64,7 +64,8 @@ class ImageRules(RuleBase):
             return UserDecision(Origin.IMAGE, image, notes, (Finding(str(e)),), **found)
         if identity.involves_root:
             return UserDecision(self.default_origin, image, notes, identity=identity, user=self.default_user,
-                                home=self.default_home, replaces_root=True, **found)
+                                home="" if inspected.home_chosen else self.default_home, replaces_root=True,
+                                **found)
         problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)

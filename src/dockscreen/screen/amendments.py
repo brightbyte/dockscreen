@@ -1,5 +1,5 @@
 """This module defines the Amendment class and the functions for applying amendments to a `docker run` or
-`create` command line, and for the amendment that runs a container as the user decided for its image. It does
+`create` command line, and for the amendments that run a container as the user decided for its image. It does
 not decide what to change.
 
 An amendment puts arguments before the command line's own, so the options the command line gives itself
@@ -34,9 +34,10 @@ def applied(args: Sequence[str], amendments: Iterable[Amendment]) -> list[str]:
     return [*(arg for a in amendments for arg in a.args), *args]
 
 
-def pinned_user(decision: UserDecision, image: str) -> Amendment:
-    """Returns the amendment that runs the container as the user decision pins (UserDecision.pins_user), as
-    numbers: a warning if that user is the default one instead of the image's root, else info.
+def pinned_user(decision: UserDecision, image: str) -> list[Amendment]:
+    """Returns the amendments that run the container as the user decision pins (UserDecision.pins_user), as
+    numbers: reported as a warning if that user is the default one instead of the image's root, else as info.
+    The default user also gets the decision's HOME, if it has one.
 
     Parameters:
     - decision: the decision of the container's image, which pins a user
@@ -45,10 +46,18 @@ def pinned_user(decision: UserDecision, image: str) -> Amendment:
     user = ids.format_user(decision.pinned_user)
     args = (f"--user={user}",)
     if not decision.replaces_root:
-        return Amendment(args, Notice(f"image {image} runs as {user}, passed to docker as numbers",
-                                      NoticeSeverity.INFO))
+        return [Amendment(args, Notice(f"image {image} runs as {user}, passed to docker as numbers",
+                                       NoticeSeverity.INFO))]
     home = default_home(decision.pinned_user, decision.home)
-    return Amendment(args, Notice(
+    found = [Amendment(args, Notice(
         instead_of_root(decision), NoticeSeverity.WARNING,
         help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
-        "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else "")))
+        "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else "")))]
+    if home:
+        found.append(Amendment(("-e", f"HOME={home}")))  # reported with the user
+    return found
+
+
+def notices(amendments: Iterable[Amendment]) -> list[Notice]:
+    """Returns the notices of the amendments that have one, in their order."""
+    return [a.notice for a in amendments if a.notice]
