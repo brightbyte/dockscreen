@@ -1,5 +1,5 @@
 """This module defines the UserRules class, the group of the policy's rules for the users containers run as,
-and what they work with: IdRules, which decides which uids and gids a project or an image may choose,
+and what they work with: IdFacts, the settings and host facts the id rules judge uids and gids by,
 UserOption, the record of a user a command line gives, and Resolution, what dockscreen's own --as and --as-me
 stand for.
 
@@ -90,10 +90,10 @@ USER_HELP = ("set user: on the service to choose one; the default user may not b
 RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
-class IdRules(NamedTuple):
-    """Value object for deciding which uids and gids a project or an image may choose (problems). It holds the
-    caller's ids and whether they are allowed, the nobody range and the default user from the config file, and
-    this host's accounts and subordinate ranges.
+class IdFacts(NamedTuple):
+    """Value object for what the id rules (UserRules.id_problems) judge uids and gids by. It holds the
+    caller's ids and whether they are allowed, the nobody range and the default user from the config file,
+    this host's accounts and subordinate ranges, and how the command allows the caller's ids.
 
     Instances come from for_runtime; with_settings gives a copy.
 
@@ -116,10 +116,10 @@ class IdRules(NamedTuple):
 
     @classmethod
     def for_runtime(cls, runtime: Runtime, allow_me: bool = False, own_ids_hint: str = COMPOSE_HINT) -> Self:
-        """Returns the id rules for the config file's settings.
+        """Returns the facts for the config file's settings, the caller and this host.
 
         Parameters:
-        - runtime: the Runtime of the command, whose settings and caller give the rules
+        - runtime: the Runtime of the command, whose settings and caller give the facts
         - allow_me: the caller's own ids are allowed
         - own_ids_hint: how the command allows them, for the refusal
         """
@@ -127,66 +127,8 @@ class IdRules(NamedTuple):
                    runtime.accounts, runtime.subordinate, own_ids_hint)
 
     def with_settings(self, settings: configuration.Config) -> Self:
-        """Returns these rules with the nobody range and default user of settings (config.effective)."""
+        """Returns these facts with the nobody range and default user of settings (config.effective)."""
         return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
-
-    def _allowed(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
-        """Tells whether value is an allowed id of kind ("uid" or "gid").
-
-        Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
-        caller if allow_me is set.
-        """
-        index = 0 if kind == "uid" else 1
-        low, high = self.nobody_range
-        pairs = [self.default_user, *extra, *([self.me] if self.allow_me else [])]
-        return low <= value <= high or any(pair[index] == value for pair in pairs)
-
-    def problem(self, kind: str, value: int, mounts: bool,
-                extra: Iterable[tuple[int, int]] = ()) -> str | None:
-        """Returns why value may not be used as an id of kind, or None if it may.
-
-        Parameters:
-        - kind: "uid", "gid" or "supplementary gid"
-        - value: the id
-        - mounts: the container has host mounts, which leaves only allowed ids
-        - extra: further allowed (uid, gid) pairs
-        """
-        base = "uid" if kind == "uid" else "gid"
-        # first: allowed ids such as nobody usually exist on this host too
-        if self._allowed(base, value, extra):
-            return None
-        if value == 0:
-            return f"{kind} 0 is root"
-        if value in configuration.NO_ID:
-            return f"{kind} {value} means \"no id\" to many tools"
-        if value > MAX_ID:
-            return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
-        # before the account lookup, which finds the caller too but cannot give the --allow-me hint
-        if value == self.me[0 if base == "uid" else 1]:
-            return f"{kind} {value} is yours" + (f"; {self.own_ids_hint}" if self.own_ids_hint else "")
-        name = self.local.user_name(value) if base == "uid" else self.local.group_name(value)
-        if name is not None:
-            account = "user" if base == "uid" else "group"
-            return f"{kind} {value} exists on this host (local {account} {name})"
-        if self.subordinate.contains(base, value):
-            return f"{kind} {value} is in a subordinate id range of this host (rootless containers)"
-        if mounts:
-            low, high = self.nobody_range
-            return f"{kind} {value} is not in the nobody range {low}-{high}, and there are host mounts"
-        return None
-
-    def problems(self, uid: int | None, gid: int | None, supplementary: Iterable[int] = (),
-                 mounts: bool = False, extra: Collection[tuple[int, int]] = ()) -> list[str]:
-        """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
-
-        Parameters:
-        - uid, gid: the ids; None for one that is not checked
-        - supplementary: the supplementary gids
-        - mounts, extra: as problem takes them
-        """
-        checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
-        found = [self.problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
-        return [p for p in found if p]
 
 
 class UserOption(NamedTuple):
@@ -229,6 +171,65 @@ class UserRules(RuleBase):
     (resolve_user_names), and the decided users pinned in what runs (user_changes, user_amendments).
     """
 
+    def _allowed_id(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
+        """Tells whether value is an allowed id of kind ("uid" or "gid").
+
+        Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
+        caller if allow_me is set.
+        """
+        index = 0 if kind == "uid" else 1
+        low, high = self.ids.nobody_range
+        pairs = [self.ids.default_user, *extra, *([self.ids.me] if self.ids.allow_me else [])]
+        return low <= value <= high or any(pair[index] == value for pair in pairs)
+
+    def id_problem(self, kind: str, value: int, mounts: bool,
+                extra: Iterable[tuple[int, int]] = ()) -> str | None:
+        """Returns why value may not be used as an id of kind, or None if it may.
+
+        Parameters:
+        - kind: "uid", "gid" or "supplementary gid"
+        - value: the id
+        - mounts: the container has host mounts, which leaves only allowed ids
+        - extra: further allowed (uid, gid) pairs
+        """
+        base = "uid" if kind == "uid" else "gid"
+        # first: allowed ids such as nobody usually exist on this host too
+        if self._allowed_id(base, value, extra):
+            return None
+        if value == 0:
+            return f"{kind} 0 is root"
+        if value in configuration.NO_ID:
+            return f"{kind} {value} means \"no id\" to many tools"
+        if value > MAX_ID:
+            return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
+        # before the account lookup, which finds the caller too but cannot give the --allow-me hint
+        if value == self.ids.me[0 if base == "uid" else 1]:
+            hint = self.ids.own_ids_hint
+            return f"{kind} {value} is yours" + (f"; {hint}" if hint else "")
+        name = self.ids.local.user_name(value) if base == "uid" else self.ids.local.group_name(value)
+        if name is not None:
+            account = "user" if base == "uid" else "group"
+            return f"{kind} {value} exists on this host (local {account} {name})"
+        if self.ids.subordinate.contains(base, value):
+            return f"{kind} {value} is in a subordinate id range of this host (rootless containers)"
+        if mounts:
+            low, high = self.ids.nobody_range
+            return f"{kind} {value} is not in the nobody range {low}-{high}, and there are host mounts"
+        return None
+
+    def id_problems(self, uid: int | None, gid: int | None, supplementary: Iterable[int] = (),
+                 mounts: bool = False, extra: Collection[tuple[int, int]] = ()) -> list[str]:
+        """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
+
+        Parameters:
+        - uid, gid: the ids; None for one that is not checked
+        - supplementary: the supplementary gids
+        - mounts, extra: as id_problem takes them
+        """
+        checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
+        found = [self.id_problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
+        return [p for p in found if p]
+
     def check_user(self, value: Any, service: JudgedService) -> list[str]:
         """Checks a `user:` of service with its names resolved; returns the problems, empty for an acceptable
         `uid:gid`.
@@ -254,7 +255,7 @@ class UserRules(RuleBase):
             return [_not_a_name("group", group)]
         configured = (self.configured_user,) if self.configured_user else ()
         return [f"user {value!r}: {p}"
-                for p in self.ids.problems(uid, gid, mounts=service.reaches_host, extra=configured)]
+                for p in self.id_problems(uid, gid, mounts=service.reaches_host, extra=configured)]
 
     def needs_user_files(self, origin: Origin) -> bool:
         """Tells whether check_image needs the image's passwd and group files (Inspected.passwd) for a
@@ -292,7 +293,7 @@ class UserRules(RuleBase):
             return UserDecision(self.default_origin, image, notes, identity=identity, user=self.default_user,
                                 home="" if inspected.home_chosen else self.default_home, replaces_root=True,
                                 **found)
-        problems = self.ids.problems(identity.uid, identity.gid, identity.supplementary,
+        problems = self.id_problems(identity.uid, identity.gid, identity.supplementary,
                                      mounts=inspected.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
         return UserDecision(Origin.IMAGE, image, notes, refusals, identity,

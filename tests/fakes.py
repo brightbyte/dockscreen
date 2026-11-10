@@ -62,12 +62,12 @@ ME = (4242, 4343)
 
 
 def rules(me=ME, allow_me=False, local=None, settings=None, subordinate=None):
-    """users.IdRules for the host of Accounts, with the default config unless settings says otherwise.
+    """users.IdFacts for the host of Accounts, with the default config unless settings says otherwise.
 
     The caller is ME.
     """
     settings = settings or config.Config()
-    return users.IdRules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
+    return users.IdFacts(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
                            subordinate or NoSubordinate())
 
 

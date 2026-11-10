@@ -39,7 +39,7 @@ class Screener(NamedTuple):
     Attributes:
     - runtime: the Runtime of the command
     - allow_me: whether --allow-me allows the caller's own ids
-    - own_ids_hint: how the command allows them, said when they are refused (users.IdRules)
+    - own_ids_hint: how the command allows them, said when they are refused (users.IdFacts)
     """
     runtime: Runtime
     allow_me: bool = False
@@ -51,9 +51,9 @@ class Screener(NamedTuple):
         return self.runtime.docker
 
     @property
-    def ids(self) -> users.IdRules:
+    def ids(self) -> users.IdFacts:
         """Returns the id rules with the config file's top-level settings."""
-        return users.IdRules.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
+        return users.IdFacts.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
 
     @property
     def local(self) -> hostusers.HostAccounts:

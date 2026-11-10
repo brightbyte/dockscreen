@@ -10,7 +10,7 @@ from dockscreen.host import config as configuration
 from dockscreen.model.origin import Origin
 
 if TYPE_CHECKING:
-    from dockscreen.screen.rules.users import IdRules
+    from dockscreen.screen.rules.users import IdFacts
 
 
 class JudgedService(Protocol):
@@ -46,10 +46,10 @@ class RuleBase:
     """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
     which Policy holds and documents, and what follows from them for every group of rules.
 
-    The id rules (users.IdRules) are not a mixin: they come with the host facts they judge ids by, which
-    Policy holds as one object, ids, for the groups of rules to call.
+    What the id rules judge by (users.IdFacts), the settings and host facts about ids, is one object, ids,
+    for the groups of rules to read.
     """
-    ids: "IdRules"
+    ids: "IdFacts"
     extra_dirs: tuple
     trust: frozenset[Origin]
     config_file: str | None

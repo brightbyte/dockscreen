@@ -13,12 +13,12 @@ added tomorrow is denied until someone has reviewed it. Every structure that can
 with `x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
 BuildRules._check_build).
 
-A Policy holds the settings the rules apply with, such as the id rules (users.IdRules) that decide which
-uids and gids a project may choose; what is known about the thing judged belongs to it, not to the
-policy, down to the directory its paths are judged against. Every rule is a method of Policy, whether it
-reads the settings or not. The checks of a whole target turn the problems of each rule into findings
-(findings.Finding), or into notices (notices.Notice) for a trusted value, about the service, volume or
-network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
+A Policy holds the settings the rules apply with, such as what the id rules, which decide which uids and
+gids a project may choose, judge by (users.IdFacts); what is known about the thing judged belongs to it,
+not to the policy, down to the directory its paths are judged against. Every rule is a method of Policy,
+whether it reads the settings or not. The checks of a whole target turn the problems of each rule into
+findings (findings.Finding), or into notices (notices.Notice) for a trusted value, about the service, volume
+or network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
 """
 
 import dataclasses
@@ -56,7 +56,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:
-    - ids: the id rules (users.IdRules)
+    - ids: what the id rules judge by (users.IdFacts)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
       instead (with_trust)
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
@@ -66,7 +66,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
     """
-    ids: users.IdRules
+    ids: users.IdFacts
     extra_dirs: tuple = ()  # mount_dirs from the config file
     trust: frozenset[Origin] = TRUSTED
     config_file: str | None = None
@@ -83,7 +83,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, rules: users.IdRules,
+    def for_settings(cls, settings: configuration.Config, rules: users.IdFacts,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 
