@@ -1,11 +1,9 @@
 """This module provides functions for working out, as substitutions, the defaults to add to every service of a
-compose config, and the ids on this host for the user names in it; and, as an amendment, the same defaults for
-a container that `docker run` or `create` makes.
+compose config, with the ids on this host for the user names in it (Policy.resolve_user_names); and, as an
+amendment, the same defaults for a container that `docker run` or `create` makes.
 
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
-or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
-to ids on this host, so the generated file never asks the image to resolve a name; the policy
-then checks the ids, and refuses a name that does not exist here. A project cannot weaken them, because adding
+or `no-new-privileges` gets them. A project cannot weaken them, because adding
 `cap_add` or `no-new-privileges:false` is still refused by the policy. The
 changes are substitutions (see substitutions), reported by `audit` and before a run.
 """
@@ -13,26 +11,25 @@ changes are substitutions (see substitutions), reported by `audit` and before a 
 import json
 from typing import Any
 
-from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
 from dockscreen.screen.amendments import Amendment
 from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
-from dockscreen.util import ids
 
 
-def changes(config: dict[str, Any], accounts: hostusers.HostAccounts) -> list[Substitution]:
+def changes(config: dict[str, Any], policy: Policy) -> list[Substitution]:
     """Returns the substitutions that add dockscreen's defaults to every service of config and resolve user
-    names to ids.
+    names to ids (Policy.resolve_user_names).
 
     Parameters:
     - config: the project's resolved config
-    - accounts: the users and groups to resolve names with (hostusers.HostAccounts)
+    - policy: the policy whose rules resolve the names
     """
     found = []
     for name, service in (config.get("services") or {}).items():
-        found += _resolve_user_names(name, service or {}, accounts)
+        found += policy.resolve_user_names(name, service or {})
         found += _defaults(name, service or {})
     return found
 
@@ -72,76 +69,11 @@ def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks:
     return Substitution(name, key, [*declared, value], notice)
 
 
-def _resolve_user_names(name: str, service: dict[str, Any],
-                        accounts: hostusers.HostAccounts) -> list[Substitution]:
-    """Returns the substitutions that replace names in the service's user and hook users by their ids."""
-    found = []
-    if service.get("user"):
-        resolved = _resolve_spec(service["user"], accounts)
-        if resolved != service["user"]:
-            message = _resolved_message("user", service["user"], resolved)
-            found.append(Substitution(name, "user", resolved, _resolved_notice(message)))
-    for key in ("post_start", "pre_stop"):
-        hooks = service.get(key) or []
-        resolved_hooks = [_with_resolved_user(hook, accounts) for hook in hooks]
-        for hook, resolved_hook in zip(hooks, resolved_hooks):
-            if resolved_hook is not hook:
-                message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
-                found.append(Substitution(name, key, resolved_hooks, _resolved_notice(message)))
-    return found
-
-
-def _resolved_notice(message: str) -> Notice:
-    """Returns the notice that message, a name resolved to ids, is reported by."""
-    return Notice(message, NoticeSeverity.INFO, help=RESOLVE_HELP)
-
-
-def _with_resolved_user(hook: Any, accounts: hostusers.HostAccounts) -> Any:
-    """Returns hook with the names in its user resolved to ids, or hook itself if there is nothing to
-    resolve.
-    """
-    if not (isinstance(hook, dict) and hook.get("user")):
-        return hook
-    resolved = _resolve_spec(hook["user"], accounts)
-    return hook if resolved == hook["user"] else {**hook, "user": resolved}
-
-
-def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
-    """Resolves a user spec: `name` becomes that account's `uid:gid`, a group name its gid.
-
-    Numbers and unknown names stay. A uid alone stays alone: the policy refuses it rather than guess a group.
-    """
-    user, has_group, group = str(spec).partition(":")
-    account = accounts.user(user) if user and ids.parse_id(user) is None else None
-    uid = str(account[0]) if account else user
-    if has_group:
-        gid = _resolve_group(group, accounts)
-    elif account:
-        gid = str(account[1])  # a name brings its primary group, as with --as
-    else:
-        return str(spec) if uid == user else uid
-    return f"{uid}:{gid}"
-
-
-def _resolve_group(group: str, accounts: hostusers.HostAccounts) -> str:
-    """Returns group as a gid if accounts knows its name; ids and unknown names are unchanged."""
-    if ids.parse_id(group) is not None:
-        return group
-    gid = accounts.group(str(group))
-    return group if gid is None else str(gid)
-
-
-def _resolved_message(what: str, before: object, after: str) -> str:
-    """Returns the notice that what was resolved from before to after on this host."""
-    return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
-
-
 NOT_REMOVABLE = "dockscreen always adds it, and cap_add is refused: a service that needs more cannot run"
 DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, and cap_add is refused: "
                  "it cannot run under dockscreen")
 CONTAINER_DEFAULTS_HELP = ("a program that needs a capability or setuid fails: add --cap-add or "
                            "--security-opt yourself, which override these")
-RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
 DEFAULTS = SubstitutionGroup(

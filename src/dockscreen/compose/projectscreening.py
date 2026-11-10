@@ -141,7 +141,7 @@ def load_project(args: Sequence[str], runtime: Runtime) -> LoadedProject:
     """
     found = inspect.project(args, runtime)
     remote = is_remote(args, runtime.docker)
-    changes = hardening.changes(found.definition, runtime.accounts)
+    changes = hardening.changes(found.definition, Screener(runtime).policy(found.directory))
     return LoadedProject(tuple(args), found, remote, tuple(changes))
 
 

@@ -8,10 +8,11 @@ from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen import decisions, policy, substitutions
+from dockscreen.screen import policy, substitutions
 from dockscreen.screen.findings import Verdict
 from dockscreen.screen.notices import Notice
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.rules import users
 from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
@@ -20,7 +21,7 @@ NOBODY = "65534:65534"
 
 ROOT_FALLBACK = "running as 65534:65534 instead of root"
 PIN = "user, image id and pull_policy: never fixed to what was checked, in the generated file only"
-USER_HELP = decisions.USER_HELP
+USER_HELP = users.USER_HELP
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # what prepare is given; only the tail matters
 
 

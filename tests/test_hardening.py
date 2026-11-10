@@ -12,7 +12,7 @@ NOBODY = "65534:65534"
 
 def harden(config, accounts):
     """(config hardened, the substitutions that hardened it)."""
-    found = hardening.changes(config, accounts)
+    found = hardening.changes(config, Policy(rules(local=accounts)))
     return substitutions.apply(config, found), found
 
 

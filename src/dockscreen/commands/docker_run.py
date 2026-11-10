@@ -91,7 +91,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
-        user = amendments.pinned_user(decision, parsed.image)
+        user = screener.policy(runtime.cwd).user_amendments(decision, parsed.image)
         for notice in amendments.notices(user):
             messages.notice(notice)
         created = _create_checked(screener, parsed, [defaults, *user], decision)

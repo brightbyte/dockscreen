@@ -20,7 +20,7 @@ because what the container can write on the host depends on it.
 Allowed ids: the nobody range and the default user from the config file, ids the caller adds for one
 check (a configured image user), and the caller's own ids when --allow-me was given (compose).
 
-A service's user. `user:` and hook users must be numeric `uid:gid` once hardening has resolved names on this
+A service's user. `user:` and hook users must be numeric `uid:gid` once the names in them are resolved on this
 host, and pass the id rules (check_user).
 
 An image's user, from what was seen of the image (model.image.Inspected), for `docker run` and compose alike
@@ -39,9 +39,23 @@ runtime's can at worst refuse a good image, never run root.
 The users a command line gives (check_user_options). Only their form is judged, since the command line is
 trusted, but in a form docker cannot read differently from what was checked. --as and --as-me are
 dockscreen's own: the rules resolve them to the `--user=uid:gid` docker gets (resolve_user_options).
+
+Names in a project. Names in `user:` and hook users are resolved to ids on this host (resolve_user_names), so
+the generated file never asks the image to resolve a name; check_user then checks the ids, and refuses a name
+that does not exist here.
+
+What runs. A user dockscreen decided is pinned as numbers: `user: "uid:gid"` for compose (user_changes),
+`--user=uid:gid` for `docker run` (user_amendments). The runtime reads neither passwd nor group for that, so
+it cannot resolve the image's user to anything but what was checked. For compose, the image that was checked
+is pinned too, by id unless the service builds it, with `pull_policy: never`, so that neither a pull nor a
+moved tag changes what runs; `docker run` starts the very container it checked. A compose service that does
+not start and sets no user gets the default user, in case it does get started: a mistake in working out what
+starts must fail safe. The default user that replaces root gets a HOME of its own (default_home), unless one
+was chosen for it.
 """
 
-from collections.abc import Collection, Iterable
+import json
+from collections.abc import Collection, Iterable, Mapping
 from typing import Any, NamedTuple, Self
 
 from dockscreen.host import config as configuration
@@ -49,11 +63,15 @@ from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
+from dockscreen.model.project import Project
 from dockscreen.screen import imageuser
+from dockscreen.screen.amendments import Amendment
 from dockscreen.screen.findings import Finding, Verdict
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import JudgedService, RuleBase
+from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
 from dockscreen.screen.userdecision import UserDecision
+from dockscreen.screen.userdecisionview import CHOOSE_HINT, instead_of_root
 from dockscreen.util import commandline, ids
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
@@ -63,6 +81,13 @@ MAX_ID = 2**31 - 1
 # What an id of the caller's is refused with, by the command: how it can be allowed there.
 COMPOSE_HINT = f"pass {commandline.ALLOW_ME} to allow it"
 RUN_HINT = f"pass {commandline.AS_ME} to run as you"
+
+PINNED = SubstitutionGroup(
+    "services {services}: user, image id and pull_policy: never fixed to what was checked, "
+    "in the generated file only")
+USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
+             "volumes set up for root")
+RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
 class IdRules(NamedTuple):
@@ -200,15 +225,17 @@ USER_OPTION_ALTERNATIVES = "; --as NAME runs as a local user, --as-me as yoursel
 class UserRules(RuleBase):
     """Mixin of Policy with the rules for the users containers run as, not used on its own: a service's user
     (check_user), an image's user (check_image) and the users a command line gives (check_user_options,
-    resolve_user_options).
+    resolve_user_options); and the changes that follow: names in a project resolved to ids
+    (resolve_user_names), and the decided users pinned in what runs (user_changes, user_amendments).
     """
 
     def check_user(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks a `user:` of service as hardening left it; returns the problems, empty for an acceptable
+        """Checks a `user:` of service with its names resolved; returns the problems, empty for an acceptable
         `uid:gid`.
 
-        Refused are a missing user, a name (hardening resolved those that exist), a missing group, and ids
-        the id rules refuse (ids, with whether service reaches host files and the configured user allowed).
+        Refused are a missing user, a name (resolve_user_names resolved those that exist), a missing group,
+        and ids the id rules refuse (ids, with whether service reaches host files and the configured user
+        allowed).
 
         Parameters:
         - value: the value of `user:`; None if it is missing
@@ -324,6 +351,73 @@ class UserRules(RuleBase):
             return [Finding(f"user {name!r} does not exist on this host; use --user with a numeric id")]
         return []
 
+    def resolve_user_names(self, name: str, service: dict[str, Any]) -> list[Substitution]:
+        """Returns the substitutions that replace names in the user and hook users of the service called name
+        by their ids on this host (ids.local), each with its notice.
+
+        Numbers and names unknown here stay as they are: check_user refuses such a name. A uid alone stays
+        alone, refused rather than given a guessed group.
+        """
+        accounts = self.ids.local
+        found = []
+        if service.get("user"):
+            resolved = _resolve_spec(service["user"], accounts)
+            if resolved != service["user"]:
+                message = _resolved_message("user", service["user"], resolved)
+                found.append(Substitution(name, "user", resolved, _resolved_notice(message)))
+        for key in ("post_start", "pre_stop"):
+            hooks = service.get(key) or []
+            resolved_hooks = [_with_resolved_user(hook, accounts) for hook in hooks]
+            for hook, resolved_hook in zip(hooks, resolved_hooks):
+                if resolved_hook is not hook:
+                    message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
+                    found.append(Substitution(name, key, resolved_hooks, _resolved_notice(message)))
+        return found
+
+    def user_changes(self, project: Project, decisions: Mapping[str, UserDecision]) -> list[Substitution]:
+        """Returns the substitutions that make project the one to run, by service name: services that start
+        and set no user get the decided user (decisions), pinned to the image that was checked; those that do
+        not start get this policy's default user, with its default_home as HOME (the function default_home).
+
+        Parameters:
+        - project: the project
+        - decisions: by service, the UserDecision of each started service that sets no user
+        """
+        found = []
+        for name, service in sorted((project.definition.get("services") or {}).items()):
+            service = service or {}
+            if service.get("user"):
+                continue
+            decision = decisions.get(name)
+            if decision is None:  # not started by this command
+                found += _user(name, service, self.default_user, self.default_home, self.default_origin)
+            elif decision.pins_user:
+                found += _pinned(name, service, decision)
+        return found
+
+    def user_amendments(self, decision: UserDecision, image: str) -> list[Amendment]:
+        """Returns the amendments that run a `docker run` container as the user decision pins
+        (UserDecision.pins_user), as numbers: reported as a warning if that user is the default one instead of
+        the image's root, else as info. The default user also gets the decision's HOME, if it has one.
+
+        Parameters:
+        - decision: the decision of the container's image, which pins a user
+        - image: the image, as the command line names it
+        """
+        user = ids.format_user(decision.pinned_user)
+        args = (f"--user={user}",)
+        if not decision.replaces_root:
+            return [Amendment(args, Notice(f"image {image} runs as {user}, passed to docker as numbers",
+                                           NoticeSeverity.INFO))]
+        home = default_home(decision.pinned_user, decision.home)
+        found = [Amendment(args, Notice(
+            instead_of_root(decision), NoticeSeverity.WARNING,
+            help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not "
+            "be accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else "")))]
+        if home:
+            found.append(Amendment(("-e", f"HOME={home}")))  # reported with the user
+        return found
+
 
 def image_problem(name: str, decision: UserDecision, config_file: str | None = None) -> Finding:
     """Returns, as one finding, why the service called name must not run, for a decision of its image
@@ -344,10 +438,97 @@ def image_problem(name: str, decision: UserDecision, config_file: str | None = N
 
 
 def _not_a_name(kind: str, value: str) -> str:
-    """Returns the problem with a user or group (kind) value that is still a name after hardening.
+    """Returns the problem with a user or group (kind) value that is still a name once names are resolved.
 
-    Hardening resolves every name that exists on this host, so this one does not.
+    UserRules.resolve_user_names resolves every name that exists on this host, so this one does not.
     """
     return (f"{kind} {value!r} does not exist on this host (names are resolved on this host, "
             "never in the image)")
 
+
+# The default user owns nothing of the image's, and the image's HOME (root's, usually) is not its own.
+def default_home(user: tuple[int, int], home: str) -> str:
+    """Returns the HOME for a default user (uid, gid) that replaces an image's root user, or "" for none.
+
+    Root keeps its own.
+
+    Parameters:
+    - user: the default user's (uid, gid)
+    - home: the configured default_home
+    """
+    return "" if 0 in user else home
+
+
+def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, origin: Origin | None,
+          text: str | None = None, group: SubstitutionGroup | None = None) -> list[Substitution]:
+    """Returns the substitutions that set the service's user to the default one, which comes from origin,
+    reported by text if given, and the HOME that comes with it (default_home) unless the service sets HOME.
+    """
+    notice = Notice(text, NoticeSeverity.WARNING, help=USER_HELP) if text else None
+    found = [Substitution(name, "user", ids.format_user(user), notice, group=group, origin=origin)]
+    if home := default_home(user, home):
+        found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
+    return found
+
+
+def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[Substitution]:
+    """Returns the substitutions that pin a started service to what the decision of its image checked:
+    the user, as numbers, the image by id unless it is built, and pull_policy never.
+    """
+    if decision.replaces_root:
+        found = _user(name, service, decision.pinned_user, decision.home, decision.origin,
+                      instead_of_root(decision), PINNED)
+    else:  # the image's user, or the one its image section configures
+        found = [Substitution(name, "user", ids.format_user(decision.pinned_user), group=PINNED,
+                              origin=decision.origin)]
+    # the image checked is what runs
+    found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
+    if decision.image.id and "build" not in service:
+        # ... even if the name is moved to another image
+        found.append(Substitution(name, "image", decision.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
+    return found
+
+
+def _resolved_notice(message: str) -> Notice:
+    """Returns the notice that message, a name resolved to ids, is reported by."""
+    return Notice(message, NoticeSeverity.INFO, help=RESOLVE_HELP)
+
+
+def _with_resolved_user(hook: Any, accounts: hostusers.HostAccounts) -> Any:
+    """Returns hook with the names in its user resolved to ids, or hook itself if there is nothing to
+    resolve.
+    """
+    if not (isinstance(hook, dict) and hook.get("user")):
+        return hook
+    resolved = _resolve_spec(hook["user"], accounts)
+    return hook if resolved == hook["user"] else {**hook, "user": resolved}
+
+
+def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
+    """Resolves a user spec: `name` becomes that account's `uid:gid`, a group name its gid.
+
+    Numbers and unknown names stay. A uid alone stays alone: the policy refuses it rather than guess a group.
+    """
+    user, has_group, group = str(spec).partition(":")
+    account = accounts.user(user) if user and ids.parse_id(user) is None else None
+    uid = str(account[0]) if account else user
+    if has_group:
+        gid = _resolve_group(group, accounts)
+    elif account:
+        gid = str(account[1])  # a name brings its primary group, as with --as
+    else:
+        return str(spec) if uid == user else uid
+    return f"{uid}:{gid}"
+
+
+def _resolve_group(group: str, accounts: hostusers.HostAccounts) -> str:
+    """Returns group as a gid if accounts knows its name; ids and unknown names are unchanged."""
+    if ids.parse_id(group) is not None:
+        return group
+    gid = accounts.group(str(group))
+    return group if gid is None else str(gid)
+
+
+def _resolved_message(what: str, before: object, after: str) -> str:
+    """Returns the notice that what was resolved from before to after on this host."""
+    return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
