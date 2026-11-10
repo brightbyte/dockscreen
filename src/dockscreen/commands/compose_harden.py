@@ -31,7 +31,7 @@ from dockscreen.screen.findings import Finding, failure_of
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules import service as service_rules
 from dockscreen.screen.rules.base import is_inside_any
-from dockscreen.screen.rules.image import image_problem
+from dockscreen.screen.rules.users import image_problem
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable

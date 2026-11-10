@@ -6,7 +6,7 @@ that cannot change between check and start. The one image-derived fact checked
 is the identity the container would run as (see imageuser), unless the command
 line sets a user: the person typing the command is trusted, the image is not.
 
-With no user chosen on the command line, the policy decides it from the image (rules.image). Whatever
+With no user chosen on the command line, the policy decides it from the image (rules.users). Whatever
 it accepts is not left for the runtime to resolve a second time: the container is re-created with
 `--user uid:gid` as the checked numbers.
 
@@ -31,7 +31,7 @@ from dockscreen.screen.amendments import Amendment
 from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules import idrules
+from dockscreen.screen.rules import users
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, root_default_notice
@@ -55,7 +55,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=users.RUN_HINT)
     remote = is_remote(parent_cli.lead_args, runtime.docker)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
@@ -66,13 +66,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         finding = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
         Report.of([finding]).show_screening()
         return 1
-    users, parsed = userargs.screened(parsed, screener)
-    if not users.passed:
-        users.show()
+    given, parsed = userargs.screened(parsed, screener)
+    if not given.passed:
+        given.show()
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     defaults = hardening.container_defaults()
-    for message in [*users.notices, root_default, defaults.notice]:
+    for message in [*given.notices, root_default, defaults.notice]:
         if message:
             messages.notice(message)
 
@@ -219,7 +219,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has_own(commandline.BRIEF), line.argv
-    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=users.RUN_HINT)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
                                                                             runtime.docker)))
     if not daemon.passed:
@@ -230,11 +230,11 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    users, parsed = userargs.screened(parsed, screener)
-    if not users.passed:
-        return users.show(brief)
+    given, parsed = userargs.screened(parsed, screener)
+    if not given.passed:
+        return given.show(brief)
     if not brief:
-        for message in users.notices:
+        for message in given.notices:
             messages.notice(message)
 
     try:

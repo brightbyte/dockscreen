@@ -8,7 +8,7 @@ from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.project import Project, ProjectLocation
-from dockscreen.screen.rules import idrules
+from dockscreen.screen.rules import users
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -62,12 +62,12 @@ ME = (4242, 4343)
 
 
 def rules(me=ME, allow_me=False, local=None, settings=None, subordinate=None):
-    """idrules.IdRules for the host of Accounts, with the default config unless settings says otherwise.
+    """users.IdRules for the host of Accounts, with the default config unless settings says otherwise.
 
     The caller is ME.
     """
     settings = settings or config.Config()
-    return idrules.IdRules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
+    return users.IdRules(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
                            subordinate or NoSubordinate())
 
 
@@ -76,7 +76,7 @@ class Accounts:
     `docker` (999), and nobody.
 
     By name there is also alice (4242:4343), who has no matching group. Her ids are not listed as local
-    accounts: tests use them as the caller's own, which idrules must tell apart from someone else's.
+    accounts: tests use them as the caller's own, which the id rules must tell apart from someone else's.
     """
 
     def user(self, name):

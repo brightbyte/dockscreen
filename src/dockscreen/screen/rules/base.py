@@ -4,11 +4,13 @@ paths against a directory."""
 
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from dockscreen.host import config as configuration
 from dockscreen.model.origin import Origin
-from dockscreen.screen.rules import idrules
+
+if TYPE_CHECKING:
+    from dockscreen.screen.rules.users import IdRules
 
 
 class JudgedService(Protocol):
@@ -44,10 +46,10 @@ class RuleBase:
     """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
     which Policy holds and documents, and what follows from them for every group of rules.
 
-    The id rules (idrules) are not a mixin: they come with the host facts they judge ids by, which Policy
-    holds as one object, ids, for the groups of rules to call.
+    The id rules (users.IdRules) are not a mixin: they come with the host facts they judge ids by, which
+    Policy holds as one object, ids, for the groups of rules to call.
     """
-    ids: idrules.IdRules
+    ids: "IdRules"
     extra_dirs: tuple
     trust: frozenset[Origin]
     config_file: str | None

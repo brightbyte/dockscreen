@@ -2,8 +2,8 @@
 against the rules of the security policy, with the settings they apply with.
 
 The rules are grouped by what they judge (screen.rules): the keys of a service (rules.service), what a
-project has besides its services (rules.project), builds (rules.build), the user an image runs as
-(rules.image) and the users a command line gives (rules.commandline). Policy has them all, and checks
+project has besides its services (rules.project), builds (rules.build), and the users containers run as
+(rules.users): a service's, an image's and the ones a command line gives. Policy has them all, and checks
 whole targets with them: a project (check_project), a container read back into compose service keys
 (check_container), and a project's builds (check_project_build).
 
@@ -13,7 +13,7 @@ added tomorrow is denied until someone has reviewed it. Every structure that can
 with `x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
 BuildRules._check_build).
 
-A Policy holds the settings the rules apply with, such as the id rules (idrules.IdRules) that decide which
+A Policy holds the settings the rules apply with, such as the id rules (users.IdRules) that decide which
 uids and gids a project may choose; what is known about the thing judged belongs to it, not to the
 policy, down to the directory its paths are judged against. Every rule is a method of Policy, whether it
 reads the settings or not. The checks of a whole target turn the problems of each rule into findings
@@ -32,11 +32,9 @@ from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen.findings import Finding, Reportable, about, judged, refused
-from dockscreen.screen.rules import idrules
+from dockscreen.screen.rules import users
 from dockscreen.screen.rules.base import JudgedService, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
-from dockscreen.screen.rules.commandline import CommandLineRules
-from dockscreen.screen.rules.image import ImageRules, image_problem
 from dockscreen.screen.rules.project import TOP_LEVEL_KEYS, ProjectRules
 from dockscreen.screen.rules.service import (
     HARMLESS_SERVICE_KEYS,
@@ -44,11 +42,12 @@ from dockscreen.screen.rules.service import (
     SERVICE_CHECKS,
     ServiceRules,
 )
+from dockscreen.screen.rules.users import UserRules, image_problem
 from dockscreen.screen.userdecision import UserDecision
 
 
 @dataclasses.dataclass(frozen=True)
-class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRules):
+class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     """Service object for checking a compose project, a container, a build or an image against the rules of
     the security policy, with the settings they apply with, as the config file sets them for one directory and
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
@@ -57,7 +56,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:
-    - ids: the id rules (idrules.IdRules)
+    - ids: the id rules (users.IdRules)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
       instead (with_trust)
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
@@ -67,7 +66,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
     """
-    ids: idrules.IdRules
+    ids: users.IdRules
     extra_dirs: tuple = ()  # mount_dirs from the config file
     trust: frozenset[Origin] = TRUSTED
     config_file: str | None = None
@@ -84,7 +83,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, ImageRules, CommandLineRule
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, rules: idrules.IdRules,
+    def for_settings(cls, settings: configuration.Config, rules: users.IdRules,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 

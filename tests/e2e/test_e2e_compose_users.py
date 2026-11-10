@@ -1,6 +1,6 @@
 """Feature: a compose project cannot choose who its containers run as on this host
 
-Rules (Policy.check_user, idrules, hardening):
+Rules (Policy.check_user, rules.users, hardening):
 - `user:` is `uid:gid`; a name is resolved on this host, never in the image, and a name unknown here is
   refused, as is a uid without a group;
 - the project may not choose root, an account or group of this host, a subordinate id, 65535 or

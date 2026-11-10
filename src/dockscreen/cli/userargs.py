@@ -21,7 +21,7 @@ from typing import NamedTuple, Protocol, Self, TypeVar
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules.commandline import Resolution, UserOption
+from dockscreen.screen.rules.users import Resolution, UserOption
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 

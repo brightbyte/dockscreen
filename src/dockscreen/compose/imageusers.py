@@ -1,6 +1,6 @@
 """This module provides functions for finding out which user the images of compose services would run them
 as, by whatever it takes: the images are pulled or built as compose would, and then looked at, so that the
-policy can decide the user to use by the rule `docker run` uses (rules.image). Which services' images to
+policy can decide the user to use by the rule `docker run` uses (rules.users). Which services' images to
 look at is the caller's to say (serviceinfo).
 
 An image is untrusted, so what it says about its user cannot be taken from its name or its config alone.

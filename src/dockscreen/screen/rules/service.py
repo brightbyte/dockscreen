@@ -19,7 +19,7 @@ from dockscreen.screen.rules.base import (
     unknown_keys,
 )
 from dockscreen.screen.rules.build import BuildRules
-from dockscreen.util import ids
+from dockscreen.screen.rules.users import UserRules
 
 if TYPE_CHECKING:
     from dockscreen.screen.policy import Policy
@@ -83,32 +83,6 @@ SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option 
 
 class ServiceRules(RuleBase):
     """Mixin of Policy with the rules for the keys of a service, not used on its own."""
-
-    def check_user(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks a `user:` of service as hardening left it; returns the problems, empty for an acceptable
-        `uid:gid`.
-
-        Refused are a missing user, a name (hardening resolved those that exist), a missing group, and ids
-        the id rules refuse (ids, with whether service reaches host files and the configured user allowed).
-
-        Parameters:
-        - value: the value of `user:`; None if it is missing
-        - service: the service (JudgedService)
-        """
-        if not value:
-            return ["user is not set, the image default may be root"]
-        user, has_group, group = str(value).partition(":")
-        uid, gid = ids.parse_id(user), ids.parse_id(group)
-        if uid is None:
-            return [_not_a_name("user", user)]
-        if not has_group:
-            # docker would take the group, and supplementary groups, from the image
-            return [f"user {value!r} has no group, use uid:gid"]
-        if gid is None:
-            return [_not_a_name("group", group)]
-        configured = (self.configured_user,) if self.configured_user else ()
-        return [f"user {value!r}: {p}"
-                for p in self.ids.problems(uid, gid, mounts=service.reaches_host, extra=configured)]
 
     def check_security_opt(self, value: Any, service: JudgedService) -> list[str]:
         """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
@@ -228,7 +202,8 @@ def _check_host_files(key: str) -> Check:
 def _check_hooks(key: str) -> Check:
     """Returns a check for the hook key (post_start or pre_stop) that refuses hooks that escalate.
 
-    Those are hooks with unknown keys, privileged ones, and ones whose user Policy.check_user refuses.
+    Those are hooks with unknown keys, privileged ones, and ones whose user Policy.check_user refuses
+    (rules.users).
     """
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems = []
@@ -242,7 +217,7 @@ def _check_hooks(key: str) -> Check:
     return check
 
 SERVICE_CHECKS: dict[str, Check] = {
-    "user": ServiceRules.check_user,
+    "user": UserRules.check_user,
     "cap_drop": ServiceRules.check_cap_drop,
     "security_opt": ServiceRules.check_security_opt,
     **{key: _forbidden(key) for key in FORBIDDEN_KEYS},
@@ -258,15 +233,6 @@ SERVICE_CHECKS: dict[str, Check] = {
     "post_start": _check_hooks("post_start"),
     "pre_stop": _check_hooks("pre_stop"),
 }
-
-
-def _not_a_name(kind: str, value: str) -> str:
-    """Returns the problem with a user or group (kind) value that is still a name after hardening.
-
-    Hardening resolves every name that exists on this host, so this one does not.
-    """
-    return (f"{kind} {value!r} does not exist on this host (names are resolved on this host, "
-            "never in the image)")
 
 
 def _is_selinux_label(option: str) -> bool:

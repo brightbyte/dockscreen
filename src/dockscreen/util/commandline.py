@@ -7,7 +7,7 @@ Before the subcommand (main_commandline and CommandLine.subcommand take them out
   not recognised, so docker or compose rejects it, which is the safe direction. The warning is
   printed every time and cannot be silenced, because the flag may have been copied into a script or
   an alias.
-- --allow-me lets services and images run as the caller's own ids (see idrules), for compose. Docker's
+- --allow-me lets services and images run as the caller's own ids (see rules.users), for compose. Docker's
   commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user instead.
 - --helpful (or --verbose) adds the second part of messages that have one: why, and what it costs.
   The audit commands do that anyway. --verbose is taken here, not passed on, so that it does not

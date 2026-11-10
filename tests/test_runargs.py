@@ -3,7 +3,7 @@ import pytest
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
-from dockscreen.screen.rules.commandline import UserOption
+from dockscreen.screen.rules.users import UserOption
 from dockscreen.screen.screener import Screener
 
 ME = (4242, 4343)
