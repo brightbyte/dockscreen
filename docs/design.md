@@ -277,14 +277,14 @@ Compose works that way already: `hardening` and `decisions` give substitutions, 
 Where it is going:
 
 - The thing to run is a compose service, or a `Call`: the arguments of `docker run` or `create`.
-- A change is a `Substitution`, which sets a key of a service, or an `Amendment`, which puts arguments before the user's own, so that the user's later options override them. They apply differently, which is why they are two things, but they are reported alike: both have a notice, a group and an origin.
+- A change is a `Substitution`, which sets a key of a service, or an `Amendment`, which puts arguments before the user's own, so that the user's later options override them. They apply differently, which is why they are two things; both carry the notice that reports them.
 - `--as` and `--as-me` stay in the `Call` as they were read, and a rule resolves them in place, since their order against `--user` decides which one docker uses. A `Call` that still has one cannot be run.
 - The user rules (`rules.idrules`, `Policy.check_image`, and the name resolution of `hardening` and `userargs`) are one module of rules that gives findings, notices and changes. `UserDecision` stays the result of deciding, which each kind of thing to run turns into its own changes.
 
 The steps, each of which leaves the code working:
 
-1. `Call` and `Amendment`, and the changes for `run` and `create` made from the user decision and the defaults.
-2. Name resolution (`--as`, `--as-me`, names in `user:`) moved into the rules, and out of `GivenUsers`.
+1. `Amendment`, and the changes for `run` and `create` made from the user decision and the defaults. The arguments of `run` and `create` stay a list (`runargs.RunArgs.create_args`).
+2. Name resolution (`--as`, `--as-me`, names in `user:`) moved into the rules, and out of `GivenUsers`. This is where a `Call` is needed: it holds `--as` and `--as-me` as they were read, until a rule resolves them.
 3. The user rules gathered into one module.
 
 The point is less to keep in mind: one way from a rule to what runs. A step that adds more code or concepts than it takes away is to be reconsidered, not finished.

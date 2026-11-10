@@ -12,7 +12,6 @@ from typing import NamedTuple
 
 from dockscreen.cli import userargs
 from dockscreen.host import hostusers
-from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.
@@ -33,9 +32,6 @@ LONG_VALUE_FLAGS = frozenset({
     "--volume-driver", "--volumes-from", "--workdir",
 })
 SHORT_VALUE_FLAGS = frozenset("acehlmpuvw")
-# What `run` and `create` add before the user's own arguments, so the user can override both
-# (for example `--cap-add NET_BIND_SERVICE`).
-DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 # Every option that takes the next argument as its value, ours included, as it is typed.
 VALUE_OPTIONS = LONG_VALUE_FLAGS | {commandline.AS} | {f"-{c}" for c in SHORT_VALUE_FLAGS}
 # Options of `docker exec` that take a value in the next argument, as userargs reads them.
@@ -206,11 +202,3 @@ def _value_at(args: Sequence[str], index: int, flag: str) -> str:
     if index >= len(args):
         raise ParseError(f"{flag} needs a value")
     return args[index]
-
-
-def defaults_notice() -> Notice:
-    """Returns the notice that `run` and `create` add their defaults to every container."""
-    return Notice(
-        f"added {' '.join(DEFAULTS)}", NoticeSeverity.INFO,
-        help="a program that needs a capability or setuid fails: add --cap-add or --security-opt yourself, "
-             "which override these")

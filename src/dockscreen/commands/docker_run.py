@@ -16,17 +16,18 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 --strict-screen.
 """
 
+from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.cli import runargs
-from dockscreen.cli.runargs import DEFAULTS, defaults_notice
 from dockscreen.commands import helptext
 from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container, env_value
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, userdecisionview
+from dockscreen.screen import amendments, findings, hardening, userdecisionview
+from dockscreen.screen.amendments import Amendment
 from dockscreen.screen.decisions import default_home
 from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.notices import Notice, NoticeSeverity
@@ -34,7 +35,7 @@ from dockscreen.screen.report import Report
 from dockscreen.screen.rules import idrules
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, instead_of_root, root_default_notice
+from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, root_default_notice
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 
@@ -71,11 +72,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         refused.show()
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
-    for message in [*parsed.users.notices, root_default, defaults_notice()]:
+    defaults = hardening.container_defaults()
+    for message in [*parsed.users.notices, root_default, defaults.notice]:
         if message:
             messages.notice(message)
 
-    created = _create_checked(screener, parsed, [])
+    created = _create_checked(screener, parsed, [defaults])
     if isinstance(created, int):
         return created
     container, decision = created
@@ -90,16 +92,10 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
-        user = ids.format_user(decision.pinned_user)
-        if decision.replaces_root:
-            messages.notice(_fallback_notice(decision))
-        else:
-            messages.notice(Notice(f"image {parsed.image} runs as {user}, passed to docker as numbers",
-                                   NoticeSeverity.INFO))
-        extra = [f"--user={user}"]
-        if decision.replaces_root:
-            extra += _home_args(screener, container, decision)
-        created = _create_checked(screener, parsed, extra, decision)
+        user = amendments.pinned_user(decision, parsed.image)
+        messages.notice(user.notice)
+        created = _create_checked(screener, parsed, [defaults, user, *_home(screener, container, decision)],
+                                  decision)
         if isinstance(created, int):
             return created
         container, decision = created
@@ -114,33 +110,23 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     )
 
 
-def _home_args(screener: Screener, container: Container, decision: UserDecision) -> list[str]:
-    """Returns `-e HOME=...` for the default user, unless the command line or an env file chose a HOME.
+def _home(screener: Screener, container: Container, decision: UserDecision) -> list[Amendment]:
+    """Returns the amendment that sets HOME for the default user that replaces the image's root, unless the
+    command line or an env file chose a HOME; its notice is the default user's (amendments.pinned_user).
 
     The container as created has the merged environment: a HOME that differs from the image's own
     was set by the person running it, and stays.
     """
-    home = default_home(decision.pinned_user, decision.home)
+    home = default_home(decision.pinned_user, decision.home)  # "" unless the default user replaces root
     if not home:
         return []
     image_env = screener.docker.inspect_image(container.info["Image"])["Config"].get("Env")
     if env_value(container.info["Config"].get("Env"), "HOME") != env_value(image_env, "HOME"):
         return []
-    return ["-e", f"HOME={home}"]
+    return [Amendment(("-e", f"HOME={home}"))]
 
 
-def _fallback_notice(decision: UserDecision) -> Notice:
-    """Returns the warning that the default user replaces the image's root, and what to do about
-    it.
-    """
-    home = default_home(decision.pinned_user, decision.home)
-    return Notice(
-        instead_of_root(decision), NoticeSeverity.WARNING,
-        help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not be "
-        "accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else ""))
-
-
-def _create_checked(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
+def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendment],
                     decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
     """Creates the container (check); returns it with the decision of its user, or the exit status if it
     may not start.
@@ -148,7 +134,7 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs, extra: list[str
     A container that would be refused is removed and the refusal printed. Any other decision is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, created = check(screener, parsed, extra, decided)
+    code, created = check(screener, parsed, changes, decided)
     if created is None:  # docker said why
         Report.failure(f"docker could not create a container for {parsed.image}").show_screening()
         return code
@@ -160,24 +146,22 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs, extra: list[str
     return created
 
 
-def check(screener: Screener, parsed: runargs.RunArgs, extra: list[str],
+def check(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendment],
           decided: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
     The container is left for the caller to remove.
 
-    The container is left for the caller to remove.
-
     Parameters:
     - screener: the Screener of the command
     - parsed: the `docker run` command line, as parsed
-    - extra: arguments that go before the command line's own
-    - decided: the decision of a first creation, whose user extra pins; the container is then not assessed
+    - changes: what goes before the command line's own arguments: the defaults, and the user decided
+    - decided: the decision of a first creation, whose user changes pins; the container is then not assessed
       again, only checked to be what the command line asked for, and its user comes from where the decided one
       does
     """
-    code, created = screener.docker.create([*DEFAULTS, *extra, *parsed.create_args])
+    code, created = screener.docker.create(amendments.applied(parsed.create_args, changes))
     if created is None:
         return code, None
     here = screener.runtime.cwd
@@ -271,7 +255,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             messages.notice(message)
 
     try:
-        _, created = check(screener, parsed, [])
+        _, created = check(screener, parsed, [hardening.container_defaults()])
     except DockerNotFound as e:
         return Report.failure(str(e)).show(brief)
     if created is None:
@@ -314,7 +298,8 @@ def _report_decision(screener: Screener, image: str, decision: UserDecision) -> 
     if decision.pins_user:
         user = ids.format_user(decision.pinned_user)
         messages.out(f"  docker run would create it again with --user={user}, as numbers")
-    messages.out("  docker run also adds " + " ".join(runargs.DEFAULTS) + "; later options override them")
+    defaults = " ".join(hardening.container_defaults().args)
+    messages.out(f"  docker run also adds {defaults}; later options override them")
 
 
 def _report_findings(found: list[Reportable]) -> None:

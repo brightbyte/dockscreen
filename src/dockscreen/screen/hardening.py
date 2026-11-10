@@ -1,5 +1,6 @@
 """This module provides functions for working out, as substitutions, the defaults to add to every service of a
-compose config, and the ids on this host for the user names in it.
+compose config, and the ids on this host for the user names in it; and, as an amendment, the same defaults for
+a container that `docker run` or `create` makes.
 
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
 or `no-new-privileges` gets them. Names in `user:` and hook users are resolved
@@ -14,6 +15,7 @@ from typing import Any
 
 from dockscreen.host import hostusers
 from dockscreen.model.origin import Origin
+from dockscreen.screen.amendments import Amendment
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
@@ -33,6 +35,15 @@ def changes(config: dict[str, Any], accounts: hostusers.HostAccounts) -> list[Su
         found += _resolve_user_names(name, service or {}, accounts)
         found += _defaults(name, service or {})
     return found
+
+
+def container_defaults() -> Amendment:
+    """Returns the amendment that adds the defaults to a container that `docker run` or `create` makes, before
+    the command line's own options, which may override them.
+    """
+    args = (f"--cap-drop={CAP_DROP}", f"--security-opt={SECURITY_OPT}")
+    notice = Notice(f"added {' '.join(args)}", NoticeSeverity.INFO, help=CONTAINER_DEFAULTS_HELP)
+    return Amendment(args, notice)
 
 
 def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
@@ -128,6 +139,8 @@ def _resolved_message(what: str, before: object, after: str) -> str:
 NOT_REMOVABLE = "dockscreen always adds it, and cap_add is refused: a service that needs more cannot run"
 DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, and cap_add is refused: "
                  "it cannot run under dockscreen")
+CONTAINER_DEFAULTS_HELP = ("a program that needs a capability or setuid fails: add --cap-add or "
+                           "--security-opt yourself, which override these")
 RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
