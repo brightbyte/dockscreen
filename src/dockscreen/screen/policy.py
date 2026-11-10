@@ -62,6 +62,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
     - section: which image section of the config file applies to the image this policy is for, and why the
       one for its repository does not (config.section_for); NO_SECTION for a policy not for an image
+    - nobody_range: the inclusive (low, high) range of ids any project or image may choose
     - default_user: the (uid, gid) that runs instead of an image that would run as root
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
@@ -74,6 +75,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     # The user the config file sets for this service (its image's or project's, or the top level's):
     # its uid and gid are allowed ids for the service too, whoever names them.
     configured_user: tuple | None = None
+    nobody_range: tuple[int, int] = configuration.Config().nobody_range
     default_user: tuple[int, int] = configuration.Config().default_user
     default_home: str = configuration.Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN
@@ -83,17 +85,16 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, rules: users.IdFacts,
+    def for_settings(cls, settings: configuration.Config, ids: users.IdFacts,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 
         Parameters:
         - settings: the settings of the config file that apply (config.effective)
-        - rules: the id rules with the caller's allow_me; the settings give them their nobody range and
-          default user
+        - ids: what the id rules judge by besides the settings: the caller, with allow_me, and this host
         - config_file: named in hints, as in Policy
         """
-        return cls(rules.with_settings(settings), settings.mount_dirs, config_file=config_file,
+        return cls(ids, settings.mount_dirs, config_file=config_file, nobody_range=settings.nobody_range,
                    security_opts=settings.security_opts, configured_user=settings.user,
                    default_user=settings.default_user, default_home=settings.default_home,
                    default_origin=_origin_of(settings, "default_user"))

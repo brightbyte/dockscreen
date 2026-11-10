@@ -61,14 +61,12 @@ class NoSubordinate:
 ME = (4242, 4343)
 
 
-def rules(me=ME, allow_me=False, local=None, settings=None, subordinate=None):
-    """users.IdFacts for the host of Accounts, with the default config unless settings says otherwise.
+def rules(me=ME, allow_me=False, local=None, subordinate=None):
+    """users.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says otherwise.
 
     The caller is ME.
     """
-    settings = settings or config.Config()
-    return users.IdFacts(me, allow_me, settings.nobody_range, settings.default_user, local or Accounts(),
-                           subordinate or NoSubordinate())
+    return users.IdFacts(me, allow_me, local or Accounts(), subordinate or NoSubordinate())
 
 
 class Accounts:

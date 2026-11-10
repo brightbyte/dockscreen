@@ -91,44 +91,35 @@ RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 
 class IdFacts(NamedTuple):
-    """Value object for what the id rules (UserRules.id_problems) judge uids and gids by. It holds the
-    caller's ids and whether they are allowed, the nobody range and the default user from the config file,
-    this host's accounts and subordinate ranges, and how the command allows the caller's ids.
+    """Value object for what the id rules (UserRules.id_problems) judge uids and gids by besides the settings
+    of the config file, which the policy holds: the caller's ids and whether they are allowed, this host's
+    accounts and subordinate ranges, and how the command allows the caller's ids.
 
-    Instances come from for_runtime; with_settings gives a copy.
+    Instances come from for_runtime.
 
     Attributes:
     - me: the caller's (uid, gid)
     - allow_me: whether the caller's ids are allowed (--allow-me)
-    - nobody_range: the inclusive (low, high) range of ids any project or image may choose
-    - default_user: the (uid, gid) that replaces root
     - local: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
     - own_ids_hint: how the command allows the caller's ids, said after refusing them; empty if it has no way
     """
     me: tuple
     allow_me: bool
-    nobody_range: tuple
-    default_user: tuple
     local: hostusers.HostAccounts
     subordinate: hostusers.SubordinateRanges
     own_ids_hint: str = COMPOSE_HINT
 
     @classmethod
     def for_runtime(cls, runtime: Runtime, allow_me: bool = False, own_ids_hint: str = COMPOSE_HINT) -> Self:
-        """Returns the facts for the config file's settings, the caller and this host.
+        """Returns the facts about the caller and this host.
 
         Parameters:
-        - runtime: the Runtime of the command, whose settings and caller give the facts
+        - runtime: the Runtime of the command, whose caller and host give the facts
         - allow_me: the caller's own ids are allowed
         - own_ids_hint: how the command allows them, for the refusal
         """
-        return cls(runtime.me, allow_me, runtime.settings.nobody_range, runtime.settings.default_user,
-                   runtime.accounts, runtime.subordinate, own_ids_hint)
-
-    def with_settings(self, settings: configuration.Config) -> Self:
-        """Returns these facts with the nobody range and default user of settings (config.effective)."""
-        return self._replace(nobody_range=settings.nobody_range, default_user=settings.default_user)
+        return cls(runtime.me, allow_me, runtime.accounts, runtime.subordinate, own_ids_hint)
 
 
 class UserOption(NamedTuple):
@@ -178,8 +169,8 @@ class UserRules(RuleBase):
         caller if allow_me is set.
         """
         index = 0 if kind == "uid" else 1
-        low, high = self.ids.nobody_range
-        pairs = [self.ids.default_user, *extra, *([self.ids.me] if self.ids.allow_me else [])]
+        low, high = self.nobody_range
+        pairs = [self.default_user, *extra, *([self.ids.me] if self.ids.allow_me else [])]
         return low <= value <= high or any(pair[index] == value for pair in pairs)
 
     def id_problem(self, kind: str, value: int, mounts: bool,
@@ -213,7 +204,7 @@ class UserRules(RuleBase):
         if self.ids.subordinate.contains(base, value):
             return f"{kind} {value} is in a subordinate id range of this host (rootless containers)"
         if mounts:
-            low, high = self.ids.nobody_range
+            low, high = self.nobody_range
             return f"{kind} {value} is not in the nobody range {low}-{high}, and there are host mounts"
         return None
 

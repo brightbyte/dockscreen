@@ -55,6 +55,7 @@ class RuleBase:
     config_file: str | None
     security_opts: tuple
     configured_user: tuple | None
+    nobody_range: tuple[int, int]
     default_user: tuple[int, int]
     default_home: str
     default_origin: Origin

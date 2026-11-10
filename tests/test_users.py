@@ -6,9 +6,9 @@ from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules import users
 
 
-def policy_with(**facts):
-    """The policy with the id facts of fakes.rules for facts."""
-    return Policy(rules(**facts))
+def policy_with(settings=None, **facts):
+    """The policy for settings, the default config if None, with the id facts of fakes.rules for facts."""
+    return Policy.for_settings(settings or config.Config(), rules(**facts))
 
 
 class Accounts:
