@@ -20,9 +20,9 @@ def parse(command, args):
     return userargs.parse(args, VALUE_FLAGS[command], ME, ACCOUNTS)
 
 
-def resolved(parsed):
-    """parsed with --as and --as-me replaced by what the policy resolves them to."""
-    return parsed.resolved(policy.Policy(rules()).resolve_user_options(parsed.users.given))
+def screened(parsed):
+    """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
+    return userargs.screened(parsed, Screener(make_runtime()))
 
 
 @pytest.mark.parametrize("args, service, user_given", [
@@ -79,11 +79,11 @@ ACCOUNTS = Accounts()
     ("run", ["web", "tool", "--as", "bob"], ["web", "tool", "--as", "bob"]),
 ])
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
-    parsed = resolved(parse(subcommand, args))
+    report, parsed = screened(parse(subcommand, args))
     assert list(parsed.args) == rewritten
     assert parsed.users.chosen == ("--as" not in rewritten)
     resolving = ["Resolving user alice to uid 1001, gid 1002"]
-    assert texts(parsed.users.notices) == ([] if "--as" in rewritten else resolving)
+    assert texts(report.notices) == ([] if "--as" in rewritten else resolving)
 
 
 def test_as_with_an_unknown_name_is_refused():
@@ -108,5 +108,5 @@ def test_check_given_users_reports_what_the_policy_refuses():
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
-    parsed = resolved(parse(subcommand, ["-it", "--as-me", "c", "sh"]))
+    _, parsed = screened(parse(subcommand, ["-it", "--as-me", "c", "sh"]))
     assert list(parsed.args) == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.chosen

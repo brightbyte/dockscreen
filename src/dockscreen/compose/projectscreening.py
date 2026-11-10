@@ -221,7 +221,7 @@ def surroundings(loaded: LoadedProject, screener: Screener) -> list[Notice]:
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, runtime: Runtime,
-                  allow_me: bool = False, strict: bool = False) -> int:
+                  allow_me: bool = False, strict: bool = False, notices: Sequence[Notice] = ()) -> int:
     """Runs `docker compose global_args sub` with parsed's arguments, sub a subcommand that starts
     containers, on the project global_args select if it passes the checks.
 
@@ -233,11 +233,13 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, r
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
     - sub: the subcommand
-    - parsed: the subcommand's arguments, with the user the command line chose (compose_run)
+    - parsed: the subcommand's arguments, with the user the command line chose, resolved (userargs.screened)
     - runtime: the Runtime of the command
     - allow_me: --allow-me was given, so the caller's own ids are allowed
     - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
       with the command line untrusted; otherwise those options are taken as given, as for `docker run`
+    - notices: what resolving the user the command line chose did (userargs.screened), printed with the
+      project's notices
     """
     try:
         loaded = load_project(global_args, runtime)
@@ -252,7 +254,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, r
         return 1
 
     screener = Screener(runtime, allow_me)
-    lines = [*parsed.users.notices, *surroundings(loaded, screener),
+    lines = [*notices, *surroundings(loaded, screener),
              userdecisionview.root_default_notice(screener.policy(loaded.directory).default_user),
              *substitutions.describe(loaded.hardening)]
     cleared = check(loaded, screener)

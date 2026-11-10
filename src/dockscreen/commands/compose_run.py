@@ -26,14 +26,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "run"
     parsed = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
-    screener = Screener(runtime)
-    refused = screener.check_given_users(parsed.users.given)
-    if not refused.passed:
-        refused.show()
+    users, parsed = userargs.screened(parsed, Screener(runtime))
+    if not users.passed:
+        users.show()
         return 1
-    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
     return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
-                                          parent_cli.allow_me, parent_cli.strict)
+                                          parent_cli.allow_me, parent_cli.strict, users.notices)
 
 
 def help(name: str) -> helptext.HelpTopic:

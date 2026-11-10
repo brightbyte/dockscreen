@@ -6,7 +6,7 @@ The container is checked when it is started (docker_start).
 
 from collections.abc import Sequence
 
-from dockscreen.cli import runargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import amendments, hardening
@@ -29,12 +29,10 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     except runargs.ParseError:  # docker will report what is wrong with them
         resolved: Sequence[str] = args
     else:
-        screener = Screener(runtime)
-        refused = screener.check_given_users(parsed.users.given)
-        if not refused.passed:
-            return refused.show()
-        parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
-        for message in parsed.users.notices:
+        users, parsed = userargs.screened(parsed, Screener(runtime))
+        if not users.passed:
+            return users.show()
+        for message in users.notices:
             messages.notice(message)
         resolved = parsed.create_args
     defaults = hardening.container_defaults()

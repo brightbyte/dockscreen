@@ -1,9 +1,10 @@
 import fakes
 import pytest
 
-from dockscreen.cli import runargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
 from dockscreen.screen.rules.commandline import UserOption
+from dockscreen.screen.screener import Screener
 
 ME = (4242, 4343)
 
@@ -17,9 +18,9 @@ def parse(*args):
     return runargs.parse(list(args), ME, fakes.Accounts())
 
 
-def resolved(parsed):
-    """parsed with --as and --as-me replaced by what the policy resolves them to."""
-    return parsed.resolved(policy.Policy(fakes.rules()).resolve_user_options(parsed.users.given))
+def screened(parsed):
+    """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
+    return userargs.screened(parsed, Screener(fakes.make_runtime()))
 
 
 def test_plain_command():
@@ -87,9 +88,9 @@ def test_incomplete_command_lines_are_errors(args):
 def test_as_me_means_the_callers_ids_and_resolves_nothing():
     parsed = runargs.parse(["--as-me", "img"], ME, accounts=None)  # looking anything up would fail
     assert list(parsed.create_args) == [UserOption("--as-me", "", ME), "img"]  # reading changes nothing
-    parsed = resolved(parsed)
+    report, parsed = screened(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
-    assert parsed.users.chosen and parsed.users.notices == []
+    assert parsed.users.chosen and report.passed and report.notices == ()
 
 
 def test_current_user_is_no_longer_a_flag_of_ours():
@@ -102,16 +103,18 @@ def test_current_user_is_no_longer_a_flag_of_ours():
 def test_as_resolves_a_local_account_on_the_host(flags):
     parsed = runargs.parse([*flags, "img"], ME, fakes.Accounts())
     assert list(parsed.create_args) == [UserOption("--as", "alice", ME), "img"]
-    parsed = resolved(parsed)
+    report, parsed = screened(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
-    assert fakes.texts(parsed.users.notices) == ["Resolving user alice to uid 4242, gid 4343"]
+    assert fakes.texts(report.notices) == ["Resolving user alice to uid 4242, gid 4343"]
     assert parsed.users.chosen
 
 
 def test_an_as_that_was_not_resolved_cannot_reach_docker():
     parsed = runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
+    report, unresolved = screened(parsed)
+    assert not report.passed and unresolved is parsed
     with pytest.raises(KeyError):
-        resolved(parsed)  # refused by the policy, so it has nothing to stand for
+        parsed.resolved({})  # nothing to stand for
 
 
 def test_as_with_an_unknown_account_or_an_id_is_refused():
@@ -131,10 +134,10 @@ def test_as_with_an_unknown_account_or_an_id_is_refused():
     (["-itu", "7:8"], "7:8"),
 ])
 def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
-    parsed = resolved(parse(*flags, "img"))
+    report, parsed = screened(parse(*flags, "img"))
     assert list(parsed.create_args) == [*flags, "img"]
     assert parsed.users.given == [UserOption("--user", user)]
-    assert parsed.users.chosen and parsed.users.notices == []
+    assert parsed.users.chosen and report.notices == ()
 
 
 @pytest.mark.parametrize("flags", [

@@ -19,7 +19,7 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.cli import runargs
+from dockscreen.cli import runargs, userargs
 from dockscreen.commands import helptext
 from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
@@ -66,14 +66,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         finding = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
         Report.of([finding]).show_screening()
         return 1
-    refused = screener.check_given_users(parsed.users.given)
-    if not refused.passed:
-        refused.show()
+    users, parsed = userargs.screened(parsed, screener)
+    if not users.passed:
+        users.show()
         return 1
-    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     defaults = hardening.container_defaults()
-    for message in [*parsed.users.notices, root_default, defaults.notice]:
+    for message in [*users.notices, root_default, defaults.notice]:
         if message:
             messages.notice(message)
 
@@ -231,12 +230,11 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    refused = screener.check_given_users(parsed.users.given)
-    if not refused.passed:
-        return refused.show(brief)
-    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
+    users, parsed = userargs.screened(parsed, screener)
+    if not users.passed:
+        return users.show(brief)
     if not brief:
-        for message in parsed.users.notices:
+        for message in users.notices:
             messages.notice(message)
 
     try:

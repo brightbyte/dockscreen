@@ -56,7 +56,7 @@ def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime
 
 def _values(parsed: userargs.UserArgs, options: Sequence[str]) -> list[str]:
     """Returns the values parsed gives to any of options, in their order."""
-    return [value for option, value in parsed.users.values if option in options]
+    return [value for option, value in parsed.values if option in options]
 
 
 def _set(service: Service, key: str, value: Any) -> Substitution:

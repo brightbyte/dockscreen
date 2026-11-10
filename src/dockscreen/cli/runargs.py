@@ -80,8 +80,7 @@ class RunArgs(NamedTuple):
 
     def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
         """Returns this record with --as and --as-me replaced by `--user=uid:gid` (userargs.resolved)."""
-        return self._replace(create_args=userargs.resolved(self.create_args, resolutions),
-                             users=self.users.resolved(resolutions))
+        return self._replace(create_args=userargs.resolved(self.create_args, resolutions))
 
 
 class _State:
