@@ -1,27 +1,46 @@
-"""This module defines the CommandLineRules class, the group of the policy's rules for judging the users a
-command line gives, and UserOption, the record of one: only their form is judged, since the command line is
-trusted, but in a form docker cannot read differently from what was checked."""
+"""This module defines the CommandLineRules class, the group of the policy's rules for the users a command
+line gives, UserOption, the record of one, and Resolution, what dockscreen's own options stand for. Only
+their form is judged, since the command line is trusted, but in a form docker cannot read differently from
+what was checked. --as and --as-me are dockscreen's own: the rules resolve them to the `--user=uid:gid`
+docker gets.
+"""
 
 from collections.abc import Iterable
 from typing import NamedTuple
 
 from dockscreen.screen.findings import Finding
+from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import RuleBase
-from dockscreen.util import ids
+from dockscreen.util import commandline, ids
 
 
 class UserOption(NamedTuple):
     """Record of one user option a command line gives, for the policy to judge. It holds the option and its
-    value, and for --as the account of that name on this host.
+    value, and for --as and --as-me the ids they stand for on this host.
+
+    In the arguments of a command line read by userargs or runargs, --as and --as-me are kept as their
+    UserOption until they are resolved (resolve_user_options).
 
     Attributes:
-    - flag: `--user` or `--as`
-    - value: what the option gives
-    - account: for --as, the (uid, gid) of the account of that name on this host; None if there is none
+    - flag: `--user`, `--as` or `--as-me`
+    - value: what the option gives; "" for --as-me
+    - account: the (uid, gid) of the account --as names on this host, or the caller's for --as-me; None if
+      there is none, and for --user
     """
     flag: str
     value: str
     account: tuple[int, int] | None = None
+
+
+class Resolution(NamedTuple):
+    """Record of the user that --as or --as-me stands for, and the notice that reports it.
+
+    Attributes:
+    - user: the user as `uid:gid`, which docker gets as `--user=uid:gid`
+    - notice: what was resolved, or None if there is nothing to say
+    """
+    user: str
+    notice: Notice | None = None
 
 
 # The ways to choose a user on a docker command line, named in refusals of --user.
@@ -37,10 +56,25 @@ class CommandLineRules(RuleBase):
         """
         found = []
         for option in options:
-            if option.flag == "--as":
+            if option.flag == commandline.AS:
                 found += self.check_as_option(option.value, option.account)
-            else:
+            elif option.flag == "--user":
                 found += self.check_user_option(option.value)
+        return found
+
+    def resolve_user_options(self, options: Iterable[UserOption]) -> dict[UserOption, Resolution]:
+        """Returns what each --as and --as-me of options stands for: the ids of the account --as names, with a
+        notice, and the caller's own for --as-me. An --as without an account, which check_user_options
+        refuses, is left out; so is --user, which docker gets as given.
+        """
+        found = {}
+        for option in options:
+            if option.flag == commandline.AS_ME and option.account:
+                found[option] = Resolution(ids.format_user(option.account))
+            elif option.flag == commandline.AS and option.account:
+                uid, gid = option.account
+                notice = Notice(f"Resolving user {option.value} to uid {uid}, gid {gid}", NoticeSeverity.INFO)
+                found[option] = Resolution(ids.format_user(option.account), notice)
         return found
 
     def check_user_option(self, spec: str) -> list[Finding]:

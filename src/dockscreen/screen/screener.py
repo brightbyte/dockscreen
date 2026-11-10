@@ -24,7 +24,7 @@ from dockscreen.screen.findings import Finding
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules import idrules
-from dockscreen.screen.rules.commandline import UserOption
+from dockscreen.screen.rules.commandline import Resolution, UserOption
 from dockscreen.screen.userdecision import UserDecision
 
 
@@ -82,6 +82,15 @@ class Screener(NamedTuple):
         - given: the user options the command line gives (GivenUsers.given)
         """
         return Report.of(self.policy(self.runtime.cwd).check_user_options(given))
+
+    def resolve_given_users(self, given: Iterable[UserOption]) -> dict[UserOption, Resolution]:
+        """Returns what --as and --as-me among the user options the command line gives stand for, by the
+        policy for the current directory (Policy.resolve_user_options).
+
+        Parameters:
+        - given: the user options the command line gives (GivenUsers.given)
+        """
+        return self.policy(self.runtime.cwd).resolve_user_options(given)
 
     def section_for(self, image: Image) -> config.SectionMatch:
         """Returns which image section applies to image, by its name and where it was pulled from

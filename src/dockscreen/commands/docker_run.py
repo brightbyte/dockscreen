@@ -70,6 +70,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if not refused.passed:
         refused.show()
         return 1
+    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     defaults = hardening.container_defaults()
     for message in [*parsed.users.notices, root_default, defaults.notice]:
@@ -233,6 +234,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     refused = screener.check_given_users(parsed.users.given)
     if not refused.passed:
         return refused.show(brief)
+    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
     if not brief:
         for message in parsed.users.notices:
             messages.notice(message)

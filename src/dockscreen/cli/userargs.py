@@ -6,22 +6,25 @@ The command line is trusted, so the user it gives is not checked against the id 
 form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. A name would be
 resolved in the image (for `exec`, in the running container's /etc/passwd, which the container may have
 rewritten), and a uid alone takes its group from the image. `--as NAME` names an account on this host
-instead; it is replaced by `--user=uid:gid` before compose or docker sees it. So is `--as-me`, for the
-caller's own ids.
+instead, and `--as-me` the caller's own ids. Reading changes nothing: the arguments keep both as their
+UserOption, which the policy resolves (Policy.resolve_user_options), and which resolved replaces by
+`--user=uid:gid` before compose or docker sees them.
 
 A misreading cannot loosen anything: a user that is missed reaches compose as typed, which the command
 line could have done with plain compose anyway, and a service that is missed has its image decided as
 if no user had been chosen.
 """
 
-from collections.abc import Collection, Sequence
-from typing import NamedTuple
+import copy
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from typing import NamedTuple, Self
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.rules.commandline import UserOption
+from dockscreen.screen.notices import Notice
+from dockscreen.screen.rules.commandline import Resolution, UserOption
 from dockscreen.screen.screener import Screener
-from dockscreen.util import commandline, ids, messages
+from dockscreen.util import commandline, messages
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.
 COMPOSE_VALUE_FLAGS = {
@@ -33,22 +36,26 @@ COMPOSE_VALUE_FLAGS = {
 }
 
 
+# An argument as read: a string, or the UserOption of --as or --as-me until it is resolved (resolved).
+Arg = str | UserOption
+
+
 class GivenUsers:
     """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
-    the command to run with. It holds each user option given, whether a user was chosen, the notices that
-    resolving names produced, and the options that take a value.
+    resolve. It holds each user option given, whether a user was chosen, the options that take a value, and
+    once resolved, the notices of resolving them.
 
     The three are lists that only its own methods add to; callers must not change them.
 
-    The parsers of this module and of runargs create and fill it, turning each user option into
-    `--user=uid:gid` through its methods; nothing changes it after they return,
-    though nothing enforces that.
+    The parsers of this module and of runargs create and fill it; nothing changes it after they return,
+    though nothing enforces that. A copy with --as and --as-me resolved comes from resolved.
 
     Attributes:
     - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
-    - notices: what resolving user names on this host did, for the caller to print
     - given: the user options given, as UserOption records
-    - values: each option that takes a value, with it, as docker gets it
+    - values: each option that takes a value, with it; --as and --as-me are under --user, as their UserOption
+      until resolved
+    - notices: what resolving --as did, for the caller to print; empty until resolved
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -61,49 +68,51 @@ class GivenUsers:
         self.callers_ids = me
         self.accounts = accounts
         self.chosen = False
-        self.notices: list[str] = []
+        self.notices: list[Notice] = []
         self.given: list[UserOption] = []
-        self.values: list[tuple[str, str]] = []
+        self.values: list[tuple[str, Arg]] = []
 
-    def value(self, option: str, value: str) -> None:
-        """Records that option takes value, as docker gets it."""
+    def value(self, option: str, value: Arg) -> None:
+        """Records that option takes value."""
         self.values.append((option, value))
 
-    def numeric(self, spec: str) -> str:
-        """Returns `--user=` for spec, and records it.
-
-        Parameters:
-        - spec: the value of --user or -u
-        """
+    def numeric(self, spec: str) -> None:
+        """Records spec, the value of --user or -u, which docker gets as given."""
         self.chosen = True
         self.given.append(UserOption("--user", spec))
-        return f"--user={spec}"
 
-    def account(self, name: str) -> str:
-        """Returns `--user=` with the ids of the local account called name (--as), and keeps the notice;
-        or returns --as as given if there is no such account. Records it either way.
+    def account(self, name: str) -> UserOption:
+        """Returns the UserOption of --as with name, with the ids of the local account of that name if there
+        is one, and records it.
         """
-        self.chosen = True
-        account = self.accounts.user(name) if name else None
-        self.given.append(UserOption(commandline.AS, name, account))
-        if account is None:
-            return f"{commandline.AS}={name}"
-        uid, gid = account
-        self.notices.append(f"Resolving user {name} to uid {uid}, gid {gid}")
-        self.value("--user", ids.format_user(account))
-        return f"--user={ids.format_user(account)}"
+        return self._chosen(UserOption(commandline.AS, name, self.accounts.user(name) if name else None))
 
-    def me(self) -> str:
-        """Returns `--user=` with the caller's own ids (--as-me), and records that a user was chosen."""
+    def me(self) -> UserOption:
+        """Returns the UserOption of --as-me, with the caller's own ids, and records it."""
+        return self._chosen(UserOption(commandline.AS_ME, "", self.callers_ids))
+
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
+        """Returns a copy whose values have --as and --as-me replaced by the users they stand for (resolved),
+        with the notices of the resolutions.
+        """
+        found = copy.copy(self)
+        found.values = [(option, _resolved_arg(value, resolutions, bare=True))
+                        for option, value in self.values]
+        found.notices = [r.notice for r in resolutions.values() if r.notice]
+        return found
+
+    def _chosen(self, option: UserOption) -> UserOption:
+        """Records option, of --as or --as-me, as the user chosen, and returns it."""
         self.chosen = True
-        self.value("--user", ids.format_user(self.callers_ids))
-        return f"--user={ids.format_user(self.callers_ids)}"
+        self.given.append(option)
+        self.value("--user", option)
+        return option
 
 
 class UserArgs(NamedTuple):
     """Record of what a command line that runs something in a container says about the service or container
     it names and about the user, read only far enough to find those. It holds the service or container, the
-    arguments with --as and --as-me replaced by ids, and the users it gives.
+    arguments, and the users it gives.
 
     It is for the commands that name a service or container: `docker compose run` keeps it, because the
     service it names is the one whose user the command line chooses, so the image does not decide it, and
@@ -117,12 +126,16 @@ class UserArgs(NamedTuple):
 
     Attributes:
     - service: the service or container it names, or None
-    - args: the arguments, with --as and --as-me replaced by `--user=uid:gid`
+    - args: the arguments, with --as and --as-me as their UserOption until resolved
     - users: what the command line says about the user before the service (GivenUsers)
     """
     service: str | None
-    args: tuple[str, ...]
+    args: tuple[Arg, ...]
     users: GivenUsers
+
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
+        """Returns this record with --as and --as-me replaced by `--user=uid:gid` (the function resolved)."""
+        return self._replace(args=resolved(self.args, resolutions), users=self.users.resolved(resolutions))
 
     @classmethod
     def unread(cls, args: list[str], runtime: Runtime) -> "UserArgs":
@@ -136,7 +149,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
           accounts: hostusers.HostAccounts) -> UserArgs:
     """Parses args far enough to find the service or container, and whether a user is given.
 
-    Returns a UserArgs, with --as and --as-me replaced by ids, and the users given.
+    Returns a UserArgs, with --as and --as-me as their UserOption, and the users given.
 
     Parameters:
     - args: the subcommand's arguments
@@ -145,7 +158,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     - accounts: where the name given to --as is looked up (hostusers.HostAccounts)
     """
     users = GivenUsers(me, accounts)
-    kept: list[str] = []
+    kept: list[Arg] = []
     i = 0
     while i < len(args):
         token = args[i]
@@ -176,9 +189,25 @@ def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
     return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
+def resolved(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]) -> tuple[str, ...]:
+    """Returns args with --as and --as-me replaced by `--user=uid:gid`, with the user each stands for. Raises
+    KeyError for one that resolutions lacks: it must not reach docker.
+    """
+    return tuple(_resolved_arg(arg, resolutions) for arg in args)
+
+
+def _resolved_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution], bare: bool = False) -> str:
+    """Returns arg, or for a UserOption the user it stands for: `--user=uid:gid`, or with bare `uid:gid`."""
+    if isinstance(arg, str):
+        return arg
+    user = resolutions[arg].user
+    return user if bare else f"--user={user}"
+
+
 def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
                       ) -> list[str] | None:
-    """Returns args with --as and --as-me replaced by ids, and prints the notices of resolving names.
+    """Returns args with --as and --as-me replaced by ids (resolved), and prints the notices of resolving
+    names.
 
     Returns None, and reports why, if the user cannot be used (Screener.check_given_users).
 
@@ -188,17 +217,20 @@ def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime
     - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
     """
     parsed = parse(args, value_flags, runtime.me, runtime.accounts)
-    refused = Screener(runtime).check_given_users(parsed.users.given)
+    screener = Screener(runtime)
+    refused = screener.check_given_users(parsed.users.given)
     if not refused.passed:
         refused.show()
         return None
+    parsed = parsed.resolved(screener.resolve_given_users(parsed.users.given))
     for notice in parsed.users.notices:
         messages.notice(notice)
     return list(parsed.args)
 
+
 def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users: GivenUsers,
-                kept: list[str]) -> int:
-    """Reads the --option at args[i] into kept, with --as replaced, and returns the index after it."""
+                kept: list[Arg]) -> int:
+    """Reads the --option at args[i] into kept, --as as its UserOption, and returns the index after it."""
     name, has_value, value = args[i].partition("=")
     end = i
     if (name in value_flags or name == commandline.AS) and not has_value:
@@ -216,7 +248,7 @@ def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], users
 
 
 def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], users: GivenUsers,
-                 kept: list[str]) -> int:
+                 kept: list[Arg]) -> int:
     """Reads the cluster at args[i] (such as -it or -u0:0) into kept, and returns the index after it."""
     token = args[i]
     short_values = {flag[1] for flag in value_flags if len(flag) == 2}

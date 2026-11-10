@@ -3,6 +3,7 @@ import pytest
 
 from dockscreen.cli import runargs
 from dockscreen.screen import policy
+from dockscreen.screen.rules.commandline import UserOption
 
 ME = (4242, 4343)
 
@@ -14,6 +15,11 @@ def refusals(parsed):
 
 def parse(*args):
     return runargs.parse(list(args), ME, fakes.Accounts())
+
+
+def resolved(parsed):
+    """parsed with --as and --as-me replaced by what the policy resolves them to."""
+    return parsed.resolved(policy.Policy(fakes.rules()).resolve_user_options(parsed.users.given))
 
 
 def test_plain_command():
@@ -80,6 +86,8 @@ def test_incomplete_command_lines_are_errors(args):
 
 def test_as_me_means_the_callers_ids_and_resolves_nothing():
     parsed = runargs.parse(["--as-me", "img"], ME, accounts=None)  # looking anything up would fail
+    assert list(parsed.create_args) == [UserOption("--as-me", "", ME), "img"]  # reading changes nothing
+    parsed = resolved(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
     assert parsed.users.chosen and parsed.users.notices == []
 
@@ -93,9 +101,17 @@ def test_current_user_is_no_longer_a_flag_of_ours():
 @pytest.mark.parametrize("flags", [["--as", "alice"], ["--as=alice"]])
 def test_as_resolves_a_local_account_on_the_host(flags):
     parsed = runargs.parse([*flags, "img"], ME, fakes.Accounts())
+    assert list(parsed.create_args) == [UserOption("--as", "alice", ME), "img"]
+    parsed = resolved(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
-    assert parsed.users.notices == ["Resolving user alice to uid 4242, gid 4343"]
+    assert fakes.texts(parsed.users.notices) == ["Resolving user alice to uid 4242, gid 4343"]
     assert parsed.users.chosen
+
+
+def test_an_as_that_was_not_resolved_cannot_reach_docker():
+    parsed = runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
+    with pytest.raises(KeyError):
+        resolved(parsed)  # refused by the policy, so it has nothing to stand for
 
 
 def test_as_with_an_unknown_account_or_an_id_is_refused():
@@ -115,8 +131,9 @@ def test_as_with_an_unknown_account_or_an_id_is_refused():
     (["-itu", "7:8"], "7:8"),
 ])
 def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
-    parsed = parse(*flags, "img")
-    assert f"--user={user}" in list(parsed.create_args)
+    parsed = resolved(parse(*flags, "img"))
+    assert list(parsed.create_args) == [*flags, "img"]
+    assert parsed.users.given == [UserOption("--user", user)]
     assert parsed.users.chosen and parsed.users.notices == []
 
 
@@ -130,8 +147,8 @@ def test_user_names_are_refused_with_a_pointer_to_as(flags):
     assert "--user takes numeric ids as uid:gid" in refusal
 
 
-def test_a_user_flag_in_a_cluster_keeps_its_neighbours():
-    assert list(parse("-itu", "7:8", "img").create_args) == ["-it", "--user=7:8", "img"]
+def test_a_user_flag_in_a_cluster_stays_in_it():
+    assert list(parse("-itu", "7:8", "img").create_args) == ["-itu", "7:8", "img"]
 
 
 def test_user_flags_after_the_image_belong_to_the_command():

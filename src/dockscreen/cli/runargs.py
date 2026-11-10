@@ -5,13 +5,18 @@ We need the image position and the few flags that `run` has and `create` lacks
 (`-d`, `--sig-proxy`, `--detach-keys`, `-a`). Nothing security-relevant hangs
 on this: the policy looks at the container the daemon created from the result,
 and docker_run checks that our reading of the command line matched the daemon's.
+
+Reading changes nothing but what `create` lacks: --as and --as-me are kept as their UserOption, as userargs
+keeps them, until they are resolved.
 """
 
-from collections.abc import Sequence
-from typing import NamedTuple
+from collections.abc import Mapping, Sequence
+from typing import NamedTuple, Self
 
 from dockscreen.cli import userargs
+from dockscreen.cli.userargs import Arg
 from dockscreen.host import hostusers
+from dockscreen.screen.rules.commandline import Resolution, UserOption
 from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.
@@ -58,45 +63,42 @@ class RunArgs(NamedTuple):
     Instances come from parse.
 
     Attributes:
-    - create_args: the arguments for `docker create`, with the users given as ids
+    - create_args: the arguments for `docker create`, with --as and --as-me as their UserOption until
+      resolved
     - image: the image, as the command line names it
     - command: what follows the image
     - detach: whether `-d` or `--detach` was given
     - detach_keys: the value of `--detach-keys`, or None
     - users: what the command line says about the user before the image (GivenUsers)
     """
-    create_args: tuple[str, ...]
+    create_args: tuple[Arg, ...]
     image: str
     command: tuple[str, ...]
     detach: bool
     detach_keys: str | None
     users: userargs.GivenUsers
 
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
+        """Returns this record with --as and --as-me replaced by `--user=uid:gid` (userargs.resolved)."""
+        return self._replace(create_args=userargs.resolved(self.create_args, resolutions),
+                             users=self.users.resolved(resolutions))
+
 
 class _State:
     """Private helper of parse that holds what it has read of a command line so far."""
     def __init__(self, users: userargs.GivenUsers) -> None:
         self.users = users
-        self.kept: list[str] = []
+        self.kept: list[Arg] = []
         self.detach = False
         self.detach_keys: str | None = None
 
 
 def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> RunArgs:
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
-    the options `create` lacks, with users given as ids.
+    the options `create` lacks, with --as and --as-me as their UserOption.
 
     Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
-    the policy to judge.
-
-    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
-    the policy to judge.
-
-    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
-    the policy to judge.
-
-    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
-    the policy to judge.
+    the policy to judge and resolve.
 
     Parameters:
     - args: the arguments after `run`
@@ -145,16 +147,14 @@ def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
             value = _value_at(args, i, name)
         if name == "--detach-keys":
             state.detach_keys = value
-    elif name == "--user":
-        if not has_value:
-            i += 1
-            value = _value_at(args, i, name)
-        state.kept.append(state.users.numeric(value))
     else:
         state.kept.append(token)
         if name in LONG_VALUE_FLAGS and not has_value:
             i += 1
-            state.kept.append(_value_at(args, i, name))
+            value = _value_at(args, i, name)
+            state.kept.append(value)
+        if name == "--user":
+            state.users.numeric(value)
     return i + 1
 
 
@@ -177,13 +177,8 @@ def _parse_short(args: Sequence[str], i: int, state: _State) -> int:
                     _value_at(args, i + 1, token)
                     consumed = 2
                 break
-            if char == "u":  # a user is a value we may rewrite: move it out of the cluster
-                value = rest or _value_at(args, i + 1, token)
-                consumed = 1 if rest else 2
-                if keep:
-                    state.kept.append("-" + keep)
-                state.kept.append(state.users.numeric(value))
-                return i + consumed
+            if char == "u":
+                state.users.numeric(rest or _value_at(args, i + 1, token))
             keep += char + rest
             next_is_value = not rest
             break

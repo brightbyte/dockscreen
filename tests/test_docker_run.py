@@ -327,7 +327,7 @@ def test_as_resolves_a_local_account_on_the_host_and_docker_gets_ids(capsys):
 
     assert docker.calls[0][1] == [*DEFAULTS, "--user=4242:4343", "img"]
     assert docker.names().count("create") == 1  # a user was given: no fallback
-    assert "[dockscreen] Resolving user alice to uid 4242, gid 4343" in capsys.readouterr().err
+    assert "[dockscreen] \u25cf Resolving user alice to uid 4242, gid 4343" in capsys.readouterr().err
 
 
 def test_as_with_an_account_the_host_does_not_have_is_refused_before_anything_is_created(capsys):
@@ -453,7 +453,7 @@ def test_audit_with_a_user_does_not_check_the_image_but_judges_the_user(capsys):
     assert "the user is set on the command line" in out
     assert "command line: user '1000:1000': uid 1000 exists on this host (local user daniel)" in out
     assert "--strict-screen makes them fail the audit" in out
-    assert docker.calls[0][1] == [*DEFAULTS, "--user=1000:1000", "img"]
+    assert docker.calls[0][1] == [*DEFAULTS, "--user", "1000:1000", "img"]  # as typed
 
 
 def test_audit_points_out_what_a_project_could_not_ask_for(monkeypatch, tmp_path, capsys):
