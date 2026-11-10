@@ -34,13 +34,13 @@ from dockscreen.host.dockerclient import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import hardening, policy, substitutions, userdecisionview
+from dockscreen.screen import hardening, policy, userdecisionview
 from dockscreen.screen.decisions import Decisions
 from dockscreen.screen.findings import Finding, Verdict
 from dockscreen.screen.notices import Notice
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
-from dockscreen.screen.substitutions import Substitution
+from dockscreen.screen.substitutions import ProjectPatch
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
@@ -63,17 +63,17 @@ class LoadedProject(NamedTuple):
     - global_args: the compose options that select the project
     - resolved: the project as compose resolved it
     - remote: whether its daemon may not be this host's
-    - hardening: the substitutions that add the defaults (Substitution)
+    - hardening: the patch that adds the defaults
     """
     global_args: tuple[str, ...]
     resolved: Project
     remote: bool
-    hardening: tuple[Substitution, ...]
+    hardening: ProjectPatch
 
     @property
     def hardened(self) -> Project:
         """Returns the project with the defaults added, which is what the images are acquired for."""
-        return substitutions.applied(self.resolved, self.hardening)
+        return self.hardening.applied_to(self.resolved)
 
     @property
     def directory(self) -> str:
@@ -94,7 +94,7 @@ class LoadedProject(NamedTuple):
         Parameters:
         - definition: a definition with the defaults already added, as hardened has it
         """
-        return self._replace(resolved=self.hardened.with_definition(definition), hardening=())
+        return self._replace(resolved=self.hardened.with_definition(definition), hardening=ProjectPatch())
 
     def generated(self, docker_binary: str) -> contextlib.AbstractContextManager[Command]:
         """Returns _generated() for this project."""
@@ -142,7 +142,7 @@ def load_project(args: Sequence[str], runtime: Runtime) -> LoadedProject:
     found = inspect.project(args, runtime)
     remote = is_remote(args, runtime.docker)
     changes = hardening.changes(found.definition, Screener(runtime).policy(found.directory))
-    return LoadedProject(tuple(args), found, remote, tuple(changes))
+    return LoadedProject(tuple(args), found, remote, changes)
 
 
 def check(loaded: LoadedProject, screener: Screener) -> ClearedProject | Report:
@@ -202,7 +202,7 @@ def finish(cleared: ClearedProject, decided: Decisions, screener: Screener,
     if not decided.report.passed:
         return decided.report
     loaded = cleared.loaded
-    final = substitutions.applied(loaded.resolved, [*loaded.hardening, *decided.changes])
+    final = (loaded.hardening + decided.changes).applied_to(loaded.resolved)
     judged, trust = (final, TRUSTED)
     if strict and parsed:
         judged, trust = _as_run(final, parsed, screener.runtime), STRICT
@@ -256,7 +256,7 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, r
     screener = Screener(runtime, allow_me)
     lines = [*notices, *surroundings(loaded, screener),
              userdecisionview.root_default_notice(screener.policy(loaded.directory).default_user),
-             *substitutions.describe(loaded.hardening)]
+             *loaded.hardening.notices()]
     cleared = check(loaded, screener)
     if isinstance(cleared, Report):
         cleared.show_screening()
@@ -291,7 +291,7 @@ def _as_run(final: Project, parsed: userargs.UserArgs, runtime: Runtime) -> Proj
     name = parsed.service
     if name is None or name not in (final.definition.get("services") or {}):
         return final  # compose refuses to run it
-    return substitutions.applied(final, runoptions.substitutions(parsed, final.service(name), runtime))
+    return runoptions.substitutions(parsed, final.service(name), runtime).applied_to(final)
 
 
 def _chosen(parsed: userargs.UserArgs) -> frozenset[str]:

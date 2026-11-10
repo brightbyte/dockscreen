@@ -3,7 +3,6 @@ from fakes import make_runtime, project_of
 from dockscreen.cli import userargs
 from dockscreen.compose import runoptions
 from dockscreen.model.origin import Origin
-from dockscreen.screen import substitutions
 
 ME = (1000, 1001)
 
@@ -13,7 +12,7 @@ def run(service, *args, cwd="/work", home="/home/me"):
     parsed = userargs.parse_compose("run", [*args, "web"], ME, None)
     project = project_of({"services": {"web": service}})
     found = runoptions.substitutions(parsed, project.service("web"), make_runtime(cwd=cwd, home=home))
-    return substitutions.applied(project, found).service("web")
+    return found.applied_to(project).service("web")
 
 
 def test_options_that_set_no_checked_key_change_nothing():

@@ -65,11 +65,11 @@ from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import imageuser
-from dockscreen.screen.amendments import Amendment
+from dockscreen.screen.amendments import Amendment, CommandLinePatch
 from dockscreen.screen.findings import Finding, Verdict
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import JudgedService, RuleBase
-from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
+from dockscreen.screen.substitutions import ProjectPatch, Substitution, SubstitutionGroup
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, instead_of_root
 from dockscreen.util import commandline, ids
@@ -343,8 +343,8 @@ class UserRules(RuleBase):
             return [Finding(f"user {name!r} does not exist on this host; use --user with a numeric id")]
         return []
 
-    def resolve_user_names(self, name: str, service: dict[str, Any]) -> list[Substitution]:
-        """Returns the substitutions that replace names in the user and hook users of the service called name
+    def resolve_user_names(self, name: str, service: dict[str, Any]) -> ProjectPatch:
+        """Returns the patch that replaces names in the user and hook users of the service called name
         by their ids on this host (ids.local), each with its notice.
 
         Numbers and names unknown here stay as they are: check_user refuses such a name. A uid alone stays
@@ -364,10 +364,10 @@ class UserRules(RuleBase):
                 if resolved_hook is not hook:
                     message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
                     found.append(Substitution(name, key, resolved_hooks, _resolved_notice(message)))
-        return found
+        return ProjectPatch.of(found)
 
-    def user_changes(self, project: Project, decisions: Mapping[str, UserDecision]) -> list[Substitution]:
-        """Returns the substitutions that make project the one to run, by service name: services that start
+    def user_changes(self, project: Project, decisions: Mapping[str, UserDecision]) -> ProjectPatch:
+        """Returns the patch that makes project the one to run, by service name: services that start
         and set no user get the decided user (decisions), pinned to the image that was checked; those that do
         not start get this policy's default user, with its default_home as HOME (the function default_home).
 
@@ -385,10 +385,10 @@ class UserRules(RuleBase):
                 found += _user(name, service, self.default_user, self.default_home, self.default_origin)
             elif decision.pins_user:
                 found += _pinned(name, service, decision)
-        return found
+        return ProjectPatch.of(found)
 
-    def user_amendments(self, decision: UserDecision, image: str) -> list[Amendment]:
-        """Returns the amendments that run a `docker run` container as the user decision pins
+    def user_amendments(self, decision: UserDecision, image: str) -> CommandLinePatch:
+        """Returns the patch that runs a `docker run` container as the user decision pins
         (UserDecision.pins_user), as numbers: reported as a warning if that user is the default one instead of
         the image's root, else as info. The default user also gets the decision's HOME, if it has one.
 
@@ -399,8 +399,8 @@ class UserRules(RuleBase):
         user = ids.format_user(decision.pinned_user)
         args = (f"--user={user}",)
         if not decision.replaces_root:
-            return [Amendment(args, Notice(f"image {image} runs as {user}, passed to docker as numbers",
-                                           NoticeSeverity.INFO))]
+            return CommandLinePatch.of([Amendment(args, Notice(
+                f"image {image} runs as {user}, passed to docker as numbers", NoticeSeverity.INFO))])
         home = default_home(decision.pinned_user, decision.home)
         found = [Amendment(args, Notice(
             instead_of_root(decision), NoticeSeverity.WARNING,
@@ -408,7 +408,7 @@ class UserRules(RuleBase):
             "be accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else "")))]
         if home:
             found.append(Amendment(("-e", f"HOME={home}")))  # reported with the user
-        return found
+        return CommandLinePatch.of(found)
 
 
 def image_problem(name: str, decision: UserDecision, config_file: str | None = None) -> Finding:

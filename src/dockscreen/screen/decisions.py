@@ -9,13 +9,13 @@ from typing import NamedTuple, Self
 from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.project import Project
-from dockscreen.screen import substitutions, userdecisionview
+from dockscreen.screen import userdecisionview
 from dockscreen.screen.findings import Finding
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.users import USER_HELP
-from dockscreen.screen.substitutions import Substitution
+from dockscreen.screen.substitutions import ProjectPatch
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.util import ids, messages
 
@@ -33,7 +33,7 @@ class Decisions(NamedTuple):
     - decisions: by service, the UserDecision of each started service that sets no user; a dict that must not
       be changed in place
     - report: the failures to acquire the images, and the services whose image must not run
-    - changes: the substitutions that make the project the one to run
+    - changes: the patch that makes the project the one to run
     - local: this host's accounts, for naming the users in describe
     """
     project: Project
@@ -41,7 +41,7 @@ class Decisions(NamedTuple):
     local: hostusers.HostAccounts
     decisions: dict[str, UserDecision]
     report: Report
-    changes: tuple[Substitution, ...]
+    changes: ProjectPatch
 
     @classmethod
     def of(cls, project: Project, project_policy: Policy, local: hostusers.HostAccounts,
@@ -59,7 +59,7 @@ class Decisions(NamedTuple):
         decided = project_policy.assess_images(inspected)
         report = Report.of([*failures, *project_policy.check_images(inspected)])
         return cls(project, project_policy, local, decided, report,
-                   tuple(project_policy.user_changes(project, decided)))
+                   project_policy.user_changes(project, decided))
 
     def describe(self) -> list[messages.HasMark]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
@@ -81,10 +81,10 @@ class Decisions(NamedTuple):
                 lines.append(Notice(text, NoticeSeverity.WARNING, f"service {name}", USER_HELP))
             for note in decision.notices:
                 lines.append(Notice(f"note: {note}", NoticeSeverity.WARNING, f"service {name}"))
-        return [*lines, *substitutions.grouped(self.changes)]
+        return [*lines, *self.changes.group_notices()]
 
     def notices(self) -> list[Notice]:
         """Lists, as notices, what a run does that the project did not ask for."""
-        return substitutions.describe(self.changes)
+        return self.changes.notices()
 
 

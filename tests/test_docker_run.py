@@ -6,7 +6,7 @@ from dockscreen.commands import docker_run
 from dockscreen.host import config
 from dockscreen.host.dockerclient import DockerError, DockerNotFound
 from dockscreen.model.origin import Origin
-from dockscreen.screen.amendments import Amendment
+from dockscreen.screen.amendments import Amendment, CommandLinePatch
 from dockscreen.screen.screener import Screener
 from dockscreen.util.messages import BAD, GOOD, WARN
 
@@ -71,9 +71,10 @@ def test_the_re_created_container_runs_as_the_decided_user_from_where_that_comes
     docker, settings = FakeDocker(image_user="app"), config.Config(user=(4242, 4242))
     screener = Screener(runtime(docker, settings))
     parsed = runargs.parse(["img"], screener.runtime.me, screener.runtime.accounts)
-    _, (_, decided) = docker_run.check(screener, parsed, [])
+    _, (_, decided) = docker_run.check(screener, parsed, CommandLinePatch())
+    pinned = CommandLinePatch.of([Amendment(("--user=4242:4242",))])
 
-    _, (container, again) = docker_run.check(screener, parsed, [Amendment(("--user=4242:4242",))], decided)
+    _, (container, again) = docker_run.check(screener, parsed, pinned, decided)
 
     assert again is decided  # not assessed a second time
     assert (decided.origin, container.user_origin) == (Origin.CONFIG, Origin.CONFIG)  # as compose has it

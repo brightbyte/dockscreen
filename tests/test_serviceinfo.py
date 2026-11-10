@@ -8,7 +8,7 @@ from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen import policy, substitutions
+from dockscreen.screen import policy
 from dockscreen.screen.findings import Verdict
 from dockscreen.screen.notices import Notice
 from dockscreen.screen.policy import Policy
@@ -200,7 +200,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
     changes = prepared.changes
-    return prepared, substitutions.apply(prepared.project.definition, changes), substitutions.origins(changes)
+    return prepared, changes.applied_to_definition(prepared.project.definition), changes.origins()
 
 
 def user_origins(origins):

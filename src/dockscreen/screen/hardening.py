@@ -12,35 +12,35 @@ import json
 from typing import Any
 
 from dockscreen.model.origin import Origin
-from dockscreen.screen.amendments import Amendment
+from dockscreen.screen.amendments import Amendment, CommandLinePatch
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
-from dockscreen.screen.substitutions import Substitution, SubstitutionGroup
+from dockscreen.screen.substitutions import ProjectPatch, Substitution, SubstitutionGroup
 
 
-def changes(config: dict[str, Any], policy: Policy) -> list[Substitution]:
-    """Returns the substitutions that add dockscreen's defaults to every service of config and resolve user
-    names to ids (Policy.resolve_user_names).
+def changes(config: dict[str, Any], policy: Policy) -> ProjectPatch:
+    """Returns the patch that adds dockscreen's defaults to every service of config and resolves user names to
+    ids (Policy.resolve_user_names).
 
     Parameters:
     - config: the project's resolved config
     - policy: the policy whose rules resolve the names
     """
-    found = []
+    found = ProjectPatch()
     for name, service in (config.get("services") or {}).items():
-        found += policy.resolve_user_names(name, service or {})
-        found += _defaults(name, service or {})
+        service = service or {}
+        found += policy.resolve_user_names(name, service) + ProjectPatch.of(_defaults(name, service))
     return found
 
 
-def container_defaults() -> Amendment:
-    """Returns the amendment that adds the defaults to a container that `docker run` or `create` makes, before
+def container_defaults() -> CommandLinePatch:
+    """Returns the patch that adds the defaults to a container that `docker run` or `create` makes, before
     the command line's own options, which may override them.
     """
     args = (f"--cap-drop={CAP_DROP}", f"--security-opt={SECURITY_OPT}")
     notice = Notice(f"added {' '.join(args)}", NoticeSeverity.INFO, help=CONTAINER_DEFAULTS_HELP)
-    return Amendment(args, notice)
+    return CommandLinePatch.of([Amendment(args, notice)])
 
 
 def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:

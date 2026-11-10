@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dockscreen.cli import runargs, userargs
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import amendments, hardening
+from dockscreen.screen import hardening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -36,8 +36,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             messages.notice(message)
         resolved = parsed.create_args
     defaults = hardening.container_defaults()
-    messages.notice(defaults.notice)
-    runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *amendments.applied(resolved, [defaults])])
+    for notice in defaults.notices():
+        messages.notice(notice)
+    runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *defaults.applied_to(resolved)])
 
 
 def help(name: str) -> helptext.HelpTopic:

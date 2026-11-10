@@ -1,5 +1,6 @@
-"""This module defines the Amendment class and the function for applying amendments to a `docker run` or
-`create` command line. It does not decide what to change: the rules do (Policy.user_amendments,
+"""This module defines the CommandLinePatch class, a set of changes dockscreen makes to a `docker run` or
+`create` command line before docker gets it, and the Amendment records it is made of, for applying the changes
+and reporting them. It does not decide what to change: the rules do (Policy.user_amendments,
 hardening.container_defaults).
 
 An amendment puts arguments before the command line's own, so the options the command line gives itself
@@ -7,8 +8,9 @@ override it. It is the counterpart of a substitution (see substitutions), which 
 service instead.
 """
 
-from collections.abc import Iterable, Sequence
-from typing import NamedTuple
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
+from typing import NamedTuple, Self
 
 from dockscreen.screen.notices import Notice
 
@@ -25,11 +27,43 @@ class Amendment(NamedTuple):
     notice: Notice | None = None
 
 
-def applied(args: Sequence[str], amendments: Iterable[Amendment]) -> list[str]:
-    """Returns args with the arguments of the amendments before them, in the amendments' order."""
-    return [*(arg for a in amendments for arg in a.args), *args]
+@dataclass(frozen=True)
+class CommandLinePatch:
+    """Value object for a set of changes to the arguments of a `docker run` or `create` command line, which
+    are made together (applied_to) and reported together (notices). It holds the amendments, in their order.
 
+    Instances come from the rules and hardening (Policy.user_amendments, hardening.container_defaults); of
+    makes one of amendments, and `a + b` one with b's arguments after a's. Iterating over a patch gives its
+    amendments.
 
-def notices(amendments: Iterable[Amendment]) -> list[Notice]:
-    """Returns the notices of the amendments that have one, in their order."""
-    return [a.notice for a in amendments if a.notice]
+    Attributes:
+    - amendments: the amendments, in their order
+    """
+    amendments: tuple[Amendment, ...] = ()
+
+    @classmethod
+    def of(cls, amendments: Iterable[Amendment]) -> Self:
+        """Returns the patch of amendments, in their order."""
+        return cls(tuple(amendments))
+
+    def __add__(self, other: "CommandLinePatch") -> "CommandLinePatch":
+        return CommandLinePatch((*self.amendments, *other.amendments))
+
+    def __iter__(self) -> Iterator[Amendment]:
+        return iter(self.amendments)
+
+    def __len__(self) -> int:
+        return len(self.amendments)
+
+    @property
+    def args(self) -> tuple[str, ...]:
+        """Returns the arguments of the amendments, in their order."""
+        return tuple(arg for a in self.amendments for arg in a.args)
+
+    def applied_to(self, args: Sequence[str]) -> list[str]:
+        """Returns args with the arguments of the amendments before them."""
+        return [*self.args, *args]
+
+    def notices(self) -> list[Notice]:
+        """Returns the notices of the amendments that have one, in their order."""
+        return [a.notice for a in self.amendments if a.notice]

@@ -3,7 +3,7 @@ from fakes import Accounts, compose_line, compose_project, id_facts, marked, pro
 
 from dockscreen.commands import compose_audit, compose_harden, docker_compose
 from dockscreen.model.origin import Origin
-from dockscreen.screen import hardening, policy, substitutions
+from dockscreen.screen import hardening, policy
 from dockscreen.screen.policy import Policy
 from dockscreen.util import messages
 
@@ -13,7 +13,7 @@ NOBODY = "65534:65534"
 def harden(config, accounts):
     """(config hardened, the substitutions that hardened it)."""
     found = hardening.changes(config, Policy(id_facts(local=accounts)))
-    return substitutions.apply(config, found), found
+    return found.applied_to_definition(config), found
 
 
 def config(**service):
@@ -25,7 +25,7 @@ def test_missing_defaults_are_added_and_described():
 
     web = hardened["services"]["web"]
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
-    assert marked(substitutions.describe(changes)) == [
+    assert marked(changes.notices()) == [
         (f'{messages.ROUTINE} added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where '
          "missing, in services web"),
     ]
@@ -35,7 +35,7 @@ def test_a_default_that_overrides_what_the_project_set_is_marked_check_this():
     original = config(cap_drop=["NET_RAW"])
     _, changes = harden(original, Accounts())
 
-    lines = substitutions.describe(changes)
+    lines = changes.notices()
 
     assert marked(lines)[0] == f'{messages.WARN} service web: cap_drop lacks ALL; added ["ALL"]'
     assert marked(lines)[1].startswith(f"{messages.ROUTINE} added cap_drop")  # security_opt: unset
@@ -58,13 +58,13 @@ def test_a_default_alone_is_dockscreens_and_one_added_to_the_projects_list_stays
     _, changes = harden(config(security_opt=["seccomp=unconfined"]), Accounts())
 
     # the project's own seccomp=unconfined is still in the list, and is judged as the project's
-    assert substitutions.origins(changes) == {"web": {"cap_drop": Origin.DOCKSCREEN}}
+    assert changes.origins() == {"web": {"cap_drop": Origin.DOCKSCREEN}}
 
 
 def test_a_compliant_service_is_left_alone_and_the_input_is_not_modified():
     original = config(cap_drop=["all"], security_opt=["no-new-privileges"])
     hardened, changes = harden(original, Accounts())
-    assert hardened == original and changes == []
+    assert hardened == original and not changes
 
     bare = config()
     harden(bare, Accounts())
@@ -175,7 +175,7 @@ def test_names_are_resolved_on_this_host(spec, resolved):
     assert hardened["services"]["web"]["user"] == resolved
     assert original["services"]["web"]["user"] == spec  # the input is left alone
     # the first line: the same service also lacks the other defaults
-    assert marked(substitutions.describe(changes))[0] == (
+    assert marked(changes.notices())[0] == (
         f'{messages.ROUTINE} service web: user "{spec}" resolved to "{resolved}" on this host')
 
 

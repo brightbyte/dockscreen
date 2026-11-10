@@ -20,16 +20,15 @@ from dockscreen.cli import userargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Service
-from dockscreen.screen.substitutions import Substitution
+from dockscreen.screen.substitutions import ProjectPatch, Substitution
 
 USER = ("--user", "-u")
 VOLUME = ("--volume", "-v")
 ENV_FILE = ("--env-from-file",)
 
 
-def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime
-                  ) -> list[Substitution]:
-    """Returns the substitutions that make service what `run` with parsed's options runs.
+def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime) -> ProjectPatch:
+    """Returns the patch that makes service what `run` with parsed's options runs.
 
     Parameters:
     - parsed: the arguments of `run`
@@ -51,7 +50,7 @@ def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime
         found.append(_set(service, "cap_add", cap_add))
     if cap_drop != list(definition.get("cap_drop") or []):
         found.append(_set(service, "cap_drop", cap_drop))
-    return found
+    return ProjectPatch.of(found)
 
 
 def _values(parsed: userargs.UserArgs, options: Sequence[str]) -> list[str]:

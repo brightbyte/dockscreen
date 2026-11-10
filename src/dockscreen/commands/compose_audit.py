@@ -11,7 +11,6 @@ from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
 from dockscreen.host.dockerclient import DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import substitutions
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
@@ -48,7 +47,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     outcome, lines = _audit_images(loaded, screener, brief)
     if not brief:
         around = projectscreening.surroundings(loaded, screener)
-        for line in [*substitutions.describe(loaded.hardening), *around, *lines]:
+        for line in [*loaded.hardening.notices(), *around, *lines]:
             messages.out(line)
         if outcome.findings or loaded.hardening:
             messages.out(messages.Message(messages.HINT, HARDEN_HINT))

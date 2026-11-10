@@ -16,7 +16,6 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 --strict-screen.
 """
 
-from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.cli import runargs, userargs
@@ -26,8 +25,8 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import amendments, findings, hardening, userdecisionview
-from dockscreen.screen.amendments import Amendment
+from dockscreen.screen import findings, hardening, userdecisionview
+from dockscreen.screen.amendments import CommandLinePatch
 from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
@@ -72,11 +71,11 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
     defaults = hardening.container_defaults()
-    for message in [*given.notices, root_default, defaults.notice]:
+    for message in [*given.notices, root_default, *defaults.notices()]:
         if message:
             messages.notice(message)
 
-    created = _create_checked(screener, parsed, [defaults])
+    created = _create_checked(screener, parsed, defaults)
     if isinstance(created, int):
         return created
     container, decision = created
@@ -92,9 +91,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
         user = screener.policy(runtime.cwd).user_amendments(decision, parsed.image)
-        for notice in amendments.notices(user):
+        for notice in user.notices():
             messages.notice(notice)
-        created = _create_checked(screener, parsed, [defaults, *user], decision)
+        created = _create_checked(screener, parsed, defaults + user, decision)
         if isinstance(created, int):
             return created
         container, decision = created
@@ -109,7 +108,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     )
 
 
-def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendment],
+def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: CommandLinePatch,
                     decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
     """Creates the container (check); returns it with the decision of its user, or the exit status if it
     may not start.
@@ -129,7 +128,7 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: Sequen
     return created
 
 
-def check(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendment],
+def check(screener: Screener, parsed: runargs.RunArgs, changes: CommandLinePatch,
           decided: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
@@ -144,7 +143,7 @@ def check(screener: Screener, parsed: runargs.RunArgs, changes: Sequence[Amendme
       again, only checked to be what the command line asked for, and its user comes from where the decided one
       does
     """
-    code, created = screener.docker.create(amendments.applied(parsed.create_args, changes))
+    code, created = screener.docker.create(changes.applied_to(parsed.create_args))
     if created is None:
         return code, None
     here = screener.runtime.cwd
@@ -238,7 +237,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             messages.notice(message)
 
     try:
-        _, created = check(screener, parsed, [hardening.container_defaults()])
+        _, created = check(screener, parsed, hardening.container_defaults())
     except DockerNotFound as e:
         return Report.failure(str(e)).show(brief)
     if created is None:
