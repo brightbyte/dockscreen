@@ -6,9 +6,9 @@ import subprocess
 from dockscreen.commands import docker_compose
 from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.model.project import Project, ProjectLocation
-from dockscreen.screen.rules import users
+from dockscreen.screen.rules import userrules
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -62,11 +62,12 @@ ME = (4242, 4343)
 
 
 def id_facts(me=ME, allow_me=False, local=None, subordinate=None):
-    """users.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says otherwise.
+    """userrules.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says
+    otherwise.
 
     The caller is ME.
     """
-    return users.IdFacts(me, allow_me, local or Accounts(), subordinate or NoSubordinate())
+    return userrules.IdFacts(me, allow_me, local or Accounts(), subordinate or NoSubordinate())
 
 
 class Accounts:

@@ -4,7 +4,7 @@ and reporting them. It does not decide what to change: the rules do (Policy.user
 hardening.container_defaults).
 
 An amendment puts arguments before the command line's own, so the options the command line gives itself
-override it. It is the counterpart of a substitution (see substitutions), which sets a key of a compose
+override it. It is the counterpart of a substitution (see projectpatch), which sets a key of a compose
 service instead.
 """
 
@@ -12,7 +12,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple, Self
 
-from dockscreen.screen.notices import Notice
+from dockscreen.screen.notice import Notice
 
 
 class Amendment(NamedTuple):

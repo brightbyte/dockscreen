@@ -1,5 +1,5 @@
 """This module defines the Report of what one screening reported, and how it is shown: a report is what a
-command or an audit ends by showing, and its verdict (findings.Verdict), the worst of its findings, is the
+command or an audit ends by showing, and its verdict (finding.Verdict), the worst of its findings, is the
 exit status of an audit.
 
 Use it to build a report from findings (Report.of, Report.refusal, Report.failure, Report.with_more_findings)
@@ -9,8 +9,8 @@ and to show it (Report.show, Report.show_screening).
 from collections.abc import Iterable
 from typing import NamedTuple, Self
 
-from dockscreen.screen.findings import Finding, Reportable, Verdict, failure_of
-from dockscreen.screen.notices import Notice
+from dockscreen.screen.finding import Finding, Reportable, Verdict, failure_of
+from dockscreen.screen.notice import Notice
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
 

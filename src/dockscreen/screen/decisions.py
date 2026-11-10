@@ -10,12 +10,12 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.project import Project
 from dockscreen.screen import userdecisionview
-from dockscreen.screen.findings import Finding
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.finding import Finding
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
+from dockscreen.screen.projectpatch import ProjectPatch
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules.users import USER_HELP
-from dockscreen.screen.substitutions import ProjectPatch
+from dockscreen.screen.rules.userrules import USER_HELP
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.util import ids, messages
 

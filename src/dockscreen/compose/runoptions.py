@@ -20,7 +20,7 @@ from dockscreen.cli import userargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Service
-from dockscreen.screen.substitutions import ProjectPatch, Substitution
+from dockscreen.screen.projectpatch import ProjectPatch, Substitution
 
 USER = ("--user", "-u")
 VOLUME = ("--volume", "-v")

@@ -6,8 +6,8 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.screen import imageuser
-from dockscreen.screen.findings import Finding
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.finding import Finding
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable

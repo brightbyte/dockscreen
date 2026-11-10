@@ -1,4 +1,4 @@
-"""This module defines the Finding class, for what screening finds that stops a command (see notices for what
+"""This module defines the Finding class, for what screening finds that stops a command (see notice for what
 it reports without stopping it, and report for the verdict that follows from the findings).
 
 A finding says one thing about one subject (a service, an image, a container, the command line) and why the
@@ -15,9 +15,9 @@ import enum
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.util import messages
 
 

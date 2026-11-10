@@ -30,17 +30,17 @@ from typing import Any, NamedTuple, Self
 from dockscreen.cli import userargs
 from dockscreen.compose import inspect, runoptions, serviceinfo
 from dockscreen.host import shellenv
-from dockscreen.host.dockerclient import Docker, DockerError, is_remote
+from dockscreen.host.docker import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy, userdecisionview
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding, Verdict
-from dockscreen.screen.notices import Notice
+from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.notice import Notice
+from dockscreen.screen.projectpatch import ProjectPatch
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
-from dockscreen.screen.substitutions import ProjectPatch
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.

@@ -5,18 +5,18 @@ amendment, the same defaults for a container that `docker run` or `create` makes
 A project does not have to set these itself: a service without `cap_drop: [ALL]`
 or `no-new-privileges` gets them. A project cannot weaken them, because adding
 `cap_add` or `no-new-privileges:false` is still refused by the policy. The
-changes are substitutions (see substitutions), reported by `audit` and before a run.
+changes are a ProjectPatch (see projectpatch), reported by `audit` and before a run.
 """
 
 import json
 from typing import Any
 
 from dockscreen.model.origin import Origin
-from dockscreen.screen.amendments import Amendment, CommandLinePatch
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
-from dockscreen.screen.rules.service import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
-from dockscreen.screen.substitutions import ProjectPatch, Substitution, SubstitutionGroup
+from dockscreen.screen.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
+from dockscreen.screen.rules.servicerules import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 
 
 def changes(config: dict[str, Any], policy: Policy) -> ProjectPatch:

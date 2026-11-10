@@ -1,4 +1,4 @@
-from dockscreen.model.build import BakeDefinition, ImageBuild, fields
+from dockscreen.model.imagebuild import BakeDefinition, ImageBuild, fields
 
 
 def test_compose_and_bake_name_the_sources_of_a_build_differently():

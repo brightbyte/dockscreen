@@ -1,9 +1,9 @@
 import pytest
 from fakes import marked
 
-from dockscreen.host.dockerclient import DockerError
-from dockscreen.screen.findings import Finding, Verdict
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.host.docker import DockerError
+from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
 from dockscreen.util import messages
 

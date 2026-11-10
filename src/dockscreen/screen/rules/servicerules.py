@@ -18,8 +18,8 @@ from dockscreen.screen.rules.base import (
     is_inside_any,
     unknown_keys,
 )
-from dockscreen.screen.rules.build import BuildRules
-from dockscreen.screen.rules.users import UserRules
+from dockscreen.screen.rules.buildrules import BuildRules
+from dockscreen.screen.rules.userrules import UserRules
 
 if TYPE_CHECKING:
     from dockscreen.screen.policy import Policy
@@ -203,7 +203,7 @@ def _check_hooks(key: str) -> Check:
     """Returns a check for the hook key (post_start or pre_stop) that refuses hooks that escalate.
 
     Those are hooks with unknown keys, privileged ones, and ones whose user Policy.check_user refuses
-    (rules.users).
+    (rules.userrules).
     """
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems = []

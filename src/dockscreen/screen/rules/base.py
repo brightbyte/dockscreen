@@ -10,7 +10,7 @@ from dockscreen.host import config as configuration
 from dockscreen.model.origin import Origin
 
 if TYPE_CHECKING:
-    from dockscreen.screen.rules.users import IdFacts
+    from dockscreen.screen.rules.userrules import IdFacts
 
 
 class JudgedService(Protocol):

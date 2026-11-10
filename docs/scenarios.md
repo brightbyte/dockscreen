@@ -175,7 +175,7 @@ with an image whose `/etc/group` has `65534:x:0:` before the real entry. An olde
 `user: "4294967296:65534"` with a matching passwd line, `user: "99999999999999999999:65534"`, or an image `USER` of these. An older daemon converts the id to 32 bits when it builds the OCI spec, which gives uid 0, and `4294967296+1000` gives your own uid; an overflowing number is read as a name and looked up in the image's passwd, where the image can define it as uid 0. Current moby rejects both. Unverified on an older daemon.
 
 - Expected: refused, with or without host mounts.
-- Check: any id above 2147483647 is refused in `Policy.id_problem` (`rules.users`), which every id from a project, a hook or an image passes. An allowed id is exempt, because the config file chose it.
+- Check: any id above 2147483647 is refused in `Policy.id_problem` (`rules.userrules`), which every id from a project, a hook or an image passes. An allowed id is exempt, because the config file chose it.
 - Variants: the uid, the gid, a supplementary gid of the image, `2147483648`, `4294967296`, `10**20`; `2147483647` is not refused for its size.
 - Status: tested (`tests/test_users.py::test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts`).
 

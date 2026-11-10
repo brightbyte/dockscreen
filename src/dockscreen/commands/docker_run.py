@@ -6,7 +6,7 @@ that cannot change between check and start. The one image-derived fact checked
 is the identity the container would run as (see imageuser), unless the command
 line sets a user: the person typing the command is trusted, the image is not.
 
-With no user chosen on the command line, the policy decides it from the image (rules.users). Whatever
+With no user chosen on the command line, the policy decides it from the image (rules.userrules). Whatever
 it accepts is not left for the runtime to resolve a second time: the container is re-created with
 `--user uid:gid` as the checked numbers.
 
@@ -20,17 +20,17 @@ from typing import Any
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.commands import helptext
-from dockscreen.host.dockerclient import DockerError, DockerNotFound, is_remote
+from dockscreen.host.docker import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import findings, hardening, userdecisionview
-from dockscreen.screen.amendments import CommandLinePatch
-from dockscreen.screen.findings import Finding, Reportable
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen import finding, hardening, userdecisionview
+from dockscreen.screen.commandlinepatch import CommandLinePatch
+from dockscreen.screen.finding import Finding, Reportable
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules import users
+from dockscreen.screen.rules import userrules
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, root_default_notice
@@ -54,7 +54,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    screener = Screener(runtime, own_ids_hint=users.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
     remote = is_remote(parent_cli.lead_args, runtime.docker)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
     if not daemon.passed:
@@ -62,8 +62,8 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     try:
         parsed = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
-        finding = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
-        Report.of([finding]).show_screening()
+        refusal = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
+        Report.of([refusal]).show_screening()
         return 1
     given, parsed = userargs.screened(parsed, screener)
     if not given.passed:
@@ -218,7 +218,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
     brief, args = line.has_own(commandline.BRIEF), line.argv
-    screener = Screener(runtime, own_ids_hint=users.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
     daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
                                                                             runtime.docker)))
     if not daemon.passed:
@@ -288,8 +288,8 @@ def _report_findings(found: list[Reportable]) -> None:
     """Prints what the command line asks for that a project or an image may not: as refusals, or as worth a
     look where the command line is trusted.
     """
-    for finding in findings.about(found, "command line"):
-        messages.out(finding)
+    for item in finding.about(found, "command line"):
+        messages.out(item)
     if any(isinstance(item, Notice) for item in found):
         messages.out(messages.Message(messages.HINT, "docker run allows these because you gave them; "
                                                    "--strict-screen makes them fail the audit"))

@@ -9,11 +9,10 @@ from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import ProjectLocation
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Finding, Verdict
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.policy import Policy
-from dockscreen.screen.rules import project as project_rules
-from dockscreen.screen.rules import service as service_rules
+from dockscreen.screen.rules import projectrules, servicerules
 from dockscreen.util import messages
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
@@ -117,8 +116,8 @@ def test_unknown_keys_are_refused_in_nested_structures(project):
 
 
 def test_every_checked_key_is_outside_the_harmless_list():
-    assert not service_rules.HARMLESS_SERVICE_KEYS & service_rules.SERVICE_CHECKS.keys()
-    assert service_rules.REQUIRED_SERVICE_KEYS <= service_rules.SERVICE_CHECKS.keys()
+    assert not servicerules.HARMLESS_SERVICE_KEYS & servicerules.SERVICE_CHECKS.keys()
+    assert servicerules.REQUIRED_SERVICE_KEYS <= servicerules.SERVICE_CHECKS.keys()
 
 
 # --- users ----------------------------------------------------------------
@@ -567,7 +566,7 @@ def test_each_key_is_judged_as_where_its_value_comes_from():
 
 def test_a_daemon_that_may_not_be_this_hosts_is_refused():
     assert policy.Policy(id_facts()).check_daemon(False) == []
-    assert texts(policy.Policy(id_facts()).check_daemon(True)) == [project_rules.REMOTE_MESSAGE]
+    assert texts(policy.Policy(id_facts()).check_daemon(True)) == [projectrules.REMOTE_MESSAGE]
 
 
 def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():

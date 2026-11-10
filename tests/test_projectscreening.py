@@ -7,7 +7,7 @@ from fakes import ME, FakeImages, compose_line, compose_project, make_runtime, m
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.compose import projectscreening
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker
+from dockscreen.host.docker import Docker
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline

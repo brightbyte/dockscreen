@@ -6,9 +6,9 @@ from fakes import make_runtime
 
 from dockscreen.compose import inspect
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.host.docker import Docker, DockerError
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen.findings import Verdict
+from dockscreen.screen.finding import Verdict
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):

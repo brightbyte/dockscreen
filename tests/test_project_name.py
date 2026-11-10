@@ -3,9 +3,9 @@ from fakes import FakeImages, compose_line, compose_project, docker_dispatch, id
 
 from dockscreen.commands import compose_up
 from dockscreen.compose import inspect
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Verdict
+from dockscreen.screen.finding import Verdict
 
 
 def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():

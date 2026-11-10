@@ -13,12 +13,12 @@ the configured mount_dirs allow bind mounts.
 from typing import Any
 
 from dockscreen.commands import helptext
-from dockscreen.host.dockerclient import DockerError, is_remote
+from dockscreen.host.docker import DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.origin import STRICT, Origin
-from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding, Reportable
+from dockscreen.screen import finding
+from dockscreen.screen.finding import Finding, Reportable
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
@@ -73,13 +73,13 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
                     f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
             else:
                 explained = explain_existing(decision, runtime.config_file)
-                problems += findings.about(explained, ref)
+                problems += finding.about(explained, ref)
             if cli.strict:
                 chosen = decision.origin is Origin.COMMAND_LINE
                 user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
                 strict_policy = screener.policy(None, decision.section, STRICT)
                 found = strict_policy.check_container(Container(info, None, user_origin))
-                problems += findings.about(found, ref)
+                problems += finding.about(found, ref)
         except (DockerError, ValueError, KeyError) as e:
             problems.append(Finding(messages.with_output(e), subject=ref))
     return problems

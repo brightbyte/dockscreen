@@ -1,4 +1,4 @@
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.util import messages
 
 

@@ -2,8 +2,8 @@ import pytest
 
 from dockscreen.model.image import Image
 from dockscreen.model.origin import Origin
-from dockscreen.screen.findings import Finding, Verdict
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.userdecision import UserDecision
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}

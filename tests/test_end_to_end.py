@@ -9,7 +9,7 @@ import fakes
 import pytest
 from fakes import PASSWD, docker_dispatch
 
-from dockscreen.host.dockerclient import Docker
+from dockscreen.host.docker import Docker
 
 # Canned answers come from files next to the script; every call is appended to `calls`.
 FAKE_DOCKER = """#!/bin/sh

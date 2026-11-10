@@ -6,9 +6,9 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.model.build import BakeDefinition, ImageBuild, fields
-from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding
+from dockscreen.model.imagebuild import BakeDefinition, ImageBuild, fields
+from dockscreen.screen import finding
+from dockscreen.screen.finding import Finding
 from dockscreen.screen.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
 
 BUILD_HARMLESS_KEYS = frozenset({
@@ -82,7 +82,7 @@ class BuildRules(RuleBase):
         problems = unknown_keys(bake.definition, BAKE_TOP_LEVEL_KEYS, "key", extensions=False)
         for name, build in bake.targets.items():
             problems += [f"target {name}: {p}" for p in self._check_bake_target(build)]
-        return findings.refusals(problems)
+        return finding.refusals(problems)
 
     def _check_bake_target(self, build: ImageBuild) -> list[str]:
         """Returns the problems with a bake target: unknown keys, what it reaches (check_build), and what

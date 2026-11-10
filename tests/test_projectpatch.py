@@ -2,8 +2,8 @@ from fakes import marked
 
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project, ProjectLocation
-from dockscreen.screen.notices import Notice, NoticeSeverity
-from dockscreen.screen.substitutions import ProjectPatch, Substitution, SubstitutionGroup
+from dockscreen.screen.notice import Notice, NoticeSeverity
+from dockscreen.screen.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
 from dockscreen.util import messages
 
 PINNED = SubstitutionGroup("services {services}: pinned", "nothing to do")

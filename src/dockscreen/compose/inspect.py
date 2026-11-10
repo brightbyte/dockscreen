@@ -9,11 +9,11 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Finding, Verdict
+from dockscreen.screen.finding import Finding, Verdict
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.screener import Screener

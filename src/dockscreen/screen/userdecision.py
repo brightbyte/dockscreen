@@ -13,8 +13,8 @@ from typing import NamedTuple, Self
 from dockscreen.host.config import NO_SECTION, SectionMatch
 from dockscreen.model.image import Image, UserIdentity
 from dockscreen.model.origin import Origin
-from dockscreen.screen.findings import Finding, Verdict
-from dockscreen.screen.notices import Notice
+from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.notice import Notice
 
 
 class UserDecision(NamedTuple):

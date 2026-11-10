@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen.report import Report
 from dockscreen.screen.screener import Screener

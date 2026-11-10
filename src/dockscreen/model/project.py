@@ -43,7 +43,7 @@ class Project(NamedTuple):
     """View of a compose project's resolved definition, for judging it. It holds the definition, where the
     project is, and where the values dockscreen set in the definition come from.
 
-    Instances come from inspect.project; substitutions.ProjectPatch.applied_to gives one with values changed.
+    Instances come from inspect.project; projectpatch.ProjectPatch.applied_to gives one with values changed.
 
     Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not

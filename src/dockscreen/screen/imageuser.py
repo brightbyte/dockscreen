@@ -2,7 +2,7 @@
 passwd and group files, as docker does.
 
 The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is
-untrusted, so the id rules (rules.users) decide whether the image may have it. Whatever is accepted runs
+untrusted, so the id rules (rules.userrules) decide whether the image may have it. Whatever is accepted runs
 pinned as numbers, so a difference between this reading and docker's can at worst refuse a good image.
 """
 

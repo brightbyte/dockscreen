@@ -20,8 +20,8 @@ They guard against a docker, compose or buildx that behaves differently from tod
   current buildx prints `output`, `cache-from`, `cache-to` and `secret` entries as objects. Older buildx
   prints text.
 - `serviceinfo._services_to_run`: `docker compose config --services` failing after `config` worked.
-- `dockerclient.label_values` and `inspect.name_conflicts`: `docker ps` failing.
-- `dockerclient._first_file_of_tar`: `docker cp` sending something that is not a tar archive.
+- `docker.label_values` and `inspect.name_conflicts`: `docker ps` failing.
+- `docker._first_file_of_tar`: `docker cp` sending something that is not a tar archive.
 - `Policy.check_project`: a config without a project name; compose always gives one. `_check_scope`
   without a project name, likewise.
 - `policy.unknown_keys` for top-level keys: compose refuses unknown top-level keys itself, and leaves
@@ -51,11 +51,11 @@ Something has to change between two of dockscreen's calls to docker.
 - `docker_run.check` failing to inspect the container it just created, or its image.
 - `imageusers._look` failing to inspect the container it just created.
 - `config._read`: the config file replaced between the check of its modes and the read.
-- `dockerclient.run_child`: docker vanishing between dockscreen's first call and compose.
+- `docker.run_child`: docker vanishing between dockscreen's first call and compose.
 
 ## Signals and terminals
 
-- `dockerclient.run_child` passing SIGTERM, SIGHUP and SIGQUIT on to compose, and waiting through Ctrl-C:
+- `docker.run_child` passing SIGTERM, SIGHUP and SIGQUIT on to compose, and waiting through Ctrl-C:
   the hand-off returns at once, so there is nothing to signal.
 - `messages`: wrapping report lines to the terminal and colouring the marks. The tests run without a
   terminal, with `NO_COLOR` and `COLUMNS=10`.

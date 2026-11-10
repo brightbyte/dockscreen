@@ -1,11 +1,11 @@
 """This module defines the Policy class, for checking a compose project, a container, a build or an image
 against the rules of the security policy, with the settings they apply with.
 
-The rules are grouped by what they judge (screen.rules): the keys of a service (rules.service), what a
-project has besides its services (rules.project), builds (rules.build), and the users containers run as
-(rules.users): a service's, an image's and the ones a command line gives. Policy has them all, and checks
-whole targets with them: a project (check_project), a container read back into compose service keys
-(check_container), and a project's builds (check_project_build).
+The rules are grouped by what they judge (screen.rules): the keys of a service (rules.servicerules), what
+a project has besides its services (rules.projectrules), builds (rules.buildrules), and the users
+containers run as (rules.userrules): a service's, an image's and the ones a command line gives. Policy has
+them all, and checks whole targets with them: a project (check_project), a container read back into compose
+service keys (check_container), and a project's builds (check_project_build).
 
 The policy is an allowlist and fails closed: a key that is not listed is refused, so a Compose feature
 added tomorrow is denied until someone has reviewed it. Every structure that can carry unlisted keys
@@ -14,10 +14,10 @@ with `x-` are extension fields that Compose itself ignores; they pass everywhere
 BuildRules._check_build).
 
 A Policy holds the settings the rules apply with, such as what the id rules, which decide which uids and
-gids a project may choose, judge by (users.IdFacts); what is known about the thing judged belongs to it,
+gids a project may choose, judge by (userrules.IdFacts); what is known about the thing judged belongs to it,
 not to the policy, down to the directory its paths are judged against. Every rule is a method of Policy,
 whether it reads the settings or not. The checks of a whole target turn the problems of each rule into
-findings (findings.Finding), or into notices (notices.Notice) for a trusted value, about the service, volume
+findings (finding.Finding), or into notices (notice.Notice) for a trusted value, about the service, volume
 or network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
 """
 
@@ -31,19 +31,19 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding, Reportable
-from dockscreen.screen.rules import users
+from dockscreen.screen import finding
+from dockscreen.screen.finding import Finding, Reportable
+from dockscreen.screen.rules import userrules
 from dockscreen.screen.rules.base import JudgedService, unknown_keys
-from dockscreen.screen.rules.build import BuildRules
-from dockscreen.screen.rules.project import TOP_LEVEL_KEYS, ProjectRules
-from dockscreen.screen.rules.service import (
+from dockscreen.screen.rules.buildrules import BuildRules
+from dockscreen.screen.rules.projectrules import TOP_LEVEL_KEYS, ProjectRules
+from dockscreen.screen.rules.servicerules import (
     HARMLESS_SERVICE_KEYS,
     REQUIRED_SERVICE_KEYS,
     SERVICE_CHECKS,
     ServiceRules,
 )
-from dockscreen.screen.rules.users import UserRules, image_problem
+from dockscreen.screen.rules.userrules import UserRules, image_problem
 from dockscreen.screen.userdecision import UserDecision
 
 
@@ -57,7 +57,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:
-    - ids: what the id rules judge by (users.IdFacts)
+    - ids: what the id rules judge by (userrules.IdFacts)
     - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
       instead (with_trust)
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
@@ -68,7 +68,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
     """
-    ids: users.IdFacts
+    ids: userrules.IdFacts
     extra_dirs: tuple = ()  # mount_dirs from the config file
     trust: frozenset[Origin] = TRUSTED
     config_file: str | None = None
@@ -86,7 +86,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, ids: users.IdFacts,
+    def for_settings(cls, settings: configuration.Config, ids: userrules.IdFacts,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (config.effective).
 
@@ -130,17 +130,17 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         config, name = project.definition, project.name
         top_level = [*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
                      *self._check_service_names(config)]
-        problems: list[Reportable] = findings.refusals(top_level)
+        problems: list[Reportable] = finding.refusals(top_level)
         if not name:  # volumes and networks are scoped to the project by its name
-            problems += findings.refusals(["config has no project name"])
+            problems += finding.refusals(["config has no project name"])
         for service in project.services:
             found = self.for_service(service.name).check_service(service)
-            problems += findings.about(found, f"service {service.name}")
+            problems += finding.about(found, f"service {service.name}")
         for key, volume in project.volumes.items():
             volume_problems = self._check_volume(key, volume, name, project.directory)
-            problems += findings.refusals(volume_problems, f"volume {key}")
+            problems += finding.refusals(volume_problems, f"volume {key}")
         for key, network in (config.get("networks") or {}).items():
-            problems += findings.refusals(self._check_network(key, network, name), f"network {key}")
+            problems += finding.refusals(self._check_network(key, network, name), f"network {key}")
         problems += self._check_file_sources(config, project.directory)
         return problems + self.check_location(project.location)
 
@@ -152,11 +152,11 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
         Runtime hardening (user, capabilities, mounts) is irrelevant until containers run.
         """
-        problems = findings.refusals(self._check_service_names(project.definition))
+        problems = finding.refusals(self._check_service_names(project.definition))
         for service in project.services:
             if "build" in service.definition:
                 build = self._check_build(service.definition["build"], service)
-                problems += findings.refusals(build, f"service {service.name}")
+                problems += finding.refusals(build, f"service {service.name}")
         # build secrets refer to these
         return problems + self._check_file_sources(project.definition, project.directory)
 
@@ -164,19 +164,19 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """Checks one service; returns what it finds, empty if there is nothing.
 
         A problem is refused, or a warning if its value comes from an origin that this policy trusts
-        (findings.judged). A user from the image is left to the image decision.
+        (finding.judged). A user from the image is left to the image decision.
         """
         keys = service.definition
         found: list[Reportable] = []
         for key in keys:
             unknown = unknown_keys({key: keys[key]}, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-            found += findings.judged(unknown, service.origin_of(key), self.trust)
+            found += finding.judged(unknown, service.origin_of(key), self.trust)
         for key, check in SERVICE_CHECKS.items():
             origin = service.origin_of(key)
             if key == "user" and origin is Origin.IMAGE:
                 continue
             if key in REQUIRED_SERVICE_KEYS or key in keys:
-                found += findings.judged(check(self, keys.get(key), service), origin, self.trust)
+                found += finding.judged(check(self, keys.get(key), service), origin, self.trust)
         return found
 
     def check_container(self, container: Container) -> list[Reportable]:

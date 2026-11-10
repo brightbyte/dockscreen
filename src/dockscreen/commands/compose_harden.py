@@ -22,16 +22,16 @@ from typing import Any
 
 from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.screen import hardening, policy
-from dockscreen.screen.findings import Finding, failure_of
+from dockscreen.screen.finding import Finding, failure_of
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules import service as service_rules
+from dockscreen.screen.rules import servicerules
 from dockscreen.screen.rules.base import is_inside_any
-from dockscreen.screen.rules.users import image_problem
+from dockscreen.screen.rules.userrules import image_problem
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
@@ -41,7 +41,7 @@ from dockscreen.util.messages import printable
 _USER_TEMPLATE = "${UID}:${GID}"
 
 # Keys whose removal is a safe fix.
-_REMOVABLE_SERVICE_KEYS = (*service_rules.FORBIDDEN_KEYS, "runtime", *service_rules.NAMESPACE_KEYS)
+_REMOVABLE_SERVICE_KEYS = (*servicerules.FORBIDDEN_KEYS, "runtime", *servicerules.NAMESPACE_KEYS)
 
 
 def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -137,9 +137,9 @@ def _fix_config(project: Project, pol: policy.Policy) -> dict[str, Any]:
         if not from_image and service_pol.check_user(service.get("user"), original):
             service["user"] = _USER_TEMPLATE
         if service_pol.check_security_opt(service.get("security_opt"), original):
-            service["security_opt"] = [service_rules.SECURITY_OPT]
+            service["security_opt"] = [servicerules.SECURITY_OPT]
         if service_pol.check_cap_drop(service.get("cap_drop"), original):
-            service["cap_drop"] = [service_rules.CAP_DROP]
+            service["cap_drop"] = [servicerules.CAP_DROP]
         for key in _REMOVABLE_SERVICE_KEYS:
             service.pop(key, None)
         if "volumes_from" in service:

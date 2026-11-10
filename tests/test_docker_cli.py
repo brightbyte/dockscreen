@@ -4,7 +4,7 @@ from fakes import FakeDocker, compose_project, docker_dispatch, make_runtime
 from dockscreen import docker_cli
 from dockscreen.commands import compose_run
 from dockscreen.host import config
-from dockscreen.host.dockerclient import Docker
+from dockscreen.host.docker import Docker
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 

@@ -7,10 +7,10 @@ from fakes import docker_dispatch, docker_line, id_facts, make_runtime, texts
 
 from dockscreen.commands import docker_bake
 from dockscreen.commands.docker import BUILDX_OPTS_WITH_VALUE
-from dockscreen.host.dockerclient import DockerError
-from dockscreen.model.build import BakeDefinition
+from dockscreen.host.docker import DockerError
+from dockscreen.model.imagebuild import BakeDefinition
 from dockscreen.screen import policy
-from dockscreen.screen.findings import Verdict
+from dockscreen.screen.finding import Verdict
 from dockscreen.util import messages
 
 

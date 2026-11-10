@@ -16,10 +16,10 @@ from typing import Any
 
 from dockscreen.compose import imageusers
 from dockscreen.host import config as configuration
-from dockscreen.host.dockerclient import DockerError
+from dockscreen.host.docker import DockerError
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.project import Project, ServiceImages
-from dockscreen.screen.findings import Finding, failure_of
+from dockscreen.screen.finding import Finding, failure_of
 from dockscreen.screen.screener import Screener
 
 

@@ -1,6 +1,6 @@
 """This module provides functions for finding out which user the images of compose services would run them
 as, by whatever it takes: the images are pulled or built as compose would, and then looked at, so that the
-policy can decide the user to use by the rule `docker run` uses (rules.users). Which services' images to
+policy can decide the user to use by the rule `docker run` uses (rules.userrules). Which services' images to
 look at is the caller's to say (serviceinfo).
 
 An image is untrusted, so what it says about its user cannot be taken from its name or its config alone.
@@ -13,12 +13,12 @@ from it and never started (Screener.look).
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from dockscreen.host.dockerclient import Docker, DockerError
+from dockscreen.host.docker import Docker, DockerError
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import findings
-from dockscreen.screen.findings import Finding
+from dockscreen.screen import finding
+from dockscreen.screen.finding import Finding
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
@@ -41,7 +41,7 @@ def find(command: Sequence[str], project: Project, started: Collection[str], loo
     """
     failures = _acquire(command, project.definition, started, args, screener.docker)
     if failures:
-        return {}, findings.failures(failures)
+        return {}, finding.failures(failures)
     return {name: _look(project, name, screener) for name in sorted(looked_at)}, []
 
 

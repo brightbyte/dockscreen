@@ -11,7 +11,7 @@ from collections.abc import Collection, Mapping, MutableMapping
 from typing import NamedTuple, Self
 
 from dockscreen.host import config, hostusers
-from dockscreen.host.dockerclient import Docker, DockerNotFound
+from dockscreen.host.docker import Docker, DockerNotFound
 from dockscreen.util import messages
 
 

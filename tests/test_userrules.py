@@ -3,7 +3,7 @@ from fakes import id_facts
 
 from dockscreen.host import config, hostusers
 from dockscreen.screen.policy import Policy
-from dockscreen.screen.rules import users
+from dockscreen.screen.rules import userrules
 
 
 def policy_with(settings=None, **facts):
@@ -83,7 +83,7 @@ def test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with
 
 
 @pytest.mark.parametrize("hint, said", [
-    (users.RUN_HINT, "uid 1000 is yours; pass --as-me to run as you"),
+    (userrules.RUN_HINT, "uid 1000 is yours; pass --as-me to run as you"),
     ("", "uid 1000 is yours"),  # a command that has no way to allow them
 ])
 def test_what_the_refusal_of_the_callers_ids_says_depends_on_the_command(hint, said):

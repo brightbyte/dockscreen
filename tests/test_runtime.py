@@ -3,7 +3,7 @@ import os
 import pytest
 
 from dockscreen.host import config, runtime
-from dockscreen.host.dockerclient import DockerNotFound
+from dockscreen.host.docker import DockerNotFound
 
 
 def make_docker(directory):

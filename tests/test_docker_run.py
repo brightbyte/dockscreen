@@ -4,9 +4,9 @@ from fakes import FakeDocker, docker_line, make_runtime
 from dockscreen.cli import runargs
 from dockscreen.commands import docker_run
 from dockscreen.host import config
-from dockscreen.host.dockerclient import DockerError, DockerNotFound
+from dockscreen.host.docker import DockerError, DockerNotFound
 from dockscreen.model.origin import Origin
-from dockscreen.screen.amendments import Amendment, CommandLinePatch
+from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
 from dockscreen.screen.screener import Screener
 from dockscreen.util.messages import BAD, GOOD, WARN
 

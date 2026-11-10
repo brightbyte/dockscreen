@@ -16,7 +16,7 @@ from typing import NamedTuple, Self
 from dockscreen.cli import userargs
 from dockscreen.cli.userargs import Arg
 from dockscreen.host import hostusers
-from dockscreen.screen.rules.users import Resolution, UserOption
+from dockscreen.screen.rules.userrules import Resolution, UserOption
 from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.

@@ -1,6 +1,6 @@
 """This module defines the Notice class, for what screening reports without stopping the command: what
 dockscreen changes in what it runs, and what is worth a look. A Notice never judges anything; what is
-refused, or could not be looked at, is a Finding (findings).
+refused, or could not be looked at, is a Finding (finding).
 
 A notice is info if it rarely changes how anything runs, a warning if it can.
 """

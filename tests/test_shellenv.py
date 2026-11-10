@@ -5,7 +5,7 @@ import pytest
 from fakes import docker_dispatch, make_runtime
 
 from dockscreen.host import shellenv
-from dockscreen.host.dockerclient import Docker
+from dockscreen.host.docker import Docker
 
 
 def config(**services):

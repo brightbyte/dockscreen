@@ -19,7 +19,7 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen.notices import Notice, NoticeSeverity
+from dockscreen.screen.notice import Notice, NoticeSeverity
 
 
 class SubstitutionGroup(NamedTuple):

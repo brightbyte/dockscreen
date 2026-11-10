@@ -3,8 +3,8 @@ import shutil
 
 import pytest
 
-from dockscreen.host.dockerclient import DockerError
-from dockscreen.screen.findings import Finding
+from dockscreen.host.docker import DockerError
+from dockscreen.screen.finding import Finding
 from dockscreen.util import messages
 
 

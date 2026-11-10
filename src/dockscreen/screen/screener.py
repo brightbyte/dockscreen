@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NamedTuple
 
 from dockscreen.host import config, hostusers
-from dockscreen.host.dockerclient import Docker
+from dockscreen.host.docker import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import env_value
 from dockscreen.model.image import Image, Inspected
@@ -20,11 +20,11 @@ from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.findings import Finding
+from dockscreen.screen.finding import Finding
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.report import Report
-from dockscreen.screen.rules import users
-from dockscreen.screen.rules.users import Resolution, UserOption
+from dockscreen.screen.rules import userrules
+from dockscreen.screen.rules.userrules import Resolution, UserOption
 from dockscreen.screen.userdecision import UserDecision
 
 
@@ -39,11 +39,11 @@ class Screener(NamedTuple):
     Attributes:
     - runtime: the Runtime of the command
     - allow_me: whether --allow-me allows the caller's own ids
-    - own_ids_hint: how the command allows them, said when they are refused (users.IdFacts)
+    - own_ids_hint: how the command allows them, said when they are refused (userrules.IdFacts)
     """
     runtime: Runtime
     allow_me: bool = False
-    own_ids_hint: str = users.COMPOSE_HINT
+    own_ids_hint: str = userrules.COMPOSE_HINT
 
     @property
     def docker(self) -> Docker:
@@ -51,9 +51,9 @@ class Screener(NamedTuple):
         return self.runtime.docker
 
     @property
-    def ids(self) -> users.IdFacts:
+    def ids(self) -> userrules.IdFacts:
         """Returns the id rules with the config file's top-level settings."""
-        return users.IdFacts.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
+        return userrules.IdFacts.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
 
     @property
     def local(self) -> hostusers.HostAccounts:
@@ -137,7 +137,7 @@ class Screener(NamedTuple):
     def assess(self, directory: str | None, container: str, info: dict[str, Any],
                origin: Origin | None = None, mounts: bool | None = None, reference: str | None = None,
                built: bool = False) -> UserDecision:
-        """Decides which user the container's image may run as (rules.users), for the project in directory
+        """Decides which user the container's image may run as (rules.userrules), for the project in directory
         (the current one for what a command line runs, None for a container that existed before): looks at
         the image as far as the policy needs (look), which then judges it (Policy.check_image).
 

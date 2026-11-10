@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from dockscreen.host.dockerclient import Docker, DockerError, DockerNotFound, _first_file_of_tar
+from dockscreen.host.docker import Docker, DockerError, DockerNotFound, _first_file_of_tar
 
 
 def test_a_missing_binary_is_docker_not_found(tmp_path):

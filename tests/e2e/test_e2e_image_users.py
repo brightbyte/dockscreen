@@ -1,6 +1,6 @@
 """Feature: the user an image runs as is read from the image's own files, as docker reads them
 
-Rules (imageuser, rules.users, Screener.look, dockerclient.read_file):
+Rules (imageuser, rules.userrules, Screener.look, docker.read_file):
 - the image's USER is resolved in its own /etc/passwd and /etc/group, read out of a container that never
   starts; a missing file has no names in it;
 - a name the image does not define is refused, as docker would refuse to start it;
