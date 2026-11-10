@@ -1,5 +1,5 @@
 import pytest
-from fakes import Accounts, compose_line, compose_project, marked, project_of, rules, texts
+from fakes import Accounts, compose_line, compose_project, id_facts, marked, project_of, texts
 
 from dockscreen.commands import compose_audit, compose_harden, docker_compose
 from dockscreen.model.origin import Origin
@@ -12,7 +12,7 @@ NOBODY = "65534:65534"
 
 def harden(config, accounts):
     """(config hardened, the substitutions that hardened it)."""
-    found = hardening.changes(config, Policy(rules(local=accounts)))
+    found = hardening.changes(config, Policy(id_facts(local=accounts)))
     return substitutions.apply(config, found), found
 
 
@@ -75,15 +75,15 @@ def test_a_project_cannot_weaken_the_defaults():
     # Appending true does not undo false: the policy still refuses the config.
     original = config(security_opt=["no-new-privileges:false"], cap_add=["SYS_ADMIN"])
     hardened, _ = harden(original, Accounts())
-    problems = texts(policy.Policy(rules()).check_project(project_of(hardened)))
+    problems = texts(policy.Policy(id_facts()).check_project(project_of(hardened)))
     assert "service web: security_opt 'no-new-privileges:false' is not allowed" in problems
     assert "service web: cap_add is not allowed" in problems
 
 
 def test_a_config_without_the_keys_passes_the_policy_once_hardened():
     hardened, _ = harden(config(), Accounts())
-    assert policy.Policy(rules()).check_project(project_of(hardened)) == []
-    assert policy.Policy(rules()).check_project(project_of(config()))  # but not as it stands
+    assert policy.Policy(id_facts()).check_project(project_of(hardened)) == []
+    assert policy.Policy(id_facts()).check_project(project_of(config()))  # but not as it stands
 
 
 def test_audit_reports_the_additions_and_hints_at_harden(capsys, tmp_path):
@@ -187,7 +187,7 @@ def test_numbers_and_unknown_names_are_left_for_the_policy(spec):
 
 
 def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them():
-    policy = Policy(rules())
+    policy = Policy(id_facts())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     for spec, part in (("app", "user 'app'"), ("app:app", "user 'app'"), ("1000:staff", "group 'staff'")):
         hardened, _ = harden(config(user=spec, **keep), Accounts())
@@ -196,7 +196,7 @@ def test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them()
 
 
 def test_nobody_passes_and_root_is_refused_once_resolved():
-    policy = Policy(rules())
+    policy = Policy(id_facts())
     keep = {"cap_drop": ["ALL"], "security_opt": ["no-new-privileges"]}
     nobody, _ = harden(config(user="nobody", **keep), Accounts())
     root, _ = harden(config(user="root", **keep), Accounts())

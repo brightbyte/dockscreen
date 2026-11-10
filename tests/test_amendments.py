@@ -1,4 +1,4 @@
-from fakes import rules
+from fakes import id_facts
 
 from dockscreen.model.image import Image
 from dockscreen.model.origin import Origin
@@ -8,7 +8,7 @@ from dockscreen.screen.notices import NoticeSeverity
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.userdecision import UserDecision
 
-POLICY = Policy(rules())
+POLICY = Policy(id_facts())
 
 
 def test_the_arguments_go_before_the_command_lines_own_in_order():

@@ -2,7 +2,7 @@ import copy
 import subprocess
 
 import pytest
-from fakes import FakeImages, make_runtime, make_screener, marked, project_of, rules, texts
+from fakes import FakeImages, id_facts, make_runtime, make_screener, marked, project_of, texts
 
 from dockscreen.compose import serviceinfo
 from dockscreen.host import config as configuration
@@ -250,7 +250,7 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
         config["services"][name].update(cap_drop=["ALL"], security_opt=["no-new-privileges:true"])
     _, final, origins = decided(config, FakeImages(users={"web:1": "", "db:1": "app"}),
                                 active=("web", "db"))
-    policy = Policy(rules())
+    policy = Policy(id_facts())
 
     assert policy.check_project(project_of(final, origins=origins)) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
@@ -368,7 +368,7 @@ def test_services_whose_user_the_command_line_chooses_are_not_decided():
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
     # No key in a compose file can mark a service as vetted: it lives in the Context only.
     config = project(web={"x-vetted": True, "vetted": True})
-    problems = texts(policy.Policy(rules()).check_project(project_of(config)))
+    problems = texts(policy.Policy(id_facts()).check_project(project_of(config)))
     assert "service web: key 'vetted' is not on the allow list" in problems
     assert "service web: user is not set, the image default may be root" in problems
 

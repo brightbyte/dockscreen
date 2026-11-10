@@ -61,7 +61,7 @@ class NoSubordinate:
 ME = (4242, 4343)
 
 
-def rules(me=ME, allow_me=False, local=None, subordinate=None):
+def id_facts(me=ME, allow_me=False, local=None, subordinate=None):
     """users.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says otherwise.
 
     The caller is ME.

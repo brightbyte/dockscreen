@@ -1,5 +1,5 @@
 import pytest
-from fakes import make_runtime, rules, texts
+from fakes import id_facts, make_runtime, texts
 
 from dockscreen.cli import runargs, userargs
 from dockscreen.screen import policy
@@ -12,7 +12,7 @@ VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE
 
 def refusals(parsed):
     """What the policy says about the users parsed gives."""
-    return texts(policy.Policy(rules()).check_user_options(parsed.users.given))
+    return texts(policy.Policy(id_facts()).check_user_options(parsed.users.given))
 
 
 

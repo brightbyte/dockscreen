@@ -1,5 +1,5 @@
 import pytest
-from fakes import rules
+from fakes import id_facts
 
 from dockscreen.host import config, hostusers
 from dockscreen.screen.policy import Policy
@@ -7,8 +7,8 @@ from dockscreen.screen.rules import users
 
 
 def policy_with(settings=None, **facts):
-    """The policy for settings, the default config if None, with the id facts of fakes.rules for facts."""
-    return Policy.for_settings(settings or config.Config(), rules(**facts))
+    """The policy for settings, the default config if None, with the id facts of fakes.id_facts for facts."""
+    return Policy.for_settings(settings or config.Config(), id_facts(**facts))
 
 
 class Accounts:
@@ -87,7 +87,7 @@ def test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with
     ("", "uid 1000 is yours"),  # a command that has no way to allow them
 ])
 def test_what_the_refusal_of_the_callers_ids_says_depends_on_the_command(hint, said):
-    found = rules(me=(1000, 1000), local=Accounts())._replace(own_ids_hint=hint)
+    found = id_facts(me=(1000, 1000), local=Accounts())._replace(own_ids_hint=hint)
 
     assert Policy(found).id_problems(1000, None) == [said]
 
