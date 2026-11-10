@@ -217,7 +217,7 @@ def surroundings(loaded: LoadedProject, screener: Screener) -> list[Notice]:
     """
     runtime, here = screener.runtime, screener.policy(loaded.directory)
     return [*here.check_mount_dirs(inspect.sensitive_mount_dirs(runtime)),
-            *here.check_shell_env(shellenv.copied(loaded.hardened.definition, runtime.env))]
+            *here.check_shell_env(shellenv.shell_values(loaded.hardened.definition, runtime.env))]
 
 
 def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, runtime: Runtime,

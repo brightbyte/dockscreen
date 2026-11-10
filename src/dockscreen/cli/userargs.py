@@ -149,7 +149,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
         if token == "--":
             return read.result(args[i + 1] if i + 1 < len(args) else None, args[i:])
         if token == commandline.AS_ME:
-            read.chosen(read.users.me())
+            read.keep_chosen(read.users.me())
             i += 1
         elif token.startswith("--"):
             i = _parse_long(args, i, value_flags, read)
@@ -168,7 +168,7 @@ class _Reading:
         self.kept: list[Arg] = []
         self.values: list[tuple[str, Arg]] = []
 
-    def chosen(self, option: UserOption) -> None:
+    def keep_chosen(self, option: UserOption) -> None:
         """Keeps option, of --as or --as-me, in the arguments, and as the value of --user."""
         self.kept.append(option)
         self.values.append(("--user", option))
@@ -268,7 +268,7 @@ def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], read:
         end = i + 1
         value = args[end] if end < len(args) else ""
     if name == commandline.AS:
-        read.chosen(read.users.account(value))
+        read.keep_chosen(read.users.account(value))
         return end + 1
     if name == "--user":
         read.users.numeric(value)

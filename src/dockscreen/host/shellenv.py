@@ -28,7 +28,7 @@ def exported(me: tuple[int, int]) -> dict[str, str]:
     return dict(zip(EXPORTED, (str(i) for i in me)))
 
 
-def copied(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
+def shell_values(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
     """Returns {service: [variable names]} for the environment values of services that are the shell's own.
 
     Parameters:

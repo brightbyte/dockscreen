@@ -41,7 +41,7 @@ def find(command: Sequence[str], project: Project, started: Collection[str], loo
     """
     failures = _acquire(command, project.definition, started, args, screener.docker)
     if failures:
-        return {}, findings.failed(failures)
+        return {}, findings.failures(failures)
     return {name: _look(project, name, screener) for name in sorted(looked_at)}, []
 
 

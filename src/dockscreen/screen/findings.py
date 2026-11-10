@@ -129,12 +129,12 @@ def about(found: Iterable[Reportable], subject: str) -> list[Reportable]:
     return [f.about(subject) for f in found]
 
 
-def refused(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
+def refusals(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
     """Returns each of reasons as a refusal (Finding.of), about subject if given."""
     return [Finding.of(r, Verdict.REFUSED, subject) for r in reasons]
 
 
-def failed(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
+def failures(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
     """Returns each of reasons as a failure to look (Finding.of), about subject if given."""
     return [Finding.of(r, Verdict.FAILED, subject) for r in reasons]
 
@@ -152,4 +152,4 @@ def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], s
     """
     if origin in trust:
         return [Notice(str(r), NoticeSeverity.WARNING, subject, messages.help_of(r)) for r in reasons]
-    return refused(reasons, subject)
+    return refusals(reasons, subject)

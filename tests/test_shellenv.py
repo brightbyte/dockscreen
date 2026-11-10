@@ -16,7 +16,7 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_by_name():
     shell = {"TOKEN": "s3cret", "HOME": "/home/me", "UID": "1000"}
     cfg = config(web={"TOKEN": "s3cret", "OWN": "x", "UID": "1000"}, db={"HOME": "/home/me"}, job={"A": "b"})
 
-    assert shellenv.copied(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
+    assert shellenv.shell_values(cfg, shell) == {"web": ["TOKEN"], "db": ["HOME"]}
 
 
 @pytest.mark.parametrize("environment, shell", [
@@ -28,11 +28,11 @@ def test_variables_that_are_the_shells_own_are_listed_per_service_by_name():
     ({"UID": "1000"}, {"UID": "1000"}),   # dockscreen's own export
 ])
 def test_nothing_is_reported_for_these(environment, shell):
-    assert shellenv.copied(config(web=environment), shell) == {}
+    assert shellenv.shell_values(config(web=environment), shell) == {}
 
 
 def test_services_without_an_environment_are_fine():
-    assert shellenv.copied({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}
+    assert shellenv.shell_values({"services": {"web": {}, "db": None}}, {"A": "b"}) == {}
 
 
 def test_exported_names_the_ids():

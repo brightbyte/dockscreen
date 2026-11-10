@@ -31,7 +31,8 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen.findings import Finding, Reportable, about, judged, refused
+from dockscreen.screen import findings
+from dockscreen.screen.findings import Finding, Reportable
 from dockscreen.screen.rules import users
 from dockscreen.screen.rules.base import JudgedService, unknown_keys
 from dockscreen.screen.rules.build import BuildRules
@@ -127,17 +128,19 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
-        problems: list[Reportable] = refused([*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
-                                              *self._check_service_names(config)])
+        top_level = [*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
+                     *self._check_service_names(config)]
+        problems: list[Reportable] = findings.refusals(top_level)
         if not name:  # volumes and networks are scoped to the project by its name
-            problems += refused(["config has no project name"])
+            problems += findings.refusals(["config has no project name"])
         for service in project.services:
             found = self.for_service(service.name).check_service(service)
-            problems += about(found, f"service {service.name}")
+            problems += findings.about(found, f"service {service.name}")
         for key, volume in project.volumes.items():
-            problems += refused(self._check_volume(key, volume, name, project.directory), f"volume {key}")
+            volume_problems = self._check_volume(key, volume, name, project.directory)
+            problems += findings.refusals(volume_problems, f"volume {key}")
         for key, network in (config.get("networks") or {}).items():
-            problems += refused(self._check_network(key, network, name), f"network {key}")
+            problems += findings.refusals(self._check_network(key, network, name), f"network {key}")
         problems += self._check_file_sources(config, project.directory)
         return problems + self.check_location(project.location)
 
@@ -149,11 +152,11 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
         Runtime hardening (user, capabilities, mounts) is irrelevant until containers run.
         """
-        problems = refused(self._check_service_names(project.definition))
+        problems = findings.refusals(self._check_service_names(project.definition))
         for service in project.services:
             if "build" in service.definition:
                 build = self._check_build(service.definition["build"], service)
-                problems += refused(build, f"service {service.name}")
+                problems += findings.refusals(build, f"service {service.name}")
         # build secrets refer to these
         return problems + self._check_file_sources(project.definition, project.directory)
 
@@ -167,13 +170,13 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         found: list[Reportable] = []
         for key in keys:
             unknown = unknown_keys({key: keys[key]}, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-            found += judged(unknown, service.origin_of(key), self.trust)
+            found += findings.judged(unknown, service.origin_of(key), self.trust)
         for key, check in SERVICE_CHECKS.items():
             origin = service.origin_of(key)
             if key == "user" and origin is Origin.IMAGE:
                 continue
             if key in REQUIRED_SERVICE_KEYS or key in keys:
-                found += judged(check(self, keys.get(key), service), origin, self.trust)
+                found += findings.judged(check(self, keys.get(key), service), origin, self.trust)
         return found
 
     def check_container(self, container: Container) -> list[Reportable]:

@@ -74,9 +74,9 @@ def test_of_a_finding_keeps_its_subject_in_the_text():
 
 
 def test_refused_and_failed_make_findings_about_one_subject():
-    assert [(str(f), f.verdict) for f in findings.refused(["a", "b"], "volume v")] == [
+    assert [(str(f), f.verdict) for f in findings.refusals(["a", "b"], "volume v")] == [
         ("volume v: a", Verdict.REFUSED), ("volume v: b", Verdict.REFUSED)]
-    assert [f.verdict for f in findings.failed(["a"])] == [Verdict.FAILED]
+    assert [f.verdict for f in findings.failures(["a"])] == [Verdict.FAILED]
 
 
 def test_failure_of_an_error_says_what_to_do_if_told():

@@ -9,7 +9,8 @@ from typing import Any
 
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen.findings import Finding, refused
+from dockscreen.screen import findings
+from dockscreen.screen.findings import Finding
 from dockscreen.screen.notices import Notice, NoticeSeverity
 from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 
@@ -103,7 +104,7 @@ class ProjectRules(RuleBase):
         problems = []
         for kind in ("secrets", "configs"):
             for key, item in (config.get(kind) or {}).items():
-                problems += refused(self._check_file_source(item, directory), f"{kind} {key}")
+                problems += findings.refusals(self._check_file_source(item, directory), f"{kind} {key}")
         return problems
 
     def _check_file_source(self, item: dict[str, Any] | None, directory: str) -> list[str]:
