@@ -13,8 +13,8 @@ keeps them, until they are resolved.
 from collections.abc import Mapping, Sequence
 from typing import Generic, NamedTuple
 
-from dockscreen.cli import userargs
-from dockscreen.cli.userargs import Arg, ArgT
+from dockscreen.compose import userargs
+from dockscreen.compose.userargs import Arg, ArgT
 from dockscreen.host import hostusers
 from dockscreen.screen.rules.userrules import Resolution, UserOption
 from dockscreen.util import commandline

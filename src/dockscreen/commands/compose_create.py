@@ -5,9 +5,8 @@ The project is checked, its images are looked at, and compose runs the config th
 (projectscreening.check_and_run).
 """
 
-from dockscreen.cli import userargs
 from dockscreen.commands import helptext
-from dockscreen.compose import projectscreening
+from dockscreen.compose import projectscreening, userargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline
 

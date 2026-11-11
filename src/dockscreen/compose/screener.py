@@ -52,8 +52,12 @@ class Screener(NamedTuple):
 
     @property
     def ids(self) -> userrules.IdFacts:
-        """Returns the id rules with the config file's top-level settings."""
-        return userrules.IdFacts.for_runtime(self.runtime, self.allow_me, self.own_ids_hint)
+        """Returns the facts the id rules judge by: the caller's ids and whether they are allowed, and this
+        host's accounts and subordinate ranges.
+        """
+        runtime = self.runtime
+        return userrules.IdFacts(runtime.me, self.allow_me, runtime.accounts, runtime.subordinate,
+                                 self.own_ids_hint)
 
     @property
     def local(self) -> hostusers.HostAccounts:

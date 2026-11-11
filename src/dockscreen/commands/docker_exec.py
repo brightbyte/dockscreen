@@ -4,9 +4,8 @@ nothing.
 The command line is trusted, and the container was checked when it started (docker_run, docker_start).
 """
 
-from dockscreen.cli import runargs
 from dockscreen.commands import helptext
-from dockscreen.compose import userscreening
+from dockscreen.compose import runargs, userscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen.report import Report
 from dockscreen.util import commandline

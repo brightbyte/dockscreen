@@ -6,9 +6,8 @@ The command line is trusted: a user it gives is taken as numeric `uid:gid`, or `
 checked against the image.
 """
 
-from dockscreen.cli import userargs
 from dockscreen.commands import helptext
-from dockscreen.compose import projectscreening, userscreening
+from dockscreen.compose import projectscreening, userargs, userscreening
 from dockscreen.compose.screener import Screener
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline

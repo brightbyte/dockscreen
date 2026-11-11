@@ -27,8 +27,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen.cli import userargs
-from dockscreen.compose import inspect, runoptions, serviceinfo
+from dockscreen.compose import inspect, runoptions, serviceinfo, userargs
 from dockscreen.compose.screener import Screener
 from dockscreen.host import shellenv
 from dockscreen.host.docker import Docker, DockerError, is_remote

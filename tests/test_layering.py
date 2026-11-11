@@ -6,10 +6,10 @@ import pytest
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 # Each layer is a package and may import its own and the ones before it: the shared vocabulary (util),
 # then the concepts that screening judges (model), then what describes the host (host), then the checks,
-# which never call docker (screen), then reading the command line (cli), then screening targets with what
-# docker shows of them (compose), then the commands, docker's and compose's dispatch among them. The module
-# at the top is the entry point.
-LAYERS = ("util", "model", "host", "screen", "cli", "compose", "commands", "entry")
+# which never call docker (screen), then screening targets with what docker shows of them and with what the
+# command line says (compose), then the commands, docker's and compose's dispatch among them. The module at
+# the top is the entry point.
+LAYERS = ("util", "model", "host", "screen", "compose", "commands", "entry")
 
 
 def module_name(path):
@@ -51,13 +51,15 @@ def test_the_checks_never_call_docker(path):
     # the policy decides from the facts it is given; a failure to get them (DockerError) is one of them
     for node in ast.walk(ast.parse(path.read_text())):
         if isinstance(node, ast.Import):
-            assert "dockscreen.host.docker" not in {a.name for a in node.names}
+            assert not {"dockscreen.host.docker", "dockscreen.host.runtime"} & {a.name for a in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module == "dockscreen.host":
-            assert "docker" not in {a.name for a in node.names}
+            assert not {"docker", "runtime"} & {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module == "dockscreen.host.runtime":
+            pytest.fail("a Runtime holds the docker")
         elif isinstance(node, ast.ImportFrom) and node.module == "dockscreen.host.docker":
             assert {a.name for a in node.names} <= {"DockerError"}
 
 
-@pytest.mark.parametrize("package", ["cli", "commands", "compose", "host", "model", "screen", "util"])
+@pytest.mark.parametrize("package", ["commands", "compose", "host", "model", "screen", "util"])
 def test_packages_import_nothing_themselves(package):
     assert (SOURCE / package / "__init__.py").read_text() == ""

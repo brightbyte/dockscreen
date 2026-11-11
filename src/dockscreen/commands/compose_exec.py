@@ -4,9 +4,8 @@ checks nothing.
 The command line is trusted, and the service's container was checked when it was created.
 """
 
-from dockscreen.cli import userargs
 from dockscreen.commands import helptext
-from dockscreen.compose import userscreening
+from dockscreen.compose import userargs, userscreening
 from dockscreen.host.runtime import Runtime
 from dockscreen.util import commandline
 

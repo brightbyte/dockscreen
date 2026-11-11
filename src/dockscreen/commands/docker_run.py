@@ -18,9 +18,8 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 
 from typing import Any
 
-from dockscreen.cli import runargs
 from dockscreen.commands import helptext
-from dockscreen.compose import userscreening
+from dockscreen.compose import runargs, userscreening
 from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime

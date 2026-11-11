@@ -9,9 +9,9 @@ the command.
 from collections.abc import Collection, Mapping, Sequence
 from typing import Protocol, TypeVar
 
-from dockscreen.cli import userargs
-from dockscreen.cli.userargs import GivenUsers
+from dockscreen.compose import userargs
 from dockscreen.compose.screener import Screener
+from dockscreen.compose.userargs import GivenUsers
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.userrules import Resolution, UserOption

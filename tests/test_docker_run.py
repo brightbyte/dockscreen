@@ -1,8 +1,8 @@
 import pytest
 from fakes import FakeDocker, docker_line, make_runtime
 
-from dockscreen.cli import runargs
 from dockscreen.commands import docker_run
+from dockscreen.compose import runargs
 from dockscreen.compose.screener import Screener
 from dockscreen.host import config
 from dockscreen.host.docker import DockerError, DockerNotFound

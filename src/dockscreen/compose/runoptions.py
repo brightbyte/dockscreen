@@ -16,7 +16,7 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.cli import userargs
+from dockscreen.compose import userargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Service

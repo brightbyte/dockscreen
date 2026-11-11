@@ -56,11 +56,10 @@ was chosen for it.
 
 import json
 from collections.abc import Collection, Iterable, Mapping
-from typing import Any, NamedTuple, Self
+from typing import Any, NamedTuple
 
 from dockscreen.host import config as configuration
 from dockscreen.host import hostusers
-from dockscreen.host.runtime import Runtime
 from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
@@ -95,7 +94,7 @@ class IdFacts(NamedTuple):
     of the config file, which the policy holds: the caller's ids and whether they are allowed, this host's
     accounts and subordinate ranges, and how the command allows the caller's ids.
 
-    Instances come from for_runtime.
+    Instances come from Screener.ids, which takes them from the Runtime of the command.
 
     Attributes:
     - me: the caller's (uid, gid)
@@ -109,17 +108,6 @@ class IdFacts(NamedTuple):
     local: hostusers.HostAccounts
     subordinate: hostusers.SubordinateRanges
     own_ids_hint: str = COMPOSE_HINT
-
-    @classmethod
-    def for_runtime(cls, runtime: Runtime, allow_me: bool = False, own_ids_hint: str = COMPOSE_HINT) -> Self:
-        """Returns the facts about the caller and this host.
-
-        Parameters:
-        - runtime: the Runtime of the command, whose caller and host give the facts
-        - allow_me: the caller's own ids are allowed
-        - own_ids_hint: how the command allows them, for the refusal
-        """
-        return cls(runtime.me, allow_me, runtime.accounts, runtime.subordinate, own_ids_hint)
 
 
 class UserOption(NamedTuple):

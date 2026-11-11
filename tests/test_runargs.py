@@ -1,8 +1,7 @@
 import fakes
 import pytest
 
-from dockscreen.cli import runargs
-from dockscreen.compose import userscreening
+from dockscreen.compose import runargs, userscreening
 from dockscreen.compose.screener import Screener
 from dockscreen.screen import policy
 from dockscreen.screen.rules.userrules import UserOption
