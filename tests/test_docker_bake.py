@@ -11,6 +11,7 @@ from dockscreen.host.docker import DockerError
 from dockscreen.model.imagebuild import BakeDefinition
 from dockscreen.policy import policy
 from dockscreen.policy.finding import Verdict
+from dockscreen.screen import bakescreening
 from dockscreen.util import messages
 
 
@@ -115,11 +116,16 @@ def bake_line(*argv):
     return docker_line(*argv).subcommand(BUILDX_OPTS_WITH_VALUE)
 
 
+def screened(docker):
+    """Returns what screening `docker buildx bake`, run in the current directory with docker, finds."""
+    return bakescreening.check(docker, bake_line("buildx", "bake"), policy.Policy(id_facts()), os.getcwd())
+
+
 def test_the_definition_comes_from_print_with_the_whole_command_line():
     docker = Docker(out=json.dumps({"target": {}}))
     bake = bake_line("--context", "x", "buildx", "--builder", "b", "bake", "-f", "b.hcl", "app")
 
-    assert docker_bake._definition(docker, bake) == {"target": {}}
+    assert bakescreening._definition(docker, bake) == {"target": {}}
     # the daemon and the builder are the ones the build would use
     assert docker.commands == [
         ["docker", "--context", "x", "buildx", "--builder", "b", "bake", "--print", "-f", "b.hcl", "app"]]
@@ -132,9 +138,9 @@ def test_the_definition_comes_from_print_with_the_whole_command_line():
 ])
 def test_a_definition_that_cannot_be_read_fails_the_screening(docker, message):
     with pytest.raises(DockerError) as raised:
-        docker_bake._definition(docker, bake_line("buildx", "bake"))
+        bakescreening._definition(docker, bake_line("buildx", "bake"))
     assert message in messages.with_output(raised.value)
-    [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(id_facts()), os.getcwd())
+    [reason] = screened(docker)
     assert reason.verdict is Verdict.FAILED and message in messages.with_output(reason)
 
 
@@ -142,7 +148,7 @@ def test_screen_checks_against_the_current_directory(project, monkeypatch):
     monkeypatch.chdir(project)
     docker = Docker(out=json.dumps({"target": {"app": {"context": "/etc"}}}))
 
-    [reason] = docker_bake.check(docker, bake_line("buildx", "bake"), policy.Policy(id_facts()), os.getcwd())
+    [reason] = screened(docker)
     assert str(reason) == "target app: context '/etc' is outside " + str(project)
     assert reason.verdict is Verdict.REFUSED
 

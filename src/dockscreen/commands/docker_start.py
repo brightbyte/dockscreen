@@ -10,20 +10,15 @@ nothing. So it is judged without a directory: no project section of the config f
 the configured mount_dirs allow bind mounts.
 """
 
-from typing import Any
 
 from dockscreen.commands import helptext
-from dockscreen.host.docker import DockerError, is_remote
+from dockscreen.host.docker import is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.container import Container
-from dockscreen.model.origin import STRICT, Origin
-from dockscreen.policy import finding
-from dockscreen.policy.finding import Finding, Reportable
+from dockscreen.policy.finding import Reportable
 from dockscreen.policy.report import Report
-from dockscreen.policy.userdecision import UserDecision
-from dockscreen.policy.userdecisionview import explain_existing
+from dockscreen.screen import containerscreening
 from dockscreen.screen.screener import Screener
-from dockscreen.util import commandline, ids, messages
+from dockscreen.util import commandline
 
 # Options of `docker start` and `restart` that take a value.
 VALUE_LONG = frozenset({"--detach-keys", "--checkpoint", "--checkpoint-dir", "--signal", "--time"})
@@ -48,8 +43,7 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
     """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
     command line cli names.
 
-    An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default user
-    or a configured one) is refused like one whose user is not accepted, unless it already runs as that user.
+    Each container is judged as containerscreening.check_existing judges it, and a remote daemon is refused.
 
     Parameters:
     - cli: the docker command line, with `start` or `restart` as its command. With --strict-screen, what
@@ -62,32 +56,8 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
         return [*screener.policy(None).check_daemon(True)]
     problems: list[Reportable] = []
     for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
-        try:
-            info = screener.docker.inspect_container(ref)
-            decision = screener.assess(None, info["Id"], info)
-            replaces_image_user = decision.pins_user and decision.origin is not Origin.IMAGE
-            if replaces_image_user and not _runs_as_pinned_user(info, decision):
-                user = ids.format_user(decision.pinned_user)
-                problems.append(Finding(
-                    f"cannot change the user of an existing container; it would run as the "
-                    f"image's user, not as {user}", subject=ref, help=f"recreate it with --user {user}"))
-            else:
-                explained = explain_existing(decision, runtime.config_file)
-                problems += finding.about(explained, ref)
-            if cli.strict:
-                chosen = decision.origin is Origin.COMMAND_LINE
-                user_origin = Origin.COMMAND_LINE if chosen else Origin.IMAGE
-                strict_policy = screener.policy(None, decision.section, STRICT)
-                found = strict_policy.check_container(Container(info, None, user_origin))
-                problems += finding.about(found, ref)
-        except (DockerError, ValueError, KeyError) as e:
-            problems.append(Finding(messages.with_output(e), subject=ref))
+        problems += containerscreening.check_existing(screener, ref, cli.strict)
     return problems
-
-
-def _runs_as_pinned_user(info: dict[str, Any], decision: UserDecision) -> bool:
-    """Tells whether the container was created with the numeric user dockscreen would have chosen."""
-    return ids.parse_user(info["Config"].get("User") or "") == decision.user
 
 
 def help(name: str) -> helptext.HelpTopic:

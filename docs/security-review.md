@@ -80,7 +80,7 @@ A bake file given with `-f` from another directory is checked against the wrong 
 
 ### 15. Uncaught exceptions end in a traceback
 
-`getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `commands.docker_run.check` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
+`getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `screen.containerscreening.create` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
 
 ### 16. `messages.printable` does not escape `\`
 
@@ -109,7 +109,7 @@ Not defects to fix; the design records them as known gaps or as choices.
 - The generated compose file is checked against what compose reads back from it, before any pull or build; it is written in a private directory (0700) with an exclusive 0600 file; services whose image was looked at are pinned to the image id.
 - `-f`, `--project-directory`, `--project-name`, `-p` from the command line are replaced by the generated file.
 - `imageuser.py` matches moby/sys/user `main` for line splitting, whitespace, `atoi`, zero-filling, first match, numeric specs, NUL, duplicates and `a:b:c`.
-- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `docker_run._verify_split` catches a misread command line; a uid without a group is refused.
+- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `containerscreening._verify_split` catches a misread command line; a uid without a group is refused.
 - Image sections need a RepoDigests match on the image id; built and retagged images match nothing; sections cannot cross projects.
 - `--skip-screening`, `--allow-me`, `--strict-screen` and `--helpful` come only from argv before the subcommand; `--strict-screen` with anything but `audit` is refused.
 - Every `Docker` call uses `--` before container ids and image names; image files are read through the tar stream, capped at 1 MiB, fail closed.

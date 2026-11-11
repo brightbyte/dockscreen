@@ -15,7 +15,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
   differently from what was checked. dockscreen writes compose's own output, so today's compose reads it
   back the same.
 - `inspect._load_config`: `docker compose config` printing something that is not JSON.
-- `docker_bake._definition`: `bake --print` printing something that is not a JSON object.
+- `bakescreening._definition`: `bake --print` printing something that is not a JSON object.
 - `build.fields` for entries given as text, and `Policy._check_cache_from` for an entry it cannot read:
   current buildx prints `output`, `cache-from`, `cache-to` and `secret` entries as objects. Older buildx
   prints text.
@@ -30,12 +30,12 @@ They guard against a docker, compose or buildx that behaves differently from tod
   `compose_harden._fix_config` adding them: hardening adds both to every service before the policy sees
   it.
 - `policy._check_host_files` for an `env_file` entry without a path: compose gives every entry one.
-- `compose_lifecycle.check` for a project without a name.
+- `projectscreening.check_name` for a project without a name.
 - `Policy.check_user` for a service without a user: the services that set none are left to their
   images, and those that start get a user before the final check.
 - `decisions.Decisions.changes` for a decision that pins no user: a refused or failed decision stops
   the run before finalize.
-- `docker_run._verify_split` refusing a command line whose image dockscreen misread: it knows every
+- `containerscreening._verify_split` refusing a command line whose image dockscreen misread: it knows every
   value-taking option of `docker run` that the daemon accepts on Linux. An option it does not know, such
   as `--cpu-count`, fails at `create` instead
   (`test_an_option_dockscreen_does_not_know_fails_closed`).
@@ -48,7 +48,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 Something has to change between two of dockscreen's calls to docker.
 
 - `docker_run._create_checked` refusing the container created again with the pinned user.
-- `docker_run.check` failing to inspect the container it just created, or its image.
+- `containerscreening.create` failing to inspect the container it just created, or its image.
 - `imageusers._look` failing to inspect the container it just created.
 - `config._read`: the config file replaced between the check of its modes and the read.
 - `docker.run_child`: docker vanishing between dockscreen's first call and compose.

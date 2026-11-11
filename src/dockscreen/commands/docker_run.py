@@ -10,19 +10,17 @@ With no user chosen on the command line, the policy decides it from the image (r
 it accepts is not left for the runtime to resolve a second time: the container is re-created with
 `--user uid:gid` as the checked numbers.
 
-check creates the container and assesses it; gate starts it if it may run; audit creates it in the
-same way, reports what `run` would do and removes it. The command line is trusted, so what it asks for
-that a project or an image may not is pointed out (Policy.check_container), and fails the audit only with
---strict-screen.
+gate creates the container and has its user decided (containerscreening.create), and starts it if it may
+run; audit creates it in the same way, reports what `run` would do and removes it. The command line is
+trusted, so what it asks for that a project or an image may not is pointed out
+(containerscreening.command_line_findings), and fails the audit only with --strict-screen.
 """
 
-from typing import Any
 
 from dockscreen.commands import helptext
-from dockscreen.host.docker import DockerError, DockerNotFound, is_remote
+from dockscreen.host.docker import DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
-from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.policy import finding, hardening, userdecisionview
 from dockscreen.policy.commandlinepatch import CommandLinePatch
@@ -32,7 +30,7 @@ from dockscreen.policy.report import Report
 from dockscreen.policy.rules import userrules
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.policy.userdecisionview import CHOOSE_HINT, explain, root_default_notice
-from dockscreen.screen import runargs, userscreening
+from dockscreen.screen import containerscreening, runargs, userscreening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
@@ -80,7 +78,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return created
     container, decision = created
     if parent_cli.strict:
-        found = Report.of(_command_line_findings(screener, container, decision, STRICT))
+        found = Report.of(containerscreening.command_line_findings(screener, container, decision, STRICT))
         if not found.passed:
             screener.docker.remove(container.id)
             found.show_screening()
@@ -110,13 +108,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
 def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLinePatch,
                     decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
-    """Creates the container (check); returns it with the decision of its user, or the exit status if it
-    may not start.
+    """Creates the container (containerscreening.create); returns it with the decision of its user, or the
+    exit status if it may not start.
 
     A container that would be refused is removed and the refusal printed. Any other decision is
     returned, for the caller to re-create the container with the user as numbers if it pins one.
     """
-    code, created = check(screener, parsed, changes, decided)
+    code, created = containerscreening.create(screener, parsed, changes, decided)
     if created is None:  # docker said why
         Report.failure(f"docker could not create a container for {parsed.image}").show_screening()
         return code
@@ -126,76 +124,6 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: C
         Report.of(explain(decision, screener.runtime.config_file)).show_screening()
         return 1
     return created
-
-
-def check(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLinePatch,
-          decided: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
-    """Creates the container as `docker run` would and returns (exit status, (container, decision of its
-    user)), or (exit status, None) if docker could not create it; it said why.
-
-    The container is left for the caller to remove.
-
-    Parameters:
-    - screener: the Screener of the command
-    - parsed: the `docker run` command line, as parsed
-    - changes: what goes before the command line's own arguments: the defaults, and the user decided
-    - decided: the decision of a first creation, whose user changes pins; the container is then not assessed
-      again, only checked to be what the command line asked for, and its user comes from where the decided one
-      does
-    """
-    code, created = screener.docker.create(changes.applied_to(parsed.create_args))
-    if created is None:
-        return code, None
-    here = screener.runtime.cwd
-    container, image = Container.uninspected(created, here), Image(parsed.image)
-    try:
-        container = Container(screener.docker.inspect_container(created), here, _user_origin(parsed, decided))
-        problems = _verify_split(container.info, parsed)  # a misread command line may hide a --user
-        if problems:
-            decision = UserDecision(None, image, (), tuple(problems))
-        else:
-            decision = decided or screener.assess(screener.runtime.cwd, container.id, container.info,
-                                                    container.user_origin, reference=parsed.image)
-    except (DockerError, ValueError, KeyError) as e:
-        decision = UserDecision.failure(image, messages.with_output(e))
-    return code, (container, decision)
-
-
-def _command_line_findings(screener: Screener, container: Container, decision: UserDecision,
-                           trust: frozenset[Origin]) -> list[Reportable]:
-    """Returns what the command line asks for, in the container it created (check, with no options of
-    dockscreen's own), that a project or an image may not have: refused, or a warning where trust trusts the
-    command line (Policy.check_container).
-
-    Empty if the container could not be inspected.
-    """
-    if not container.inspected:
-        return []
-    return screener.policy(screener.runtime.cwd, decision.section, trust).check_container(container)
-
-
-def _user_origin(parsed: runargs.RunArgs[str], decided: UserDecision | None) -> Origin:
-    """Returns where the user of the container comes from: where the decided one does, for a container
-    re-created with it (check), else the command line if it gives one, else the image.
-    """
-    if decided is not None and decided.origin is not None:
-        return decided.origin
-    return Origin.COMMAND_LINE if parsed.users.chosen else Origin.IMAGE
-
-
-def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs[str]) -> list[Finding]:
-    """Checks that our reading of the command line matches the container the daemon created.
-
-    Returns the problem if it does not, else an empty list.
-    """
-    config = info["Config"]
-    misread_image = config.get("Image") != parsed.image
-    # without a command of its own the container has the image's Cmd, which says nothing about our reading
-    misread_command = parsed.command and (config.get("Cmd") or []) != list(parsed.command)
-    if misread_image or misread_command:
-        return [Finding("could not reliably tell the image from the command line",
-                        help="use the real docker for this one")]
-    return []
 
 
 def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -237,7 +165,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
             messages.notice(message)
 
     try:
-        _, created = check(screener, parsed, hardening.container_defaults())
+        _, created = containerscreening.create(screener, parsed, hardening.container_defaults())
     except DockerNotFound as e:
         return Report.failure(str(e)).show(brief)
     if created is None:
@@ -245,7 +173,8 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return Report.failure(reason).show(brief)
     container, decision = created
     try:
-        found = _command_line_findings(screener, container, decision, STRICT if line.strict else TRUSTED)
+        trust = STRICT if line.strict else TRUSTED
+        found = containerscreening.command_line_findings(screener, container, decision, trust)
     finally:
         screener.docker.remove(container.id)
 

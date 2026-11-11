@@ -8,6 +8,8 @@ project with what was decided is checked once more (finish), which makes it runn
 caller composes the stages it needs; the types say which stage may follow which, so nothing is pulled or
 built for a project that was not cleared, and nothing runs that was not checked last.
 
+The commands that act on the containers a project already has check only its name (check_name).
+
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
 and handed to compose as its only file, together with the project directory and
@@ -272,6 +274,28 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs[st
                 messages.notice(line)
         runnable.report.show_screening()
         return screener.docker.run_child([*command(runnable.project.definition), sub, *parsed.args])
+
+
+def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
+    """Returns why the project's name may not be used: containers made from another directory have it.
+
+    Empty for a name chosen on the command line or in the environment, and for a project that cannot be
+    inspected, which is left to compose to report.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
+    """
+    if inspect.names_project(global_args, runtime.env):
+        return []
+    try:
+        project = inspect.project(global_args, runtime)
+    except (inspect.ProjectRefused, DockerError):
+        return []
+    if not project.name:
+        return []
+    project_policy = Screener(runtime).project_policy(project)
+    return inspect.name_conflicts(project_policy, project.name, project.directory, runtime.docker)
 
 
 def _name_conflicts(loaded: LoadedProject, static_policy: policy.Policy, screener: Screener) -> list[Finding]:
