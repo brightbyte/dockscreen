@@ -5,11 +5,11 @@ import subprocess
 
 from dockscreen.commands import docker_compose
 from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
+from dockscreen.compose.screener import Screener
 from dockscreen.host import config
 from dockscreen.host.docker import DockerError
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen.rules import userrules
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 PASSWD = ("app:x:100000:100001::/:/bin/sh\nroot:x:0:0::/:/bin/sh\nweb:x:1000:1000::/:/bin/sh\n"

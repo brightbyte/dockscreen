@@ -9,10 +9,10 @@ from collections.abc import Sequence
 
 from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen.report import Report
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 HARDEN_HINT = "the harden subcommand prints a compose override file with these fixes"

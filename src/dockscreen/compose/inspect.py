@@ -8,6 +8,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
+from dockscreen.compose.screener import Screener
 from dockscreen.host import config
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
@@ -16,7 +17,6 @@ from dockscreen.screen import policy
 from dockscreen.screen.finding import Finding, Reportable, Verdict
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.base import is_inside
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")

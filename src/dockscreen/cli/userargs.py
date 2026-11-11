@@ -16,14 +16,12 @@ if no user had been chosen.
 """
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import Generic, NamedTuple, Protocol, TypeVar
+from typing import Generic, NamedTuple, TypeVar
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.report import Report
 from dockscreen.screen.rules.userrules import Resolution, UserOption
-from dockscreen.screen.screener import Screener
-from dockscreen.util import commandline, messages
+from dockscreen.util import commandline
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.
 COMPOSE_VALUE_FLAGS = {
@@ -44,7 +42,7 @@ ArgT = TypeVar("ArgT", bound=Arg)
 
 class GivenUsers:
     """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
-    resolve (screened). It holds each user option given, and whether a user was chosen.
+    resolve (userscreening.screened). It holds each user option given, and whether a user was chosen.
 
     The list is added to only by its own methods; callers must not change it.
 
@@ -99,8 +97,8 @@ class UserArgs(NamedTuple, Generic[ArgT]):
     service it names is the one whose user the command line chooses, so the image does not decide it, and
     because its options are applied to that service (compose.runoptions). `docker compose up` and `create`
     keep one that names no service. `exec`, for compose and docker alike, only needs the rewritten arguments
-    (resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also holds the image
-    and the options only `run` has; both keep the users in a GivenUsers.
+    (userscreening.resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also
+    holds the image and the options only `run` has; both keep the users in a GivenUsers.
 
     Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
     nor a user.
@@ -201,68 +199,12 @@ def resolved(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]) 
     return tuple(_resolved_arg(arg, resolutions) for arg in args)
 
 
-# The record a command line as read resolves to.
-Resolved_co = TypeVar("Resolved_co", covariant=True)
-Resolved = TypeVar("Resolved")
-
-
-class _Resolvable(Protocol[Resolved_co]):
-    """Protocol for a command line as read whose --as and --as-me can be resolved: UserArgs and
-    runargs.RunArgs.
-    """
-
-    @property
-    def users(self) -> GivenUsers: ...
-
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Resolved_co: ...
-
-
-def screened(parsed: _Resolvable[Resolved], screener: Screener) -> tuple[Report, Resolved | None]:
-    """Has the policy judge the users parsed gives and resolve its --as and --as-me
-    (Screener.check_given_users, Screener.resolve_given_users); returns the report, and parsed with them
-    replaced by ids (resolved).
-
-    The report holds the refusals, and the record is None; or, if the users pass, the notices of resolving
-    them.
-
-    Parameters:
-    - parsed: the command line as read (UserArgs, runargs.RunArgs)
-    - screener: the Screener of the command
-    """
-    refused = screener.check_given_users(parsed.users.given)
-    if not refused.passed:
-        return refused, None
-    resolutions = screener.resolve_given_users(parsed.users.given)
-    return Report(tuple(r.notice for r in resolutions.values() if r.notice)), parsed.resolved(resolutions)
-
-
 def _resolved_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution], bare: bool = False) -> str:
     """Returns arg, or for a UserOption the user it stands for: `--user=uid:gid`, or with bare `uid:gid`."""
     if isinstance(arg, str):
         return arg
     user = resolutions[arg].user
     return user if bare else f"--user={user}"
-
-
-def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
-                      ) -> list[str] | None:
-    """Returns args with --as and --as-me replaced by ids (screened), and prints the notices of resolving
-    names.
-
-    Returns None, and reports why, if the user cannot be used.
-
-    Parameters:
-    - args: the subcommand's arguments
-    - value_flags: as parse takes them
-    - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
-    """
-    report, parsed = screened(parse(args, value_flags, runtime.me, runtime.accounts), Screener(runtime))
-    if parsed is None:
-        report.show()
-        return None
-    for notice in report.notices:
-        messages.notice(notice)
-    return list(parsed.args)
 
 
 def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], read: _Reading) -> int:

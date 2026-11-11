@@ -29,6 +29,7 @@ from typing import Any, NamedTuple, Self
 
 from dockscreen.cli import userargs
 from dockscreen.compose import inspect, runoptions, serviceinfo
+from dockscreen.compose.screener import Screener
 from dockscreen.host import shellenv
 from dockscreen.host.docker import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
@@ -40,7 +41,6 @@ from dockscreen.screen.finding import Finding, Verdict
 from dockscreen.screen.notice import Notice
 from dockscreen.screen.projectpatch import ProjectPatch
 from dockscreen.screen.report import Report
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.
@@ -233,12 +233,13 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs[st
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
     - sub: the subcommand
-    - parsed: the subcommand's arguments, with the user the command line chose, resolved (userargs.screened)
+    - parsed: the subcommand's arguments, with the user the command line chose, resolved
+      (userscreening.screened)
     - runtime: the Runtime of the command
     - allow_me: --allow-me was given, so the caller's own ids are allowed
     - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
       with the command line untrusted; otherwise those options are taken as given, as for `docker run`
-    - notices: what resolving the user the command line chose did (userargs.screened), printed with the
+    - notices: what resolving the user the command line chose did (userscreening.screened), printed with the
       project's notices
     """
     try:

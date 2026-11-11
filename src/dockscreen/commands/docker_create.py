@@ -6,11 +6,12 @@ The container is checked when it is started (docker_start).
 
 from collections.abc import Sequence
 
-from dockscreen.cli import runargs, userargs
+from dockscreen.cli import runargs
 from dockscreen.commands import helptext
+from dockscreen.compose import userscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import hardening
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 
@@ -29,7 +30,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     except runargs.ParseError:  # docker will report what is wrong with them
         resolved: Sequence[str] = args
     else:
-        users, parsed = userargs.screened(read, Screener(runtime))
+        users, parsed = userscreening.screened(read, Screener(runtime))
         if parsed is None:
             return users.show()
         for message in users.notices:

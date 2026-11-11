@@ -14,13 +14,13 @@ import json
 from collections.abc import Collection
 from typing import Any
 
+from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.imagebuild import BakeDefinition
 from dockscreen.screen import finding, policy
 from dockscreen.screen.finding import Finding
 from dockscreen.screen.report import Report
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing

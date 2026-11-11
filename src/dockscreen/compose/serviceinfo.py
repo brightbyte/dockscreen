@@ -15,12 +15,12 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.compose import imageusers
+from dockscreen.compose.screener import Screener
 from dockscreen.host import config as configuration
 from dockscreen.host.docker import DockerError
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.screen.finding import Finding, failure_of
-from dockscreen.screen.screener import Screener
 
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], screener: Screener,

@@ -22,6 +22,7 @@ from typing import Any
 
 from dockscreen.commands import helptext
 from dockscreen.compose import inspect, projectscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
@@ -32,7 +33,6 @@ from dockscreen.screen.report import Report
 from dockscreen.screen.rules import servicerules
 from dockscreen.screen.rules.base import is_inside_any
 from dockscreen.screen.rules.userrules import image_problem
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 

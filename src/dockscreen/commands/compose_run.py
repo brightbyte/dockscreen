@@ -8,9 +8,9 @@ checked against the image.
 
 from dockscreen.cli import userargs
 from dockscreen.commands import helptext
-from dockscreen.compose import projectscreening
+from dockscreen.compose import projectscreening, userscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 
@@ -26,7 +26,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "run"
     read = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
-    users, parsed = userargs.screened(read, Screener(runtime))
+    users, parsed = userscreening.screened(read, Screener(runtime))
     if parsed is None:
         users.show()
         return 1

@@ -1,10 +1,11 @@
 import fakes
 import pytest
 
-from dockscreen.cli import runargs, userargs
+from dockscreen.cli import runargs
+from dockscreen.compose import userscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.screen import policy
 from dockscreen.screen.rules.userrules import UserOption
-from dockscreen.screen.screener import Screener
 
 ME = (4242, 4343)
 
@@ -20,7 +21,7 @@ def parse(*args):
 
 def screened(parsed):
     """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
-    return userargs.screened(parsed, Screener(fakes.make_runtime()))
+    return userscreening.screened(parsed, Screener(fakes.make_runtime()))
 
 
 def test_plain_command():

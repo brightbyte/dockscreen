@@ -5,9 +5,10 @@ import pytest
 
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 # Each layer is a package and may import its own and the ones before it: the shared vocabulary (util),
-# then the concepts that screening judges (model), then what describes the host (host), then the checks
-# (screen), then reading the command line (cli), then what compose commands share (compose), then the
-# commands, docker's and compose's dispatch among them. The module at the top is the entry point.
+# then the concepts that screening judges (model), then what describes the host (host), then the checks,
+# which never call docker (screen), then reading the command line (cli), then screening targets with what
+# docker shows of them (compose), then the commands, docker's and compose's dispatch among them. The module
+# at the top is the entry point.
 LAYERS = ("util", "model", "host", "screen", "cli", "compose", "commands", "entry")
 
 
@@ -43,6 +44,18 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
     module = module_name(path)
     for name in imported(path):
         assert LAYERS.index(layer(name)) <= LAYERS.index(layer(module)), f"{module} imports {name}"
+
+
+@pytest.mark.parametrize("path", sorted((SOURCE / "screen").rglob("*.py")), ids=lambda p: module_name(p))
+def test_the_checks_never_call_docker(path):
+    # the policy decides from the facts it is given; a failure to get them (DockerError) is one of them
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Import):
+            assert "dockscreen.host.docker" not in {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module == "dockscreen.host":
+            assert "docker" not in {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module == "dockscreen.host.docker":
+            assert {a.name for a in node.names} <= {"DockerError"}
 
 
 @pytest.mark.parametrize("package", ["cli", "commands", "compose", "host", "model", "screen", "util"])

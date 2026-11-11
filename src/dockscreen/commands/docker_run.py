@@ -18,8 +18,10 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 
 from typing import Any
 
-from dockscreen.cli import runargs, userargs
+from dockscreen.cli import runargs
 from dockscreen.commands import helptext
+from dockscreen.compose import userscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
@@ -31,7 +33,6 @@ from dockscreen.screen.finding import Finding, Reportable
 from dockscreen.screen.notice import Notice, NoticeSeverity
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules import userrules
-from dockscreen.screen.screener import Screener
 from dockscreen.screen.userdecision import UserDecision
 from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, root_default_notice
 from dockscreen.util import commandline, ids, messages
@@ -65,7 +66,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         refusal = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
         Report.of([refusal]).show_screening()
         return 1
-    given, parsed = userargs.screened(read, screener)
+    given, parsed = userscreening.screened(read, screener)
     if parsed is None:
         given.show()
         return 1
@@ -229,7 +230,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    given, parsed = userargs.screened(read, screener)
+    given, parsed = userscreening.screened(read, screener)
     if parsed is None:
         return given.show(brief)
     if not brief:

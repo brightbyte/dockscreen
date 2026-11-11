@@ -2,8 +2,9 @@ import pytest
 from fakes import id_facts, make_runtime, texts
 
 from dockscreen.cli import runargs, userargs
+from dockscreen.compose import userscreening
+from dockscreen.compose.screener import Screener
 from dockscreen.screen import policy
-from dockscreen.screen.screener import Screener
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value
@@ -22,7 +23,7 @@ def parse(command, args):
 
 def screened(parsed):
     """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
-    return userargs.screened(parsed, Screener(make_runtime()))
+    return userscreening.screened(parsed, Screener(make_runtime()))
 
 
 @pytest.mark.parametrize("args, service, user_given", [

@@ -5,6 +5,7 @@ import pytest
 from fakes import FakeImages, id_facts, make_runtime, make_screener, marked, project_of, texts
 
 from dockscreen.compose import serviceinfo
+from dockscreen.compose.screener import Screener
 from dockscreen.host import config as configuration
 from dockscreen.host.docker import DockerError
 from dockscreen.model.origin import Origin
@@ -13,7 +14,6 @@ from dockscreen.screen.finding import Verdict
 from dockscreen.screen.notice import Notice
 from dockscreen.screen.policy import Policy
 from dockscreen.screen.rules import userrules
-from dockscreen.screen.screener import Screener
 from dockscreen.util import messages
 from dockscreen.util.messages import GOOD, WARN
 
