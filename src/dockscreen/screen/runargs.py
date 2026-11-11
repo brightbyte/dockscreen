@@ -13,10 +13,10 @@ keeps them, until they are resolved.
 from collections.abc import Mapping, Sequence
 from typing import Generic, NamedTuple
 
-from dockscreen.compose import userargs
-from dockscreen.compose.userargs import Arg, ArgT
 from dockscreen.host import hostusers
-from dockscreen.screen.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.screen import userargs
+from dockscreen.screen.userargs import Arg, ArgT
 from dockscreen.util import commandline
 
 # Long options of `docker run`/`create` that take a value in the next argument.

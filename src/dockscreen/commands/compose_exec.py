@@ -5,8 +5,8 @@ The command line is trusted, and the service's container was checked when it was
 """
 
 from dockscreen.commands import helptext
-from dockscreen.compose import userargs, userscreening
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import userargs, userscreening
 from dockscreen.util import commandline
 
 

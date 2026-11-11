@@ -19,21 +19,21 @@ that a project or an image may not is pointed out (Policy.check_container), and 
 from typing import Any
 
 from dockscreen.commands import helptext
-from dockscreen.compose import runargs, userscreening
-from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError, DockerNotFound, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
-from dockscreen.screen import finding, hardening, userdecisionview
-from dockscreen.screen.commandlinepatch import CommandLinePatch
-from dockscreen.screen.finding import Finding, Reportable
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.report import Report
-from dockscreen.screen.rules import userrules
-from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import CHOOSE_HINT, explain, root_default_notice
+from dockscreen.policy import finding, hardening, userdecisionview
+from dockscreen.policy.commandlinepatch import CommandLinePatch
+from dockscreen.policy.finding import Finding, Reportable
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.report import Report
+from dockscreen.policy.rules import userrules
+from dockscreen.policy.userdecision import UserDecision
+from dockscreen.policy.userdecisionview import CHOOSE_HINT, explain, root_default_notice
+from dockscreen.screen import runargs, userscreening
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
 from dockscreen.util.messages import printable
 

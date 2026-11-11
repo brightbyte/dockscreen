@@ -13,13 +13,13 @@ from it and never started (Screener.look).
 from collections.abc import Collection, Sequence
 from typing import Any
 
-from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import finding
-from dockscreen.screen.finding import Finding
+from dockscreen.policy import finding
+from dockscreen.policy.finding import Finding
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 

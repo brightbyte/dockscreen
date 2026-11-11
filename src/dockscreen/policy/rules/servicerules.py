@@ -10,7 +10,7 @@ means the value is acceptable.
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
-from dockscreen.screen.rules.base import (
+from dockscreen.policy.rules.base import (
     JudgedService,
     RuleBase,
     directory_of,
@@ -18,11 +18,11 @@ from dockscreen.screen.rules.base import (
     is_inside_any,
     unknown_keys,
 )
-from dockscreen.screen.rules.buildrules import BuildRules
-from dockscreen.screen.rules.userrules import UserRules
+from dockscreen.policy.rules.buildrules import BuildRules
+from dockscreen.policy.rules.userrules import UserRules
 
 if TYPE_CHECKING:
-    from dockscreen.screen.policy import Policy
+    from dockscreen.policy.policy import Policy
 
 NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "no-new-privileges=true"})
 

@@ -4,7 +4,7 @@ import shutil
 import pytest
 
 from dockscreen.host.docker import DockerError
-from dockscreen.screen.finding import Finding
+from dockscreen.policy.finding import Finding
 from dockscreen.util import messages
 
 
@@ -154,7 +154,7 @@ def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
 
 
 def test_a_reasons_help_follows_it_on_the_refusal_line(capsys):
-    from dockscreen.screen.report import Report
+    from dockscreen.policy.report import Report
     reason = Finding("it is wrong", help="make it right")
 
     Report.refusal(reason).show()

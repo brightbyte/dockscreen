@@ -5,11 +5,11 @@ import pytest
 from fakes import ME, FakeImages, compose_line, compose_project, make_runtime, make_screener, read_raw
 
 from dockscreen.commands import compose_run, compose_up
-from dockscreen.compose import projectscreening
-from dockscreen.compose.screener import Screener
 from dockscreen.host import config
 from dockscreen.host.docker import Docker
-from dockscreen.screen.report import Report
+from dockscreen.policy.report import Report
+from dockscreen.screen import projectscreening
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 UID, GID = ME

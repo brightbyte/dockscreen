@@ -3,8 +3,8 @@ import os
 from fakes import FakeImages, compose_line, compose_project, id_facts, project_of
 
 from dockscreen.commands import compose_audit, compose_harden
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.report import Report
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.report import Report
 from dockscreen.util.messages import printable
 
 UID, GID = os.getuid(), os.getgid()

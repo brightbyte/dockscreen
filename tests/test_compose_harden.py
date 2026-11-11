@@ -8,7 +8,7 @@ from fakes import ME, FakeImages, compose_line, compose_project, id_facts, proje
 
 from dockscreen.commands import compose_harden
 from dockscreen.model.origin import Origin
-from dockscreen.screen import policy
+from dockscreen.policy import policy
 
 UID, GID = ME
 

@@ -12,11 +12,11 @@ import json
 from typing import Any
 
 from dockscreen.model.origin import Origin
-from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
-from dockscreen.screen.rules.servicerules import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
+from dockscreen.policy.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
+from dockscreen.policy.rules.servicerules import CAP_DROP, SECURITY_OPT, drops_all, has_no_new_privileges
 
 
 def changes(config: dict[str, Any], policy: Policy) -> ProjectPatch:

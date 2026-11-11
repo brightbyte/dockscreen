@@ -12,7 +12,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple, Self
 
-from dockscreen.screen.notice import Notice
+from dockscreen.policy.notice import Notice
 
 
 class Amendment(NamedTuple):

@@ -9,7 +9,7 @@ from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
 from dockscreen.host.docker import DockerNotFound
 from dockscreen.host.runtime import load_runtime
-from dockscreen.screen.report import Report
+from dockscreen.policy.report import Report
 from dockscreen.util import commandline, messages
 
 

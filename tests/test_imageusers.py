@@ -1,7 +1,7 @@
 from fakes import FakeImages, make_screener, project_of, texts
 
-from dockscreen.compose import imageusers
 from dockscreen.model.image import Inspected, Unseen
+from dockscreen.screen import imageusers
 
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # only the tail matters
 

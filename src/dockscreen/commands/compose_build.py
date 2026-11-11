@@ -7,9 +7,9 @@ Builds start no containers of the project, so only what a build can reach is che
 """
 
 from dockscreen.commands import helptext
-from dockscreen.compose import inspect
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import policy
+from dockscreen.policy import policy
+from dockscreen.screen import inspect
 from dockscreen.util import commandline
 
 

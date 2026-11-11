@@ -19,7 +19,7 @@ from dockscreen.commands import (
     helptext,
 )
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.report import Report
+from dockscreen.policy.report import Report
 from dockscreen.util import commandline, messages
 
 # Global `docker` options that consume the following token as their value.

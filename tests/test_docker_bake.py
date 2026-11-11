@@ -9,8 +9,8 @@ from dockscreen.commands import docker_bake
 from dockscreen.commands.docker import BUILDX_OPTS_WITH_VALUE
 from dockscreen.host.docker import DockerError
 from dockscreen.model.imagebuild import BakeDefinition
-from dockscreen.screen import policy
-from dockscreen.screen.finding import Verdict
+from dockscreen.policy import policy
+from dockscreen.policy.finding import Verdict
 from dockscreen.util import messages
 
 

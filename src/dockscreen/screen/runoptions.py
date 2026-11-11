@@ -16,11 +16,11 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.compose import userargs
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Service
-from dockscreen.screen.projectpatch import ProjectPatch, Substitution
+from dockscreen.policy.projectpatch import ProjectPatch, Substitution
+from dockscreen.screen import userargs
 
 USER = ("--user", "-u")
 VOLUME = ("--volume", "-v")

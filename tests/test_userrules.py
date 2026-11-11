@@ -2,8 +2,8 @@ import pytest
 from fakes import id_facts
 
 from dockscreen.host import config, hostusers
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.rules import userrules
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.rules import userrules
 
 
 def policy_with(settings=None, **facts):

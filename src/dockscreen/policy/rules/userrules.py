@@ -63,14 +63,14 @@ from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import imageuser
-from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
-from dockscreen.screen.finding import Finding, Verdict
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
-from dockscreen.screen.rules.base import JudgedService, RuleBase
-from dockscreen.screen.userdecision import UserDecision
-from dockscreen.screen.userdecisionview import CHOOSE_HINT, instead_of_root
+from dockscreen.policy import imageuser
+from dockscreen.policy.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.policy.finding import Finding, Verdict
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
+from dockscreen.policy.rules.base import JudgedService, RuleBase
+from dockscreen.policy.userdecision import UserDecision
+from dockscreen.policy.userdecisionview import CHOOSE_HINT, instead_of_root
 from dockscreen.util import commandline, ids
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the

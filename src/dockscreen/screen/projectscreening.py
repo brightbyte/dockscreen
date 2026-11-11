@@ -27,19 +27,19 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, NamedTuple, Self
 
-from dockscreen.compose import inspect, runoptions, serviceinfo, userargs
-from dockscreen.compose.screener import Screener
 from dockscreen.host import shellenv
 from dockscreen.host.docker import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import hardening, policy, userdecisionview
-from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.finding import Finding, Verdict
-from dockscreen.screen.notice import Notice
-from dockscreen.screen.projectpatch import ProjectPatch
-from dockscreen.screen.report import Report
+from dockscreen.policy import hardening, policy, userdecisionview
+from dockscreen.policy.decisions import Decisions
+from dockscreen.policy.finding import Finding, Verdict
+from dockscreen.policy.notice import Notice
+from dockscreen.policy.projectpatch import ProjectPatch
+from dockscreen.policy.report import Report
+from dockscreen.screen import inspect, runoptions, serviceinfo, userargs
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 # Options that select the files and the project; ours replace them.

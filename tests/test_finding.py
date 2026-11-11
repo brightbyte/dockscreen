@@ -1,8 +1,8 @@
 import pytest
 
 from dockscreen.host.docker import DockerError
-from dockscreen.screen import finding
-from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.policy import finding
+from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.util import messages
 
 

@@ -20,7 +20,7 @@ from typing import Generic, NamedTuple, TypeVar
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules.userrules import Resolution, UserOption
 from dockscreen.util import commandline
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.
@@ -95,7 +95,7 @@ class UserArgs(NamedTuple, Generic[ArgT]):
 
     It is for the commands that name a service or container: `docker compose run` keeps it, because the
     service it names is the one whose user the command line chooses, so the image does not decide it, and
-    because its options are applied to that service (compose.runoptions). `docker compose up` and `create`
+    because its options are applied to that service (screen.runoptions). `docker compose up` and `create`
     keep one that names no service. `exec`, for compose and docker alike, only needs the rewritten arguments
     (userscreening.resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also
     holds the image and the options only `run` has; both keep the users in a GivenUsers.

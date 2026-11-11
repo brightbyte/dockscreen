@@ -3,8 +3,8 @@ from fakes import Accounts, compose_line, compose_project, id_facts, marked, pro
 
 from dockscreen.commands import compose_audit, compose_harden, docker_compose
 from dockscreen.model.origin import Origin
-from dockscreen.screen import hardening, policy
-from dockscreen.screen.policy import Policy
+from dockscreen.policy import hardening, policy
+from dockscreen.policy.policy import Policy
 from dockscreen.util import messages
 
 NOBODY = "65534:65534"

@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.model.imagebuild import BakeDefinition, ImageBuild, fields
-from dockscreen.screen import finding
-from dockscreen.screen.finding import Finding
-from dockscreen.screen.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
+from dockscreen.policy import finding
+from dockscreen.policy.finding import Finding
+from dockscreen.policy.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
 
 BUILD_HARMLESS_KEYS = frozenset({
     "args", "dockerfile_inline", "extra_hosts", "isolation", "labels", "no_cache", "platforms",

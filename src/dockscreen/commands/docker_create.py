@@ -7,10 +7,10 @@ The container is checked when it is started (docker_start).
 from collections.abc import Sequence
 
 from dockscreen.commands import helptext
-from dockscreen.compose import runargs, userscreening
-from dockscreen.compose.screener import Screener
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import hardening
+from dockscreen.policy import hardening
+from dockscreen.screen import runargs, userscreening
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 

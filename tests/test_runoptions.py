@@ -1,7 +1,7 @@
 from fakes import make_runtime, project_of
 
-from dockscreen.compose import runoptions, userargs
 from dockscreen.model.origin import Origin
+from dockscreen.screen import runoptions, userargs
 
 ME = (1000, 1001)
 

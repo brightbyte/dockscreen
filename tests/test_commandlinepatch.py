@@ -2,11 +2,11 @@ from fakes import id_facts
 
 from dockscreen.model.image import Image
 from dockscreen.model.origin import Origin
-from dockscreen.screen import hardening
-from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
-from dockscreen.screen.notice import NoticeSeverity
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.userdecision import UserDecision
+from dockscreen.policy import hardening
+from dockscreen.policy.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.policy.notice import NoticeSeverity
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.userdecision import UserDecision
 
 POLICY = Policy(id_facts())
 

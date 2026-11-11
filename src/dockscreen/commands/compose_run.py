@@ -7,9 +7,9 @@ checked against the image.
 """
 
 from dockscreen.commands import helptext
-from dockscreen.compose import projectscreening, userargs, userscreening
-from dockscreen.compose.screener import Screener
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import projectscreening, userargs, userscreening
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 

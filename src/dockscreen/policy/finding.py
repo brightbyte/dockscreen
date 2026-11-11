@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 
 from dockscreen.host.docker import DockerError
 from dockscreen.model.origin import Origin
-from dockscreen.screen.notice import Notice, NoticeSeverity
+from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.util import messages
 
 

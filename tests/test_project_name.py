@@ -2,10 +2,10 @@ import pytest
 from fakes import FakeImages, compose_line, compose_project, docker_dispatch, id_facts
 
 from dockscreen.commands import compose_up
-from dockscreen.compose import inspect
 from dockscreen.host.docker import DockerError
-from dockscreen.screen import policy
-from dockscreen.screen.finding import Verdict
+from dockscreen.policy import policy
+from dockscreen.policy.finding import Verdict
+from dockscreen.screen import inspect
 
 
 def test_the_containers_of_a_project_are_found_by_its_label_and_say_where_they_were_made():

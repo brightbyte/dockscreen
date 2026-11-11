@@ -1,9 +1,9 @@
 import pytest
 from fakes import id_facts, make_runtime, texts
 
-from dockscreen.compose import runargs, userargs, userscreening
-from dockscreen.compose.screener import Screener
-from dockscreen.screen import policy
+from dockscreen.policy import policy
+from dockscreen.screen import runargs, userargs, userscreening
+from dockscreen.screen.screener import Screener
 
 ME = (1000, 1001)  # what --as-me stands for
 # the options of each command that take a value

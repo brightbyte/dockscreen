@@ -9,8 +9,8 @@ and to show it (Report.show, Report.show_screening).
 from collections.abc import Iterable
 from typing import NamedTuple, Self
 
-from dockscreen.screen.finding import Finding, Reportable, Verdict, failure_of
-from dockscreen.screen.notice import Notice
+from dockscreen.policy.finding import Finding, Reportable, Verdict, failure_of
+from dockscreen.policy.notice import Notice
 from dockscreen.util import messages
 from dockscreen.util.messages import printable
 

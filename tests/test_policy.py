@@ -8,11 +8,11 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen import policy
-from dockscreen.screen.finding import Finding, Verdict
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.rules import projectrules, servicerules
+from dockscreen.policy import policy
+from dockscreen.policy.finding import Finding, Verdict
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.rules import projectrules, servicerules
 from dockscreen.util import messages
 
 # The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts

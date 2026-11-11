@@ -19,13 +19,13 @@ from dockscreen.model.image import Image, Inspected
 from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
-from dockscreen.screen.decisions import Decisions
-from dockscreen.screen.finding import Finding
-from dockscreen.screen.policy import Policy
-from dockscreen.screen.report import Report
-from dockscreen.screen.rules import userrules
-from dockscreen.screen.rules.userrules import Resolution, UserOption
-from dockscreen.screen.userdecision import UserDecision
+from dockscreen.policy.decisions import Decisions
+from dockscreen.policy.finding import Finding
+from dockscreen.policy.policy import Policy
+from dockscreen.policy.report import Report
+from dockscreen.policy.rules import userrules
+from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.policy.userdecision import UserDecision
 
 
 class Screener(NamedTuple):

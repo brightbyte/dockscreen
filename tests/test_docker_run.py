@@ -2,12 +2,12 @@ import pytest
 from fakes import FakeDocker, docker_line, make_runtime
 
 from dockscreen.commands import docker_run
-from dockscreen.compose import runargs
-from dockscreen.compose.screener import Screener
 from dockscreen.host import config
 from dockscreen.host.docker import DockerError, DockerNotFound
 from dockscreen.model.origin import Origin
-from dockscreen.screen.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.policy.commandlinepatch import Amendment, CommandLinePatch
+from dockscreen.screen import runargs
+from dockscreen.screen.screener import Screener
 from dockscreen.util.messages import BAD, GOOD, WARN
 
 DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]

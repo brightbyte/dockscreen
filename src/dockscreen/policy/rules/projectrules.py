@@ -9,10 +9,10 @@ from typing import Any
 
 from dockscreen.model.mounts import BIND_FLAGS, mount_flags
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen import finding
-from dockscreen.screen.finding import Finding
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
+from dockscreen.policy import finding
+from dockscreen.policy.finding import Finding
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
 
 TOP_LEVEL_KEYS = frozenset({"name", "services", "volumes", "networks", "secrets", "configs", "version"})
 VOLUME_KEYS = frozenset({"name", "driver", "driver_opts", "external", "labels"})

@@ -6,10 +6,10 @@ import pytest
 SOURCE = pathlib.Path(__file__).parent.parent / "src" / "dockscreen"
 # Each layer is a package and may import its own and the ones before it: the shared vocabulary (util),
 # then the concepts that screening judges (model), then what describes the host (host), then the checks,
-# which never call docker (screen), then screening targets with what docker shows of them and with what the
-# command line says (compose), then the commands, docker's and compose's dispatch among them. The module at
+# which never call docker (policy), then screening targets with what docker shows of them and with what the
+# command line says (screen), then the commands, docker's and compose's dispatch among them. The module at
 # the top is the entry point.
-LAYERS = ("util", "model", "host", "screen", "compose", "commands", "entry")
+LAYERS = ("util", "model", "host", "policy", "screen", "commands", "entry")
 
 
 def module_name(path):
@@ -46,7 +46,7 @@ def test_imports_go_from_the_entry_point_down_the_layers(path):
         assert LAYERS.index(layer(name)) <= LAYERS.index(layer(module)), f"{module} imports {name}"
 
 
-@pytest.mark.parametrize("path", sorted((SOURCE / "screen").rglob("*.py")), ids=lambda p: module_name(p))
+@pytest.mark.parametrize("path", sorted((SOURCE / "policy").rglob("*.py")), ids=lambda p: module_name(p))
 def test_the_checks_never_call_docker(path):
     # the policy decides from the facts it is given; a failure to get them (DockerError) is one of them
     for node in ast.walk(ast.parse(path.read_text())):
@@ -60,6 +60,6 @@ def test_the_checks_never_call_docker(path):
             assert {a.name for a in node.names} <= {"DockerError"}
 
 
-@pytest.mark.parametrize("package", ["commands", "compose", "host", "model", "screen", "util"])
+@pytest.mark.parametrize("package", ["commands", "host", "model", "policy", "screen", "util"])
 def test_packages_import_nothing_themselves(package):
     assert (SOURCE / package / "__init__.py").read_text() == ""

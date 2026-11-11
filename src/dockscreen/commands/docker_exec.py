@@ -5,9 +5,9 @@ The command line is trusted, and the container was checked when it started (dock
 """
 
 from dockscreen.commands import helptext
-from dockscreen.compose import runargs, userscreening
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.report import Report
+from dockscreen.policy.report import Report
+from dockscreen.screen import runargs, userscreening
 from dockscreen.util import commandline
 
 

@@ -23,7 +23,7 @@ from dockscreen.commands import (
 )
 from dockscreen.host import shellenv
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.report import Report
+from dockscreen.policy.report import Report
 from dockscreen.util import commandline, messages
 
 # dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there

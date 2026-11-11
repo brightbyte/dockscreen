@@ -4,11 +4,11 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen.compose import inspect
 from dockscreen.host import config
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.model.project import ProjectLocation
-from dockscreen.screen.finding import Verdict
+from dockscreen.policy.finding import Verdict
+from dockscreen.screen import inspect
 
 
 def test_project_directory_is_dir_of_first_file(tmp_path):

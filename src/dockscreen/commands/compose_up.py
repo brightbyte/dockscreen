@@ -6,8 +6,8 @@ The project is checked, its images are looked at, and compose runs the config th
 """
 
 from dockscreen.commands import helptext
-from dockscreen.compose import projectscreening, userargs
 from dockscreen.host.runtime import Runtime
+from dockscreen.screen import projectscreening, userargs
 from dockscreen.util import commandline
 
 

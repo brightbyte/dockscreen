@@ -9,12 +9,12 @@ the command.
 from collections.abc import Collection, Mapping, Sequence
 from typing import Protocol, TypeVar
 
-from dockscreen.compose import userargs
-from dockscreen.compose.screener import Screener
-from dockscreen.compose.userargs import GivenUsers
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.report import Report
-from dockscreen.screen.rules.userrules import Resolution, UserOption
+from dockscreen.policy.report import Report
+from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.screen import userargs
+from dockscreen.screen.screener import Screener
+from dockscreen.screen.userargs import GivenUsers
 from dockscreen.util import messages
 
 # The record a command line as read resolves to.

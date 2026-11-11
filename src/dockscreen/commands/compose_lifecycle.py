@@ -8,12 +8,12 @@ environment is the person's choice and is not checked.
 
 from collections.abc import Sequence
 
-from dockscreen.compose import inspect
-from dockscreen.compose.screener import Screener
 from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen.finding import Finding
-from dockscreen.screen.report import Report
+from dockscreen.policy.finding import Finding
+from dockscreen.policy.report import Report
+from dockscreen.screen import inspect
+from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 

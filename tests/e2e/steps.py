@@ -39,7 +39,7 @@ from realdocker import (
     toml_string,
 )
 
-# What ends dockscreen's output, by verdict (screen.report).
+# What ends dockscreen's output, by verdict (policy.report).
 PASSED, REFUSED, FAILED = "✔ audit passed", "⊖ denied by audit", "✘ audit failed"
 # Labels the containers the scenarios create themselves, so that they can be found and removed.
 LABEL = "dockscreen-e2e"

@@ -2,9 +2,9 @@ import pytest
 
 from dockscreen.model.image import Image
 from dockscreen.model.origin import Origin
-from dockscreen.screen.finding import Finding, Verdict
-from dockscreen.screen.notice import Notice, NoticeSeverity
-from dockscreen.screen.userdecision import UserDecision
+from dockscreen.policy.finding import Finding, Verdict
+from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.userdecision import UserDecision
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
 

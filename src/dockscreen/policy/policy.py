@@ -1,7 +1,7 @@
 """This module defines the Policy class, for checking a compose project, a container, a build or an image
 against the rules of the security policy, with the settings they apply with.
 
-The rules are grouped by what they judge (screen.rules): the keys of a service (rules.servicerules), what
+The rules are grouped by what they judge (policy.rules): the keys of a service (rules.servicerules), what
 a project has besides its services (rules.projectrules), builds (rules.buildrules), and the users
 containers run as (rules.userrules): a service's, an image's and the ones a command line gives. Policy has
 them all, and checks whole targets with them: a project (check_project), a container read back into compose
@@ -31,20 +31,20 @@ from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.screen import finding
-from dockscreen.screen.finding import Finding, Reportable
-from dockscreen.screen.rules import userrules
-from dockscreen.screen.rules.base import JudgedService, unknown_keys
-from dockscreen.screen.rules.buildrules import BuildRules
-from dockscreen.screen.rules.projectrules import TOP_LEVEL_KEYS, ProjectRules
-from dockscreen.screen.rules.servicerules import (
+from dockscreen.policy import finding
+from dockscreen.policy.finding import Finding, Reportable
+from dockscreen.policy.rules import userrules
+from dockscreen.policy.rules.base import JudgedService, unknown_keys
+from dockscreen.policy.rules.buildrules import BuildRules
+from dockscreen.policy.rules.projectrules import TOP_LEVEL_KEYS, ProjectRules
+from dockscreen.policy.rules.servicerules import (
     HARMLESS_SERVICE_KEYS,
     REQUIRED_SERVICE_KEYS,
     SERVICE_CHECKS,
     ServiceRules,
 )
-from dockscreen.screen.rules.userrules import UserRules, image_problem
-from dockscreen.screen.userdecision import UserDecision
+from dockscreen.policy.rules.userrules import UserRules, image_problem
+from dockscreen.policy.userdecision import UserDecision
 
 
 @dataclasses.dataclass(frozen=True)
@@ -53,7 +53,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     the security policy, with the settings they apply with, as the config file sets them for one directory and
     image. It holds those settings, the origins it trusts, and the policy of each service of a project.
 
-    The rules come from the mixins in screen.rules. Instances come from Screener.policy and
+    The rules come from the mixins in policy.rules. Instances come from Screener.policy and
     Screener.project_policy; with_trust and the other with_* methods give copies.
 
     Attributes:

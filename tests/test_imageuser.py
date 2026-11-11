@@ -1,7 +1,7 @@
 import pytest
 
 from dockscreen.model.image import UserIdentity
-from dockscreen.screen import imageuser
+from dockscreen.policy import imageuser
 
 PASSWD = """root:x:0:0:root:/root:/bin/bash
 app:x:100000:100001:app:/home/app:/bin/sh
