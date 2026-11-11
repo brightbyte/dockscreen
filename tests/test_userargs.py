@@ -11,7 +11,7 @@ VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE
 
 
 def refusals(parsed):
-    """What the policy says about the users parsed gives."""
+    """Returns the texts of the policy's refusals of the users that parsed gives."""
     return texts(policy.Policy(id_facts()).check_user_options(parsed.users.given))
 
 

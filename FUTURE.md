@@ -6,7 +6,7 @@ Not planned work: things worth doing once there is a need for them. Each says wh
 
 `--strict-screen` makes `audit` treat the command line as untrusted: what it asks for that a compose project or an image may not have (privileged, cap_add, devices, host namespaces, other security options, bind mounts outside the current directory, a user the id rules refuse) fails the audit. The same could refuse those things at execution time, for `run` first. `runpolicy.findings` already computes them from the created container, so `gate.run` would only need to remove the container and refuse.
 
-Why it is not done yet:
+It is not done yet, for three reasons:
 
 - The threat model trusts the command line, because whoever controls it can call docker directly. Strict execution only adds protection when the command line comes from somewhere less trusted than the person running it (a README, a project's Makefile or scripts, an agent) and dockscreen is installed as `docker`, so that those commands reach it.
 - A script will not pass `--strict-screen` itself. To protect against untrusted scripts it would have to be a config setting (`strict_screen = true` in the config file), with the flag only for one-off use.
@@ -26,4 +26,4 @@ Two sections could match one image: one for the repository (`mariadb`) and one f
 
 `dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`runtime.real_docker`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
 
-Why it is not done yet: nobody has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.
+It is not done yet because nobody has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.

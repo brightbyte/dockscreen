@@ -107,7 +107,7 @@ def make_runtime(**fields):
 
 
 class Executing:
-    """What a fake docker records of exec: every argv it was replaced with, and the compose ones."""
+    """Recorder of a fake docker's exec calls: every argv it was replaced with, and the compose ones."""
 
     binary = "docker"
     environment = os.environ
@@ -244,7 +244,7 @@ class FakeDocker(Executing):
 
 
 class Recorder:
-    """What docker was asked to run: compose commands, and the config file each one would read."""
+    """Log of the commands docker was asked to run: compose commands, and the config file each reads."""
 
     def __init__(self):
         self.children = []

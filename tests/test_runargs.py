@@ -10,7 +10,7 @@ ME = (4242, 4343)
 
 
 def refusals(parsed):
-    """What the policy says about the users parsed gives."""
+    """Returns the texts of the policy's refusals of the users that parsed gives."""
     return fakes.texts(policy.Policy(fakes.id_facts()).check_user_options(parsed.users.given))
 
 

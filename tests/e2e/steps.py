@@ -46,7 +46,7 @@ LABEL = "dockscreen-e2e"
 
 
 class World:
-    """What a scenario has set up, and what happened when dockscreen ran."""
+    """State of a scenario: its setup, and the result of running dockscreen."""
 
     def __init__(self, docker: RealDocker, handoff: Path, base: Path, config_home: Path,
                  pull: Callable[[str], str], nodeid: str) -> None:
