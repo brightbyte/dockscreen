@@ -152,4 +152,4 @@ def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], s
     """
     if origin in trust:
         return [Notice(str(r), NoticeSeverity.WARNING, subject, messages.help_of(r)) for r in reasons]
-    return refusals(reasons, subject)
+    return [*refusals(reasons, subject)]

@@ -25,9 +25,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    parsed = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
-    users, parsed = userargs.screened(parsed, Screener(runtime))
-    if not users.passed:
+    read = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
+    users, parsed = userargs.screened(read, Screener(runtime))
+    if parsed is None:
         users.show()
         return 1
     return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,

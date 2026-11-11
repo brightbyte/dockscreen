@@ -16,7 +16,7 @@ if no user had been chosen.
 """
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import NamedTuple, Protocol, Self, TypeVar
+from typing import Generic, NamedTuple, Protocol, TypeVar
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
@@ -37,6 +37,9 @@ COMPOSE_VALUE_FLAGS = {
 
 # An argument as read: a string, or the UserOption of --as or --as-me until it is resolved (resolved).
 Arg = str | UserOption
+
+# The arguments a record holds: Arg as read, str once resolved.
+ArgT = TypeVar("ArgT", bound=Arg)
 
 
 class GivenUsers:
@@ -87,7 +90,7 @@ class GivenUsers:
         return option
 
 
-class UserArgs(NamedTuple):
+class UserArgs(NamedTuple, Generic[ArgT]):
     """Record of what a command line that runs something in a container says about the service or container
     it names and about the user, read only far enough to find those. It holds the service or container, the
     arguments, the users it gives, and the options that take a value.
@@ -110,28 +113,28 @@ class UserArgs(NamedTuple):
       as their UserOption until resolved
     """
     service: str | None
-    args: tuple[Arg, ...]
+    args: tuple[ArgT, ...]
     users: GivenUsers
-    values: tuple[tuple[str, Arg], ...] = ()
+    values: tuple[tuple[str, ArgT], ...] = ()
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "UserArgs[str]":
         """Returns this record with --as and --as-me replaced by the users they stand for: `--user=uid:gid`
         in args (the function resolved), `uid:gid` in values.
         """
         values = tuple((option, _resolved_arg(value, resolutions, bare=True))
                        for option, value in self.values)
-        return self._replace(args=resolved(self.args, resolutions), values=values)
+        return UserArgs(self.service, resolved(self.args, resolutions), self.users, values)
 
     @classmethod
-    def unread(cls, args: list[str], runtime: Runtime) -> "UserArgs":
+    def unread(cls, args: list[str], runtime: Runtime) -> "UserArgs[str]":
         """Returns args as a command line that names no service and gives no user, for a subcommand that
         takes neither (`up`, `create`).
         """
-        return cls(None, tuple(args), GivenUsers(runtime.me, runtime.accounts))
+        return UserArgs(None, tuple(args), GivenUsers(runtime.me, runtime.accounts))
 
 
 def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int],
-          accounts: hostusers.HostAccounts) -> UserArgs:
+          accounts: hostusers.HostAccounts) -> UserArgs[Arg]:
     """Parses args far enough to find the service or container, and whether a user is given.
 
     Returns a UserArgs, with --as and --as-me as their UserOption, and the users given.
@@ -173,14 +176,14 @@ class _Reading:
         self.kept.append(option)
         self.values.append(("--user", option))
 
-    def result(self, service: str | None, rest: Sequence[str]) -> UserArgs:
+    def result(self, service: str | None, rest: Sequence[str]) -> UserArgs[Arg]:
         """Returns what was read, with service and the rest of the arguments after it."""
         return UserArgs(service, (*self.kept, *rest), self.users, tuple(self.values))
 
 
 
 def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
-                  accounts: hostusers.HostAccounts) -> UserArgs:
+                  accounts: hostusers.HostAccounts) -> UserArgs[Arg]:
     """Returns parse of the arguments of `docker compose run` or `exec`.
 
     Parameters:
@@ -198,7 +201,12 @@ def resolved(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]) 
     return tuple(_resolved_arg(arg, resolutions) for arg in args)
 
 
-class _Resolvable(Protocol):
+# The record a command line as read resolves to.
+Resolved_co = TypeVar("Resolved_co", covariant=True)
+Resolved = TypeVar("Resolved")
+
+
+class _Resolvable(Protocol[Resolved_co]):
     """Protocol for a command line as read whose --as and --as-me can be resolved: UserArgs and
     runargs.RunArgs.
     """
@@ -206,19 +214,16 @@ class _Resolvable(Protocol):
     @property
     def users(self) -> GivenUsers: ...
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self: ...
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Resolved_co: ...
 
 
-Parsed = TypeVar("Parsed", bound=_Resolvable)
-
-
-def screened(parsed: Parsed, screener: Screener) -> tuple[Report, Parsed]:
+def screened(parsed: _Resolvable[Resolved], screener: Screener) -> tuple[Report, Resolved | None]:
     """Has the policy judge the users parsed gives and resolve its --as and --as-me
     (Screener.check_given_users, Screener.resolve_given_users); returns the report, and parsed with them
     replaced by ids (resolved).
 
-    The report holds the refusals, and parsed is returned as it is, unresolved; or, if the users pass, the
-    notices of resolving them.
+    The report holds the refusals, and the record is None; or, if the users pass, the notices of resolving
+    them.
 
     Parameters:
     - parsed: the command line as read (UserArgs, runargs.RunArgs)
@@ -226,7 +231,7 @@ def screened(parsed: Parsed, screener: Screener) -> tuple[Report, Parsed]:
     """
     refused = screener.check_given_users(parsed.users.given)
     if not refused.passed:
-        return refused, parsed
+        return refused, None
     resolutions = screener.resolve_given_users(parsed.users.given)
     return Report(tuple(r.notice for r in resolutions.values() if r.notice)), parsed.resolved(resolutions)
 
@@ -252,7 +257,7 @@ def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime
     - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
     """
     report, parsed = screened(parse(args, value_flags, runtime.me, runtime.accounts), Screener(runtime))
-    if not report.passed:
+    if parsed is None:
         report.show()
         return None
     for notice in report.notices:

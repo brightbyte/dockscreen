@@ -27,7 +27,7 @@ VOLUME = ("--volume", "-v")
 ENV_FILE = ("--env-from-file",)
 
 
-def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime) -> ProjectPatch:
+def substitutions(parsed: userargs.UserArgs[str], service: Service, runtime: Runtime) -> ProjectPatch:
     """Returns the patch that makes service what `run` with parsed's options runs.
 
     Parameters:
@@ -53,7 +53,7 @@ def substitutions(parsed: userargs.UserArgs, service: Service, runtime: Runtime)
     return ProjectPatch.of(found)
 
 
-def _values(parsed: userargs.UserArgs, options: Sequence[str]) -> list[str]:
+def _values(parsed: userargs.UserArgs[str], options: Sequence[str]) -> list[str]:
     """Returns the values parsed gives to any of options, in their order."""
     return [value for option, value in parsed.values if option in options]
 

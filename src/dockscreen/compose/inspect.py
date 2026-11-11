@@ -13,7 +13,7 @@ from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.screen import policy
-from dockscreen.screen.finding import Finding, Verdict
+from dockscreen.screen.finding import Finding, Reportable, Verdict
 from dockscreen.screen.report import Report
 from dockscreen.screen.rules.base import is_inside
 from dockscreen.screen.screener import Screener
@@ -91,7 +91,8 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
 
 
 def passes(args: Sequence[str], runtime: Runtime,
-           rules: Callable[[policy.Policy, Project], list[Finding]] = policy.Policy.check_project) -> bool:
+           rules: Callable[[policy.Policy, Project], Sequence[Reportable]] = policy.Policy.check_project
+           ) -> bool:
     """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict.
 
     Parameters:

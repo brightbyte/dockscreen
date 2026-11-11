@@ -130,7 +130,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         config, name = project.definition, project.name
         top_level = [*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
                      *self._check_service_names(config)]
-        problems: list[Reportable] = finding.refusals(top_level)
+        problems: list[Reportable] = [*finding.refusals(top_level)]
         if not name:  # volumes and networks are scoped to the project by its name
             problems += finding.refusals(["config has no project name"])
         for service in project.services:

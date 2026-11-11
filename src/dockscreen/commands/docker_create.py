@@ -25,12 +25,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     assert parent_cli.cmd == "create"
     args = parent_cli.args
     try:
-        parsed = runargs.parse(args, runtime.me, runtime.accounts)
+        read = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError:  # docker will report what is wrong with them
         resolved: Sequence[str] = args
     else:
-        users, parsed = userargs.screened(parsed, Screener(runtime))
-        if not users.passed:
+        users, parsed = userargs.screened(read, Screener(runtime))
+        if parsed is None:
             return users.show()
         for message in users.notices:
             messages.notice(message)

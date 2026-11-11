@@ -111,8 +111,8 @@ def test_as_resolves_a_local_account_on_the_host(flags):
 
 def test_an_as_that_was_not_resolved_cannot_reach_docker():
     parsed = runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
-    report, unresolved = screened(parsed)
-    assert not report.passed and unresolved is parsed
+    report, resolved = screened(parsed)
+    assert not report.passed and resolved is None
     with pytest.raises(KeyError):
         parsed.resolved({})  # nothing to stand for
 

@@ -78,8 +78,11 @@ class HasMark(Protocol):
     - shown: the text, followed by its help if there is one and helpful mode is on (with_help)
     """
 
-    mark: Mark
-    shown: str
+    @property
+    def mark(self) -> Mark: ...
+
+    @property
+    def shown(self) -> str: ...
 
 
 def with_help(text: str, help: str | None) -> str:
@@ -157,7 +160,7 @@ def notice(text: object) -> None:
         print(f"{OUTPUT_INDENT}{printable(line)}", file=sys.stderr)
 
 
-def out(text: str, indent: bool = True) -> None:
+def out(text: str | HasMark, indent: bool = True) -> None:
     """Prints a line of a report to stdout, escaped and with its mark coloured.
 
     Parameters:
@@ -184,7 +187,7 @@ def report_width(fallback: int = 0) -> int | None:
     return None if columns < MIN_WIDTH else min(columns, MAX_WIDTH)
 
 
-def _wrapped(text: str, width: int | None, colour: bool) -> list[str]:
+def _wrapped(text: str | HasMark, width: int | None, colour: bool) -> list[str]:
     """Splits text into escaped lines that fit width columns after a tab, never breaking a word.
 
     Continued lines line up under the text after the mark. width: None for one line; colour: whether

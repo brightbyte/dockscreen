@@ -11,10 +11,10 @@ keeps them, until they are resolved.
 """
 
 from collections.abc import Mapping, Sequence
-from typing import NamedTuple, Self
+from typing import Generic, NamedTuple
 
 from dockscreen.cli import userargs
-from dockscreen.cli.userargs import Arg
+from dockscreen.cli.userargs import Arg, ArgT
 from dockscreen.host import hostusers
 from dockscreen.screen.rules.userrules import Resolution, UserOption
 from dockscreen.util import commandline
@@ -51,7 +51,7 @@ class ParseError(Exception):
     """
 
 
-class RunArgs(NamedTuple):
+class RunArgs(NamedTuple, Generic[ArgT]):
     """Record of what a `docker run` command line asks for, read far enough to run it as `docker create` and
     `docker start`. It holds the arguments for `create`, the image and its command, the options only `run`
     has, and what the command line says about the user.
@@ -71,16 +71,17 @@ class RunArgs(NamedTuple):
     - detach_keys: the value of `--detach-keys`, or None
     - users: what the command line says about the user before the image (GivenUsers)
     """
-    create_args: tuple[Arg, ...]
+    create_args: tuple[ArgT, ...]
     image: str
     command: tuple[str, ...]
     detach: bool
     detach_keys: str | None
     users: userargs.GivenUsers
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Self:
+    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "RunArgs[str]":
         """Returns this record with --as and --as-me replaced by `--user=uid:gid` (userargs.resolved)."""
-        return self._replace(create_args=userargs.resolved(self.create_args, resolutions))
+        return RunArgs(userargs.resolved(self.create_args, resolutions), self.image, self.command,
+                       self.detach, self.detach_keys, self.users)
 
 
 class _State:
@@ -92,7 +93,7 @@ class _State:
         self.detach_keys: str | None = None
 
 
-def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> RunArgs:
+def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAccounts) -> RunArgs[Arg]:
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
     the options `create` lacks, with --as and --as-me as their UserOption.
 

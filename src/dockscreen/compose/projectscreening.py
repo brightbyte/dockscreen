@@ -183,7 +183,7 @@ def decide(cleared: ClearedProject, screener: Screener, command: Command, args: 
 
 
 def finish(cleared: ClearedProject, decided: Decisions, screener: Screener,
-           parsed: userargs.UserArgs | None = None, strict: bool = False
+           parsed: userargs.UserArgs[str] | None = None, strict: bool = False
            ) -> RunnableProject | Report:
     """Makes the project that will run, the resolved one with the hardening and then what the images decided
     (Decisions.changes), and checks it with the policy that decided, with image sections only where the
@@ -220,7 +220,7 @@ def surroundings(loaded: LoadedProject, screener: Screener) -> list[Notice]:
             *here.check_shell_env(shellenv.shell_values(loaded.hardened.definition, runtime.env))]
 
 
-def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs, runtime: Runtime,
+def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs[str], runtime: Runtime,
                   allow_me: bool = False, strict: bool = False, notices: Sequence[Notice] = ()) -> int:
     """Runs `docker compose global_args sub` with parsed's arguments, sub a subcommand that starts
     containers, on the project global_args select if it passes the checks.
@@ -286,7 +286,7 @@ def _name_conflicts(loaded: LoadedProject, static_policy: policy.Policy, screene
     return inspect.name_conflicts(static_policy, name, loaded.directory, screener.docker)
 
 
-def _as_run(final: Project, parsed: userargs.UserArgs, runtime: Runtime) -> Project:
+def _as_run(final: Project, parsed: userargs.UserArgs[str], runtime: Runtime) -> Project:
     """Returns the final project with the service that `run` runs changed by its options (runoptions)."""
     name = parsed.service
     if name is None or name not in (final.definition.get("services") or {}):
@@ -294,7 +294,7 @@ def _as_run(final: Project, parsed: userargs.UserArgs, runtime: Runtime) -> Proj
     return runoptions.substitutions(parsed, final.service(name), runtime).applied_to(final)
 
 
-def _chosen(parsed: userargs.UserArgs) -> frozenset[str]:
+def _chosen(parsed: userargs.UserArgs[str]) -> frozenset[str]:
     """Returns the services whose user the command line chooses: `run -u uid:gid` or `run --as NAME`."""
     return frozenset({parsed.service}) if parsed.users.chosen and parsed.service else frozenset()
 

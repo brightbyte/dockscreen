@@ -59,7 +59,7 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
     """
     screener = Screener(runtime, own_ids_hint="")  # the image's user is set in the config file, see the hint
     if is_remote(cli.lead_args, runtime.docker):
-        return screener.policy(None).check_daemon(True)
+        return [*screener.policy(None).check_daemon(True)]
     problems: list[Reportable] = []
     for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
         try:

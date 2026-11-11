@@ -60,13 +60,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if not daemon.passed:
         return daemon.show()
     try:
-        parsed = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
+        read = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         refusal = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
         Report.of([refusal]).show_screening()
         return 1
-    given, parsed = userargs.screened(parsed, screener)
-    if not given.passed:
+    given, parsed = userargs.screened(read, screener)
+    if parsed is None:
         given.show()
         return 1
     root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
@@ -108,7 +108,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     )
 
 
-def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: CommandLinePatch,
+def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLinePatch,
                     decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
     """Creates the container (check); returns it with the decision of its user, or the exit status if it
     may not start.
@@ -128,7 +128,7 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs, changes: Comman
     return created
 
 
-def check(screener: Screener, parsed: runargs.RunArgs, changes: CommandLinePatch,
+def check(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLinePatch,
           decided: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
     """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
@@ -174,7 +174,7 @@ def _command_line_findings(screener: Screener, container: Container, decision: U
     return screener.policy(screener.runtime.cwd, decision.section, trust).check_container(container)
 
 
-def _user_origin(parsed: runargs.RunArgs, decided: UserDecision | None) -> Origin:
+def _user_origin(parsed: runargs.RunArgs[str], decided: UserDecision | None) -> Origin:
     """Returns where the user of the container comes from: where the decided one does, for a container
     re-created with it (check), else the command line if it gives one, else the image.
     """
@@ -183,7 +183,7 @@ def _user_origin(parsed: runargs.RunArgs, decided: UserDecision | None) -> Origi
     return Origin.COMMAND_LINE if parsed.users.chosen else Origin.IMAGE
 
 
-def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs) -> list[Finding]:
+def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs[str]) -> list[Finding]:
     """Checks that our reading of the command line matches the container the daemon created.
 
     Returns the problem if it does not, else an empty list.
@@ -224,13 +224,13 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if not daemon.passed:
         return daemon.show(brief)
     try:
-        parsed = runargs.parse(args, runtime.me, runtime.accounts)
+        read = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         messages.notice(e)
         messages.notice(AUDIT_USAGE)
         return 2
-    given, parsed = userargs.screened(parsed, screener)
-    if not given.passed:
+    given, parsed = userargs.screened(read, screener)
+    if parsed is None:
         return given.show(brief)
     if not brief:
         for message in given.notices:

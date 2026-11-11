@@ -47,7 +47,8 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     outcome, lines = _audit_images(loaded, screener, brief)
     if not brief:
         around = projectscreening.surroundings(loaded, screener)
-        for line in [*loaded.hardening.notices(), *around, *lines]:
+        report_lines: list[str | messages.HasMark] = [*loaded.hardening.notices(), *around, *lines]
+        for line in report_lines:
             messages.out(line)
         if outcome.findings or loaded.hardening:
             messages.out(messages.Message(messages.HINT, HARDEN_HINT))
@@ -55,7 +56,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
 
 def _audit_images(loaded: projectscreening.LoadedProject, screener: Screener, brief: bool
-                  ) -> tuple[Report, Sequence[str]]:
+                  ) -> tuple[Report, Sequence[str | messages.HasMark]]:
     """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
     if the checks before them pass.
 
