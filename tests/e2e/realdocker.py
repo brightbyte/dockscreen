@@ -1,4 +1,6 @@
-"""What the end-to-end tests share: the real docker, the images they use, skipping on unmet preconditions."""
+"""This module provides the parts the end-to-end tests share: the real docker, the images they use, and
+skipping on unmet preconditions.
+"""
 
 import grp
 import json

@@ -8,7 +8,7 @@ It protects you from what you download, the compose project and its images. It d
     dockscreen compose up -d
     pytest
 
-## What gets refused
+## Refusals
 
 For `dockscreen compose`: `up`, `create`, `run`, `watch`, `scale` and `alpha` refuse a project that:
 

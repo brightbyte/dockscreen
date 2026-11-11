@@ -1,4 +1,4 @@
-# What the end-to-end tests do not reach
+# Gaps in end-to-end coverage
 
 Audience: whoever changes dockscreen's checks and reads the coverage report of
 `DOCKSCREEN_E2E_COVERAGE=1 pytest -m e2e`. Every line and branch of dockscreen that the scenarios do not
