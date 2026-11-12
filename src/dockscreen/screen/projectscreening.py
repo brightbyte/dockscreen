@@ -8,7 +8,8 @@ project with what was decided is checked once more (finish), which makes it runn
 caller composes the stages it needs; the types say which stage may follow which, so nothing is pulled or
 built for a project that was not cleared, and nothing runs that was not checked last.
 
-The commands that act on the containers a project already has check only its name (check_name).
+The commands that act on the containers a project already has check only its name (check_name), and
+the ones that only build check only what the builds can reach (check_build).
 
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
@@ -34,7 +35,7 @@ from dockscreen.host.docker import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.origin import STRICT, TRUSTED, Origin
 from dockscreen.model.project import Project
-from dockscreen.policy import hardening, policy, userdecisionview
+from dockscreen.policy import finding, hardening, policy, userdecisionview
 from dockscreen.policy.decisions import Decisions
 from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.policy.notice import Notice
@@ -291,11 +292,32 @@ def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
     try:
         project = inspect.project(global_args, runtime)
     except (inspect.ProjectRefused, DockerError):
+        # these commands start nothing and build nothing, so compose may as well say what is wrong
         return []
     if not project.name:
         return []
     project_policy = Screener(runtime).project_policy(project)
     return inspect.name_conflicts(project_policy, project.name, project.directory, runtime.docker)
+
+
+def check_build(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
+    """Returns why the project's builds may not run: what they can reach (Policy.check_project_build), or
+    why the project could not be loaded or was refused before it was.
+
+    A project that cannot be loaded is not left to compose, as check_name leaves it: a build reads files, so
+    what cannot be checked does not run.
+
+    Parameters:
+    - global_args: the compose options before the subcommand, which select the project
+    - runtime: the Runtime of the command
+    """
+    try:
+        project = inspect.project(global_args, runtime)
+    except DockerError as e:
+        return [finding.failure_of(e)]
+    except inspect.ProjectRefused as e:
+        return list(e.findings)
+    return Screener(runtime).project_policy(project).check_project_build(project)
 
 
 def _name_conflicts(loaded: LoadedProject, static_policy: policy.Policy, screener: Screener) -> list[Finding]:

@@ -2,14 +2,14 @@
 compose builds the project.
 
 Builds start no containers of the project, so only what a build can reach is checked
-(policy.Policy.check_project_build): build sources inside the project, no host network, no `x-` keys that
+(projectscreening.check_build): build sources inside the project, no host network, no `x-` keys that
 `buildx bake` would read.
 """
 
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
-from dockscreen.policy import policy
-from dockscreen.screen import inspect
+from dockscreen.policy.report import Report
+from dockscreen.screen import projectscreening
 from dockscreen.util import commandline
 
 
@@ -24,7 +24,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd in ("build", "bake")
     global_args = parent_cli.lead_args
-    if not inspect.passes(global_args, runtime, policy.Policy.check_project_build):
+    if not Report.of(projectscreening.check_build(global_args, runtime)).show_screening():
         return 1
     runtime.docker.exec(["compose", *global_args, parent_cli.cmd, *parent_cli.args])
 

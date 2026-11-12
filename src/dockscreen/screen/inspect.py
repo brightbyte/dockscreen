@@ -5,7 +5,7 @@ which containers have its name, and which configured mount directories are risky
 import json
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from dockscreen.host import config
@@ -13,8 +13,7 @@ from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
 from dockscreen.policy import policy
-from dockscreen.policy.finding import Finding, Reportable, Verdict
-from dockscreen.policy.report import Report
+from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.policy.rules.base import is_inside
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
@@ -88,26 +87,6 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
     """
     return {directory: _sensitive_inside(directory, runtime)
             for directory in config.all_mount_dirs(runtime.settings)}
-
-
-def passes(args: Sequence[str], runtime: Runtime,
-           rules: Callable[[policy.Policy, Project], Sequence[Reportable]] = policy.Policy.check_project
-           ) -> bool:
-    """Tells whether rules(policy, project) finds nothing in the selected project, printing the verdict.
-
-    Parameters:
-    - args: the compose options before the subcommand, which select the project
-    - runtime: the Runtime of the command
-    - rules: the checks to run: a Policy method that takes the project, check_project by default
-    """
-    try:
-        found = project(args, runtime)
-    except DockerError as e:
-        return Report.failure(e).show_screening()
-    except ProjectRefused as e:
-        return Report.of(e.findings).show_screening()
-    project_policy = Screener(runtime).project_policy(found)
-    return Report.of(rules(project_policy, found)).show_screening()
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from fakes import ME, FakeImages, compose_line, compose_project, make_runtime, m
 from dockscreen.commands import compose_run, compose_up
 from dockscreen.host import config
 from dockscreen.host.docker import Docker
+from dockscreen.policy.finding import Verdict
 from dockscreen.policy.report import Report
 from dockscreen.screen import projectscreening
 from dockscreen.screen.screener import Screener
@@ -48,6 +49,23 @@ def test_compose_runs_from_the_hardened_config_with_the_project_pinned(tmp_path,
     assert web["cap_drop"] == ["ALL"] and web["security_opt"] == ["no-new-privileges:true"]
     assert ('added cap_drop: ["ALL"] and security_opt: ["no-new-privileges:true"] where '
             "missing, in services web") in capsys.readouterr().err
+
+
+def test_a_build_is_judged_by_what_it_can_reach(tmp_path):
+    runtime, _ = compose_project(tmp_path, project_config(build={"context": "."}))
+    assert projectscreening.check_build([], runtime) == []
+
+    runtime, _ = compose_project(tmp_path, project_config(build={"context": "/etc"}))
+    [refusal] = projectscreening.check_build([], runtime)
+    assert refusal.verdict is Verdict.REFUSED and "'/etc' is outside" in str(refusal)
+
+
+def test_a_build_of_a_project_that_cannot_be_loaded_is_a_failure_not_left_to_compose(tmp_path):
+    (tmp_path / "empty").mkdir()
+    runtime = make_runtime(cwd=str(tmp_path / "empty"), home=str(tmp_path))
+    [failure] = projectscreening.check_build([], runtime)
+    assert failure.verdict is Verdict.FAILED and "no compose file" in str(failure)
+    assert projectscreening.check_name([], runtime) == []  # which leaves it to compose
 
 
 def test_every_generated_file_is_private_and_removed_afterwards(tmp_path):
