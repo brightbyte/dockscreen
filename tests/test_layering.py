@@ -60,6 +60,8 @@ def test_the_checks_never_call_docker(path):
             assert {a.name for a in node.names} <= {"DockerError"}
 
 
-@pytest.mark.parametrize("package", ["commands", "host", "model", "policy", "screen", "util"])
-def test_packages_import_nothing_themselves(package):
-    assert (SOURCE / package / "__init__.py").read_text() == ""
+@pytest.mark.parametrize("package", ["commands", "host", "model", "policy", "policy/rules", "screen", "util"])
+def test_packages_hold_only_their_docstring(package):
+    # what a package is for, holds and must not do; its modules are imported by name
+    body = ast.parse((SOURCE / package / "__init__.py").read_text()).body
+    assert len(body) == 1 and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
