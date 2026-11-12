@@ -2,12 +2,12 @@
 does (`scale`, `watch`, `alpha`).
 
 The project is checked, its images are looked at, and compose runs the config that was checked
-(projectscreening.check_and_run).
+(projectrun.check_and_run).
 """
 
-from dockscreen.commands import helptext
+from dockscreen.commands import helptext, projectrun
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import projectscreening, userargs
+from dockscreen.screen import userargs
 from dockscreen.util import commandline
 
 
@@ -22,7 +22,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd is not None
     parsed = userargs.UserArgs.unread(list(parent_cli.args), runtime)
-    return projectscreening.check_and_run(list(parent_cli.lead_args), parent_cli.cmd, parsed, runtime,
+    return projectrun.check_and_run(list(parent_cli.lead_args), parent_cli.cmd, parsed, runtime,
                                           parent_cli.allow_me)
 
 

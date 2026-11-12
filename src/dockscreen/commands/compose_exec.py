@@ -7,7 +7,7 @@ The command line is trusted, and the service's container was checked when it was
 from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.screen import userargs, userscreening
-from dockscreen.util import commandline
+from dockscreen.util import commandline, messages
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -21,9 +21,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "exec"
     value_flags = userargs.COMPOSE_VALUE_FLAGS["exec"]
-    resolved = userscreening.resolve_user_args(list(parent_cli.args), value_flags, runtime)
+    report, resolved = userscreening.resolve_user_args(list(parent_cli.args), value_flags, runtime)
     if resolved is None:
+        report.show()
         return 1
+    for notice in report.notices:
+        messages.notice(notice)
     runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved])
 
 

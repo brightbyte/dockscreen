@@ -15,7 +15,6 @@ from dockscreen.policy.rules.userrules import Resolution, UserOption
 from dockscreen.screen import userargs
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userargs import GivenUsers
-from dockscreen.util import messages
 
 # The record a command line as read resolves to.
 Resolved_co = TypeVar("Resolved_co", covariant=True)
@@ -53,11 +52,9 @@ def screened(parsed: _Resolvable[Resolved], screener: Screener) -> tuple[Report,
 
 
 def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
-                      ) -> list[str] | None:
-    """Returns args with --as and --as-me replaced by ids (screened), and prints the notices of resolving
-    names.
-
-    Returns None, and reports why, if the user cannot be used.
+                      ) -> tuple[Report, list[str] | None]:
+    """Returns the report of judging the users args give, with the notices of resolving names, and args with
+    --as and --as-me replaced by ids (screened); None in their place if the users are refused.
 
     Parameters:
     - args: the subcommand's arguments
@@ -66,9 +63,4 @@ def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime
     """
     read = userargs.parse(args, value_flags, runtime.me, runtime.accounts)
     report, parsed = screened(read, Screener(runtime))
-    if parsed is None:
-        report.show()
-        return None
-    for notice in report.notices:
-        messages.notice(notice)
-    return list(parsed.args)
+    return report, None if parsed is None else list(parsed.args)

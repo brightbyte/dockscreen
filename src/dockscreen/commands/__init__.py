@@ -5,6 +5,7 @@ Contents:
 - docker_*: the docker commands (run, create, start, exec, bake), and docker_compose for `docker compose`
 - compose_*: the compose subcommands, one module per group that is screened alike
 - docker, docker_compose: reading the command line and dispatching to a command
+- projectrun: what compose up, create and run share, from screening the project to running compose
 - helptext: the help of the commands
 
 Not here: screening. A command has its targets screened (screen), prints what was found, and hands over to

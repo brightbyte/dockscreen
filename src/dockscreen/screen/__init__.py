@@ -4,7 +4,7 @@ has the policy judge it, in the stages each kind of target needs.
 Contents:
 - screener: the Screener, which gives the policy for a target and looks at images through docker
 - projectscreening, with inspect, serviceinfo, imageusers and runoptions: a compose project, from loading
-  its config to running compose on what was checked
+  its config to the generated file compose is to run from
 - containerscreening: a container, created as `docker run` makes it or existing already
 - bakescreening: the definition `docker buildx bake` would build
 - userargs, runargs: reading command lines just far enough to find the users and the target
@@ -17,11 +17,6 @@ Constraints:
 - Screening returns what was found, and leaves printing it to the command.
 - docker is asked for facts, and to create what is to be looked at. Handing over to docker, to run what
   passed, is the command's.
-
-Exceptions:
-- projectscreening.check_and_run prints the notices and the verdict, and runs compose as a child: it is
-  the shared body of compose up, create and run, and so a command's work.
-- userscreening.resolve_user_args prints the notices of resolving names.
 
 Dependencies: util, model, host and policy. Not commands.
 """

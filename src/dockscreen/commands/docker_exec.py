@@ -8,7 +8,7 @@ from dockscreen.commands import helptext
 from dockscreen.host.runtime import Runtime
 from dockscreen.policy.report import Report
 from dockscreen.screen import runargs, userscreening
-from dockscreen.util import commandline
+from dockscreen.util import commandline, messages
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -24,9 +24,12 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if parent_cli.strict:
         return Report.refusal(commandline.STRICT_REFUSAL).show()
 
-    resolved = userscreening.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
+    report, resolved = userscreening.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
     if resolved is None:
+        report.show()
         return 1
+    for notice in report.notices:
+        messages.notice(notice)
     runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved])
 
 

@@ -6,9 +6,9 @@ The command line is trusted: a user it gives is taken as numeric `uid:gid`, or `
 checked against the image.
 """
 
-from dockscreen.commands import helptext
+from dockscreen.commands import helptext, projectrun
 from dockscreen.host.runtime import Runtime
-from dockscreen.screen import projectscreening, userargs, userscreening
+from dockscreen.screen import userargs, userscreening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
@@ -29,7 +29,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     if parsed is None:
         users.show()
         return 1
-    return projectscreening.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
+    return projectrun.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
                                           parent_cli.allow_me, parent_cli.strict, users.notices)
 
 
