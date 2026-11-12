@@ -11,10 +11,7 @@ Not here: the settings the rules apply with, which Policy holds, and anything th
 that is Policy's (policy.policy) and screen's.
 
 Constraints: as for policy. A rule returns what it finds; it does not print, raise for a refusal, or call
-docker. How a decision is put into words for the reader is not a rule's (userdecisionview).
-
-Exceptions: userrules takes wording from userdecisionview (CHOOSE_HINT, instead_of_root), so the rules
-depend on the module that describes their results.
+docker. The rules do not depend on the modules that describe their results (userdecisionview).
 
 Dependencies: as for policy. The mixins use each other only through Policy.
 """

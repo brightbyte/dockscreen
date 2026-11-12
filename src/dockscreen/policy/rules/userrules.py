@@ -70,7 +70,6 @@ from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.policy.projectpatch import ProjectPatch, Substitution, SubstitutionGroup
 from dockscreen.policy.rules.base import JudgedService, RuleBase
 from dockscreen.policy.userdecision import UserDecision
-from dockscreen.policy.userdecisionview import CHOOSE_HINT, instead_of_root
 from dockscreen.util import commandline, ids
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
@@ -80,6 +79,8 @@ MAX_ID = 2**31 - 1
 # What an id of the caller's is refused with, by the command: how it can be allowed there.
 COMPOSE_HINT = f"pass {commandline.ALLOW_ME} to allow it"
 RUN_HINT = f"pass {commandline.AS_ME} to run as you"
+# How the command line chooses the user of a container, instead of its image.
+CHOOSE_HINT = f"pass --user UID:GID, {commandline.AS} NAME or {commandline.AS_ME} to choose a user"
 
 PINNED = SubstitutionGroup(
     "services {services}: user, image id and pull_policy: never fixed to what was checked, "
@@ -512,3 +513,8 @@ def _resolve_group(group: str, accounts: hostusers.HostAccounts) -> str:
 def _resolved_message(what: str, before: object, after: str) -> str:
     """Returns the notice that what was resolved from before to after on this host."""
     return f"{what} {json.dumps(before)} resolved to {json.dumps(after)} on this host"
+
+
+def instead_of_root(decision: UserDecision) -> str:
+    """Describes what a decision that replaces_root does instead of running as root."""
+    return f"running as {ids.format_user(decision.pinned_user)} instead of root"

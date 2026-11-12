@@ -8,11 +8,10 @@ from dockscreen.model.origin import Origin
 from dockscreen.policy import imageuser
 from dockscreen.policy.finding import Finding
 from dockscreen.policy.notice import Notice, NoticeSeverity
+from dockscreen.policy.rules import userrules
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.util import ids, messages
 from dockscreen.util.messages import printable
-
-CHOOSE_HINT = "pass --user UID:GID, --as NAME or --as-me to choose a user"
 
 
 def dot(decision: UserDecision) -> messages.Mark:
@@ -36,16 +35,11 @@ def outcome(decision: UserDecision, local: hostusers.HostAccounts) -> str:
     if decision.accepted:
         return f"runs as {who}; accepted"
     if decision.replaces_root and not decision.refused:
-        return f"would run as {who}; {instead_of_root(decision)}"
+        return f"would run as {who}; {userrules.instead_of_root(decision)}"
     reasons = "; ".join(printable(r.text) for r in decision.findings)
     if decision.failed:
         return f"could not be assessed: {reasons}"
     return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"
-
-
-def instead_of_root(decision: UserDecision) -> str:
-    """Describes what a decision that replaces_root does instead of running as root."""
-    return f"running as {ids.format_user(decision.pinned_user)} instead of root"
 
 
 def root_default_notice(default_user: tuple[int, int]) -> Notice | None:
@@ -66,7 +60,7 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
     """
     if not decision.identity:
         return list(decision.findings)
-    help = f"{CHOOSE_HINT}, {config_hint(decision.image.reference, config_file)}"
+    help = f"{userrules.CHOOSE_HINT}, {config_hint(decision.image.reference, config_file)}"
     return [r.with_help(help) for r in decision.findings]
 
 

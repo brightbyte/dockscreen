@@ -29,7 +29,7 @@ from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.policy.report import Report
 from dockscreen.policy.rules import userrules
 from dockscreen.policy.userdecision import UserDecision
-from dockscreen.policy.userdecisionview import CHOOSE_HINT, explain, root_default_notice
+from dockscreen.policy.userdecisionview import explain, root_default_notice
 from dockscreen.screen import containerscreening, runargs, userscreening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
@@ -202,7 +202,7 @@ def _report_decision(screener: Screener, image: str, decision: UserDecision) -> 
             messages.out(Notice(f"note: {note}", NoticeSeverity.WARNING))
     if decision.refused:
         if not decision.failed:
-            messages.out(messages.Message(messages.HINT, CHOOSE_HINT))
+            messages.out(messages.Message(messages.HINT, userrules.CHOOSE_HINT))
             hint = userdecisionview.config_hint(image, screener.runtime.config_file)
             messages.out(messages.Message(messages.HINT, hint))
         return
