@@ -71,7 +71,8 @@ class DockerCommand:
         argv, cmd = cli.argv, cli.cmd
         messages.set_helpful(cli.helpful or cmd == "audit")
         if cli.skip_screening:
-            commandline.banner()
+            for warning in commandline.SKIP_SCREENING_WARNINGS:
+                messages.warning(warning)
             return _passthrough(argv, self.runtime)
         target = _help_request(cli)
         if target is not None:

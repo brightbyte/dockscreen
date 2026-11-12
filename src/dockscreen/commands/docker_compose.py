@@ -91,7 +91,8 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return 1
     cli = parent_cli.subcommand(GLOBAL_OPTS_WITH_VALUE, OWN_OPTIONS)
     if cli.skip_screening:
-        commandline.banner()
+        for warning in commandline.SKIP_SCREENING_WARNINGS:
+            messages.warning(warning)
         return runtime.docker.exec(cli.full_argv)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
     # with --skip-screening, which leaves compose as it is

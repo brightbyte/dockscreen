@@ -52,8 +52,9 @@ def test_a_subcommand_that_inherits_the_lead_takes_the_place_of_its_command():
     assert run.full_argv == ["-H", "unix:///s", "run", "-it", "x"]
 
 
-def test_banner_goes_to_stderr(capsys):
-    commandline.banner()
+def test_skip_screening_warns_on_stderr(tmp_path, capsys):
+    runtime, _ = compose_project(tmp_path, PROJECT)
+    docker_dispatch([FLAG, "ps"], runtime)
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "screening is disabled" in captured.err and "no defaults are added" in captured.err

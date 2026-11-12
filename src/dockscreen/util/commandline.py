@@ -42,6 +42,9 @@ STRICT_REFUSAL = (f"{STRICT_SCREEN} is only supported for audit, create, restart
 # What --allow-me is refused with before a command that does not support it.
 ALLOW_ME_REFUSAL = (f"{ALLOW_ME} is only supported for compose; for run, audit and create, choose the user "
                     f"after the command with {AS_ME}, {AS} NAME or --user UID:GID")
+# The warnings that --skip-screening turns screening off for a command.
+SKIP_SCREENING_WARNINGS = (f"{SKIP_SCREENING} given: screening is disabled.",
+                           "nothing in this command is checked, and no defaults are added.")
 HELPFUL = "--helpful"
 VERBOSE = "--verbose"
 BRIEF = "--brief"
@@ -215,12 +218,6 @@ def main_commandline(argv: Sequence[str], value_opts: Collection[str] = (),
     """
     cmd, args, lead, taken = _split_argv(argv, value_opts, own_opts)
     return CommandLine(cmd, args, lead, taken)
-
-
-def banner() -> None:
-    """Warns on stderr that screening is turned off for this command."""
-    messages.warning(f"{SKIP_SCREENING} given: screening is disabled.")
-    messages.warning("nothing in this command is checked, and no defaults are added.")
 
 
 def _find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | None:

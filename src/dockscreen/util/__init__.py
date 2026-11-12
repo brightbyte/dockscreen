@@ -14,10 +14,8 @@ command line asks docker to do is read in screen (userargs, runargs).
 Constraints:
 - No module here calls docker or reads the host, beyond the terminal and the environment that messages
   needs for its output.
-- Nothing here decides whether something may run, or says what dockscreen is doing.
-
-Exceptions: commandline.banner prints the warning that --skip-screening turns screening off. That is
-something the dispatcher says (commands), not vocabulary.
+- Nothing here decides whether something may run. Texts may be defined here (commandline holds the ones
+  about dockscreen's options), but only messages prints, and only when a caller tells it what.
 
 Dependencies: none on other dockscreen packages; every other package may depend on this one.
 """
