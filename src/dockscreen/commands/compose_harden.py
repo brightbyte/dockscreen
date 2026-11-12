@@ -4,17 +4,15 @@ compose override that fixes what can be fixed.
 The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
 lead_args of the command line.
 
-_fix_config removes or replaces only what has a safe automatic fix; checking the result with
-Policy.check_project reports what is left.
+The fixes are the policy's (projectfixes); checking the result with Policy.check_project reports what is
+left.
 
 _render writes the difference between a config and its fixed copy as a compose override file. Compose
 merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset` tag
 and replaced lists use `!override`. Values are written as JSON, which is valid YAML.
 """
 
-import copy
 import json
-import os
 import re
 import sys
 from collections.abc import Iterable
@@ -23,25 +21,13 @@ from typing import Any
 from dockscreen.commands import helptext
 from dockscreen.host.docker import DockerError
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.origin import Origin
-from dockscreen.model.project import Project
-from dockscreen.policy import hardening, policy
+from dockscreen.policy import hardening, projectfixes
 from dockscreen.policy.finding import Finding, failure_of
 from dockscreen.policy.report import Report
-from dockscreen.policy.rules import servicerules
-from dockscreen.policy.rules.base import is_inside_any
-from dockscreen.policy.rules.userrules import image_problem
 from dockscreen.screen import inspect, projectscreening
 from dockscreen.screen.screener import Screener
-from dockscreen.util import commandline, ids, messages
+from dockscreen.util import commandline, messages
 from dockscreen.util.messages import printable
-
-# What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
-# only with --allow-me. A literal would only fit the person who ran harden.
-_USER_TEMPLATE = "${UID}:${GID}"
-
-# Keys whose removal is a safe fix.
-_REMOVABLE_SERVICE_KEYS = (*servicerules.FORBIDDEN_KEYS, "runtime", *servicerules.NAMESPACE_KEYS)
 
 
 def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -79,10 +65,10 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         return 1
 
     base = loaded.static()
-    fixed = _fix_config(base, static)
+    fixed = projectfixes.fixed_config(base, static)
     # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
     # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
-    resolved = _as_compose_reads(fixed, static, base.directory)
+    resolved = projectfixes.as_compose_reads(fixed, static, base.directory)
     # the patched project goes through the same stages as `up` would take it through
     cleared = projectscreening.check(loaded.with_hardened(resolved), screener)
     notes = [hardening.defaults_note()]
@@ -91,100 +77,18 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         messages.notice("the images were not looked at because of the problems below: "
                         "nothing was pulled or built")
     else:
-        remaining, notes = _fix_image_users(cleared, screener, fixed, notes)
+        with cleared.loaded.generated(screener.docker.binary) as command:
+            decided = projectscreening.decide(cleared, screener, command)
+        if decided.decisions:
+            remaining, image_notes = projectfixes.set_image_users(fixed, decided.decisions)
+            notes += image_notes
+        else:  # nothing could be looked at: pulling or building failed
+            remaining = list(decided.report.findings)
 
     sys.stdout.write(_render(base.definition, fixed, remaining, notes=notes))
     for problem in remaining:
         messages.notice(f"cannot fix automatically: {problem}")
     return 1 if remaining else 0
-
-
-def _fix_image_users(cleared: projectscreening.ClearedProject, screener: Screener, fixed: dict[str, Any],
-                     notes: list[str]) -> tuple[list[Finding], list[str]]:
-    """Sets a user in fixed on the services whose image chose one that is not acceptable.
-
-    Returns (problems left, notes). cleared: the project with fixed as it will run, which is what the images
-    are looked at with.
-    """
-    with cleared.loaded.generated(screener.docker.binary) as command:
-        decided = projectscreening.decide(cleared, screener, command)
-    if not decided.decisions:
-        return list(decided.report.findings), notes  # nothing could be looked at: pulling or building failed
-    remaining: list[Finding] = []
-    for name, decision in decided.decisions.items():
-        if decision.failed:  # setting a user does not fix an image that could not be read
-            remaining.append(image_problem(name, decision))
-        elif decision.refused:
-            fixed["services"][name]["user"] = _USER_TEMPLATE
-            notes.append(f"service {name}: image {decision.image.reference} chose a user that is not "
-                         "acceptable, so user is set explicitly")
-    return remaining, notes
-
-
-def _fix_config(project: Project, pol: policy.Policy) -> dict[str, Any]:
-    """Returns a copy of the project's definition with the problems that have a mechanical fix fixed.
-
-    Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
-    become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
-    and env files have no safe automatic fix; they stay and are reported by Policy.check_project on the
-    result.
-    """
-    fixed = copy.deepcopy(project.definition)
-    for original in project.services:
-        service = fixed["services"][original.name]
-        service_pol = pol.for_service(original.name)
-        from_image = original.origin_of("user") is Origin.IMAGE and not service.get("user")
-        if not from_image and service_pol.check_user(service.get("user"), original):
-            service["user"] = _USER_TEMPLATE
-        if service_pol.check_security_opt(service.get("security_opt"), original):
-            service["security_opt"] = [servicerules.SECURITY_OPT]
-        if service_pol.check_cap_drop(service.get("cap_drop"), original):
-            service["cap_drop"] = [servicerules.CAP_DROP]
-        for key in _REMOVABLE_SERVICE_KEYS:
-            service.pop(key, None)
-        if "volumes_from" in service:
-            service["volumes_from"] = [
-                v for v in service["volumes_from"] if not str(v).startswith("container:")]
-            if not service["volumes_from"]:
-                del service["volumes_from"]
-        if "volumes" in service:
-            service["volumes"] = [_fix_mount(m, service_pol, project.directory) for m in service["volumes"]]
-    return fixed
-
-
-def _as_compose_reads(config: dict[str, Any], pol: policy.Policy, directory: str) -> dict[str, Any]:
-    """Returns a copy of config, of the project in directory, as compose reads the patch, for checking it:
-    _USER_TEMPLATE becomes the caller's ids, and a relative placeholder mount source a path in directory.
-    """
-    resolved = copy.deepcopy(config)
-    for service in resolved.get("services", {}).values():
-        if service.get("user") == _USER_TEMPLATE:
-            service["user"] = ids.format_user(pol.ids.me)
-        for mount in service.get("volumes", []):
-            if mount.get("type") == "bind" and not os.path.isabs(mount["source"]):
-                mount["source"] = os.path.join(directory, mount["source"].removeprefix("./"))
-    return resolved
-
-
-def _fix_mount(mount: dict[str, Any], pol: policy.Policy, directory: str) -> dict[str, Any]:
-    """Returns mount, with a bind source outside pol's mount roots for a project in directory replaced by a
-    placeholder to edit.
-    """
-    if mount.get("type") != "bind" or is_inside_any(mount["source"], pol.mount_roots(directory)):
-        return mount
-    return {**mount, "source": _placeholder_source(mount["source"], directory)}
-
-
-def _placeholder_source(source: str, project_dir: str) -> str:
-    """Returns a relative, upper-case stand-in for a source outside the project: /etc becomes ./ETC.
-
-    The upper case keeps it from naming the same directory as a real lower-case one, and marks it as
-    something to edit.
-    """
-    relative = os.path.relpath(source, project_dir)
-    if relative.startswith(os.pardir):
-        relative = source.lstrip(os.sep)
-    return "./" + relative.replace(os.sep, "_").upper()
 
 
 _HEADER = "# Generated by `dockscreen harden`. Save as compose.override.yaml, or load it last with -f."

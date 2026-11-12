@@ -3,6 +3,7 @@ import os
 from fakes import FakeImages, compose_line, compose_project, id_facts, project_of
 
 from dockscreen.commands import compose_audit, compose_harden
+from dockscreen.policy import projectfixes
 from dockscreen.policy.policy import Policy
 from dockscreen.policy.report import Report
 from dockscreen.util.messages import printable
@@ -22,7 +23,7 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
     policy = Policy(id_facts(me=(UID, GID), allow_me=True))
-    fixed = compose_harden._fix_config(project_of(original, "/proj"), policy)
+    fixed = projectfixes.fixed_config(project_of(original, "/proj"), policy)
 
     text = compose_harden._render(original, fixed, ["bind mount " + evil])
 

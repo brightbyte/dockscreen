@@ -7,6 +7,7 @@ Contents:
 - userdecision, imageuser, userdecisionview: deciding the user an image would run as, and describing it
 - hardening, projectpatch, commandlinepatch, decisions: what screening changes in a project or a command line
   (the defaults, the user decided), held as patches to apply
+- projectfixes: the fixes `harden` writes out for a project, for the person to adopt
 - finding, notice, report: what the rules find, and the verdict of a whole screening
 
 Not here: getting the facts. A Policy judges what it is given; screen gets it through docker and builds

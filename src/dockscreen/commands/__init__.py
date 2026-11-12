@@ -19,8 +19,6 @@ Constraints:
 - Nothing below commands may import from it.
 
 Exceptions:
-- compose_harden works out the fixes of `harden` itself, from the rules (servicerules, is_inside_any,
-  image_problem): what can be fixed and how is the policy's.
 - docker_run.gate removes a container whose user was decided and creates it again with that user, a
   stage of screening that containerscreening does not have.
 
