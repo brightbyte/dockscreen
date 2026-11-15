@@ -5,9 +5,9 @@ import subprocess
 
 from dockscreen.commands import docker_compose
 from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
-from dockscreen.host import config
 from dockscreen.host.docker import DockerError
 from dockscreen.model.project import Project, ProjectLocation
+from dockscreen.model.settings import Config
 from dockscreen.policy.rules import userrules
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
@@ -101,7 +101,7 @@ def make_runtime(**fields):
     if "docker" not in fields:
         fields["docker"] = FakeImages()
         fake_compose(fields["docker"])
-    defaults = {"settings": config.Config(), "accounts": Accounts(), "subordinate": NoSubordinate(),
+    defaults = {"settings": Config(), "accounts": Accounts(), "subordinate": NoSubordinate(),
                 "me": ME, "env": os.environ, "home": os.path.expanduser("~"), "cwd": os.getcwd()}
     return Runtime(**{**defaults, **fields})
 
@@ -315,7 +315,7 @@ def compose_project(directory, project, images=None, settings=None, **compose):
         json.dump(project, f)
     images = images if images is not None else FakeImages()
     recorder = fake_compose(images, project=path, **compose)
-    runtime = make_runtime(docker=images, cwd=str(directory), settings=settings or config.Config())
+    runtime = make_runtime(docker=images, cwd=str(directory), settings=settings or Config())
     return runtime, recorder
 
 

@@ -2,11 +2,11 @@ import pytest
 from fakes import FakeDocker, docker_line, make_runtime, texts
 
 from dockscreen.commands import docker_start
-from dockscreen.host import config
+from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.util import commandline
 
 BIND = {"Mounts": [{"Type": "bind", "Source": "/p", "Destination": "/p"}]}
-IMG_USERS = config.Config(images={"docker.io/library/img": config.ConfigSection(user=(999, 999))})
+IMG_USERS = Config(images={"docker.io/library/img": ConfigSection(user=(999, 999))})
 
 
 def start_line(container, strict=False):
@@ -16,7 +16,7 @@ def start_line(container, strict=False):
 
 def runtime(docker, settings=None):
     """The Runtime of a `docker` command line run with docker and settings, by the caller fakes.ME."""
-    return make_runtime(docker=docker, settings=settings or config.Config())
+    return make_runtime(docker=docker, settings=settings or Config())
 
 
 def test_existing_containers_cannot_be_rewritten_so_a_root_image_is_refused():
@@ -99,7 +99,7 @@ def test_an_existing_container_is_judged_without_the_current_directory_which_did
     here = str(tmp_path)
     bind = {"HostConfig": HARDENED, "Mounts": [{"Type": "bind", "Source": here, "Destination": "/w"}]}
     docker = FakeDocker(image_user="nobody", info_extra=bind)
-    settings = config.Config(projects={here: config.ConfigSection(user=(999, 999))})
+    settings = Config(projects={here: ConfigSection(user=(999, 999))})
 
     # the project section of the current directory does not decide the user
     assert docker_start.check(start_line("c1"),
@@ -108,6 +108,6 @@ def test_an_existing_container_is_judged_without_the_current_directory_which_did
     [refusal] = docker_start.check(start_line("c1", strict=True), make_runtime(docker=docker, cwd=here))
     assert str(refusal).startswith(f"c1: bind mount {here!r} is outside the configured mount_dirs, which are "
                               "none; to allow it, add a directory that contains it to mount_dirs in ")
-    allowed = config.Config(mount_dirs=(here,))
+    allowed = Config(mount_dirs=(here,))
     assert docker_start.check(start_line("c1", strict=True),
                               make_runtime(docker=docker, settings=allowed, cwd=here)) == []

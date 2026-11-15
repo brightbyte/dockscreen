@@ -26,11 +26,11 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Self
 
-from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
 from dockscreen.model.image import Inspected, Unseen
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project
+from dockscreen.model.settings import NO_SECTION, Config, SectionMatch
 from dockscreen.policy import finding
 from dockscreen.policy.finding import Finding, Reportable
 from dockscreen.policy.rules import userrules
@@ -62,7 +62,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
       instead (with_trust)
     - config_file: the caller's config file, named in hints on what it can allow; None for no hints
     - section: which image section of the config file applies to the image this policy is for, and why the
-      one for its repository does not (config.section_for); NO_SECTION for a policy not for an image
+      one for its repository does not (sections.section_for); NO_SECTION for a policy not for an image
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose
     - default_user: the (uid, gid) that runs instead of an image that would run as root
     - default_home: the HOME the default user gets (default_home)
@@ -76,22 +76,22 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     # The user the config file sets for this service (its image's or project's, or the top level's):
     # its uid and gid are allowed ids for the service too, whoever names them.
     configured_user: tuple | None = None
-    nobody_range: tuple[int, int] = configuration.Config().nobody_range
-    default_user: tuple[int, int] = configuration.Config().default_user
-    default_home: str = configuration.Config().default_home
+    nobody_range: tuple[int, int] = Config().nobody_range
+    default_user: tuple[int, int] = Config().default_user
+    default_home: str = Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN
-    section: configuration.SectionMatch = configuration.NO_SECTION
+    section: SectionMatch = NO_SECTION
     # The policy for each service of the project this one is for, with the settings of its image section
     # if one applies, by service name; a service that is not in it gets this one.
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: configuration.Config, ids: userrules.IdFacts,
+    def for_settings(cls, settings: Config, ids: userrules.IdFacts,
                      config_file: str | None = None) -> Self:
-        """Returns the policy with these settings (config.effective).
+        """Returns the policy with these settings (sections.effective).
 
         Parameters:
-        - settings: the settings of the config file that apply (config.effective)
+        - settings: the settings of the config file that apply (sections.effective)
         - ids: what the id rules judge by besides the settings: the caller, with allow_me, and this host
         - config_file: named in hints, as in Policy
         """
@@ -107,7 +107,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         found = self.per_service.get(name)
         return found.with_trust(self.trust) if found else self
 
-    def with_section(self, section: configuration.SectionMatch) -> Self:
+    def with_section(self, section: SectionMatch) -> Self:
         """Returns this policy for an image that section says which image section applies to."""
         return dataclasses.replace(self, section=section)
 
@@ -215,6 +215,6 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         return found
 
 
-def _origin_of(settings: configuration.Config, key: str) -> Origin:
+def _origin_of(settings: Config, key: str) -> Origin:
     """Returns where the setting called key comes from: the config file if one sets it, else dockscreen."""
     return Origin.CONFIG if key in settings.configured else Origin.DOCKSCREEN

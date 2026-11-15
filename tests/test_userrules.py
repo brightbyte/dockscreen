@@ -1,14 +1,15 @@
 import pytest
 from fakes import id_facts
 
-from dockscreen.host import config, hostusers
+from dockscreen.host import hostusers
+from dockscreen.model.settings import Config
 from dockscreen.policy.policy import Policy
 from dockscreen.policy.rules import userrules
 
 
 def policy_with(settings=None, **facts):
     """The policy for settings, the default config if None, with the id facts of fakes.id_facts for facts."""
-    return Policy.for_settings(settings or config.Config(), id_facts(**facts))
+    return Policy.for_settings(settings or Config(), id_facts(**facts))
 
 
 class Accounts:
@@ -68,7 +69,7 @@ def test_ids_that_exist_on_this_host_are_refused_with_the_local_account_named():
 
 def test_the_nobody_range_and_the_default_user_are_allowed_even_where_they_exist_locally():
     local = Accounts(uids={65534: "nobody", 4000: "svc"}, gids={65534: "nogroup", 4001: "svc"})
-    settings = config.Config(default_user=(4000, 4001))
+    settings = Config(default_user=(4000, 4001))
     policy = policy_with(local=local, settings=settings)
     assert policy.id_problems(65534, 65534, (65534,), mounts=True) == []
     assert policy.id_problems(4000, 4001, mounts=True) == []
@@ -93,7 +94,7 @@ def test_what_the_refusal_of_the_callers_ids_says_depends_on_the_command(hint, s
 
 
 def test_with_mounts_only_allowed_ids_pass():
-    settings = config.Config(nobody_range=(70000, 70010))
+    settings = Config(nobody_range=(70000, 70010))
     assert policy_with(local=Accounts(), settings=settings).id_problems(70005, 70010, mounts=True) == []
     assert policy_with(local=Accounts(), settings=settings).id_problems(5000, 70010, mounts=True) == [
         "uid 5000 is not in the nobody range 70000-70010, and there are host mounts"]

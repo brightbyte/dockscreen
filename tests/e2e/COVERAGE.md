@@ -63,7 +63,7 @@ Something has to change between two of dockscreen's calls to docker.
 ## Not reachable from the command line
 
 - `Docker.new_for_testing`, `Subordinate.new_for_testing`, `runtime._real_docker` with wrappers given,
-  `config.effective` without a directory: for the unit tests.
+  `sections.effective` without a directory: for the unit tests.
 - `imageuser.describe` without the host's accounts.
 - `messages._escape` for a character above U+FFFF: the messages that quote project text with one in it
   quote it with `repr`, which escapes it first (`test_characters_beyond_the_basic_plane_are_shown_as_text`).
@@ -93,7 +93,7 @@ Something has to change between two of dockscreen's calls to docker.
 With docker's containerd image store, which these tests ran against, a locally tagged or built image
 has a repo digest under its local name (`docs/security-review.md`). So these are not reached:
 
-- `config.section_for` saying that the image was not pulled from the section's repository, and the note
+- `sections.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
 - `serviceinfo._find_section_images` and `Screener.project_policy` finding no proof for a section, and the final check of
   `projectrun.check_and_run` refusing a service that only passed because of it.

@@ -4,9 +4,9 @@ import subprocess
 import pytest
 from fakes import FakeImages, id_facts, make_runtime, make_screener, marked, project_of, texts
 
-from dockscreen.host import config as configuration
 from dockscreen.host.docker import DockerError
 from dockscreen.model.origin import Origin
+from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.policy import policy
 from dockscreen.policy.finding import Verdict
 from dockscreen.policy.notice import Notice
@@ -39,7 +39,7 @@ def prepare(config, images, args=(), active=("web",), codes=None, settings=None,
 
 
 def configured_screener(images, settings=None):
-    settings = settings or configuration.Config()
+    settings = settings or Config()
     return Screener(make_runtime(settings=settings, docker=images))
 
 
@@ -254,8 +254,8 @@ def test_the_final_config_passes_the_policy_with_the_users_where_they_come_from(
 
     assert policy.check_project(project_of(final, origins=origins)) == []
     # the config file is trusted: a configured user that the rules alone would refuse is only pointed out
-    section = configuration.ConfigSection(user=(1000, 1000))
-    settings = configuration.Config(images={"docker.io/library/db": section})
+    section = ConfigSection(user=(1000, 1000))
+    settings = Config(images={"docker.io/library/db": section})
     images = FakeImages(users={"db:1": ""}, digests={"db:1": ["db@sha256:x"]})
     _, final, origins = decided(config, images, active=("db",), settings=settings)
     assert final["services"]["db"]["user"] == "1000:1000" and origins["db"]["user"] is Origin.CONFIG
@@ -320,8 +320,8 @@ def test_with_mounts_a_root_image_still_runs_as_the_default_user():
 
 # --- users the config file sets ----------------------------------------------------
 
-MARIADB = configuration.Config(
-    images={"docker.io/library/mariadb": configuration.ConfigSection(user=(999, 999))})
+MARIADB = Config(
+    images={"docker.io/library/mariadb": ConfigSection(user=(999, 999))})
 
 
 def mariadb_project(**fields):
@@ -406,14 +406,14 @@ def test_a_service_that_is_not_started_gets_the_default_users_home_too():
 
 def test_the_default_home_follows_the_config_file_and_may_be_left_out():
     images = FakeImages(users={"web:1": ""})
-    _, final, _ = decided(project(web={}), images, settings=configuration.Config(default_home="/var/empty"))
+    _, final, _ = decided(project(web={}), images, settings=Config(default_home="/var/empty"))
     assert final["services"]["web"]["environment"] == {"HOME": "/var/empty"}
-    _, final, _ = decided(project(web={}), images, settings=configuration.Config(default_home=""))
+    _, final, _ = decided(project(web={}), images, settings=Config(default_home=""))
     assert "environment" not in final["services"]["web"]
 
 
 def test_root_as_the_default_user_gets_no_home():
-    settings = configuration.Config(default_user=(0, 0))
+    settings = Config(default_user=(0, 0))
     _, final, _ = decided(project(web={}), FakeImages(users={"web:1": ""}), settings=settings)
     assert "environment" not in final["services"]["web"]
 

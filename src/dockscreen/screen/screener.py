@@ -2,7 +2,7 @@
 this host (the runtime): the policy for each target, and what an image is like, looked at through docker.
 
 What the checks of one project, image or container need follows from it and from where that target is:
-the settings of the config file with the project and image sections that apply (config.effective), the
+the settings of the config file with the project and image sections that apply (sections.effective), the
 id rules with those settings, and the policy (Policy) built from them. The directory is the
 target's: a compose project's own, for what a command line runs the current one, and none for a container
 that existed before, since docker does not record where it was created.
@@ -11,7 +11,7 @@ that existed before, since docker does not record where it was created.
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NamedTuple
 
-from dockscreen.host import config, hostusers
+from dockscreen.host import hostusers
 from dockscreen.host.docker import Docker
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import env_value
@@ -19,6 +19,8 @@ from dockscreen.model.image import Image, Inspected
 from dockscreen.model.mounts import container_reaches_host
 from dockscreen.model.origin import TRUSTED, Origin
 from dockscreen.model.project import Project, ServiceImages
+from dockscreen.model.settings import NO_SECTION, SectionMatch
+from dockscreen.policy import sections
 from dockscreen.policy.decisions import Decisions
 from dockscreen.policy.finding import Finding
 from dockscreen.policy.policy import Policy
@@ -64,17 +66,17 @@ class Screener(NamedTuple):
         """Returns the accounts of this host, for naming the users an image runs as."""
         return self.runtime.accounts
 
-    def policy(self, directory: str | None, section: config.SectionMatch = config.NO_SECTION,
+    def policy(self, directory: str | None, section: SectionMatch = NO_SECTION,
                trust: frozenset[Origin] = TRUSTED) -> Policy:
         """Returns the policy for the project in directory, with the image section that section says applies,
         trusting the origins in trust.
 
         Parameters:
         - directory: the project directory; None if no project section applies
-        - section: which image section applies (config.SectionMatch); none by default
+        - section: which image section applies (SectionMatch); none by default
         - trust: the origins whose values are taken as given
         """
-        settings = config.effective(self.runtime.settings, section.repository, directory)
+        settings = sections.effective(self.runtime.settings, section.repository, directory)
         found = Policy.for_settings(settings, self.ids, self.runtime.config_file)
         return found.with_section(section).with_trust(trust)
 
@@ -96,11 +98,11 @@ class Screener(NamedTuple):
         """
         return self.policy(self.runtime.cwd).resolve_user_options(given)
 
-    def section_for(self, image: Image) -> config.SectionMatch:
+    def section_for(self, image: Image) -> SectionMatch:
         """Returns which image section applies to image, by its name and where it was pulled from
-        (config.section_for).
+        (sections.section_for).
         """
-        return config.section_for(self.runtime.settings, image.reference, image.digests, image.built)
+        return sections.section_for(self.runtime.settings, image.reference, image.digests, image.built)
 
     def project_policy(self, project: Project, found: Mapping[str, Image] | None = None) -> Policy:
         """Returns the policy for project, which gives each service the settings of its image section, if one
@@ -117,11 +119,11 @@ class Screener(NamedTuple):
         for name, service in (project.definition.get("services") or {}).items():
             service = service or {}
             if found is None:
-                repository = config.name_matches(self.runtime.settings, str(service.get("image") or ""),
+                repository = sections.name_matches(self.runtime.settings, str(service.get("image") or ""),
                                                  "build" in service)
-                section = config.SectionMatch(repository, None)
+                section = SectionMatch(repository, None)
             else:
-                section = self.section_for(found[name]) if name in found else config.NO_SECTION
+                section = self.section_for(found[name]) if name in found else NO_SECTION
             per_service[name] = self.policy(directory, section)
         return self.policy(directory).with_per_service(per_service)
 

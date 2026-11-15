@@ -14,10 +14,10 @@ line chose, gets the default user in case it does get started without it.
 from collections.abc import Sequence
 from typing import Any
 
-from dockscreen.host import config as configuration
 from dockscreen.host.docker import DockerError
 from dockscreen.model.image import Image, Inspected
 from dockscreen.model.project import Project, ServiceImages
+from dockscreen.policy import sections
 from dockscreen.policy.finding import Finding, failure_of
 from dockscreen.screen import imageusers
 from dockscreen.screen.screener import Screener
@@ -63,7 +63,7 @@ def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str
     found = {}
     for name, service in (config.get("services") or {}).items():
         image, built = imageusers.image_name(config, name, service), "build" in service
-        if configuration.name_matches(settings, image, built) is None:
+        if sections.name_matches(settings, image, built) is None:
             continue
         try:
             inspected = screener.docker.inspect_image(image)

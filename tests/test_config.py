@@ -1,10 +1,11 @@
 import os
 import stat as stat_module
-from types import MappingProxyType, SimpleNamespace
+from types import SimpleNamespace
 
 import pytest
 
 from dockscreen.host import config
+from dockscreen.model.settings import Config, ConfigSection
 
 
 def write(path, text, mode=0o600):
@@ -24,7 +25,7 @@ def load(*paths):
 
 def test_no_files_means_the_defaults(tmp_path):
     settings = load(str(tmp_path / "missing.toml"))
-    assert settings == config.Config()
+    assert settings == Config()
     assert settings.default_user == (65534, 65534) and settings.nobody_range == (65530, 65534)
 
 
@@ -62,17 +63,11 @@ nobody_range = [80000, 80010]
     assert settings.docker == "/usr/local/bin/docker"
     assert settings.configured == config.SETTINGS  # docker is not a setting the sections can have
     assert dict(settings.images) == {
-        "docker.io/library/mariadb": config.ConfigSection(user=(999, 999), mount_dirs=("/srv/db",)),
-        "ghcr.io/acme/app": config.ConfigSection(security_opts=("apparmor=acme",)),
-        "ghcr.io/acme/tool": config.ConfigSection(default_home="")}  # "" is a choice: no HOME
+        "docker.io/library/mariadb": ConfigSection(user=(999, 999), mount_dirs=("/srv/db",)),
+        "ghcr.io/acme/app": ConfigSection(security_opts=("apparmor=acme",)),
+        "ghcr.io/acme/tool": ConfigSection(default_home="")}  # "" is a choice: no HOME
     assert dict(settings.projects) == {
-        "/home/me/src/shop": config.ConfigSection(default_user=(5000, 5000), nobody_range=(80000, 80010))}
-
-
-def test_the_settings_a_section_sets_count_as_configured_where_it_applies():
-    settings = config.Config(projects=MappingProxyType({"/p": config.ConfigSection(default_user=(5, 5))}))
-    assert config.effective(settings).configured == frozenset()
-    assert config.effective(settings, None, "/p/sub").configured == {"default_user"}
+        "/home/me/src/shop": ConfigSection(default_user=(5000, 5000), nobody_range=(80000, 80010))}
 
 
 def test_the_users_file_overrides_the_system_file_key_by_key_and_section_by_section(tmp_path):
@@ -93,30 +88,8 @@ user = "5000:5000"
     settings = load(system, user)
     assert settings.default_user == (4000, 4000) and settings.mount_dirs == ("/data",)
     assert dict(settings.images) == {
-        "docker.io/library/mariadb": config.ConfigSection(user=(999, 999)),
-        "docker.io/library/redis": config.ConfigSection(user=(5000, 5000))}  # the whole section is replaced
-
-
-def test_effective_settings_apply_the_image_then_the_projects_outermost_first(tmp_path):
-    shop = tmp_path / "src" / "shop"
-    (shop / "web").mkdir(parents=True)
-    settings = config.Config(
-        user=(1, 1), mount_dirs=("/top",), security_opts=("a",),
-        images={"docker.io/library/mariadb": config.ConfigSection(user=(999, 999), mount_dirs=("/img",))},
-        projects={str(tmp_path / "src"): config.ConfigSection(user=(2, 2), mount_dirs=("/src",)),
-                  str(shop): config.ConfigSection(security_opts=("b", "a"), default_user=(3, 3))})
-
-    found = config.effective(settings, "docker.io/library/mariadb", str(shop / "web"))
-    assert found.user == (2, 2)                       # replaced: the outer project's comes after the image's
-    assert found.default_user == (3, 3)
-    assert found.mount_dirs == ("/top", "/img", "/src")  # added to, in order, each once
-    assert found.security_opts == ("a", "b")
-    assert found.images == {} and found.projects == {}
-
-    without_sections = config.Config(user=(1, 1), mount_dirs=("/top",), security_opts=("a",))
-    assert config.effective(settings) == without_sections
-    assert config.effective(settings, None, "/elsewhere").user == (1, 1)
-    assert config.effective(settings, "docker.io/library/redis", str(tmp_path)).mount_dirs == ("/top",)
+        "docker.io/library/mariadb": ConfigSection(user=(999, 999)),
+        "docker.io/library/redis": ConfigSection(user=(5000, 5000))}  # the whole section is replaced
 
 
 @pytest.mark.parametrize("text, message", [
@@ -201,7 +174,7 @@ def test_a_missing_user_file_is_created_with_every_setting_commented_out(tmp_pat
     assert config._create_user_file(str(path))
     assert stat_module.S_IMODE(path.stat().st_mode) == 0o600
     assert stat_module.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert load(str(path)) == config.Config()  # the defaults, and nothing that overrides /etc
+    assert load(str(path)) == Config()  # the defaults, and nothing that overrides /etc
 
 
 def test_the_template_examples_are_valid_settings(tmp_path):
@@ -226,34 +199,3 @@ def test_an_existing_user_file_is_left_alone(tmp_path):
     (tmp_path / "link.toml").symlink_to(tmp_path / "elsewhere.toml")
     assert not config._create_user_file(str(tmp_path / "link.toml"))
     assert not (tmp_path / "elsewhere.toml").exists()
-
-
-IMAGE_SECTION = config.Config(images={"docker.io/library/mariadb": config.ConfigSection(user=(999, 999))})
-
-
-def test_an_image_pulled_from_the_sections_repository_gets_the_section():
-    match = config.section_for(IMAGE_SECTION, "mariadb:11", ["mariadb@sha256:abc"], built=False)
-    assert match == config.SectionMatch("docker.io/library/mariadb", None)
-    # the digest may be recorded under any spelling of the repository
-    match = config.section_for(IMAGE_SECTION, "docker.io/library/mariadb",
-                               ["docker.io/library/mariadb@sha256:a"], built=False)
-    assert match.repository == "docker.io/library/mariadb"
-
-
-@pytest.mark.parametrize("reference, digests, built, problem", [
-    ("mariadb:11", [], False, "this image was not pulled from there"),
-    ("mariadb:11", ["evil.example/mariadb@sha256:abc"], False, "this image was not pulled from there"),
-    ("mariadb:11", ["mariadb@sha256:abc"], True, "the service builds its image"),
-])
-def test_an_image_that_only_has_the_name_does_not_get_the_section(reference, digests, built, problem):
-    match = config.section_for(IMAGE_SECTION, reference, digests, built)
-    assert match.repository is None and match.problem.endswith(problem)
-    # before the image is there, the name alone points to the section, unless the service builds it
-    expected = None if built else "docker.io/library/mariadb"
-    assert config.name_matches(IMAGE_SECTION, reference, built) == expected
-
-
-@pytest.mark.parametrize("reference", ["redis", "evil.example/mariadb", "someone/mariadb", "sha256:abc"])
-def test_other_repositories_have_no_section(reference):
-    match = config.section_for(IMAGE_SECTION, reference, ["x@sha256:a"], built=False)
-    assert match == config.SectionMatch(None, None)

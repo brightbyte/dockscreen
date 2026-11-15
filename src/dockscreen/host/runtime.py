@@ -12,6 +12,7 @@ from typing import NamedTuple, Self
 
 from dockscreen.host import config, hostusers
 from dockscreen.host.docker import Docker, DockerNotFound
+from dockscreen.model.settings import Config
 from dockscreen.util import messages
 
 
@@ -33,7 +34,7 @@ class Runtime(NamedTuple):
     - home: the caller's home directory
     - cwd: the directory dockscreen was started in
     """
-    settings: config.Config
+    settings: Config
     docker: Docker
     accounts: hostusers.HostAccounts
     subordinate: hostusers.SubordinateRanges
@@ -87,7 +88,7 @@ def _warn_about_relative_path(env: Mapping[str, str]) -> None:
                          "that docker and compose run")
 
 
-def _real_docker(settings: config.Config, env: Mapping[str, str],
+def _real_docker(settings: Config, env: Mapping[str, str],
                  wrappers: Collection[str] | None = None) -> str:
     """Returns the docker to run: the one settings names, else the first one on PATH that is not a
     wrapper. Raises DockerNotFound if there is none.

@@ -6,8 +6,8 @@ import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
-from dockscreen.host import config as configuration
 from dockscreen.model.origin import Origin
+from dockscreen.model.settings import SectionMatch
 
 if TYPE_CHECKING:
     from dockscreen.policy.rules.userrules import IdFacts
@@ -59,7 +59,7 @@ class RuleBase:
     default_user: tuple[int, int]
     default_home: str
     default_origin: Origin
-    section: configuration.SectionMatch
+    section: SectionMatch
 
     def mount_roots(self, directory: str | None) -> tuple[str, ...]:
         """Returns where bind mounts may come from for a project in directory: directory, then the configured

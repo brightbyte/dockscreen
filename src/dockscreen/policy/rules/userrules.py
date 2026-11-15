@@ -27,7 +27,7 @@ An image's user, from what was seen of the image (model.image.Inspected), for `d
 (check_image). The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use
 (see imageuser), and the id rules decide whether the image may have it. With no user chosen, in this order:
 - the config file names a user for the image's repository, and the image was pulled from there:
-  that user, whatever it is (config.section_for, config.effective);
+  that user, whatever it is (sections.section_for, sections.effective);
 - the image would run as root (uid, gid or a supplementary gid of 0): the default user instead, the
   configured one or nobody, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
@@ -58,7 +58,6 @@ import json
 from collections.abc import Collection, Iterable, Mapping
 from typing import Any, NamedTuple
 
-from dockscreen.host import config as configuration
 from dockscreen.host import hostusers
 from dockscreen.model.image import Inspected, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
@@ -178,7 +177,7 @@ class UserRules(RuleBase):
             return None
         if value == 0:
             return f"{kind} 0 is root"
-        if value in configuration.NO_ID:
+        if value in ids.NO_ID:
             return f"{kind} {value} means \"no id\" to many tools"
         if value > MAX_ID:
             return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"

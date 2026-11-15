@@ -1,6 +1,6 @@
-"""This package defines what screening is about: compose projects and their services (project), containers
-(container), images and the users they run as (image), builds (imagebuild), mounts (mounts), and where a
-value comes from (origin).
+"""This package defines the targets the policy judges: compose projects and their services (project),
+containers (container), images and the users they run as (image), builds (imagebuild), mounts (mounts),
+where a value comes from (origin), and the settings of the config files (settings).
 
 Contents:
 - project, container, image, imagebuild: the targets, as docker describes them, with what is known of
@@ -8,6 +8,8 @@ Contents:
 - mounts: what a mount reaches on the host
 - origin: who chose a value (the project, the image, the command line, the config file), which decides how
   far it is trusted
+- settings: dockscreen's settings as the config files give them, and which image section applies to an
+  image
 
 Not here: getting these facts, which is screen's (through docker) and host's (the host and the config
 file); judging them, which is the policy's (policy).

@@ -4,14 +4,16 @@ subordinate ranges (hostusers), the environment of the shell (shellenv), and all
 command (runtime).
 
 Contents:
-- config: the config files, read only when no one but their owner or root can have written them
+- config: reading the config files (model.settings), only when no one but their owner or root can have
+  written them
 - docker: running docker, and DockerError, which says why it failed with what docker printed
 - hostusers: the accounts of this host and the subordinate id ranges
 - shellenv: the variables a project takes from the shell
 - runtime: the Runtime of one command, which holds the above
 
 Not here: deciding anything about what was found. A failure is raised (DockerError), not turned into a
-finding; that happens in policy (finding.failure_of). What a project or container is like is gathered in
+finding; that happens in policy (finding.failure_of). Which sections of the config files apply to a
+target is the policy's too (policy.sections). What a project or container is like is gathered in
 screen, which calls docker through this package.
 
 Constraints:

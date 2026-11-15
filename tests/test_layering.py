@@ -60,6 +60,12 @@ def test_the_checks_never_call_docker(path):
             assert {a.name for a in node.names} <= {"DockerError"}
 
 
+@pytest.mark.parametrize("path", sorted((SOURCE / "policy").rglob("*.py")), ids=lambda p: module_name(p))
+def test_the_checks_never_read_the_config_files(path):
+    # the policy is given the settings (model.settings); reading the files is host.config's
+    assert "dockscreen.host.config" not in imported(path)
+
+
 @pytest.mark.parametrize("package", ["commands", "host", "model", "policy", "policy/rules", "screen", "util"])
 def test_packages_hold_only_their_docstring(package):
     # what a package is for, holds and must not do; its modules are imported by name

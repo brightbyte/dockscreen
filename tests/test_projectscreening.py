@@ -5,8 +5,8 @@ import pytest
 from fakes import ME, FakeImages, compose_line, compose_project, make_runtime, make_screener, read_raw
 
 from dockscreen.commands import compose_run, compose_up
-from dockscreen.host import config
 from dockscreen.host.docker import Docker
+from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.policy.finding import Verdict
 from dockscreen.policy.report import Report
 from dockscreen.screen import projectscreening
@@ -349,7 +349,7 @@ def test_a_context_option_is_refused_too(tmp_path, capsys):
 
 # --- image and project sections of the config file ---------------------------------
 
-X_DIRS = config.Config(images={"docker.io/library/x": config.ConfigSection(mount_dirs=("/srv/x",))})
+X_DIRS = Config(images={"docker.io/library/x": ConfigSection(mount_dirs=("/srv/x",))})
 X_MOUNT = {"volumes": [{"type": "bind", "source": "/srv/x/data", "target": "/data"}]}
 
 
@@ -375,18 +375,18 @@ def test_an_image_section_that_its_image_does_not_prove_is_refused_before_anythi
 
 
 def test_a_project_section_applies_to_its_directory(tmp_path, capsys):
-    settings = config.Config(projects={str(tmp_path): config.ConfigSection(mount_dirs=("/srv/x",))})
+    settings = Config(projects={str(tmp_path): ConfigSection(mount_dirs=("/srv/x",))})
     runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT),
                                  FakeImages(users={"x:1": "app"}), settings=settings)
     assert up(["up"], 0, runtime) == 0
 
-    elsewhere = config.Config(projects={"/elsewhere": config.ConfigSection(mount_dirs=("/srv/x",))})
+    elsewhere = Config(projects={"/elsewhere": ConfigSection(mount_dirs=("/srv/x",))})
     runtime, _ = compose_project(tmp_path, project_config(**X_MOUNT), FakeImages(users={"x:1": "app"}),
                                  settings=elsewhere)
     assert up(["up"], 0, runtime) == 1
 
 
-X_USER = config.Config(images={"docker.io/library/x": config.ConfigSection(user=(900, 900))})
+X_USER = Config(images={"docker.io/library/x": ConfigSection(user=(900, 900))})
 
 
 def inside(project):

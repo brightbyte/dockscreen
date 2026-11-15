@@ -12,6 +12,7 @@ from dockscreen.host import config
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.project import Project, ProjectLocation
+from dockscreen.model.settings import all_mount_dirs
 from dockscreen.policy import policy
 from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.policy.rules.base import is_inside
@@ -86,7 +87,7 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
     Policy.check_mount_dirs.
     """
     return {directory: _sensitive_inside(directory, runtime)
-            for directory in config.all_mount_dirs(runtime.settings)}
+            for directory in all_mount_dirs(runtime.settings)}
 
 
 def _load_config(global_args: Sequence[str], docker: Docker) -> dict[str, Any]:

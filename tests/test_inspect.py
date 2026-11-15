@@ -4,9 +4,9 @@ import subprocess
 import pytest
 from fakes import make_runtime
 
-from dockscreen.host import config
 from dockscreen.host.docker import Docker, DockerError
 from dockscreen.model.project import ProjectLocation
+from dockscreen.model.settings import Config
 from dockscreen.policy.finding import Verdict
 from dockscreen.screen import inspect
 
@@ -61,7 +61,7 @@ def test_the_sensitive_paths_in_each_configured_mount_dir_are_found(tmp_path, mo
     home = tmp_path / "home"
     (home / "code").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
-    settings = config.Config(mount_dirs=(str(home / "code"), str(tmp_path)))
+    settings = Config(mount_dirs=(str(home / "code"), str(tmp_path)))
 
     found = inspect.sensitive_mount_dirs(make_runtime(env={}, settings=settings))
     assert found[str(home / "code")] == []

@@ -3,11 +3,11 @@ import os
 import pytest
 from fakes import id_facts, project_of, texts
 
-from dockscreen.host import config as configuration
 from dockscreen.model.container import Container
 from dockscreen.model.image import Image, Inspected, Unseen
 from dockscreen.model.origin import STRICT, Origin
 from dockscreen.model.project import ProjectLocation
+from dockscreen.model.settings import Config
 from dockscreen.policy import policy
 from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.policy.notice import Notice, NoticeSeverity
@@ -647,7 +647,7 @@ def test_an_images_own_user_is_judged_from_its_files_without_docker(user, origin
 
 
 def test_the_default_user_the_config_file_sets_comes_from_it():
-    settings = configuration.Config(default_user=(9, 9), configured=frozenset({"default_user"}))
+    settings = Config(default_user=(9, 9), configured=frozenset({"default_user"}))
     found = policy.Policy.for_settings(settings, id_facts()).check_image(inspected("root"), Origin.IMAGE)
     assert (found.origin, found.replaces_root, found.user) == (Origin.CONFIG, True, (9, 9))
 

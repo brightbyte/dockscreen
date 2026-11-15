@@ -1,6 +1,5 @@
-"""This module defines the Config class, dockscreen's settings, with functions for reading them from TOML
-files that only the user or root can write and for working out the settings that apply to one image and
-project.
+"""This module provides functions for reading dockscreen's settings (model.settings.Config) from TOML files
+that only the user or root can write.
 
 The files are trusted completely, so they are only read when nothing but their owner could have put
 their content there: the file and every directory above it must be owned by the user or root and not
@@ -12,13 +11,7 @@ A missing user file is created from config.template.toml, with every setting com
 shows the defaults without overriding the system file.
 
 The settings can also be given per image (`[images."REPOSITORY"]`) and per project
-(`[projects."DIRECTORY"]`). They apply in that order, after the top level (effective): a single value
-replaces the one before, a list is added to the ones before.
-
-An image section names a repository: it trusts the image's maintainer, not one image. A name alone
-proves nothing, because anything can be built or tagged locally under any name, so an image matches only
-if docker recorded that it was pulled from that repository (a repo digest), and never for a service that
-is built from a Dockerfile (section_for).
+(`[projects."DIRECTORY"]`); which of them apply to a target is the policy's (policy.sections).
 """
 
 import importlib.resources
@@ -27,161 +20,20 @@ import stat
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
-from typing import Any, NamedTuple
+from typing import Any
 
-from dockscreen.model.image import repository, split_reference
+from dockscreen.model.image import split_reference
+from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.util import ids, messages
 
 SYSTEM_FILE = "/etc/dockscreen/config.toml"
 # What the top level, an image section and a project section may set.
 SETTINGS = frozenset({"user", "default_user", "default_home", "nobody_range", "mount_dirs", "security_opts"})
 KEYS = SETTINGS | {"docker", "images", "projects"}
-# 65535 and 4294967295 are (uid_t)-1 in 16 and 32 bits, which tools read as "no id".
-NO_ID = frozenset({65535, 4294967295})
 
 
 class ConfigError(Exception):
     """Exception raised when a config file cannot be trusted or read, which stops dockscreen from running."""
-
-
-class ConfigSection(NamedTuple):
-    """Record of the settings of one image or project section of the config files. It holds the settings the
-    section sets; None, or () for a list, leaves a setting to the levels above.
-
-    Attributes:
-    - user, default_user, default_home, nobody_range, mount_dirs, security_opts: as in Config
-    """
-    user: tuple[int, int] | None = None
-    default_user: tuple[int, int] | None = None
-    default_home: str | None = None
-    nobody_range: tuple[int, int] | None = None
-    mount_dirs: tuple = ()
-    security_opts: tuple = ()
-
-
-class Config(NamedTuple):
-    """Record of dockscreen's settings, as the config files give them, with their sections per image
-    repository and per project directory. It holds the top-level settings, filled in with the defaults, the
-    sections, and which settings a file set.
-
-    The caller's settings come from load_current; those that apply to one image and project come from
-    effective, which have no sections of their own.
-
-    Attributes:
-    - user: the (uid, gid) an image runs as when nothing chose a user, or None
-    - default_user: the (uid, gid) that replaces an image's root user
-    - default_home: the HOME of the default user; "" leaves HOME alone
-    - nobody_range: the inclusive range of ids any image or project may use
-    - mount_dirs: the absolute directories bind mounts may come from
-    - security_opts: the security options allowed besides no-new-privileges
-    - docker: the absolute path of the real docker, or None
-    - images: the image sections, by normalised repository (ConfigSection)
-    - projects: the project sections, by absolute directory (ConfigSection)
-    - configured: the names of the settings a config file sets; the others are defaults
-    """
-    user: tuple[int, int] | None = None
-    default_user: tuple[int, int] = (65534, 65534)
-    default_home: str = "/tmp"
-    nobody_range: tuple[int, int] = (65530, 65534)
-    mount_dirs: tuple = ()
-    security_opts: tuple = ()
-    docker: str | None = None
-    images: MappingProxyType = MappingProxyType({})
-    projects: MappingProxyType = MappingProxyType({})
-    configured: frozenset = frozenset()
-
-
-class SectionMatch(NamedTuple):
-    """Record of which image section of the config file applies to an image, or why the one for its repository
-    does not.
-
-    Instances come from section_for; NO_SECTION stands for a target that is not an image.
-
-    Attributes:
-    - repository: the repository of the image section that applies, or None
-    - problem: why a section for the image's repository does not apply, for audit; None if there is none
-    """
-    repository: str | None
-    problem: str | None
-
-
-NO_SECTION = SectionMatch(None, None)  # for what is not an image, or an image no section is for
-
-
-def effective(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
-    """Returns the settings for an image pulled from repository, in a project in directory.
-
-    They are the top level's, amended by the image's section, then by the sections of the projects that
-    directory is in, outermost first. The
-    result has no sections of its own.
-
-    Parameters:
-    - config: the settings of the config file
-    - repository: the image's repository; None for no image section
-    - directory: the project directory; None for no project section
-    """
-    sections = [config.images[repository]] if repository in config.images else []
-    if directory is not None:
-        real = os.path.realpath(directory)
-        roots = {d: os.path.realpath(d) for d in config.projects}
-        matching = [d for d, root in roots.items() if os.path.commonpath([real, root]) == root]
-        sections += [config.projects[d] for d in sorted(matching, key=lambda d: len(roots[d]))]
-    result = config._replace(images=MappingProxyType({}), projects=MappingProxyType({}))
-    for section in sections:
-        result = _amend(result, section)
-    return result
-
-
-def _amend(config: Config, section: ConfigSection) -> Config:
-    """Returns config with section applied: the values it sets replace, the lists it gives are added to."""
-    changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
-               if getattr(section, key) is not None}
-    lists = [key for key in ("mount_dirs", "security_opts") if getattr(section, key)]
-    configured = frozenset({*config.configured, *changes, *lists})
-    for key in ("mount_dirs", "security_opts"):
-        before = getattr(config, key)
-        changes[key] = (*before, *(v for v in getattr(section, key) if v not in before))
-    return config._replace(**changes, configured=configured)
-
-
-def all_mount_dirs(config: Config) -> tuple[str, ...]:
-    """Returns every mount dir the config names, the top level's and every section's, once each."""
-    sections = [*config.images.values(), *config.projects.values()]
-    return tuple(dict.fromkeys([*config.mount_dirs, *(d for s in sections for d in s.mount_dirs)]))
-
-
-def section_for(config: Config, reference: str, repo_digests: Iterable[str] | None, built: bool
-                ) -> SectionMatch:
-    """Determines which image section of the config file applies to this image, as a SectionMatch.
-
-    Parameters:
-    - config: the settings of the config file
-    - reference: the image name the service or command line uses
-    - repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from
-    - built: the service builds the image from a Dockerfile
-    """
-    name = repository(reference)
-    if name not in config.images:
-        return SectionMatch(None, None)
-    if built:
-        return SectionMatch(None, f"the config has a section for {name}, but the service builds its image")
-    if not any(repository(d) == name for d in repo_digests or []):
-        return SectionMatch(
-            None, f"the config has a section for {name}, but this image was not pulled from there")
-    return SectionMatch(name, None)
-
-
-def name_matches(config: Config, reference: str, built: bool) -> str | None:
-    """Returns the repository of the image section the name alone points to, or None if there is none or
-    the image is built. The name proves nothing: this is for before the image is there.
-
-    Parameters:
-    - config: the settings of the config file
-    - reference: the image name
-    - built: a compose service builds the image
-    """
-    name = repository(reference)
-    return name if name in config.images and not built else None
 
 
 def user_file(env: Mapping[str, str], home: str) -> str:
@@ -360,8 +212,8 @@ def _id_range(path: str, value: Any) -> tuple[int, ...]:
     that mean "no id".
     """
     valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
-    if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in NO_ID)
-            and value[1] < max(NO_ID)):  # also keeps out ids beyond 32 bits
+    if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in ids.NO_ID)
+            and value[1] < max(ids.NO_ID)):  # also keeps out ids beyond 32 bits
         raise ConfigError(f"{path}: nobody_range must be [low, high] with 0 < low <= high < 4294967295, "
                           "leaving out 65535")
     return tuple(value)

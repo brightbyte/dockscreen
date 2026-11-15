@@ -10,9 +10,9 @@ has no user, and so no origin.
 
 from typing import NamedTuple, Self
 
-from dockscreen.host.config import NO_SECTION, SectionMatch
 from dockscreen.model.image import Image, UserIdentity
 from dockscreen.model.origin import Origin
+from dockscreen.model.settings import NO_SECTION, SectionMatch
 from dockscreen.policy.finding import Finding, Verdict
 from dockscreen.policy.notice import Notice
 

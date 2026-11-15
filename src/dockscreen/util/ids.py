@@ -5,6 +5,10 @@ Ids given by the command line, the config file or the project are ASCII digits o
 ids out of an image's passwd and group files is different, and lives in imageuser.
 """
 
+# 65535 and 4294967295 are (uid_t)-1 in 16 and 32 bits, which tools read as "no id".
+NO_ID = frozenset({65535, 4294967295})
+
+
 def is_id(text: str) -> bool:
     """Tells whether text is a numeric id, which is ASCII digits only."""
     return text.isascii() and text.isdigit()  # isdigit alone takes other scripts' digits, which int() reads

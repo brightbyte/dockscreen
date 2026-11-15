@@ -8,6 +8,7 @@ from fakes import ME, FakeImages, compose_line, compose_project, id_facts, proje
 
 from dockscreen.commands import compose_harden
 from dockscreen.model.origin import Origin
+from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.policy import policy, projectfixes
 
 UID, GID = ME
@@ -91,9 +92,8 @@ def test_harden_fixes_no_user_when_compose_reads_the_patched_config_back_differe
 
 
 def test_harden_leaves_a_user_the_config_file_sets_for_the_image(capsys, tmp_path):
-    from dockscreen.host import config as configuration
-    section = configuration.ConfigSection(user=(900, 900))
-    settings = configuration.Config(images={"docker.io/library/db": section})
+    section = ConfigSection(user=(900, 900))
+    settings = Config(images={"docker.io/library/db": section})
     config = project(db={"user": "900:900", "volumes": [
         {"type": "bind", "source": str(tmp_path / "data"), "target": "/data"}]})
     images = FakeImages(users={"db:1": "app"}, digests={"db:1": ["db@sha256:x"]})
