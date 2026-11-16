@@ -57,6 +57,11 @@ def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str
     were pulled from, which shows whether the section applies; the checks before the images were there
     trusted the name alone.
 
+    A section trusts a repository's maintainer, but a name proves nothing: a project can build or tag an
+    image of its own as `mariadb` and so borrow the user, mount dirs or security options configured for
+    the real one. Only a repo digest for the repository, recorded when docker pulled the image from there,
+    shows its origin (sections.section_for).
+
     Returns {service: image} for those that are here.
     """
     settings = screener.runtime.settings
@@ -76,6 +81,10 @@ def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],
                      screener: Screener) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
+
+    A service in an inactive profile is started when the command names it (`compose run debug`), so it
+    counts as started and its image is decided like the others'; leaving it out would let it run as its
+    image says.
 
     Raises DockerError if compose cannot list them.
     """

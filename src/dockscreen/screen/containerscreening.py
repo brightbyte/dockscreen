@@ -4,6 +4,20 @@ line that made either asks for that a project or an image may not (command_line_
 
 A container that is created is inspected and judged, and left for the caller to start or remove: only the
 caller knows whether it is to run, be created again with the user decided, or be reported on.
+
+Containers need screening because `docker run IMAGE` runs the image as the user it chooses, root by default,
+and the image is someone else's. The command line is trusted, but it does not say which user the image
+picks, nor the identity the image's passwd and group files give it; only the image does. So the container is
+created, which lets the daemon read the command line with all its options, and inspected before it starts:
+the judged container is docker's own, not dockscreen's reading of a command line with a hundred options.
+dockscreen still reads the command line far enough to find the image and the user options, so it checks
+that reading against the container (_verify_split): a misreading must not judge another image than the
+one that runs, or miss a --user.
+
+An existing container (check_existing) was created by anyone, perhaps by plain docker or a project's
+script, and `docker start` would run it without any of this; it cannot be rewritten, so it is judged as it
+is. The command line's requests (command_line_findings) are pointed out because commands are copied from
+READMEs too: the person may trust a command line they did not write.
 """
 
 from typing import Any
@@ -66,6 +80,12 @@ def _user_origin(parsed: runargs.RunArgs[str], decided: UserDecision | None) -> 
 
 def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs[str]) -> list[Finding]:
     """Checks that our reading of the command line matches the container the daemon created.
+
+    runargs reads the command line only far enough to find the image and the command, and does not know
+    every option docker has: an option it does not know to take a value would shift its reading, so that
+    it takes the option's value for the image, or the image for part of the command. The user options are
+    found by the same reading. A container whose image or command differs from that reading is refused,
+    since the image decided on and the --user found may then not be the ones that run.
 
     Returns the problem if it does not, else an empty list.
     """

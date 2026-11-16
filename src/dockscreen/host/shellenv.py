@@ -3,8 +3,9 @@ compose project, and for the ids dockscreen passes to compose.
 
 dockscreen passes UID and GID, the real ids of the caller, in the environment of the compose commands
 it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); values already in the environment
-are overridden. Running as these ids is not allowed unless --allow-me is given (see rules.userrules): passing
-them only makes the project's intent readable.
+are overridden, so that `${UID}` is the caller's real uid, the one --allow-me allows, and not the value of
+an inherited variable. Running as these ids is not allowed unless --allow-me is given (see
+rules.userrules): passing them only makes the project's intent readable.
 
 `environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so a
 pass-through is recognised by the value being the shell's own under the same name. That also catches

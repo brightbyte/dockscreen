@@ -6,6 +6,10 @@ A project does not have to set these itself: a service without `cap_drop: [ALL]`
 or `no-new-privileges` gets them. A project cannot weaken them, because adding
 `cap_add` or `no-new-privileges:false` is still refused by the policy. The
 changes are a ProjectPatch (see projectpatch), reported by `audit` and before a run.
+
+They are the second line behind the user rules: no-new-privileges keeps a setuid binary of the image from
+making the checked user root, and without capabilities a process that became root anyway cannot override
+the permissions of mounted host files (rules.servicerules, CAP_DROP).
 """
 
 import json

@@ -44,6 +44,7 @@ def volume_reaches_host(volume: Mapping[str, Any] | None) -> bool:
     options. A plain tmpfs does not count.
     """
     opts = (volume or {}).get("driver_opts") or {}
+    # memory, not a host path; with a device or the bind flag it is not plain, and the policy refuses it
     plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
                    and not mount_flags(opts) & BIND_FLAGS)
     return bool(opts.get("device") or opts.get("o")) and not plain_tmpfs

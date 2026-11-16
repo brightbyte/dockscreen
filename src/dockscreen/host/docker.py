@@ -12,7 +12,9 @@ from typing import Any, NoReturn, Self
 
 from dockscreen.util import commandline, messages
 
-MAX_FILE_BYTES = 1 << 20  # /etc/passwd and /etc/group come from an untrusted image
+# /etc/passwd and /etc/group come from an untrusted image, which could make them large enough to exhaust
+# memory when they are read; real ones are a few kilobytes.
+MAX_FILE_BYTES = 1 << 20
 FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
@@ -242,6 +244,9 @@ class Docker:
 def _first_file_of_tar(data: bytes) -> str | None:
     """Returns the text of the first entry of a tar archive, or None if that is not a regular file or
     the archive cannot be read.
+
+    The archive is the image's: anything but a regular file (a device, a link that was not followed) has no
+    text to read, and is taken as no file, which docker would not find names in either.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:

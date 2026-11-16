@@ -46,8 +46,8 @@ class RuleBase:
     """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
     which Policy holds and documents, and what follows from them for every group of rules.
 
-    What the id rules judge by (users.IdFacts), the settings and host facts about ids, is one object, ids,
-    for the groups of rules to read.
+    The facts the id rules judge by (userrules.IdFacts), the settings and host facts about ids, are one
+    object, ids, for the groups of rules to read.
     """
     ids: "IdFacts"
     extra_dirs: tuple
@@ -120,7 +120,13 @@ def is_inside_any(path: str, roots: Iterable[str]) -> bool:
 
 
 def is_inside(path: str, root: str) -> bool:
-    """Tells whether path, resolved relative to root and through symlinks, is root or below it."""
+    """Tells whether path, resolved relative to root and through symlinks, is root or below it.
+
+    Docker follows symlinks when it mounts or reads a path, so a project that contains `data -> /` must not
+    pass with `./data`; resolving also undoes `..` and repeated slashes. This holds for the file system as it
+    is when the check runs: a container that can write the project could swap a directory for a link
+    afterwards (docs/design.md, Known gaps).
+    """
     real_root = os.path.realpath(root)
     real = os.path.realpath(os.path.join(real_root, path))
     return os.path.commonpath([real_root, real]) == real_root

@@ -84,6 +84,7 @@ def _acquire(command: Sequence[str], config: dict[str, Any], started: Collection
         else:
             pull.append(name)  # always, and the periodic ones: pulling each run never serves stale images
     for subcommand, names in (("pull", pull), ("build", build)):
+        # `--`: the names are the project's; the policy refuses those that start with `-` as well
         if names and docker.run_child([*command, subcommand, "--", *names]) != 0:
             return [f"docker compose {subcommand} {' '.join(names)} failed"]
     return []
@@ -106,7 +107,8 @@ def _look(project: Project, name: str, screener: Screener) -> Inspected | Unseen
     service = config["services"][name]
     image = Image(image_name(config, name, service), built="build" in service)
     platform = ["--platform", service["platform"]] if service.get("platform") else []
-    # a container that is never started shows the user docker would run, and its files can be copied out
+    # a container that is never started shows the user docker would run, and its files can be copied out;
+    # --pull=never: the image looked at must be the one acquired above, not a newer one pulled in between
     _, container = screener.docker.create(["--pull=never", *platform, "--", image.reference])
     if container is None:
         return Unseen(image, "the image is not available locally")

@@ -11,6 +11,24 @@ built for a project that was not cleared, and nothing runs that was not checked 
 The commands that act on the containers a project already has check only its name (check_name), and
 the ones that only build check only what the builds can reach (check_build).
 
+Projects need screening because `docker compose up` gives a project, a directory someone else wrote,
+every power the daemon has, which is root on this host. The stages exist for these reasons:
+- load_project: compose is asked for its own reading of the project (`config`), since a second parser
+  would read the YAML, the interpolation and the merging of files differently; the project directory is
+  located first, because bind mounts are judged against it.
+- check: the definition's requests are judged before anything is pulled or built, because building
+  runs the project's Dockerfile, and a refused project should not get even that far.
+- decide: a service without `user:` runs as its image says, which only the image can tell; the image is
+  acquired as compose would, then looked at without being started.
+- finish: the defaults, the decided users and the pinned images change the project, so the result is
+  judged once more, as the project that will run.
+- running from the generated file: compose reading the project's own files again could see something
+  else (a file changed in between, discovery rules, interpolation), so it reads only the file that was
+  checked, and is asked to read that back first, in case it would interpret it differently.
+- check_name: the project name decides which existing volumes, networks and containers compose acts on,
+  so a project that claims another's name reaches that project's data.
+- check_build: a build reads files from this host and runs the project's Dockerfile.
+
 The resolved config is hardened, checked, written to a private temporary file
 (`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
 and handed to compose as its only file, together with the project directory and
@@ -45,7 +63,9 @@ from dockscreen.screen import inspect, runoptions, serviceinfo, userargs
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
-# Options that select the files and the project; ours replace them.
+# Options that select the files and the project; ours replace them. Left in, a second -f would add a file
+# that was never checked, and another directory or name would make compose resolve paths, or act on
+# containers, other than those checked.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
 
 # Writes a config to a generated file and returns the compose command line on it (generated).
@@ -292,6 +312,11 @@ def _generated(global_args: Sequence[str], project_dir: str,
 
     command writes config there and returns the `docker compose` command line on it alone, with the project
     directory and name pinned, ready for a subcommand to be appended. Everything is removed afterwards.
+
+    The directory is created for this run, readable by the caller only, so another user of this host can
+    neither read the config nor put a file of their own in its place for compose to read. The project
+    directory and name are passed, not left for compose to work out from the file's location, since the file
+    is in the temporary directory and its relative paths were resolved against the project's.
     """
     counter = itertools.count()
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:

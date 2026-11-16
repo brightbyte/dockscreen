@@ -86,7 +86,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime the `docker` wrapper loaded
     """
     assert parent_cli.cmd == "compose"
-    if parent_cli.lead_args:  # the compose commands are run without them
+    # the compose commands are run without them; -H or --context would choose a daemon or config that the
+    # screening did not look at
+    if parent_cli.lead_args:
         messages.notice("docker options before `compose` are not supported")
         return 1
     cli = parent_cli.subcommand(GLOBAL_OPTS_WITH_VALUE, OWN_OPTIONS)

@@ -17,6 +17,10 @@ against these rules. Never accepted, unless they are allowed ids (below):
 With host mounts (bind mounts, devices, volumes_from, secrets, configs) the id must be an allowed id,
 because what the container can write on the host depends on it.
 
+The caller's own ids are ids on this host too, and the most useful ones to a project: a container that runs
+as the caller can write all of the caller's files that it mounts, such as the project's .git/hooks, whose
+scripts the caller later runs outside any container. A project gets them only with --allow-me, for that run.
+
 Allowed ids: the nobody range and the default user from the config file, ids the caller adds for one
 check (a configured image user), and the caller's own ids when --allow-me was given (compose).
 
@@ -461,7 +465,9 @@ def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[
     else:  # the image's user, or the one its image section configures
         found = [Substitution(name, "user", ids.format_user(decision.pinned_user), group=PINNED,
                               origin=decision.origin)]
-    # the image checked is what runs
+    # The checked image is the one that runs. Between the check and `up`, the project's own pull_policy, a
+    # build, or anyone who can tag images on this daemon could point the name at another image, whose user
+    # (root) was never decided: never pulling, and naming the image by id, close that.
     found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
     if decision.image.id and "build" not in service:
         # ... even if the name is moved to another image

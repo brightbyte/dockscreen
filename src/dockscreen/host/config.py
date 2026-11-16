@@ -39,7 +39,9 @@ class ConfigError(Exception):
 def user_file(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
-    An XDG_CONFIG_HOME in env that is not absolute is ignored, as XDG says, in favour of home/.config.
+    An XDG_CONFIG_HOME in env that is not absolute is ignored, as XDG says, in favour of home/.config: it
+    would be read relative to the current directory, which is the project's, so a project could supply the
+    config that is trusted completely.
 
     Parameters:
     - env: the caller's environment
@@ -66,7 +68,8 @@ def _create_user_file(path: str) -> bool:
     """Writes the template to path, with its directories, if nothing is there; returns whether it did.
 
     Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
-    symlink in its place, is never touched.
+    symlink in its place, is never touched: following a link someone placed there would write the
+    template to the link's target, as the caller.
     """
     template = importlib.resources.files("dockscreen.host").joinpath("config.template.toml").read_bytes()
     try:
@@ -109,6 +112,7 @@ def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
     top = _section(path, "", {k: v for k, v in data.items() if k in SETTINGS})
     changes = {key: value for key, value in top._asdict().items() if key in data}
     if "docker" in data:
+        # a relative path would be found from the current directory, which is the project's
         if not isinstance(data["docker"], str) or not os.path.isabs(data["docker"]):
             raise ConfigError(f"{path}: docker must be an absolute path")
         changes["docker"] = data["docker"]

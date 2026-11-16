@@ -1,6 +1,14 @@
 """This module defines the BuildRules class, the group of the policy's rules for judging builds: a compose
 service's `build:` and the targets of `docker buildx bake`, which share what a build may reach on this host
-(BuildRules.check_build)."""
+(BuildRules.check_build).
+
+A build runs the project's Dockerfile, which is untrusted, on this host. Its RUN steps run in a sandbox,
+but the build's inputs reach into them: the context and named contexts (COPY reads them, so a
+context of / or ~ puts host files into an image the project controls), the network (the host's reaches
+services on its localhost), the SSH agent (which authenticates as the caller to anything the agent's keys
+open), privileges and entitlements (a privileged RUN is root on the host), secrets, and outputs and caches
+(which write files on the host). The rules keep each of these inside the project or turn it off.
+"""
 
 import os
 from collections.abc import Sequence
@@ -11,6 +19,7 @@ from dockscreen.policy import finding
 from dockscreen.policy.finding import Finding
 from dockscreen.policy.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
 
+# secrets names the project's top-level secrets, which ProjectRules checks where they are defined.
 BUILD_HARMLESS_KEYS = frozenset({
     "args", "dockerfile_inline", "extra_hosts", "isolation", "labels", "no_cache", "platforms",
     "provenance", "pull", "sbom", "secrets", "shm_size", "tags", "target", "ulimits",
@@ -43,7 +52,7 @@ class BuildRules(RuleBase):
         # set outputs and cache destinations on the host. Compose's own build does not pass it on.
         problems = unknown_keys(build.definition, BUILD_KEYS, "build key", extensions=False)
         problems += self.check_build(build, "build ")
-        if build.definition.get("privileged"):
+        if build.definition.get("privileged"):  # RUN steps with every capability: root on the host
             problems.append("build privileged is not allowed")
         return problems
 
@@ -51,7 +60,9 @@ class BuildRules(RuleBase):
         """Checks what a build reaches on this host, however it is defined; returns the problems: its
         context, Dockerfile and named contexts outside its directory, a network, and the SSH agent.
 
-        Only sources that are paths on this host are checked, not URLs or services.
+        Only sources that are paths on this host are checked, not URLs or services, which are fetched rather
+        than read from this host. A Dockerfile outside the context is held to the directory too, so that
+        everything the build reads from this host is the project's.
 
         Parameters:
         - build: the build (ImageBuild)
@@ -91,6 +102,8 @@ class BuildRules(RuleBase):
         target = build.definition
         problems = unknown_keys(target, BAKE_TARGET_KEYS, "key", extensions=False)
         problems += self.check_build(build)
+        # security.insecure (privileged RUN steps), network.host, device: the access a build sandbox exists
+        # to deny
         if target.get("entitlements"):
             problems.append("entitlements ask for access beyond the build sandbox and are not allowed")
         problems += _check_outputs(target.get("output") or [], target.get("cache-to") or [])
@@ -100,7 +113,7 @@ class BuildRules(RuleBase):
 
     def _check_cache_from(self, entries: Sequence[Any], directory: str) -> list[str]:
         """Returns the problems with cache-from entries: unreadable ones, and local caches outside
-        directory.
+        directory, which the build would read from the host like a context.
         """
         problems = []
         for entry in entries:
@@ -114,6 +127,10 @@ class BuildRules(RuleBase):
     def _check_build_secrets(self, secrets: Sequence[Any], directory: str) -> list[str]:
         """Returns the problems with bake secret entries: variables instead of files, and files outside
         directory.
+
+        A secret is readable by the RUN steps that mount it, which the project writes: a file outside the
+        project (~/.ssh/id_ed25519) or a variable of the caller's (`env=AWS_SECRET_ACCESS_KEY`) can be copied
+        into a layer or sent off.
         """
         problems = []
         for entry in secrets:
@@ -127,7 +144,11 @@ class BuildRules(RuleBase):
 
 
 def _check_outputs(outputs: Sequence[Any], cache_to: Sequence[Any]) -> list[str]:
-    """Returns the problems with a bake target's output and cache-to entries: any that write to the host."""
+    """Returns the problems with a bake target's output and cache-to entries: any that write to the host.
+
+    A local or tar output writes the build result to the project's choice of `dest`, as the caller: over
+    ~/.bashrc, into ~/.ssh. Outputs that stay in the image store or go to a registry write nothing here.
+    """
     problems = []
     for entry in outputs:
         found = fields(entry)

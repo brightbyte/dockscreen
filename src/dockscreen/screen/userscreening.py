@@ -4,6 +4,13 @@
 The command lines are read by userargs and runargs, which keep `--as` and `--as-me` as their UserOption; the
 rules judge and resolve them (Policy.check_user_options, Policy.resolve_user_options) through the Screener of
 the command.
+
+The user options need screening, though the command line is trusted, because the image decides their
+meaning. Docker resolves a name in `--user` in the image's own /etc/passwd, or for `exec` in
+the running container's, which the image or container can make say root; a uid alone gets its group and
+supplementary groups from those files. So `--user` must be numeric `uid:gid`, which means the same to
+docker as it did when checked. --as and --as-me are dockscreen's own, resolved on this host, and replaced
+by the `--user=uid:gid` they stand for before docker sees the arguments.
 """
 
 from collections.abc import Collection, Mapping, Sequence

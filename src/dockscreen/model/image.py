@@ -112,6 +112,10 @@ def split_reference(reference: str) -> tuple[str, str, str]:
     """Splits an image reference into (normalised repository, tag, digest) as docker reads it:
     `mariadb` is docker.io/library/mariadb. Tag and digest are empty if not given.
 
+    Image sections of the config file are matched by the normalised repository, so that every spelling
+    docker reads as the same repository finds the same section, and none that docker reads as another
+    (`evil.example/mariadb`, `someone/mariadb`) does.
+
     Raises ValueError for something that is not a reference.
     """
     name, _, digest = reference.partition("@")

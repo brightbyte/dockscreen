@@ -10,6 +10,9 @@ Contents:
 - userargs, runargs: reading command lines just far enough to find the users and the target
 - userscreening: having the users a command line gives judged, and --as and --as-me resolved
 
+Each screening module gives, in its docstring, the reasons its kind of target needs screening, and the
+reasons for the way it is done.
+
 Not here: the rules (policy); which command screens what, and what happens with the verdict (commands).
 
 Constraints:

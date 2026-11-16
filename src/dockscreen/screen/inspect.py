@@ -1,6 +1,12 @@
 """This module provides functions for finding and loading the project a compose command line selects, as
 docker compose resolves it, and for gathering what the policy judges about it besides its config: where it is,
-which containers have its name, and which configured mount directories are risky."""
+which containers have its name, and which configured mount directories are risky.
+
+These checks matter because the project directory is the root that bind mounts and host files are judged
+against, so it must be the directory compose will use, located as compose does, and one that holds nothing
+sensitive; and the project name decides the containers and volumes compose acts on, so it must be this
+project's.
+"""
 
 import json
 import os
@@ -20,9 +26,13 @@ from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+# A project's .env that sets these makes compose read compose files that are not the ones located here.
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
-# A directory that equals or contains one of these must not be mounted wholesale.
+# A directory that equals or contains one of these must not be mounted wholesale: as a project directory,
+# everything under it is "inside the project" and may be bind mounted, so a compose file in / or /etc
+# would make the whole system mountable; as a configured mount dir, every project could mount it.
 SENSITIVE_DIRS = ("/", "/etc", "/usr", "/var", "/boot", "/root", "/run", "/proc", "/sys", "/dev")
+# Write access to the socket is control of the daemon, which is root on the host.
 DOCKER_SOCKET = "/var/run/docker.sock"
 
 
@@ -129,6 +139,9 @@ def made_from(name: str, docker: Docker) -> list[str]:
 def name_lookup_failure(name: str, error: DockerError) -> Finding:
     """Returns the failure to look at the containers called by the project name (made_from).
 
+    It is a failure, which stops the command like a refusal: a name that could not be checked is not taken
+    to be free.
+
     Parameters:
     - name: the project name
     - error: why docker could not say
@@ -157,6 +170,9 @@ def name_conflicts(project_policy: policy.Policy, name: str, directory: str, doc
 def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
     """Tells whether the caller chose the project name, with -p or COMPOSE_PROJECT_NAME.
 
+    A name the caller chose is not checked against other projects: the command line and the shell are
+    trusted, and choosing the name of another project on purpose is the way to act on it.
+
     Parameters:
     - args: the compose options before the subcommand, which select the project
     - env: the caller's environment
@@ -179,6 +195,7 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Projec
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
+        # read once by compose, so there is no file to locate a project directory from, or to check
         raise DockerError("a compose file read from stdin cannot be inspected")
     if files:  # compose takes the project directory from the first file
         return ProjectLocation(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))

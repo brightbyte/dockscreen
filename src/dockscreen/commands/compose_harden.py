@@ -101,6 +101,11 @@ def _render(original: dict[str, Any], fixed: dict[str, Any], unfixed: Iterable[F
 
     original: the config the patch is applied to, as it will be run (defaults included).
     unfixed and notes become comments.
+
+    The person saves this as a compose file, and much of it is the project's text: mount sources and
+    problems in comments, service names and keys. Comments are escaped (printable) so that a newline in
+    them cannot end the comment and add keys of the project's choosing, such as `privileged: true`, and
+    names and keys are quoted unless they are plainly safe.
     """
     lines = [_HEADER]
     lines += [f"# note: {printable(note)}" for note in notes]

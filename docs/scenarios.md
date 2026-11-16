@@ -1,243 +1,270 @@
 # dockscreen scenarios
 
-Audience: people who change dockscreen or review its security. Each scenario is a way a hostile compose project or image could try to get past the policy in dockscreen's `docs/design.md`, written so that it can become a test.
+Audience: people who change dockscreen or review its security. Each scenario is a way a hostile compose project or image could try to get past the policy in [design.md](design.md), with the attack, dockscreen's defense and its place in the code, and the tests that show it.
 
-Status values: **tested** (a test exists that I know of), **mentioned** (the term appears in the source but I have not confirmed the behaviour), **no test found** (no hit in `tests/`). The status comes from a grep of `src/` and `tests/`, not from reading the checks, so confirm before relying on it. A status that names a test comes from the change that added the scenario. Where a scenario depends on how the docker daemon behaves, that is said, and was not run against a daemon.
+Tests are named as `file::test`; "unit" tests simulate docker, "e2e" tests run against the real docker of the host ([tests/e2e/README.md](../tests/e2e/README.md)). A scenario says so when its defense depends on a daemon's behaviour that no test runs. The code documents each defense where it is made; the pointers below lead there.
 
-## Bind mount
+The scenarios are grouped by the attacker's goal: host files, privileges, a user it should not have, a difference between the checked thing and the running one, a build that reaches the host, another project's resources, or dockscreen itself.
 
-Goal of the attacker: a container that can read or write host paths outside the project directory (`/`, `/etc`, `$HOME`, the docker socket). Dockscreen checks the config that `docker compose config` prints, so the first scenarios depend on the check being applied to that resolved form and to real paths, not to the text in the file.
+## Host files
 
-### B1. Symlink inside the project
+Goal: a container, or compose on the container's behalf, that reads or writes host paths outside the project: `~/.ssh`, `/etc`, the docker socket (which is root on the host).
 
-The project contains `data -> /etc` and the service mounts `./data:/x`. The mount source is inside the project as text. Docker follows the symlink when it creates the container.
+### H1. A bind mount from outside the project
 
-- Expected: refused, because the real path is outside the project and `mount_dirs`.
-- Check: the path is resolved with symlinks before it is compared.
-- Status: mentioned (`symlink`, `realpath`; tests exist).
+`volumes: ["/:/host"]`, or the same through a path that only looks inside: a symlink in the project (`data -> /etc`), `..`, `~` (compose expands it), `/proc/1/root` (the host root through procfs), `/var/run/docker.sock`.
 
-### B2. Symlink swapped between audit and start
+- Defense: a bind source must be inside the project or a configured `mount_dirs` entry, compared after resolving symlinks, since docker follows them (`ServiceRules._check_mounts`, `base.is_inside`). The rule is "outside the project", not a list of dangerous paths.
+- Tests: unit `test_policy.py::test_bind_mount_outside_project_is_refused`, `::test_bind_mount_through_symlink_out_of_project_is_refused`; e2e `test_e2e_compose_mounts.py::test_a_bind_mount_from_outside_the_project_is_refused` (including the socket and `/proc/1/root`), `::test_a_symlink_in_the_project_is_followed_out_of_it`.
+- Known gap: the check sees the file system as it is when it runs. A container that can write the project could replace a directory with a link before the next container is created; the directories are not pinned.
 
-A container from an earlier `up` has the project mounted read-write. It replaces a directory, or a symlink target, after the audit passed and before docker creates the next container.
-
-- Expected: either refused, or documented as out of scope with the reason.
-- Check: whether the generated, checked file only names paths that cannot change under it, and whether the audit-to-create gap is closed for bind mount sources (design.md covers images and the config file, not mount sources).
-- Status: no test found. Open question, not a known bug.
-
-### B3. Named volume that is a bind mount
+### H2. A named volume that is a host mount
 
 ```yaml
 volumes:
-  host:
-    driver: local
-    driver_opts: {type: none, o: bind, device: /}
-services:
-  app:
-    volumes: ["host:/mnt"]
+  d: {driver_opts: {type: none, o: bind, device: /}}
+  t: {driver_opts: {type: tmpfs, device: /etc, o: bind}}
 ```
 
-The service uses a named volume, so there is no bind mount in `volumes:` to inspect.
+The service's `volumes:` only names `d`, so its own check sees no host path. The local driver passes `type`, `device` and `o` to mount(2), and the kernel ignores the filesystem type when the bind flag is set: `t` is the host's `/etc`, not memory. `type: nfs` or `cifs` mounts a network share from this host's position; a volume plugin can mount anything.
 
-- Expected: refused, as a bind mount of `/`.
-- Variants: `device: /etc`, `o: bind,ro`, `type: nfs` or `cifs` with a host address, a different volume `driver`.
-- Status: mentioned (`driver_opts`; a test exists).
+- Defense: only the local driver; types `none` and `tmpfs`; a bind's device is held to the same roots as a bind mount; a tmpfs may name no device and no bind flag, however `o` spells it; other `driver_opts` keys are refused (`ProjectRules._check_driver_opts`, `LOCAL_VOLUME_TYPES`). A service that uses such a volume counts as reaching host files for the id rules (`mounts.service_reaches_host`, see U5).
+- Tests: unit `test_policy.py::test_volume_drivers_and_options`, `::test_a_tmpfs_volume_cannot_be_made_a_bind_mount_of_a_host_path`, `::test_volume_driver_opts_are_an_allowlist_and_bind_needs_a_device`; e2e `test_e2e_compose_mounts.py::test_a_named_volume_that_is_not_the_projects_own_is_refused`.
 
-### B3a. A tmpfs volume with the bind flag
+### H3. Files that compose reads on the host
 
-```yaml
-volumes:
-  d:
-    driver_opts: {type: tmpfs, device: /etc, o: bind}
-services:
-  app:
-    volumes: ["d:/h"]
-```
+Content from outside the project reaches a container without a mount:
 
-The volume says `type: tmpfs`, which is harmless, but the local driver passes `type`, `device` and `o` to mount(2), and the kernel ignores the filesystem type when the bind flag is set. The container gets the host's `/etc`. Unverified on a daemon; the policy refuses it whatever the daemon does.
+| Key | Example | Defense |
+|---|---|---|
+| `env_file`, `label_file` | `~/.aws/credentials` | inside the project (`servicerules._check_host_files`); the config is loaded with `--no-env-resolution` so the path stays visible |
+| `secrets`, `configs` | `file: ~/.ssh/id_ed25519`, `environment: AWS_SECRET_ACCESS_KEY` | file inside the project, no variables, not external (`ProjectRules._check_file_source`) |
+| `develop.watch` | `path: ~/.aws`, `action: sync` | inside the project (`ServiceRules._check_develop`) |
+| `volumes_from` | `container:other` | only services of the project (`ServiceRules._check_volumes_from`) |
+| `environment` | `[AWS_SECRET_ACCESS_KEY]` | the shell is trusted, so not refused; a warning names the variables (`ProjectRules.check_shell_env`) |
 
-- Expected: refused.
-- Check: a tmpfs volume has no device (or `tmpfs`) and no `bind` or `rbind` in `o`, however it is spelled (`Bind`, `size=1m, bind`). `bind` without a device is refused. `driver_opts` keys other than `type`, `device` and `o` are refused.
-- Variants: `o: rbind`, `device: /etc` without `o`, an extra key such as `size`.
-- Status: tested (`tests/test_policy.py::test_a_tmpfs_volume_cannot_be_made_a_bind_mount_of_a_host_path`, `::test_volume_driver_opts_are_an_allowlist_and_bind_needs_a_device`).
+- Tests: unit `test_policy.py::test_secrets_and_configs`, `::test_env_and_label_files_outside_project_are_refused`, `::test_develop_watch`, `::test_privilege_escalation_is_refused` (`volumes_from`); e2e `test_e2e_compose_mounts.py::test_a_secret_or_config_from_outside_the_project_is_refused`, `::test_a_file_read_on_the_host_from_outside_the_project_is_refused`, `::test_a_watch_path_outside_the_project_is_refused`, `::test_volumes_of_another_container_are_refused`.
+- Untested: `include` and `extends` of files outside the project or from git or OCI sources. Compose merges them into the config that is checked, so their additions are judged like the rest, but no test shows it. A volume `subpath` with `..` relies on the daemon's own check.
 
-### B4. Explicit volume name of an existing volume
+### H4. A project directory that is not the project's
 
-`volumes: {host: {name: hostroot}}`, where a volume `hostroot` was created earlier with the options of B3, by hand or by another project. Compose normally prefixes the project name, but `name:` turns that off.
+Everything inside the project directory may be mounted, so a project tries to make a bigger directory its own: a compose file in `~` or in a parent directory found by compose's upward search, a `.env` that sets `COMPOSE_FILE` to send compose elsewhere, or a project directory that contains `/etc` or the config files.
 
-- Expected: refused, because the volume belongs to another project or is not created by this one.
-- Variant: `external: true`.
-- Status: mentioned (`name:`; tests exist).
+- Defense: the search stops at `$HOME` and at directories the caller does not own; `COMPOSE_FILE` and `COMPOSE_PATH_SEPARATOR` in `.env` are refused; a project directory that contains a sensitive path is refused (`ProjectRules.check_location`, `inspect.SENSITIVE_DIRS`).
+- Tests: unit `test_inspect.py::test_compose_vars_in_dotenv_make_the_project_directory_unverifiable`, `::test_a_project_directory_containing_the_home_directory_is_refused`, `::test_the_walk_up_stops_at_the_home_directory`; e2e `test_e2e_compose_project.py::test_a_dotenv_that_points_compose_elsewhere_is_refused`, `::test_a_project_directory_that_contains_the_root_is_refused`. The stop at `$HOME` has no e2e test; it depends on the host's layout.
 
-### B5. Paths that mean the root without being `/` or `/etc`
+## Privileges
 
-| Source | Why it matters |
-|---|---|
-| `/proc/1/root`, `/proc/self/root` | the host root through procfs |
-| `/var/run/docker.sock`, `/run/docker.sock` | control of the daemon, which is root on the host |
-| `/etc/..`, `//`, `/./` | non-normalised spellings of `/` |
-| `~`, `~/.ssh` | expanded to the caller's home directory by compose |
-| `/dev`, `/sys`, `/run` | devices and runtime state |
-| `/home/<other user>` | another account's files |
+Goal: root on the host through the kernel or the daemon, from a container that runs as an unprivileged user.
 
-- Expected: all refused, since none is inside the project or `mount_dirs`. The rule should be "outside the project", not a list of dangerous names.
-- Status: `docker.sock` tested; `/proc` has one source hit and no test.
+### P1. Privileges, devices and other runtimes
 
-### B6. Source built from interpolation
+`privileged`, `cap_add` (`SYS_ADMIN`, `DAC_READ_SEARCH`), `devices` (`/dev/sda`), `device_cgroup_rules`, `gpus` and device reservations, `cgroup_parent`, `runtime` other than runc, `external_links`.
 
-`volumes: ["${SRC:-/}:/mnt"]`, with `SRC` set or unset in `.env`, in an `env_file`, in your shell, or by a `COMPOSE_FILE` / `COMPOSE_` variable in `.env`.
+- Defense: refused whenever set (`servicerules.FORBIDDEN_KEYS`, `_check_runtime`, `_check_deploy`); each key's comment names the access it opens.
+- Tests: unit `test_policy.py::test_privilege_escalation_is_refused`; e2e `test_e2e_compose_services.py::test_a_service_that_asks_for_privileges_is_refused`.
 
-- Expected: refused after interpolation. A value that comes from your shell still has to pass.
-- Check: dockscreen sets `UID` and `GID` itself; nothing else changes what the checked file says between audit and run.
-- Status: no test found by name; the design (checked config written to a file and given to compose as its only input) addresses it.
+### P2. The host's namespaces
 
-### B7. Host reads and mounts that are not `volumes:`
+`pid: host` (the host's processes, and their files through `/proc/PID/root`), `network_mode: host` (services that listen on the host's 127.0.0.1, such as a docker API on tcp), `ipc`, `uts`, `userns_mode: host` (turns off user namespace remapping), `cgroup`, and `container:NAME` for each.
 
-Each of these gives a container or a build host content from outside the project, without a `volumes:` entry.
+- Defense: neither `host` nor `container:` (`servicerules.NAMESPACE_KEYS`).
+- Tests: unit `test_policy.py::test_privilege_escalation_is_refused` (pid, network_mode, ipc only); e2e `test_e2e_compose_services.py::test_a_service_that_shares_a_namespace_of_the_host_is_refused` (all six), `::test_a_service_that_joins_another_containers_namespace_is_refused`.
 
-| Mechanism | Example |
-|---|---|
-| `secrets`, `configs` | `file: /etc/shadow` |
-| `env_file` | `/etc/environment`, `~/.aws/credentials` |
-| `build` | `context: /`, `dockerfile: /etc/x`, `additional_contexts`, `secrets`, `ssh` |
-| `develop.watch` | `path:` outside the project, with `action: sync` |
-| `devices` | `/dev/sda` |
-| `volumes_from` | another container's mounts |
-| `volume.subpath` | a path into a volume, which may include `..` |
-| `include`, `extends` | a compose file outside the project, or a remote git or OCI source |
+### P3. A setuid binary in the image
 
-- Expected: refused, as the README states for files "outside the project directory".
-- Status: `additional_contexts`, `watch`, `include` tested or mentioned; `subpath` and `extends` have no test found.
+The image runs as an unprivileged user, as checked, and ships a setuid-root binary (`sudo`, or one made for the purpose).
 
-### B8. Service hidden behind a profile
+- Defense: every service and `docker run` container gets `no-new-privileges` and `cap_drop: [ALL]` (`hardening`); the kernel then ignores the setuid bit, and a root process has no capabilities to override file permissions on mounts. A project cannot turn them off: `security_opt` allows only no-new-privileges and configured options, `cap_drop` must include `ALL` (`ServiceRules.check_security_opt`, `check_cap_drop`).
+- Tests: unit `test_policy.py::test_cap_drop_all_is_required`, `::test_no_new_privileges_is_required`; e2e `test_e2e_compose_services.py::test_a_security_option_that_weakens_the_container_is_refused` (`seccomp=unconfined`, `apparmor=unconfined`), `::test_a_cap_drop_of_the_projects_own_is_extended_with_a_notice`.
 
-A service with `profiles: [debug]` is absent from the default config. `compose run debug` activates the profile for that service.
+### P4. Commands beside the main process
 
-- Expected: the audit looks at the services the command will start, including the one named on the command line.
-- Status: no test found (`profiles` has no hits in `tests/`).
+A `post_start` or `pre_stop` hook, or a `develop.watch` rule with `sync+exec`, runs a command in the container with a user and a `privileged` flag of its own.
 
-### B9. Parser differences
+- Defense: hooks may not be privileged, and their user passes the same rules as `user:`; `sync+exec` is refused (`servicerules._check_hooks`, `WATCH_ACTIONS`).
+- Tests: unit `test_policy.py::test_lifecycle_hooks_cannot_escalate`; e2e `test_e2e_compose_users.py::test_a_hook_may_not_run_as_root`, `test_e2e_compose_services.py::test_a_watch_rule_that_runs_a_command_in_the_container_is_refused`.
 
-YAML anchors and merge keys (`<<:`), duplicate keys, and unusual tags can be read differently by two parsers.
+### P5. A key dockscreen does not know
 
-- Expected: no effect, because dockscreen does not parse the file; compose does, and dockscreen reads compose's output.
-- Check: the generated file is read back through `docker compose config` and compared with what was checked (the README says it is).
-- Status: by design.
+A compose feature added after these rules were written (`models`, a new mount option) may be a new way out.
 
-### B10. Not covered on purpose
-
-- Mounts chosen on your own command line (`docker run -v /:/mnt`). `dockscreen audit` points them out, and `--strict-screen` fails the audit for them.
-- Clients that use the docker socket directly, such as IDEs and scripts. A PhpStorm docker integration bypasses the wrapper.
-- Network exposure (`ports`, `extra_hosts`, `dns`).
+- Defense: an allowlist. Every structure has its own list of keys; an unknown key is refused (`servicerules.HARMLESS_SERVICE_KEYS`, `base.unknown_keys`), except `x-` keys, which compose ignores, and not in `build`, where bake reads `x-bake`.
+- Tests: unit `test_policy.py::test_unknown_service_key_is_refused_and_extension_keys_are_not`, `::test_unknown_keys_are_refused_in_nested_structures`; e2e `test_e2e_compose_services.py::test_keys_off_the_allow_list_are_refused_and_extension_fields_ignored`, `::test_a_service_that_uses_a_model_is_refused`.
 
 ## Users and ids
 
-Goal of the attacker: a container that runs as root, or as an id that owns files on the host, although the project chose neither.
+Goal: a container that runs as root, as an account of this host, or as the caller, which owns files on the host, although nobody chose that. The rules are in `rules.userrules`, whose docstring explains each id that is refused.
 
-### U1. User check skipped because the mounts are hidden in a volume
+### U1. An image that runs as root
 
-```yaml
-volumes:
-  d:
-    driver_opts: {type: none, o: bind, device: /project/data}
-services:
-  app:
-    user: "5000:5001"
-    volumes: ["d:/h"]
-```
+No `USER`, `USER 0`, a user whose group or a supplementary group is 0, or a passwd file written to be read as root by docker and as someone else by a careless parser (`app:x:1000x:...` is uid 0 to moby).
 
-The service has no bind mount of its own, so it counts as having no host mounts, and an id that is not root, not local and not in a subordinate range passes. The volume is a bind mount of the project's files, where the id decides what the container can write.
+- Defense: the image's passwd and group files are read as moby reads them (`imageuser`), and an identity with 0 anywhere runs as the default user instead, pinned as numbers.
+- Tests: unit `test_userrules.py::test_root_and_no_id_are_refused_in_every_position`, `test_imageuser.py::test_an_earlier_line_that_reads_as_root_wins_over_a_later_well_formed_one`, `test_serviceinfo.py::test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own`; e2e `test_e2e_image_users.py::test_a_uid_that_is_not_a_number_counts_as_root`, `::test_a_member_of_the_root_group_counts_as_root`, `test_e2e_compose_images.py::test_an_image_that_would_run_as_root_runs_as_the_default_user`.
 
-- Expected: the id rules for host mounts apply: `5000:5001` is refused, as it would be with a bind mount.
-- Check: whether a service has host mounts is worked out from the whole config. A mount of a volume whose `driver_opts` name a device or mount options counts; a plain tmpfs volume does not.
-- Variants: a volume with `o: bind` and no device; the same through `compose run`, `harden` and the image decision for a service that sets no user.
-- Not covered: `docker run` and `docker start`, where a volume is only a name (see the open list in `security-review.md`).
-- Status: tested (`tests/test_mounts.py::test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files`, `tests/test_policy.py::test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume`).
+### U2. An id that is not root but owns something
 
-### U2. A numeric `group_add` that the daemon reads as a group name
+`user: "1000:1000"` (an account of this host), an id in `/etc/subuid` (a rootless container's files), `65535` or `4294967295` (read as "no id"), or with host mounts any id outside the nobody range.
 
-```yaml
-services:
-  app:
-    user: "65534:65534"
-    group_add: ["65534"]
-```
+- Defense: the id rules (`UserRules.id_problem`).
+- Tests: unit `test_userrules.py::test_ids_that_exist_on_this_host_are_refused_with_the_local_account_named`, `::test_subordinate_ranges_are_read_from_subuid_and_subgid`; e2e `test_e2e_compose_users.py::test_an_account_of_this_host_is_refused`, `::test_a_subordinate_id_is_refused`, `::test_a_user_the_project_may_not_choose_is_refused`.
 
-with an image whose `/etc/group` has `65534:x:0:` before the real entry. An older daemon looks the argument up by name first and then by number, so the container gets supplementary gid 0. Current moby matches numbers by number only. Unverified on a daemon. Dockscreen can neither pin `group_add` nor read the group file of a service that sets `user:`.
+### U3. An id that an older daemon wraps
 
-- Expected: refused, whatever the value is.
-- Check: `group_add` is a forbidden service key; `harden` removes it with a `!reset`, and does not resolve its names.
-- Variants: a name (`docker`), `0`, an id in the nobody range.
-- Not covered on purpose: `docker run --group-add`, which is on your command line; `audit` reports it.
-- Status: tested (`tests/test_policy.py::test_group_add_is_refused_whatever_it_names`, `tests/test_patch.py`).
+`user: "4294967296:65534"`: an older daemon converts it to 32 bits, which gives uid 0, and `4294967296+1000` gives the caller's uid; an overflowing number is read as a name, which the image can define as 0. Current moby refuses both; this was not run against an older daemon.
 
-### U3. An id that an older daemon wraps or clamps
+- Defense: any id above 2147483647 is refused, with or without mounts (`userrules.MAX_ID`).
+- Tests: unit `test_userrules.py::test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts`; e2e `test_e2e_compose_users.py::test_a_user_the_project_may_not_choose_is_refused`.
 
-`user: "4294967296:65534"` with a matching passwd line, `user: "99999999999999999999:65534"`, or an image `USER` of these. An older daemon converts the id to 32 bits when it builds the OCI spec, which gives uid 0, and `4294967296+1000` gives your own uid; an overflowing number is read as a name and looked up in the image's passwd, where the image can define it as uid 0. Current moby rejects both. Unverified on an older daemon.
+### U4. A name the image defines
 
-- Expected: refused, with or without host mounts.
-- Check: any id above 2147483647 is refused in `Policy.id_problem` (`rules.userrules`), which every id from a project, a hook or an image passes. An allowed id is exempt, because the config file chose it.
-- Variants: the uid, the gid, a supplementary gid of the image, `2147483648`, `4294967296`, `10**20`; `2147483647` is not refused for its size.
-- Status: tested (`tests/test_users.py::test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts`).
+`user: postgres`, where the image's passwd says `postgres:x:0:0`. Docker would resolve the name in the image; a numeric group in `group_add` can, on older daemons, be looked up as a group name in the image first.
 
-## Build
+- Defense: names in a project are resolved on this host, never in the image, and refused if unknown here (`UserRules.resolve_user_names`); `group_add` is refused for any value (`FORBIDDEN_KEYS`); `--user` on the command line takes numbers only (`userscreening`).
+- Tests: unit `test_hardening.py::test_names_unknown_on_this_host_are_refused_even_if_the_image_defines_them`, `test_policy.py::test_group_add_is_refused_whatever_it_names`; e2e `test_e2e_compose_users.py::test_a_user_name_is_resolved_on_this_host_and_root_is_refused`, `test_e2e_compose_services.py::test_a_service_that_asks_for_privileges_is_refused` (`group_add`).
 
-### K1. `docker buildx bake` reads the project's files unscreened
+### U5. Mounts hidden from the id rules
 
-`docker buildx bake` reads `docker-bake.hcl`, or a compose file with `x-bake`, which the project controls, and builds without the checks that `docker compose build` gets.
+A service with `user: "5000:5001"` and only a named volume that H2 would allow, bound to the project's files. The id decides the container's write access there, so the stricter rule for host mounts must apply.
 
-```hcl
-target "app" {
-  context  = "/"
-  output   = ["type=local,dest=/etc"]
-  secret   = ["id=k,src=/home/me/.ssh/id_rsa"]
-  ssh      = ["default"]
-  network  = "host"
-}
-```
+- Defense: whether a service reaches host files is worked out from the whole config, volumes included (`mounts.service_reaches_host`). `docker run` and `docker start` see a volume only by name and do not apply this.
+- Tests: unit `test_mounts.py::test_a_named_volume_set_up_as_a_bind_mount_reaches_host_files`, `test_policy.py::test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume`; e2e `test_e2e_compose_mounts.py::test_a_named_volume_bound_to_the_project_is_a_host_mount_for_the_id_rules`.
 
-- Expected: refused, and nothing builds.
-- Check: `docker buildx bake --print` with the same command line, on the same daemon and builder, gives the definition, with the command line applied, and builds nothing; `bake._check_definition` screens that. Refused: a context, dockerfile or named context outside the current directory; a network other than `none`; `entitlements` and `ssh`; an `output` that is not an image, registry, docker or cacheonly output without a `dest`; a `cache-to` that is not `inline` or `registry`; a local `cache-from` outside the project; a secret that is not a file inside the project, or is copied from a variable; any key it does not know. If `--print` fails, bake does not run.
-- Variants: `--set` and `--push` on the command line, which are in the printed definition; `--print` and `--help` pass through.
-- Not covered on purpose: `buildx build` and `docker build`, whose Dockerfile cannot reach the host without options that your command line gives. Relative paths are resolved against the current directory, not the directory of a bake file given with `-f`.
-- Status: tested (`tests/test_docker_bake.py`). The `--print` format was checked against one real project, not against every key.
+### U6. Borrowing a trusted image's settings
 
-## Project name and arguments
+The config file gives `mariadb` a user or mount dirs; the project builds or tags its own image as `mariadb` to get them.
 
-### N1. A project that takes the name of another project
+- Defense: an image section applies only to an image with a repo digest for that repository, and never to a built one (`sections.section_for`, `serviceinfo._find_section_images`).
+- Tests: unit `test_sections.py::test_an_image_that_only_has_the_name_does_not_get_the_section`, `test_projectscreening.py::test_an_image_section_that_its_image_does_not_prove_is_refused_before_anything_runs`; e2e `test_e2e_compose_images.py::test_an_image_section_does_not_apply_to_an_image_tagged_locally` is an expected failure: with the containerd image store, a local tag gets a repo digest. That is an open hole on such hosts ([security review, 1a](security-review.md)).
+
+### U7. Running as the caller
+
+`user: "${UID}:${GID}"`. A container that runs as the caller can write all of the caller's files that it mounts, such as `.git/hooks` in the project, which the caller runs later.
+
+- Defense: the caller's ids are refused unless `--allow-me` is given for the run; dockscreen sets `UID` and `GID` itself so that they are the real ids (`shellenv`).
+- Tests: unit `test_policy.py::test_the_callers_own_ids_need_allow_me`, `test_userrules.py::test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with_it`; e2e `test_e2e_compose_users.py::test_the_callers_own_ids_need_allow_me`.
+
+## Differences between check and run
+
+Goal: pass the checks with one thing and run another.
+
+### T1. A tag moved between check and run
+
+The image `app:1` that was checked is replaced by a root image of the same name: by the project's `pull_policy: always`, a build, or anyone who can tag on this daemon.
+
+- Defense: the generated file names each looked-at image by id, with `pull_policy: never` (`userrules._pinned`); images are looked at with `--pull=never`, by the id of the container made from them (`imageusers._look`, `Screener.look`). `docker run` starts the very container it checked.
+- Tests: unit `test_serviceinfo.py::test_a_looked_at_image_is_pinned_by_id_so_a_moved_tag_cannot_change_what_runs`; e2e `test_e2e_compose_images.py::test_an_image_that_would_run_as_root_runs_as_the_default_user` (asserts the pin). No e2e test moves a tag.
+
+### T2. Compose reads the files differently
+
+Interpolation, YAML anchors and merge keys, duplicate keys, a second `-f` on the command line, or a project file changed after the check.
+
+- Defense: dockscreen never parses the project; compose's own `config` output is checked, written to a private file, read back by compose and compared before anything is pulled, and given to compose as its only file, with the project directory and name pinned (`projectscreening`).
+- Tests: unit `test_projectscreening.py::test_a_config_compose_would_read_differently_is_refused_and_not_run`, `::test_dollars_are_written_as_compose_printed_them`. No e2e test: no way is known to make today's compose read its own output differently.
+
+### T3. A service behind a profile
+
+`profiles: [debug]` keeps a service out of the default config; `compose run debug` starts it anyway.
+
+- Defense: the config is loaded with `--profile '*'`, and a service named on the command line counts as started (`inspect._load_config`, `serviceinfo._services_to_run`).
+- Tests: unit `test_serviceinfo.py::test_services_to_run_are_the_active_ones_plus_those_named`; e2e `test_e2e_compose_commands.py::test_run_checks_the_service_it_names_even_behind_a_profile`.
+
+### T4. A `docker run` command line read differently
+
+An option dockscreen does not know to take a value makes it take the value for the image, and judge another image or miss a `--user`.
+
+- Defense: the container docker created is compared with dockscreen's reading (`containerscreening._verify_split`); an accepted container is created again with `--user=uid:gid`.
+- Tests: unit `test_docker_run.py::test_misread_command_line_is_refused_and_cleaned_up`; e2e `test_e2e_docker_run.py::test_an_option_dockscreen_does_not_know_fails_closed`.
+
+### T5. A container created without dockscreen
+
+Plain `docker create`, or a project's script, makes a container; `docker start` would run it unchecked.
+
+- Defense: `start` and `restart` judge the existing container, which cannot be rewritten, and refuse one whose user would have been replaced (`containerscreening.check_existing`). Compose's own `start` and `restart` pass through: a known gap.
+- Tests: unit `test_docker_start.py::test_existing_containers_cannot_be_rewritten_so_a_root_image_is_refused`; e2e `test_e2e_docker_start.py::test_a_container_that_would_run_as_root_is_refused`.
+
+## Builds
+
+Goal: a build that reads host files into an image, writes to the host, or uses the caller's credentials.
+
+### K1. `docker compose build`
+
+`build: {context: /}`, a Dockerfile or `additional_contexts` outside, `ssh: [default]` (the caller's SSH agent), `network: host`, `privileged: true`, `x-bake` (which `buildx bake` reads and can write outputs with).
+
+- Defense: `BuildRules.check_build`, `_check_build`; build secrets name top-level secrets, checked as in H3.
+- Tests: unit `test_policy.py::test_build_context_outside_project_is_refused`, `::test_unsafe_build_options_are_refused_when_building_and_running`; e2e `test_e2e_compose_commands.py::test_a_build_that_reaches_the_host_is_refused`, `::test_a_build_secret_from_outside_the_project_is_refused`.
+
+### K2. `docker buildx bake`
+
+The project's `docker-bake.hcl` sets `output = ["type=local,dest=/home/me/.ssh"]`, a local `cache-to`, `entitlements = ["security.insecure"]`, a secret from a variable, or keys bake adds later.
+
+- Defense: bake's own `--print`, with the same command line, gives the definition, which is judged before bake runs (`bakescreening`, `BuildRules.check_bake`). Relative paths are resolved against the current directory, not against a bake file given with `-f` elsewhere: a known gap.
+- Tests: unit `test_docker_bake.py::test_what_a_build_could_reach_on_the_host_is_refused`, `::test_bake_runs_only_when_screening_passes`; e2e `test_e2e_docker_bake.py::test_a_target_that_reaches_the_host_is_refused`, `::test_the_command_line_is_applied_before_the_check`.
+
+## Other projects' resources
+
+### N1. Another project's name
 
 ```yaml
 name: victim
-volumes:
-  data: {}
-services:
-  app:
-    image: alpine
-    volumes: ["data:/d"]
+volumes: {data: {}}
+services: {app: {image: alpine, volumes: ["data:/d"]}}
 ```
 
-The name decides which volumes (`victim_data`), networks and containers compose uses, replaces and removes. The hostile project reads and writes the victim's volume, replaces a service of the same name, joins its network, and makes `down -v` or `--remove-orphans` delete its data.
+The name decides which volumes (`victim_data`), networks and containers compose uses, replaces and, with `down -v`, removes.
 
-- Expected: refused when containers of a project called `victim`, running or stopped, were made from another directory, or have no directory label.
-- Check: `inspect.name_conflicts` compares the `com.docker.compose.project.working_dir` label of those containers with this project's directory. It runs with the other checks for `up`, `create`, `run`, `watch`, `scale` and `alpha`, and alone before `down`, `rm`, `stop`, `kill`, `restart`, `start`, `pause` and `unpause`. If docker cannot say, a project is refused.
-- Variants: the name comes from `COMPOSE_PROJECT_NAME` in the project's `.env`, which is the project's choice and is checked; `-p NAME` and `COMPOSE_PROJECT_NAME` in your real environment are your choice and are not.
-- Not covered: volumes and networks carry no directory label, so a project whose containers are all gone can still have its volumes taken over by name.
-- Status: tested (`tests/test_project_name.py`). The label and the `docker ps` format were not run against a daemon.
+- Defense: containers of that project name must have been made from this directory, by their `com.docker.compose.project.working_dir` label, checked before every compose command that acts on a project; a name the caller gives with `-p` is theirs (`ProjectRules.check_project_name`). A volume or network with an explicit `name:` that is not `<project>_<key>`, or `external: true`, is refused (`projectrules._check_scope`).
+- Tests: unit `test_project_name.py::test_a_name_used_from_another_directory_is_refused_with_the_way_out`, `test_policy.py::test_external_and_foreign_named_volumes_and_networks_are_refused`; e2e `test_e2e_compose_project.py::test_a_name_used_by_containers_of_another_directory_is_refused`, `::test_a_name_from_the_projects_dotenv_is_checked`, `test_e2e_compose_mounts.py::test_a_network_that_is_not_the_projects_own_is_refused`.
+- Known gap: volumes and networks carry no directory label, so once a project's containers are gone its volumes can be taken by name.
 
 ### N2. A service name that is an option
 
-```yaml
-services:
-  --ssh:
-    image: alpine
-    build: .
-```
+A service called `--ssh` turns `docker compose build web --ssh` into a build with the caller's SSH agent.
 
-The compose spec allows a name that starts with `-`. Passed as an argument, `--ssh` becomes `docker compose build --ssh default`, which forwards your SSH agent (a `build.ssh` key is refused by the policy).
+- Defense: names that start with `-` are refused, and dockscreen puts `--` before the names it passes (`ProjectRules._check_service_names`).
+- Tests: unit `test_policy.py::test_a_service_name_that_compose_would_read_as_an_option_is_refused`; e2e `test_e2e_compose_services.py::test_a_service_name_that_compose_would_read_as_an_option_is_refused`.
 
-- Expected: refused, for `up`, `build` and `bake` alike.
-- Check: a service name that starts with `-` is refused in `Policy.check_project` and `Policy.check_project_build`; the pulls and builds of images put `--` before the service names. `docker compose --dry-run pull -- -dash` was tried against a real compose.
-- Status: tested (`tests/test_policy.py::test_a_service_name_that_compose_would_read_as_an_option_is_refused`, and the pull and build commands in `tests/test_serviceinfo.py`).
+### N3. Networks off the host's NAT
 
-## Priorities
+A `macvlan` or `ipvlan` network puts the container on the host's LAN with an address of its own, past the host's firewall; bridge options can attach to an existing bridge.
 
-Add tests for B2, B5 (`/proc/*/root`), B7 (`subpath`, `extends`) and B8 first: they are where the grep found the least. U1 to U3 and K1 depend on the daemon's behaviour; an integration test against a real daemon would settle them.
+- Defense: drivers `bridge` and `none` only, one bridge option (MTU), default IPAM (`projectrules.NETWORK_DRIVERS`).
+- Tests: unit `test_policy.py::test_network_drivers_and_options`; e2e `test_e2e_compose_mounts.py::test_a_network_that_is_not_the_projects_own_is_refused` (another driver).
+
+## dockscreen itself
+
+### D1. Forged output
+
+A mount source, image name or service name with a newline, ANSI escapes or bidi overrides, to forge a "passed" line, hide a refusal, or inject keys into the `harden` override the person saves.
+
+- Defense: everything from a project or image is escaped before it is printed (`messages.printable`); `harden` escapes comments and quotes names and keys (`compose_harden._render`).
+- Tests: unit `test_text.py::test_refusal_output_cannot_forge_lines_or_move_the_cursor`, `::test_newline_in_untrusted_text_cannot_leave_the_patch_comment`, `::test_patch_quotes_unusual_keys`; e2e `test_e2e_escaping.py::test_a_mount_source_cannot_forge_a_verdict`, `::test_bidi_overrides_are_shown_as_text`.
+
+### D2. The config, or the docker binary, from the project
+
+The config file is trusted completely; the real docker is found on `PATH`.
+
+- Defense: the config file and every directory above it must be owned by the caller or root and writable by nobody else; a relative `XDG_CONFIG_HOME` is ignored; `docker` in the config must be absolute; empty and relative `PATH` entries are skipped, with a warning (`host.config`, `host.runtime`). Strict modes cannot stop an agent that runs as the caller; only a root-owned file in `/etc` does.
+- Tests: unit `test_config.py::test_strict_modes_refuse_what_someone_else_could_have_written`, `test_runtime.py::test_empty_and_relative_entries_are_never_searched`; e2e `test_e2e_dispatch.py::test_a_config_file_others_could_have_written_stops_everything`, `::test_empty_and_relative_path_entries_are_skipped_and_warned_about`.
+
+### D3. Another daemon
+
+`-H`, `--context`, `DOCKER_HOST` or a non-default context: ids and paths of this host mean nothing on another daemon.
+
+- Defense: refused (`docker.is_remote`, `Policy.check_daemon`).
+- Tests: unit `test_docker_cli.py::test_remote_daemons_are_refused`; e2e `test_e2e_docker_run.py::test_a_daemon_that_may_not_be_this_hosts_is_refused`.
+
+## Not covered on purpose
+
+- Requests on your own command line (`docker run -v /:/mnt --privileged`): you can call docker directly anyway. `audit` points it out, and `--strict-screen` refuses it.
+- Clients that use the docker socket directly: IDEs, scripts, other tools.
+- Network exposure: `ports`, `extra_hosts`, `dns`.
+- `${VAR}` interpolation that copies values from your shell into the config.
+
+## Missing tests
+
+- H3: `include` and `extends` of outside or remote files; `subpath` with `..`.
+- P2: unit tests for `uts`, `userns_mode` and `cgroup` (e2e covers them).
+- N3: IPAM drivers and bridge options.
+- T1: an e2e test that actually moves a tag between check and run.

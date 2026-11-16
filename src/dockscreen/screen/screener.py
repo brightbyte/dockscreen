@@ -175,6 +175,7 @@ class Screener(NamedTuple):
         Parameters:
         - directory, container, info, origin, mounts, reference, built: as assess takes them
         """
+        # by the id the container was created from: the name may have been moved to another image since
         shown = self.docker.inspect_image(info["Image"])
         image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
                       tuple(shown.get("RepoDigests") or ()))
