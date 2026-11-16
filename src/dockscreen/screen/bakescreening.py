@@ -1,15 +1,15 @@
 """This module provides functions for screening what `docker buildx bake` would build.
 
-`docker buildx bake --print` gives the definition that would be built, with the command line applied
-(`--set`, `--push`, targets), and builds nothing. The policy judges it as such (Policy.check_bake): a key
-that is not known is refused, because a new one may be a new way out.
+`docker buildx bake --print` gives the definition bake would build, with the command line applied
+(`--set`, `--push`, targets), and builds nothing. The policy judges it as such (Policy.check_bake) and
+refuses a key it does not know, because a new one may be a new way out.
 
 Bake needs screening because `docker buildx bake` reads docker-bake.hcl, or `x-bake` in a compose file, from
 the current directory, so the project decides the build, and bake has powers that compose's builds
 cannot be given: write outputs and caches to host paths, mount the SSH agent and secrets from files or
 variables, and ask for entitlements such as privileged RUN steps. Bake files are HCL, with variables,
-functions and the command line's `--set`; bake's own `--print` is used instead of a parser of ours, so
-that the judged definition is bake's own.
+functions and the command line's `--set`; dockscreen uses bake's own `--print` instead of a parser of
+its own, so that the policy judges bake's own definition.
 """
 
 import json

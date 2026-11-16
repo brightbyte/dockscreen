@@ -12,15 +12,16 @@ import enum
 
 class Origin(enum.Enum):
     """Enum of the sources a value that screening judges can come from."""
-    COMMAND_LINE = "command line"  # the person typing the command
+    COMMAND_LINE = "command line"  # the user typing the command
     CONFIG = "config file"         # dockscreen's config files, which only their owner or root can write
     PROJECT = "project"            # the compose project: its files, .env, env files and fragments
     IMAGE = "image"                # its USER, /etc/passwd and /etc/group
     DOCKSCREEN = "dockscreen"      # chosen by dockscreen from what it checked
 
 
-# Whose values are taken as given: what the policy refuses in them is pointed out, not refused. What
-# dockscreen sets is checked once more like the project's, so that a mistake in it stops the command.
+# The origins whose values the policy takes as given: it points out its objections to them instead of
+# refusing. It checks the values dockscreen sets once more like the project's, so that a mistake in them
+# stops the command.
 TRUSTED = frozenset({Origin.COMMAND_LINE, Origin.CONFIG})
-# --strict-screen: the command line is judged like a project.
+# --strict-screen: the policy judges the command line like a project.
 STRICT = TRUSTED - {Origin.COMMAND_LINE}

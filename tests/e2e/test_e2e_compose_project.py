@@ -6,10 +6,10 @@ Rules (inspect, projectscreening):
 - a project directory that is or contains a sensitive path (/, the home directory, the config file) is
   refused, because everything in it can be mounted;
 - the project's name decides which containers, volumes and networks compose uses and removes, so a name
-  that containers made from another directory have is refused; a name the caller gives is not checked;
+  that containers made from another directory have is refused; a name the user gives is not checked;
 - a daemon that may not be this host's is refused, because ids and paths cannot be checked there;
 - compose runs the config that was checked, from a generated file, with the project's directory and name
-  pinned and the caller's -f, -p and --project-directory replaced.
+  pinned and the user's -f, -p and --project-directory replaced.
 """
 
 import json

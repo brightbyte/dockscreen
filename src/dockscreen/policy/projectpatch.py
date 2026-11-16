@@ -2,11 +2,11 @@
 running it, and the Substitution records it is made of, for applying the changes and reporting them. It does
 not decide what to change.
 
-Each change sets one key of one service. Everything dockscreen changes in what it runs is said: a change
-that alters what the project chose is a warning, the others are info, and routine changes of the same
-kind are reported together in one line that names their services (SubstitutionGroup), since the line would
-be the same for each. A change with no notice and no group is part of another that is reported, such as the
-HOME that comes with the default user.
+Each change sets one key of one service. dockscreen reports every change it makes to the things it runs: a
+change that alters the project's choice is a warning, the others are info, and dockscreen reports routine
+changes of the same kind together in one line that names their services (SubstitutionGroup), since the line
+would be the same for each. A change with no notice and no group is part of another that is reported, such as
+the HOME that comes with the default user.
 
 A change that sets a value someone else chose names where that value comes from (origins), so the policy
 judges it as that origin's; one that only adds to, or respells, what the project chose names none.
@@ -23,8 +23,8 @@ from dockscreen.policy.notice import Notice, NoticeSeverity
 
 
 class SubstitutionGroup(NamedTuple):
-    """Record of a kind of routine change that is reported once for all the services it was made to. It holds
-    the line and what to do about it.
+    """Record of a kind of routine change that dockscreen reports once for all the services it changes. It
+    holds the line and what to do about it.
 
     Attributes:
     - text: the line, with `{services}` where the names of the services go

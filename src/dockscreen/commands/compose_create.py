@@ -1,8 +1,8 @@
 """This module implements `docker compose create`, with the checks of `up`, for containers that are created
 and not started.
 
-The project is checked, its images are looked at, and compose runs the config that was checked
-(projectrun.check_and_run).
+The policy checks the project, dockscreen looks at its images, and compose runs the config the policy
+checked (projectrun.check_and_run).
 """
 
 from dockscreen.commands import helptext, projectrun

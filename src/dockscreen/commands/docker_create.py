@@ -1,7 +1,7 @@
 """This module implements `docker create`, which adds the hardening defaults, replaces the users of --as and
 --as-me by ids, and checks nothing.
 
-The container is checked when it is started (docker_start).
+dockscreen checks the container when it starts it (docker_start).
 """
 
 from collections.abc import Sequence
@@ -51,5 +51,5 @@ def help(name: str) -> helptext.HelpTopic:
     return helptext.HelpTopic(
         "dockscreen create [OPTIONS] IMAGE [COMMAND] [ARG...]",
         "Create a container, with the hardening defaults added",
-        (helptext.DEFAULTS, "The container is checked when dockscreen starts it."),
+        (helptext.DEFAULTS, "dockscreen checks the container when it starts it."),
         helptext.USER_OPTIONS, aliases=("dockscreen container create", "dockscreen create"))

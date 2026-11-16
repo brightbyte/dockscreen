@@ -8,7 +8,7 @@ Rules (docker_cli, commands.docker, docker_compose, ComposeCommand, runtime, con
   support it; docker options before `compose` are refused;
 - the real docker is the one the config file names, or the first on PATH that is not dockscreen; empty
   and relative PATH entries are skipped and warned about, and without a docker dockscreen stops;
-- the config file is read only if it and every directory above it are owned by the caller or root and
+- the config file is read only if it and every directory above it are owned by the user or root and
   writable by nobody else; a file that cannot be trusted or read stops everything; a missing one is
   created, with every setting commented out.
 """

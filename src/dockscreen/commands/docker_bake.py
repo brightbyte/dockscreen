@@ -2,9 +2,9 @@
 on this host.
 
 Bake reads files the project controls (docker-bake.hcl, compose files with `x-bake`), as `compose build`
-does, so the same things are refused: build sources outside the project, host networking, the SSH
-agent. Bake adds ways to write to the host (`output`, `cache-to`) and to read files and variables
-(`secret`). What would be built is screened before (bakescreening).
+does, so the policy refuses the same things: build sources outside the project, host networking, the
+SSH agent. Bake adds ways to write to the host (`output`, `cache-to`) and to read files and variables
+(`secret`). dockscreen screens the definition bake would build before running bake (bakescreening).
 """
 
 from collections.abc import Collection

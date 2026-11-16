@@ -92,7 +92,8 @@ def me() -> tuple[int, int]:
 
 @pytest.fixture(scope="session")
 def ordinary_ids(me: tuple[int, int]) -> tuple[int, int]:
-    """The caller's (uid, gid), if an image can be built with them: alpine has no account in that range."""
+    """The invoking user's (uid, gid), if an image can be built with them: alpine has no account in that
+    range."""
     require(all(1000 <= i < 60000 for i in me),
             f"your ids {me[0]}:{me[1]} are not between 1000 and 60000, where the app image creates its user")
     return me
@@ -169,7 +170,7 @@ def config_root() -> Iterator[Path]:
 
 
 def _writable_by_others(path: Path) -> bool:
-    """Tells whether path is owned by neither the caller nor root, or is writable by group or others."""
+    """Tells whether path is owned by neither the user nor root, or is writable by group or others."""
     info = path.stat()
     return info.st_uid not in (os.getuid(), 0) or bool(info.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
 

@@ -8,8 +8,8 @@ Rules (compose_audit):
   that the harden subcommand fixes what it can;
 - --brief prints the verdict alone, on one line.
 
-webapp: an app built from a Dockerfile with the caller's ids, a cache and a web server from pulled images,
-a debug service behind a profile, and an override for debugging that asks for too much.
+webapp: an app built from a Dockerfile with the invoking user's ids, a cache and a web server from pulled
+images, a debug service behind a profile, and an override for debugging that asks for too much.
 monitoring: cAdvisor and the node exporter, which read the host as their documentation sets them up.
 """
 

@@ -4,12 +4,12 @@ compose override that fixes what can be fixed.
 The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
 lead_args of the command line.
 
-The fixes are the policy's (projectfixes); checking the result with Policy.check_project reports what is
+The fixes are the policy's (projectfixes); Policy.check_project, run on the result, reports the problems
 left.
 
 _render writes the difference between a config and its fixed copy as a compose override file. Compose
 merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset` tag
-and replaced lists use `!override`. Values are written as JSON, which is valid YAML.
+and replaced lists use `!override`. _render writes values as JSON, which is valid YAML.
 """
 
 import json
@@ -31,21 +31,21 @@ from dockscreen.util.messages import printable
 
 
 def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Prints a compose override that fixes what can be fixed; exits with 1 if problems remain.
+    """Prints a compose override that fixes the problems with a safe fix; exits with 1 if problems remain.
 
     The patch is relative to the merged config as dockscreen will run it, defaults
-    included: only what is needed on top of them to pass the audit is written out,
-    and one comment says what is added automatically. Mount sources outside the
-    project become placeholders to edit; problems without a safe automatic fix are
-    listed as comments. Images are pulled and built first, as `up` would, to see
-    which services need a user of their own.
+    included: it holds only the changes needed on top of them to pass the audit,
+    and one comment names the defaults dockscreen adds itself. Mount sources outside
+    the project become placeholders for you to edit; the patch lists problems without
+    a safe automatic fix as comments. harden pulls and builds images first, as `up`
+    would, to see which services need a user of their own.
 
-    A user that has to be set becomes `${UID}:${GID}`, the caller's own, so the result is checked as
-    if --allow-me were given, and the patch says that it needs it.
+    A user that has to be set becomes `${UID}:${GID}`, your own, so harden checks the result as if you
+    gave --allow-me, and the patch says that it needs it.
 
     Parameters:
     - parent_cli: the compose command line, with `harden` or `fix` as its command; --allow-me in it makes no
-      difference, since the result is checked as if it were given either way
+      difference, since this checks the result as if the invoking user gave it either way
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd in ("harden", "fix")
@@ -99,13 +99,13 @@ def _render(original: dict[str, Any], fixed: dict[str, Any], unfixed: Iterable[F
            notes: Iterable[str] = ()) -> str:
     """Renders the compose override that turns original into fixed, as YAML text.
 
-    original: the config the patch is applied to, as it will be run (defaults included).
+    original: the config compose applies the patch to, as dockscreen will run it (defaults included).
     unfixed and notes become comments.
 
-    The person saves this as a compose file, and much of it is the project's text: mount sources and
-    problems in comments, service names and keys. Comments are escaped (printable) so that a newline in
-    them cannot end the comment and add keys of the project's choosing, such as `privileged: true`, and
-    names and keys are quoted unless they are plainly safe.
+    The user saves this as a compose file, and much of it is the project's text: mount sources and
+    problems in comments, service names and keys. _render escapes comments (printable) so that a newline
+    in them cannot end the comment and add keys of the project's choosing, such as `privileged: true`, and
+    quotes names and keys unless they are plainly safe.
     """
     lines = [_HEADER]
     lines += [f"# note: {printable(note)}" for note in notes]

@@ -3,12 +3,12 @@ compose project besides their definition: which of them start, which user the im
 that sets no user would run it as (imageusers), and the images that an image section of the config file
 names, with where they were pulled from, which shows whether the section applies (ServiceImages).
 
-A project file is untrusted, so a service without `user:` cannot just be assumed to run as root or as
-whatever its image says; a service whose user the command line chose (`run -u`) runs as that one, so its
-image is not asked. What follows is the policy's and decisions': what is accepted is pinned in the
-generated config only, with the image that was checked, so that neither the files the project owns nor
-`harden` output turn off the project's updates; a service that is not started, or whose user the command
-line chose, gets the default user in case it does get started without it.
+A project file is untrusted, so dockscreen cannot just assume that a service without `user:` runs as root
+or as its image says; a service whose user the command line chose (`run -u`) runs as that one, so nobody
+asks its image. The rest is the policy's and decisions': the policy pins the users it accepts in the
+generated config only, with the image it checked, so that neither the files the project owns nor `harden`
+output turn off the project's updates; a service that does not start, or whose user the command line
+chose, gets the default user in case something starts it without that user.
 """
 
 from collections.abc import Sequence
@@ -82,9 +82,9 @@ def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Seque
                      screener: Screener) -> frozenset[str]:
     """Determines the services the command starts: those in the active profiles, plus any named in args.
 
-    A service in an inactive profile is started when the command names it (`compose run debug`), so it
-    counts as started and its image is decided like the others'; leaving it out would let it run as its
-    image says.
+    Compose starts a service in an inactive profile when the command names it (`compose run debug`), so
+    it counts as started and the policy decides its image like the others'; leaving it out would let it
+    run as its image says.
 
     Raises DockerError if compose cannot list them.
     """

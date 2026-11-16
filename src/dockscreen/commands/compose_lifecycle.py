@@ -1,9 +1,10 @@
 """This module implements the compose commands that act on the containers a project already has (`down`,
-`rm`, `stop`, `kill`, `restart`, `start`, `pause`, `unpause`), for which only the project's name is checked.
+`rm`, `stop`, `kill`, `restart`, `start`, `pause`, `unpause`), for which dockscreen checks only the
+project's name.
 
-These stop, change or remove what the name stands for, so a name that containers made from another
-directory already have is refused (projectscreening.check_name). A name chosen on the command line or in the
-environment is the person's choice and is not checked.
+These stop, change or remove the resources the name stands for, so the policy refuses a name that
+containers made from another directory already have (projectscreening.check_name). A name the user
+chooses on the command line or in the environment is their choice, and dockscreen does not check it.
 """
 
 from dockscreen.host.runtime import Runtime

@@ -1,9 +1,9 @@
 """This module defines the Container class, a view of a container as docker inspect shows it, which can also
 give what the container asks for in the terms of a compose service.
 
-A container that `docker run` created holds what its command line asked for, parsed by the daemon. Read
-back into the compose service keys of the same meaning (Container.as_service), it can be judged by the
-policy for compose services, with the same wording.
+A container that `docker run` created holds its command line's requests, as the daemon parsed them. Read
+back into the compose service keys of the same meaning (Container.as_service), the policy for compose
+services can judge it, with the same wording.
 """
 
 from collections.abc import Sequence
@@ -45,7 +45,7 @@ class Container(NamedTuple):
     Attributes:
     - info: what docker inspect shows of it; a dict that must not be changed in place
     - directory: the directory the command line that created it ran in; None for a container that existed
-      before, since docker does not record where it was created, and its labels, which an image can set, prove
+      before, since docker does not record where it created it, and its labels, which an image can set, prove
       nothing
     - user_origin: where its user comes from
     """

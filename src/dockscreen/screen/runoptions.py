@@ -1,5 +1,6 @@
 """This module provides functions for turning the options of `docker compose run` into substitutions on the
-service it runs, with the command line as their origin, so that the service can be judged as it will run.
+service it runs, with the command line as their origin, so that the policy can judge the service as it will
+run.
 
 Compose applies these options to the service itself, from the command line, after reading the project:
 `--user` replaces the service's user; `-v` adds a mount; `--cap-add` and `--cap-drop` add to theirs and
@@ -7,8 +8,8 @@ take the same capabilities out of the other; `--env-from-file` reads a file on t
 env_file. The other options of `run` set keys that the policy does not restrict.
 
 A `-v` source is a bind mount if it starts with `.`, `/` or `~`, else a named volume, as compose reads it.
-Compose leaves the source as it is; `~` is judged as the home directory and a relative source against
-the project directory, so that what is judged reaches at least as far as what can run. An
+Compose leaves the source as it is; the policy judges `~` as the home directory and a relative source
+against the project directory, so that the judged source reaches at least as far as the one that can run. An
 `--env-from-file` path is read from the current directory.
 """
 

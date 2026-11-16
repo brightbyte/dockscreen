@@ -41,7 +41,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
   (`test_an_option_dockscreen_does_not_know_fails_closed`).
 - `x-` keys in a compose `build`: compose drops them from its config, and its own build ignores them
   (`test_compose_drops_x_bake_from_a_build_so_its_output_is_never_written`). `docker buildx bake` reads
-  `x-bake` from a compose file, and is screened on what `--print` gives.
+  `x-bake` from a compose file, and the policy screens it on the definition `--print` gives.
 
 ## Races
 
@@ -68,7 +68,7 @@ Something has to change between two of dockscreen's calls to docker.
 - `messages._escape` for a character above U+FFFF: the messages that quote project text with one in it
   quote it with `repr`, which escapes it first (`test_characters_beyond_the_basic_plane_are_shown_as_text`).
 - `policy._outside` without a config file to name in the hint: dockscreen always knows where the
-  caller's file is.
+  user's file is.
 - `images.section_hint` for an image from a registry other than Docker Hub: the scenarios pull only from
   Docker Hub.
 - `docker_cli`'s `if __name__ == "__main__"`: `bin/docker` calls `main` itself.
@@ -98,4 +98,4 @@ has a repo digest under its local name (`docs/security-review.md`). So these are
 - `serviceinfo._find_section_images` and `Screener.project_policy` finding no proof for a section, and the final check of
   `projectrun.check_and_run` refusing a service that only passed because of it.
 
-The scenarios for them are marked as expected failures.
+The tests mark the scenarios for them as expected failures.

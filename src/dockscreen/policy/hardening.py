@@ -50,8 +50,8 @@ def container_defaults() -> CommandLinePatch:
 def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
     """Returns the substitutions that add cap_drop ALL and no-new-privileges where the service lacks them.
 
-    Where the service sets nothing, they are routine and reported for all services in one line; where it
-    sets the key itself, dockscreen extends its choice, which is notable.
+    Where the service sets nothing, they are routine, and dockscreen reports them for all services in one
+    line; where it sets the key itself, dockscreen extends its choice, which is notable.
     """
     found = []
     if not drops_all(service.get("cap_drop")):
@@ -64,7 +64,7 @@ def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
 
 def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks: str) -> Substitution:
     """Returns the substitution that adds value to the list the service declared for key, if any; the key
-    then still holds what the project chose, and is judged as the project's.
+    then still holds what the project chose, and the policy judges it as the project's.
     """
     if not declared:
         return Substitution(name, key, [value], group=DEFAULTS, origin=Origin.DOCKSCREEN)

@@ -32,7 +32,8 @@ def test_project_directory_from_compose_file_env(tmp_path):
 def test_project_directory_searches_parents(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / "sub").mkdir()
-    mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))  # the directories walked must be the caller's
+    # the directories walked must be the invoking user's
+    mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))
     assert inspect._project_location([], str(tmp_path / "sub"), mine).directory == str(tmp_path)
 
 
@@ -114,7 +115,8 @@ def test_dotenv_in_a_directory_on_the_way_up_is_scanned_too(tmp_path):
     (tmp_path / "compose.yaml").write_text("")
     (tmp_path / "sub").mkdir()
     (tmp_path / "sub" / ".env").write_text("COMPOSE_FILE=elsewhere.yml\n")
-    mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))  # the directories walked must be the caller's
+    # the directories walked must be the invoking user's
+    mine = make_runtime(env={}, me=(os.getuid(), os.getgid()))
     location = inspect._project_location([], str(tmp_path / "sub"), mine)
     assert location == ProjectLocation(str(tmp_path), redirects=(str(tmp_path / "sub" / ".env"),))
 

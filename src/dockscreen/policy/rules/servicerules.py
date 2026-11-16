@@ -1,10 +1,10 @@
 """This module defines the ServiceRules class and the checks of each key (SERVICE_CHECKS), for judging the
 keys of a service: a compose service's, or a container's read back into compose service keys.
 
-A key is listed either as harmless (any value is fine) or as checked (it has an entry in SERVICE_CHECKS
-that validates the value). A key that is neither is refused, so a Compose feature added tomorrow is
-denied until someone has reviewed it. Every check returns a list of human-readable problems; an empty list
-means the value is acceptable.
+The lists name each key either as harmless (any value is fine) or as checked (it has an entry in
+SERVICE_CHECKS that validates the value). The policy refuses a key that is neither, so a Compose feature that
+Docker adds tomorrow stays denied until someone has reviewed it. Every check returns a list of human-readable
+problems; an empty list means the value is acceptable.
 
 In short, the rules protect against a service that gets root on the host through the kernel or the
 daemon (privileges, devices, host namespaces, another runtime), one that reads or writes host files
@@ -46,8 +46,8 @@ NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "n
 CAP_DROP = "ALL"
 SECURITY_OPT = "no-new-privileges:true"
 
-# Service keys that are refused whenever they carry a value; harden removes them. Each is a way to root on
-# the host or out of the project:
+# Service keys that the policy refuses whenever they carry a value; harden removes them. Each is a way to
+# root on the host or out of the project:
 # - privileged: every capability and every device, and no seccomp or AppArmor profile; such a container
 #   can mount the host's disks.
 # - cap_add: single capabilities are enough to escape, e.g. CAP_SYS_ADMIN (mount, cgroup release agents),
@@ -122,7 +122,7 @@ WATCH_KEYS = frozenset({"path", "action", "target", "ignore", "include", "initia
 # Not sync+exec: its `exec` runs a command in the container with a user and privileged flag of its own, as
 # a hook does, outside the checks of the service's user (`exec` is not in WATCH_KEYS either).
 WATCH_ACTIONS = frozenset({"sync", "rebuild", "sync+restart"})
-# privileged and user are judged by _check_hooks, the others cannot widen access.
+# _check_hooks judges privileged and user, the others cannot widen access.
 HOOK_KEYS = frozenset({"command", "user", "privileged", "working_dir", "environment"})
 SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option instead"
 
@@ -169,7 +169,8 @@ class ServiceRules(RuleBase):
         """Checks volumes_from; returns a problem for each source that is a container, not a service.
 
         A container outside the project can have any mounts, made by its creator: taking its volumes
-        takes its bind mounts of host paths too. Another service of the project was checked like this one.
+        takes its bind mounts of host paths too. The policy checks another service of the project like this
+        one.
         """
         return [
             f"volumes_from {source!r} reaches a container outside the project"
@@ -183,9 +184,9 @@ class ServiceRules(RuleBase):
 
         A bind mount gives the container the host path itself, to read and, unless read-only, to write: a
         source outside the project is a project's way to ~/.ssh, /etc or the docker socket (which is
-        root on the host). The source is compared after resolving symlinks (base.is_inside), since docker
-        follows them: a link in the project that points to / is outside. Named volumes are checked where
-        they are defined (ProjectRules), tmpfs is memory, and an image mount is another image's files.
+        root on the host). This compares the source after resolving symlinks (base.is_inside), since docker
+        follows them: a link in the project that points to / is outside. ProjectRules checks named volumes
+        where the project defines them, tmpfs is memory, and an image mount is another image's files.
         """
         problems = []
         for mount in value or []:
@@ -254,8 +255,8 @@ def _check_namespace(key: str) -> Check:
 def _check_host_files(key: str) -> Check:
     """Returns a check for key (env_file or label_file) that refuses files outside the project directory.
 
-    Compose reads these files on the host, as the caller, and puts their content into the container's
-    environment or labels: a project that names ~/.aws/credentials or /etc/shadow-like files of the caller
+    Compose reads these files on the host, as the user, and puts their content into the container's
+    environment or labels: a project that names ~/.aws/credentials or /etc/shadow-like files of the user
     gets their content into a container it controls. These keys only show up in the definition when it is
     loaded without env resolution; with it, compose inlines the content and the path is lost.
     """

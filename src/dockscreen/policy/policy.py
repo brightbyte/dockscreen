@@ -1,24 +1,24 @@
 """This module defines the Policy class, for checking a compose project, a container, a build or an image
 against the rules of the security policy, with the settings they apply with.
 
-The rules are grouped by what they judge (policy.rules): the keys of a service (rules.servicerules), what
+policy.rules groups the rules by subject: the keys of a service (rules.servicerules), what
 a project has besides its services (rules.projectrules), builds (rules.buildrules), and the users
 containers run as (rules.userrules): a service's, an image's and the ones a command line gives. Policy has
 them all, and checks whole targets with them: a project (check_project), a container read back into compose
 service keys (check_container), and a project's builds (check_project_build).
 
-The policy is an allowlist and fails closed: a key that is not listed is refused, so a Compose feature
-added tomorrow is denied until someone has reviewed it. Every structure that can carry unlisted keys
-(service, mount, build, volume, network, secret, deploy, develop, hooks) has its own list. Keys beginning
-with `x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
+The policy is an allowlist and fails closed: it refuses a key that is not on a list, so a Compose feature that
+Docker adds tomorrow stays denied until someone has reviewed it. Every structure that can carry unlisted keys
+(service, mount, build, volume, network, secret, deploy, develop, hooks) has its own list. Keys beginning with
+`x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
 BuildRules._check_build).
 
-A Policy holds the settings the rules apply with, such as what the id rules, which decide which uids and
-gids a project may choose, judge by (userrules.IdFacts); what is known about the thing judged belongs to it,
-not to the policy, down to the directory its paths are judged against. Every rule is a method of Policy,
+A Policy holds the settings the rules apply with, such as what the id rules, which decide which uids and gids
+a project may choose, judge by (userrules.IdFacts); what is known about the thing judged belongs to it, not to
+the policy, down to the directory the policy judges its paths against. Every rule is a method of Policy,
 whether it reads the settings or not. The checks of a whole target turn the problems of each rule into
-findings (finding.Finding), or into notices (notice.Notice) for a trusted value, about the service, volume
-or network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
+findings (finding.Finding), or into notices (notice.Notice) for a trusted value, about the service, volume or
+network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
 """
 
 import dataclasses
@@ -58,9 +58,9 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
     Attributes:
     - ids: what the id rules judge by (userrules.IdFacts)
-    - trust: the origins whose values are taken as given: what the policy refuses in them is pointed out
-      instead (with_trust)
-    - config_file: the caller's config file, named in hints on what it can allow; None for no hints
+    - trust: the origins whose values the policy takes as given: it points out its objections to them
+      instead of refusing them (with_trust)
+    - config_file: the invoking user's config file, named in hints on what it can allow; None for no hints
     - section: which image section of the config file applies to the image this policy is for, and why the
       one for its repository does not (sections.section_for); NO_SECTION for a policy not for an image
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose
@@ -92,7 +92,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
         Parameters:
         - settings: the settings of the config file that apply (sections.effective)
-        - ids: what the id rules judge by besides the settings: the caller, with allow_me, and this host
+        - ids: what the id rules judge by besides the settings: the invoking user, with allow_me, and this
+          host
         - config_file: named in hints, as in Policy
         """
         return cls(ids, settings.mount_dirs, config_file=config_file, nobody_range=settings.nobody_range,
@@ -112,7 +113,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         return dataclasses.replace(self, section=section)
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
-        """Returns this policy with trust as the origins whose values are taken as given."""
+        """Returns this policy with trust as the origins whose values it takes as given."""
         return dataclasses.replace(self, trust=trust)
 
     def with_per_service(self, per_service: Mapping[str, "Policy"]) -> Self:
@@ -123,9 +124,9 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """Checks a compose project's definition and where it is; returns what it finds, each about what it
         concerns.
 
-        Empty if it passes. Each service is checked with its own policy (for_service). What needs docker to
-        be known is checked on its own: the daemon (check_daemon), the containers that have the project's
-        name (check_project_name), and the images (check_images).
+        Empty if it passes. This checks each service with its own policy (for_service). The facts that only
+        docker can give have checks of their own: the daemon (check_daemon), the containers that have the
+        project's name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
         top_level = [*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
@@ -164,7 +165,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """Checks one service; returns what it finds, empty if there is nothing.
 
         A problem is refused, or a warning if its value comes from an origin that this policy trusts
-        (finding.judged). A user from the image is left to the image decision.
+        (finding.judged). This leaves a user from the image to the image decision.
         """
         keys = service.definition
         found: list[Reportable] = []

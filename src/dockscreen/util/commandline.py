@@ -3,17 +3,18 @@ own options, which docker and compose never see, the CommandLine class, which sp
 command and holds it without them, and functions that find one thing in a command line.
 
 Before the subcommand (main_commandline and CommandLine.subcommand take them out):
-- --skip-screening runs the real thing with no checks and no defaults. After the subcommand it is
-  not recognised, so docker or compose rejects it, which is the safe direction. The warning is
-  printed every time and cannot be silenced, because the flag may have been copied into a script or
-  an alias.
-- --allow-me lets services and images run as the caller's own ids (see rules.userrules), for compose. Docker's
-  commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user instead.
+- --skip-screening runs the real thing with no checks and no defaults. After the subcommand dockscreen
+  does not recognise it, so docker or compose rejects it, which is the safe direction. dockscreen prints
+  the warning every time, and the user cannot silence it, because someone may have copied the flag
+  into a script or an alias.
+- --allow-me lets services and images run as the invoking user's own ids (see rules.userrules), for
+  compose. Docker's commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user
+  instead.
 - --helpful (or --verbose) adds the second part of messages that have one: why, and what it costs.
-  The audit commands do that anyway. --verbose is taken here, not passed on, so that it does not
-  make docker or compose noisy as well.
-- --strict-screen treats the command line as untrusted too: what it asks for that a project or an
-  image may not have (see Policy.check_container) is refused. `audit`, `run`, `create`, `start`,
+  The audit commands do that anyway. dockscreen takes --verbose here rather than pass it on, so that it
+  does not make docker or compose noisy as well.
+- --strict-screen treats the command line as untrusted too: the policy refuses its requests that a
+  project or an image may not make (see Policy.check_container). `audit`, `run`, `create`, `start`,
   `restart` and `buildx bake` support it so far; everything else refuses to run with it, rather than
   ignore it.
 
@@ -21,10 +22,10 @@ After `audit`, for compose and docker alike: --brief prints only the verdict, in
 
 After `run` or `exec` (userargs and runargs replace them by `--user=uid:gid`):
 - --as NAME: a local user by name, resolved on this host.
-- --as-me: the caller's own ids.
+- --as-me: the invoking user's own ids.
 
 The helpers are not full parsers: each knows which options take a value only from the set it is given,
-and the callers are written so that a misreading refuses or changes nothing.
+and the callers handle the result so that a misreading refuses or changes nothing.
 """
 
 from collections.abc import Collection, Sequence

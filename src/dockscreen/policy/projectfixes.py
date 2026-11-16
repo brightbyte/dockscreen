@@ -1,8 +1,8 @@
 """This module provides the fixes of `docker compose harden`: a copy of a project's definition with what has a
-safe automatic fix fixed, for the person to adopt as an override file.
+safe automatic fix fixed, for the user to adopt as an override file.
 
 Unlike hardening, which dockscreen applies to every run without changing the project, these change what
-the project says, and only what the person writes back. What has no safe fix is left as it is, for
+the project says, and only what the user writes back. What has no safe fix is left as it is, for
 Policy.check_project to report on the result.
 """
 
@@ -21,8 +21,8 @@ from dockscreen.policy.rules.userrules import image_problem
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.util import ids
 
-# What fix puts into `user`: the caller's own ids, which dockscreen passes to compose (ids.py) and allows
-# only with --allow-me. A literal would only fit the person who ran harden.
+# What fix puts into `user`: the invoking user's own ids, which dockscreen passes to compose (ids.py) and
+# allows only with --allow-me. A literal would only fit the user who ran harden.
 USER_TEMPLATE = "${UID}:${GID}"
 
 # Keys whose removal is a safe fix.
@@ -34,7 +34,7 @@ def fixed_config(project: Project, pol: policy.Policy) -> dict[str, Any]:
 
     Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
     become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
-    and env files have no safe automatic fix; they stay and are reported by Policy.check_project on the
+    and env files have no safe automatic fix; they stay, and Policy.check_project reports them on the
     result.
     """
     fixed = copy.deepcopy(project.definition)
@@ -62,7 +62,8 @@ def fixed_config(project: Project, pol: policy.Policy) -> dict[str, Any]:
 
 def as_compose_reads(config: dict[str, Any], pol: policy.Policy, directory: str) -> dict[str, Any]:
     """Returns a copy of config, of the project in directory, as compose reads the patch, for checking it:
-    USER_TEMPLATE becomes the caller's ids, and a relative placeholder mount source a path in directory.
+    USER_TEMPLATE becomes the invoking user's ids, and a relative placeholder mount source a path in
+    directory.
     """
     resolved = copy.deepcopy(config)
     for service in resolved.get("services", {}).values():
@@ -102,7 +103,7 @@ def set_image_users(fixed: dict[str, Any], decisions: Mapping[str, UserDecision]
 
     Parameters:
     - fixed: the definition, as fixed_config gives it; changed in place
-    - decisions: the decisions on the images' users, by service, as the images were looked at with fixed
+    - decisions: the decisions on the images' users, by service, as dockscreen looked at the images with fixed
     """
     remaining: list[Finding] = []
     notes: list[str] = []

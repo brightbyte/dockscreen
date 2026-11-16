@@ -1,8 +1,8 @@
 """This module implements `docker compose build` and `bake`, checking only what a build can reach before
 compose builds the project.
 
-Builds start no containers of the project, so only what a build can reach is checked
-(projectscreening.check_build): build sources inside the project, no host network, no `x-` keys that
+Builds start no containers of the project, so dockscreen checks only the files and access a build can
+reach (projectscreening.check_build): build sources inside the project, no host network, no `x-` keys that
 `buildx bake` would read.
 """
 

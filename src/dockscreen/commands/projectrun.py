@@ -1,5 +1,5 @@
 """This module provides what compose up, create and run share: having the project screened, printing what
-was found, and running compose as a child on the config that was checked, for as long as the generated file
+was found, and running compose as a child on the config the policy checked, for as long as the generated file
 it reads exists (projectscreening).
 """
 
@@ -20,10 +20,10 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs[st
     """Runs `docker compose global_args sub` with parsed's arguments, sub a subcommand that starts
     containers, on the project global_args select if it passes the checks.
 
-    Returns the exit status: 1 if the project or its images are refused or cannot be checked, else the
-    subcommand's. The images of services that set no user are acquired first, by the project's pull policy,
-    and decided on (serviceinfo, imageusers); the config that runs is the one that was checked, with the
-    result.
+    Returns the exit status: 1 if the policy refuses the project or its images, or dockscreen cannot check
+    them, else the subcommand's. This first acquires the images of services that set no user, by the
+    project's pull policy, and has the policy decide on them (serviceinfo, imageusers); the config that
+    runs is the one the policy checked, with the result.
 
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
@@ -31,9 +31,10 @@ def check_and_run(global_args: list[str], sub: str, parsed: userargs.UserArgs[st
     - parsed: the subcommand's arguments, with the user the command line chose, resolved
       (userscreening.screened)
     - runtime: the Runtime of the command
-    - allow_me: --allow-me was given, so the caller's own ids are allowed
-    - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
-      with the command line untrusted; otherwise those options are taken as given, as for `docker run`
+    - allow_me: the invoking user gave --allow-me, so the policy allows their own ids
+    - strict: the user gave --strict-screen, so the policy judges the service as `run`'s options change
+      it (runoptions), with the command line untrusted; otherwise compose gets those options as given, as
+      docker does for `docker run`
     - notices: what resolving the user the command line chose did (userscreening.screened), printed with the
       project's notices
     """

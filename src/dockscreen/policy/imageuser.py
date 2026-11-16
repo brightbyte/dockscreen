@@ -1,17 +1,17 @@
 """This module provides functions for working out the uid and gids a container would run as from the image's
 passwd and group files, as docker does.
 
-The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is
-untrusted, so the id rules (rules.userrules) decide whether the image may have it. Whatever is accepted runs
+The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is untrusted,
+so the id rules (rules.userrules) decide whether the image may have it. dockscreen runs an accepted identity
 pinned as numbers, so a difference between this reading and docker's can at worst refuse a good image.
 
-The files are read as moby reads them, quirks included, because an image can write them to be read two
-ways: a uid field that is not a number (`app:x:1000x:...`) is 0 to moby, root, which a strict parser
-would reject or read as 1000; whitespace that Python strips and Go does not (\x1c to \x1f) can make a
-line name a different user; the first of two entries for a name wins; a numeric user is looked up by
-number only, so an entry whose name is "1000" cannot redirect `USER 1000`; and supplementary groups are
-found by the user's name. Reading them the same way finds the root that docker would have used, and
-decides on the identity the image would really get.
+resolve reads the files as moby does, quirks included, because an image can write them so that two parsers
+read them two ways: a uid field that is not a number (`app:x:1000x:...`) is 0 to moby, root, which a strict
+parser would reject or read as 1000; whitespace that Python strips and Go does not (\x1c to \x1f) can make a
+line name a different user; the first of two entries for a name wins; moby looks up a numeric user by number
+only, so an entry whose name is "1000" cannot redirect `USER 1000`; and it finds supplementary groups by the
+user's name. Reading them the same way finds the root that docker would have used, and decides on the identity
+the image would really get.
 """
 
 from collections.abc import Sequence

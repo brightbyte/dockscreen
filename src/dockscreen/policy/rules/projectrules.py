@@ -29,7 +29,7 @@ SECRET_KEYS = frozenset({"name", "file", "environment", "content", "external", "
 # this host's position in the network, with credentials in `o`, and `type: ext4, device: /dev/sda1` mounts
 # a host disk. Only `none` (a bind mount, whose device _check_driver_opts checks) and tmpfs are kept.
 LOCAL_VOLUME_TYPES = frozenset({"", "none", "tmpfs"})
-# Every other key is passed to the driver too, and none is needed for a local volume.
+# The local driver passes every other key on too, and a local volume needs none.
 VOLUME_DRIVER_OPTS = frozenset({"type", "device", "o"})
 # bridge and none keep the container behind the host's NAT. macvlan and ipvlan put it on the host's own
 # network with an address of its own, past the host's firewall; host and overlay are the host's or a
@@ -51,7 +51,7 @@ class ProjectRules(RuleBase):
         option.
 
         Service names go to compose as arguments (`docker compose pull web db`): a service called `--ssh`
-        makes `compose build --ssh default`, which forwards the caller's SSH agent into the build, and
+        makes `compose build --ssh default`, which forwards the user's SSH agent into the build, and
         other options can change a command's effect. dockscreen puts `--` before the names it passes
         itself; refusing the names keeps them out of compose's own commands as well.
         """
@@ -79,7 +79,7 @@ class ProjectRules(RuleBase):
 
         The local driver can turn a named volume into a bind mount (`type: none, o: bind, device: /`) or a
         network mount, which `volumes:` of a service only names: the service's own check sees a volume, not
-        a host path. So the device of a bind is held to the same roots as a bind mount's source, and a
+        a host path. So this holds the device of a bind to the same roots as a bind mount's source, and a
         service that uses such a volume counts as reaching host files for the id rules
         (mounts.service_reaches_host).
         """
@@ -133,7 +133,7 @@ class ProjectRules(RuleBase):
 
         A file is read on the host and mounted into the container, so one outside the project hands it host
         files (~/.ssh/id_ed25519). `environment:` copies a variable from the environment compose runs in,
-        which is the caller's shell: the project picks which of the caller's secrets to take
+        which is the user's shell: the project picks which of the user's secrets to take
         (AWS_SECRET_ACCESS_KEY). An external secret or config is one that someone else created.
         """
         item = item or {}
@@ -155,15 +155,15 @@ class ProjectRules(RuleBase):
         return [Finding(REMOTE_MESSAGE)] if remote else []
 
     def check_location(self, location: ProjectLocation) -> list[Finding]:
-        """Checks where a project is; returns a refusal for each reason its directory cannot be the one its
-        bind mounts are judged against.
+        """Checks where a project is; returns a refusal for each reason its directory cannot be the one the
+        policy judges its bind mounts against.
 
-        Everything inside the project directory may be mounted, so the directory must be one the project
+        A project may mount everything inside its directory, so the directory must be one the project
         owns:
-        - foreign: compose searches upwards for a compose file, so one placed in the caller's home directory,
+        - foreign: compose searches upwards for a compose file, so one placed in the user's home directory,
           or in a directory of another user's, makes that the project directory, and ~/.ssh "inside" it;
         - redirects: a `.env` that sets COMPOSE_FILE (or its separator) makes compose read files elsewhere,
-          so the directory compose uses is not the one that was located and checked;
+          so the directory compose uses is not the one dockscreen located and the policy checked;
         - sensitive: a project directory that contains a sensitive path (/, $HOME, the config files, the
           docker socket) puts it inside the project.
         """
@@ -194,9 +194,9 @@ class ProjectRules(RuleBase):
         """Checks what the project's services take from the shell; returns a warning for each service
         that takes any, without their values.
 
-        `environment: [AWS_SECRET_ACCESS_KEY]`, a name without a value, makes compose copy the caller's
-        variable into the container. The shell is trusted, so this is not refused, but the project chooses
-        which variables, and the caller should know which leave.
+        `environment: [AWS_SECRET_ACCESS_KEY]`, a name without a value, makes compose copy the user's
+        variable into the container. The user's shell is trusted, so the policy does not refuse this, but
+        the project chooses which variables, and the user should know which leave.
 
         Parameters:
         - copied: by service, the names of the variables it takes from the shell
@@ -232,9 +232,9 @@ def _check_scope(key: str, item: dict[str, Any], project: str | None) -> list[st
     """Returns a problem unless the volume or network item called key belongs to project, by its name.
 
     Compose names a volume `<project>_<key>`, but `name:` replaces that, and `external: true` uses one that
-    exists: either way the project gets a volume another project, or the caller, created, with its data, or
+    exists: either way the project gets a volume another project, or the user, created, with its data, or
     with driver_opts that bind a host path, which were never checked here. The same goes for networks, which
-    would put the container next to another project's services. External ones are refused. Without a
+    would put the container next to another project's services. This refuses external ones. Without a
     project name there is nothing to compare; Policy.check_project refuses that.
     """
     if item.get("external"):

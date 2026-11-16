@@ -8,15 +8,15 @@ Not planned work: things worth doing once there is a need for them. Each says wh
 
 It is not done yet, for three reasons:
 
-- The threat model trusts the command line, because whoever controls it can call docker directly. Strict execution only adds protection when the command line comes from somewhere less trusted than the person running it (a README, a project's Makefile or scripts, an agent) and dockscreen is installed as `docker`, so that those commands reach it.
+- The threat model trusts the command line, because whoever controls it can call docker directly. Strict execution only adds protection when the command line comes from somewhere less trusted than the user running it (a README, a project's Makefile or scripts, an agent) and dockscreen is installed as `docker`, so that those commands reach it.
 - A script will not pass `--strict-screen` itself. To protect against untrusted scripts it would have to be a config setting (`strict_screen = true` in the config file), with the flag only for one-off use.
 - Strict `run` alone leaves gaps: `create`, `start` of a container created elsewhere, `exec --privileged`, `compose run -v` and `--cap-add`, `docker cp`. Each needs its own decision, or strict mode promises more than it does.
 
-Until then, `--strict-screen` is refused for every subcommand except `audit`, so that nobody gets lenient screening while asking for strict.
+Until then, dockscreen refuses `--strict-screen` for every subcommand except `audit`, so that nobody gets lenient screening while asking for strict.
 
 ## Image sections pinned by digest
 
-An image section could name a digest as well as a repository. An image that matches the repository but not the digest would then be refused, not run without the section's settings: whoever wrote the section trusted that content, and a different image under the same name is not it. A section without a digest keeps matching any image pulled from the repository.
+An image section could name a digest as well as a repository. dockscreen would then refuse an image that matches the repository but not the digest, not run without the section's settings: whoever wrote the section trusted that content, and a different image under the same name is not it. A section without a digest keeps matching any image pulled from the repository.
 
 ## Image sections with and without a tag
 

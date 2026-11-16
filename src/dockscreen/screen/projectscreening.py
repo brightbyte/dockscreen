@@ -13,31 +13,30 @@ the ones that only build check only what the builds can reach (check_build).
 
 Projects need screening because `docker compose up` gives a project, a directory someone else wrote,
 every power the daemon has, which is root on this host. The stages exist for these reasons:
-- load_project: compose is asked for its own reading of the project (`config`), since a second parser
-  would read the YAML, the interpolation and the merging of files differently; the project directory is
-  located first, because bind mounts are judged against it.
-- check: the definition's requests are judged before anything is pulled or built, because building
-  runs the project's Dockerfile, and a refused project should not get even that far.
-- decide: a service without `user:` runs as its image says, which only the image can tell; the image is
-  acquired as compose would, then looked at without being started.
-- finish: the defaults, the decided users and the pinned images change the project, so the result is
-  judged once more, as the project that will run.
+- load_project: dockscreen asks compose for its own reading of the project (`config`), since a second
+  parser would read the YAML, the interpolation and the merging of files differently; it locates the
+  project directory first, because the policy judges bind mounts against it.
+- check: the policy judges the definition's requests before dockscreen pulls or builds anything, because
+  building runs the project's Dockerfile, and a refused project should not get even that far.
+- decide: a service without `user:` runs as its image says, which only the image can tell; dockscreen acquires
+  the image as compose would, then looks at it without starting it.
+- finish: the defaults, the decided users and the pinned images change the project, so the policy judges
+  the result once more, as the project that will run.
 - running from the generated file: compose reading the project's own files again could see something
-  else (a file changed in between, discovery rules, interpolation), so it reads only the file that was
-  checked, and is asked to read that back first, in case it would interpret it differently.
+  else (a file changed in between, discovery rules, interpolation), so it reads only the file the policy
+  checked, and dockscreen has it read that back first, in case it would interpret it differently.
 - check_name: the project name decides which existing volumes, networks and containers compose acts on,
   so a project that claims another's name reaches that project's data.
 - check_build: a build reads files from this host and runs the project's Dockerfile.
 
-The resolved config is hardened, checked, written to a private temporary file
-(`config` prints a literal `$` as `$$`, so compose reads the file back to the same values)
-and handed to compose as its only file, together with the project directory and
-name it came from. What was checked is then exactly what runs: no second
-reading of the project's files, no discovery rules to mirror. Before any image is
-pulled or built, compose is asked for the config of the generated file, which is
-refused if it differs from what was checked (decide). The price is that
-compose runs as a child process (so the file can be removed afterwards) and
-shows the temporary file as its config file.
+dockscreen hardens the resolved config, has the policy check it, writes it to a private temporary file
+(`config` prints a literal `$` as `$$`, so compose reads the file back to the same values) and hands it to
+compose as its only file, together with the project directory and name it came from. The checked config
+is then exactly the one that runs: compose does not read the project's files a second time, and there are
+no discovery rules to mirror. Before it pulls or builds any image, dockscreen asks compose for the config of
+the generated file, and refuses the run if it differs from the checked one (decide). The price is that
+compose runs as a child process (so that dockscreen can remove the file afterwards) and shows the
+temporary file as its config file.
 """
 
 import contextlib
@@ -269,8 +268,8 @@ def check_build(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
     """Returns why the project's builds may not run: what they can reach (Policy.check_project_build), or
     why the project could not be loaded or was refused before it was.
 
-    A project that cannot be loaded is not left to compose, as check_name leaves it: a build reads files, so
-    what cannot be checked does not run.
+    This does not leave a project that cannot be loaded to compose, as check_name does: a build reads files,
+    so a build the policy cannot check does not run.
 
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
@@ -289,7 +288,7 @@ def _name_conflicts(loaded: LoadedProject, static_policy: policy.Policy, screene
     """Returns what static_policy finds in the containers that have the project's name, or the failure to
     look (inspect.name_conflicts).
 
-    Not looked at for a name the caller chose, or on a daemon that may not be this host's.
+    Not looked at for a name the user chose, or on a daemon that may not be this host's.
     """
     name = loaded.resolved.name
     if not name or loaded.remote or inspect.names_project(loaded.global_args, screener.runtime.env):
@@ -313,10 +312,11 @@ def _generated(global_args: Sequence[str], project_dir: str,
     command writes config there and returns the `docker compose` command line on it alone, with the project
     directory and name pinned, ready for a subcommand to be appended. Everything is removed afterwards.
 
-    The directory is created for this run, readable by the caller only, so another user of this host can
-    neither read the config nor put a file of their own in its place for compose to read. The project
-    directory and name are passed, not left for compose to work out from the file's location, since the file
-    is in the temporary directory and its relative paths were resolved against the project's.
+    This creates the directory for this run, readable by the user only, so another user of this host
+    can neither read the config nor put a file of their own in its place for compose to read. It passes
+    the project directory and name, rather than leave compose to work them out from the file's location,
+    since the file is in the temporary directory and compose resolved its relative paths against the
+    project's.
     """
     counter = itertools.count()
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:

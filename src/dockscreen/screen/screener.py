@@ -1,11 +1,11 @@
-"""This module defines the Screener class, for getting what screening one command needs from the caller and
-this host (the runtime): the policy for each target, and what an image is like, looked at through docker.
+"""This module defines the Screener class, for getting what screening one command needs from the invoking user
+and this host (the runtime): the policy for each target, and what an image is like, looked at through docker.
 
 What the checks of one project, image or container need follows from it and from where that target is:
 the settings of the config file with the project and image sections that apply (sections.effective), the
 id rules with those settings, and the policy (Policy) built from them. The directory is the
 target's: a compose project's own, for what a command line runs the current one, and none for a container
-that existed before, since docker does not record where it was created.
+that existed before, since docker does not record where it created it.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -33,14 +33,14 @@ from dockscreen.policy.userdecision import UserDecision
 class Screener(NamedTuple):
     """Judge of what one command runs: a factory of the policies its checks need, and a service object that
     looks at images through docker and has them judged (look, assess, decide). It holds the runtime and
-    whether the caller's own ids are allowed and how a refusal says to allow them.
+    whether the invoking user's own ids are allowed and how a refusal says to allow them.
 
     Create one per command from its Runtime, with allow_me if the command line asks for it, and with the
-    own_ids_hint of commands that allow the caller's ids another way than compose does.
+    own_ids_hint of commands that allow the invoking user's ids another way than compose does.
 
     Attributes:
     - runtime: the Runtime of the command
-    - allow_me: whether --allow-me allows the caller's own ids
+    - allow_me: whether --allow-me allows the invoking user's own ids
     - own_ids_hint: how the command allows them, said when they are refused (userrules.IdFacts)
     """
     runtime: Runtime
@@ -54,8 +54,8 @@ class Screener(NamedTuple):
 
     @property
     def ids(self) -> userrules.IdFacts:
-        """Returns the facts the id rules judge by: the caller's ids and whether they are allowed, and this
-        host's accounts and subordinate ranges.
+        """Returns the facts the id rules judge by: the invoking user's ids and whether they are allowed, and
+        this host's accounts and subordinate ranges.
         """
         runtime = self.runtime
         return userrules.IdFacts(runtime.me, self.allow_me, runtime.accounts, runtime.subordinate,
@@ -175,7 +175,7 @@ class Screener(NamedTuple):
         Parameters:
         - directory, container, info, origin, mounts, reference, built: as assess takes them
         """
-        # by the id the container was created from: the name may have been moved to another image since
+        # by the id docker created the container from: someone may have moved the name to another image since
         shown = self.docker.inspect_image(info["Image"])
         image = Image(reference or info["Config"].get("Image") or "", info["Image"], built,
                       tuple(shown.get("RepoDigests") or ()))

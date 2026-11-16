@@ -2,8 +2,9 @@
 whose user the policy then decides (create), one that exists already (check_existing), and what the command
 line that made either asks for that a project or an image may not (command_line_findings).
 
-A container that is created is inspected and judged, and left for the caller to start or remove: only the
-caller knows whether it is to run, be created again with the user decided, or be reported on.
+create inspects the container docker created and has the policy judge it, and leaves it for the calling code
+to start or remove: only the calling code knows whether it is to run, be created again with the user decided,
+or be reported on.
 
 Containers need screening because `docker run IMAGE` runs the image as the user it chooses, root by default,
 and the image is someone else's. The command line is trusted, but it does not say which user the image
@@ -14,10 +15,10 @@ dockscreen still reads the command line far enough to find the image and the use
 that reading against the container (_verify_split): a misreading must not judge another image than the
 one that runs, or miss a --user.
 
-An existing container (check_existing) was created by anyone, perhaps by plain docker or a project's
-script, and `docker start` would run it without any of this; it cannot be rewritten, so it is judged as it
-is. The command line's requests (command_line_findings) are pointed out because commands are copied from
-READMEs too: the person may trust a command line they did not write.
+Anyone may have created an existing container (check_existing), perhaps with plain docker or a project's
+script, and `docker start` would run it without any of this; dockscreen cannot rewrite it, so the policy
+judges it as it is. Audit points out the command line's requests (command_line_findings) because people
+copy commands from READMEs too: the user may trust a command line they did not write.
 """
 
 from typing import Any
@@ -41,7 +42,7 @@ def create(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLin
     """Creates the container as `docker run` would and returns (exit status, (container, decision of its
     user)), or (exit status, None) if docker could not create it; it said why.
 
-    The container is left for the caller to remove.
+    The container is left for the calling code to remove.
 
     Parameters:
     - screener: the Screener of the command
@@ -84,8 +85,8 @@ def _verify_split(info: dict[str, Any], parsed: runargs.RunArgs[str]) -> list[Fi
     runargs reads the command line only far enough to find the image and the command, and does not know
     every option docker has: an option it does not know to take a value would shift its reading, so that
     it takes the option's value for the image, or the image for part of the command. The user options are
-    found by the same reading. A container whose image or command differs from that reading is refused,
-    since the image decided on and the --user found may then not be the ones that run.
+    found by the same reading. This refuses a container whose image or command differs from that reading,
+    since the image the policy decided on and the --user found may then not be the ones that run.
 
     Returns the problem if it does not, else an empty list.
     """
@@ -120,9 +121,10 @@ def command_line_findings(screener: Screener, container: Container, decision: Us
 def check_existing(screener: Screener, ref: str, strict: bool) -> list[Reportable]:
     """Returns the refusals that forbid starting the existing container ref, each about ref.
 
-    An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default user
-    or a configured one) is refused like one whose user is not accepted, unless it already runs as that user.
-    Docker does not record where a container was created, so it is judged without a directory.
+    dockscreen cannot rewrite an existing container, so this refuses one whose user dockscreen would replace
+    (by the default user or a configured one) like one whose user the policy does not accept, unless it
+    already runs as that user. Docker does not record where it created a container, so the policy judges it
+    without a directory.
 
     Parameters:
     - screener: the Screener of the command

@@ -1,14 +1,15 @@
 """This module provides functions for working out which sections of the config files apply to an image and a
 project, and the settings that result.
 
-The settings can be given per image (`[images."REPOSITORY"]`) and per project (`[projects."DIRECTORY"]`).
+The config file can give the settings per image (`[images."REPOSITORY"]`) and per project
+(`[projects."DIRECTORY"]`).
 They apply in that order, after the top level (effective): a single value replaces the one before, a list
 is added to the ones before.
 
 An image section names a repository: it trusts the image's maintainer, not one image. A name alone
-proves nothing, because anything can be built or tagged locally under any name, so an image matches only
-if docker recorded that it was pulled from that repository (a repo digest), and never for a service that
-is built from a Dockerfile (section_for).
+proves nothing, because anyone can build or tag an image locally under any name, so an image matches only
+if docker recorded that it pulled the image from that repository (a repo digest), and never for a service
+that builds its image from a Dockerfile (section_for).
 """
 
 import os
@@ -78,7 +79,7 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
 
 def name_matches(config: Config, reference: str, built: bool) -> str | None:
     """Returns the repository of the image section the name alone points to, or None if there is none or
-    the image is built. The name proves nothing: this is for before the image is there.
+    the service builds the image. The name proves nothing: this is for before the image is there.
 
     Parameters:
     - config: the settings of the config file

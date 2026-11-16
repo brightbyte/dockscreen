@@ -1,16 +1,16 @@
 # Security review: open findings
 
-Audience: whoever fixes the findings below. Fixed findings are not listed. Findings are ordered by priority; there are no high ones open.
+Audience: whoever fixes the findings below. This review leaves out fixed findings, and orders the others by priority; there are no high ones open.
 
-Threat model: the compose project and the image are untrusted. Usually neither is hostile, but either may be. The command line is trusted not to be malicious, but the person typing it is protected from mistakes and from being tricked by the project. Running as root must be rare and opt-in; running as the calling user must not be selectable by a project or image.
+Threat model: the compose project and the image are untrusted. Usually neither is hostile, but either may be. The command line is trusted not to be malicious, but dockscreen protects the user typing it from mistakes and from tricks of the project. Running as root must be rare and opt-in; running as the calling user must not be selectable by a project or image.
 
-Method: reading the source. "Code confirmed" means the dockscreen side was re-read. The behaviour of docker, moby, runc, the kernel, compose and buildx comes from reading or memory and is marked "unverified" where a finding depends on it. A test that runs `docker compose config` and `docker buildx bake --print` on real projects would settle most of those.
+Method: reading the source. "Code confirmed" means the reviewer re-read the dockscreen side. The behaviour of docker, moby, runc, the kernel, compose and buildx comes from reading or memory, and the review marks it "unverified" where a finding depends on it. A test that runs `docker compose config` and `docker buildx bake --print` on real projects would settle most of those.
 
 ## Medium
 
 ### 1. An `include:` entry's `env_file` and `extends.file` are invisible in the `config` output
 
-Host file contents can flow into values such as `image:` and be sent at pull time. The `env_file` of services is covered; these two are not.
+Host file contents can flow into values such as `image:`, which docker sends to the registry at pull time. The policy covers the `env_file` of services; these two are not.
 
 Fix: refuse them in the raw config, or document as out of scope.
 
@@ -32,7 +32,7 @@ Ordered by how likely the problem is to matter, then by how cheap the fix is.
 
 ### 3. `docker run` and `docker start` do not see a bind-backed named volume
 
-In a project, a named volume whose `driver_opts` bind a host path counts as a host mount. For a container, the volume is only a name, so a volume that was created that way earlier is not counted, and the id rules for containers without host mounts apply.
+In a project, a named volume whose `driver_opts` bind a host path counts as a host mount. For a container, the volume is only a name, so dockscreen does not count a volume that someone created that way earlier, and the id rules for containers without host mounts apply.
 
 ### 4. `docker run` recreates the container by image name, not id
 
@@ -56,15 +56,15 @@ The policy checks the `ipam` keys and driver, not the subnets, so a project can 
 
 ### 9. `docker buildx bake` resolves relative paths against the current directory
 
-A bake file given with `-f` from another directory is checked against the wrong base.
+The policy checks a bake file given with `-f` from another directory against the wrong base.
 
 ### 10. Commands that start containers or build without going through dockscreen
 
-`docker sandbox run`, `docker model run`, swarm `service create` and `stack deploy` are passed through unchecked. `buildx build` and `docker build` are not screened either: their Dockerfile cannot reach the host without options, and the command line is trusted.
+dockscreen passes `docker sandbox run`, `docker model run`, swarm `service create` and `stack deploy` through unchecked, and does not screen `buildx build` and `docker build` either: their Dockerfile cannot reach the host without options, and the command line is trusted.
 
 ### 11. `harden` maps a mount source `/` to `./`
 
-`compose_harden._placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The patch is reviewed before it is saved, and `up` checks it again.
+`compose_harden._placeholder_source`: the patch would mount the project read-write although its note says "compose creates empty". The user reviews the patch before saving it, and `up` checks it again.
 
 ### 12. `docker.context()` ignores `--config`
 
@@ -94,24 +94,24 @@ Moby does not. Harmless on `run` and compose; a spurious refusal on `start`.
 
 Not defects to fix; the design records them as known gaps or as choices.
 
-- `start` and `restart` trust a container whose user differs from its image's, as `run --user` is trusted: a container made on a command line cannot be told from one a project's script made. `HostConfig` (privileged, binds, devices) is not examined. For an image's own user, the daemon resolves the name at start, so the safety rests on `imageuser` reading ids as the daemon does; `restart` has a window in which a running container with a writable `/etc/passwd` can change the result after the check.
+- `start` and `restart` trust a container whose user differs from its image's, as `run --user` is trusted: dockscreen cannot tell a container made on a command line from one a project's script made. They do not examine `HostConfig` (privileged, binds, devices). For an image's own user, the daemon resolves the name at start, so the safety rests on `imageuser` reading ids as the daemon does; `restart` has a window in which a running container with a writable `/etc/passwd` can change the result after the check.
 - `docker run --group-add` is trusted like the rest of the command line, and `audit` reports it. An older daemon resolves a numeric value as a group name from the image first.
 - The project mount is read-write, so a container can write files that run on the host, such as `.git/hooks`, as whatever user it runs as.
-- The project name check compares containers only: volumes and networks carry no directory label, so a project whose containers are all gone can still have its volumes taken over by name. A name given with `-p` or `COMPOSE_PROJECT_NAME` in the environment is the person's choice and is not checked.
+- The project name check compares containers only: volumes and networks carry no directory label, so a project whose containers are all gone can still have its volumes taken over by name. A name given with `-p` or `COMPOSE_PROJECT_NAME` in the environment is the user's choice and is not checked.
 - A daemon's behaviour on ids above 2147483647, on `group_add` and on `type: tmpfs` volumes with `bind` is unverified; the policy refuses them whatever the daemon does.
 
 ## Checked and fine
 
-- Service keys outside the allowlist are refused (`provider`, `models`, `use_api_socket`, `credential_spec`, `extends`, `entitlements`, `cache_to`, `cache_from`); `x-` fields are ignored except in `build`; anchors and merge keys are resolved before the check.
-- `cap_add`, `devices`, `privileged`, `gpus`, `cgroup_parent`, `device_cgroup_rules` and `group_add` are refused; `cap_drop` must include `ALL`; `security_opt` exactly no-new-privileges; `pid`, `ipc`, `uts`, `userns_mode`, `cgroup`, `network_mode` refuse `host` and `container:`; `runtime` only `runc`; hook keys checked.
+- The policy refuses service keys outside the allowlist (`provider`, `models`, `use_api_socket`, `credential_spec`, `extends`, `entitlements`, `cache_to`, `cache_from`); it ignores `x-` fields except in `build`; compose resolves anchors and merge keys before the check.
+- The policy refuses `cap_add`, `devices`, `privileged`, `gpus`, `cgroup_parent`, `device_cgroup_rules` and `group_add`; `cap_drop` must include `ALL`; `security_opt` exactly no-new-privileges; `pid`, `ipc`, `uts`, `userns_mode`, `cgroup`, `network_mode` refuse `host` and `container:`; `runtime` only `runc`; hook keys checked.
 - Bind sources, local volume `device`, secrets and configs `file`, `env_file`, `label_file`, `develop.watch.path`, build contexts and dockerfiles go through `is_inside` with `realpath`; a dangling symlink resolves to its target; a NUL byte is a refusal. Volume `driver_opts` are an allowlist, and tmpfs volumes cannot bind.
-- Ids above 2147483647 are refused with or without host mounts.
-- The generated compose file is checked against what compose reads back from it, before any pull or build; it is written in a private directory (0700) with an exclusive 0600 file; services whose image was looked at are pinned to the image id.
-- `-f`, `--project-directory`, `--project-name`, `-p` from the command line are replaced by the generated file.
+- The policy refuses ids above 2147483647, with or without host mounts.
+- dockscreen compares the generated compose file with compose's reading of it, before any pull or build; it writes the file in a private directory (0700) as an exclusive 0600 file, and pins services whose image it looked at to the image id.
+- The generated file replaces `-f`, `--project-directory`, `--project-name` and `-p` from the command line.
 - `imageuser.py` matches moby/sys/user `main` for line splitting, whitespace, `atoi`, zero-filling, first match, numeric specs, NUL, duplicates and `a:b:c`.
-- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `containerscreening._verify_split` catches a misread command line; a uid without a group is refused.
+- Numeric pinning covers `run`, compose `up`/`create` and `compose run`; `runargs` handles `--user=`, `-u` and clustered `-u`; `containerscreening._verify_split` catches a misread command line; the policy refuses a uid without a group.
 - Image sections need a RepoDigests match on the image id; built and retagged images match nothing; sections cannot cross projects.
-- `--skip-screening`, `--allow-me`, `--strict-screen` and `--helpful` come only from argv before the subcommand; `--strict-screen` with anything but `audit` is refused.
-- Every `Docker` call uses `--` before container ids and image names; image files are read through the tar stream, capped at 1 MiB, fail closed.
-- Finding the real docker skips empty and relative `PATH` entries and the wrapper itself; without one, dockscreen stops instead of running plain `docker`. Empty or relative entries are warned about, since docker and compose look up their own helpers on `PATH`.
-- `docker buildx bake` is screened on the definition `--print` gives.
+- `--skip-screening`, `--allow-me`, `--strict-screen` and `--helpful` come only from argv before the subcommand; dockscreen refuses `--strict-screen` with anything but `audit`.
+- Every `Docker` call uses `--` before container ids and image names; dockscreen reads image files through the tar stream, capped at 1 MiB, and fails closed.
+- Finding the real docker skips empty and relative `PATH` entries and the wrapper itself; without one, dockscreen stops instead of running plain `docker`. dockscreen warns about empty or relative entries, since docker and compose look up their own helpers on `PATH`.
+- The policy screens `docker buildx bake` on the definition `--print` gives.

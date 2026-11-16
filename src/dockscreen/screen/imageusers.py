@@ -1,13 +1,13 @@
 """This module provides functions for finding out which user the images of compose services would run them
-as, by whatever it takes: the images are pulled or built as compose would, and then looked at, so that the
-policy can decide the user to use by the rule `docker run` uses (rules.userrules). Which services' images to
-look at is the caller's to say (serviceinfo).
+as, by whatever it takes: dockscreen pulls or builds the images as compose would, and then looks at them,
+so that the policy can decide the user to use by the rule `docker run` uses (rules.userrules). Which
+services' images to look at is the calling code's to say (serviceinfo).
 
-An image is untrusted, so what it says about its user cannot be taken from its name or its config alone.
-The images of the services that start are acquired first, following the project's own pull policy so that
-automatic updates keep happening (pull, or build if it is built from a Dockerfile); they are then the images
-that run, since the policy pins them. Each image asked about is then looked at through a container created
-from it and never started (Screener.look).
+An image is untrusted, so dockscreen cannot take its user from its name or its config alone. It first
+acquires the images of the services that start, following the project's own pull policy so that automatic
+updates keep happening (pull, or build if the service builds it from a Dockerfile); they are then the
+images that run, since the policy pins them. It then looks at each image asked about through a container
+that docker creates from it and nobody starts (Screener.look).
 """
 
 from collections.abc import Collection, Sequence
@@ -107,7 +107,7 @@ def _look(project: Project, name: str, screener: Screener) -> Inspected | Unseen
     service = config["services"][name]
     image = Image(image_name(config, name, service), built="build" in service)
     platform = ["--platform", service["platform"]] if service.get("platform") else []
-    # a container that is never started shows the user docker would run, and its files can be copied out;
+    # a container that nobody starts shows the user docker would run, and docker cp can copy its files out;
     # --pull=never: the image looked at must be the one acquired above, not a newer one pulled in between
     _, container = screener.docker.create(["--pull=never", *platform, "--", image.reference])
     if container is None:

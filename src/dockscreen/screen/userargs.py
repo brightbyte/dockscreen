@@ -1,18 +1,18 @@
 """This module provides functions for reading command lines that run something in a container (`docker compose
-run` and `exec`, `docker exec`) just far enough to find the user and the service or container. `docker run`
-is read by runargs, which uses the same GivenUsers.
+run` and `exec`, `docker exec`) just far enough to find the user and the service or container. runargs
+reads `docker run`, with the same GivenUsers.
 
-The command line is trusted, so the user it gives is not checked against the id rules, only for its
-form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. A name would be
-resolved in the image (for `exec`, in the running container's /etc/passwd, which the container may have
+The command line is trusted, so the policy does not check the user it gives against the id rules, only its
+form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. Docker would resolve a
+name in the image (for `exec`, in the running container's /etc/passwd, which the container may have
 rewritten), and a uid alone takes its group from the image. `--as NAME` names an account on this host
-instead, and `--as-me` the caller's own ids. Reading changes nothing: the arguments keep both as their
+instead, and `--as-me` the invoking user's own ids. Reading changes nothing: the arguments keep both as their
 UserOption, which the policy resolves (Policy.resolve_user_options), and which resolved replaces by
 `--user=uid:gid` before compose or docker sees them.
 
-A misreading cannot loosen anything: a user that is missed reaches compose as typed, which the command
-line could have done with plain compose anyway, and a service that is missed has its image decided as
-if no user had been chosen.
+A misreading cannot loosen anything: a user this misses reaches compose as typed, which the command line
+could have done with plain compose anyway, and for a service this misses, the policy decides its image as
+if the command line chose no user.
 """
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -44,7 +44,7 @@ class GivenUsers:
     """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
     resolve (userscreening.screened). It holds each user option given, and whether a user was chosen.
 
-    The list is added to only by its own methods; callers must not change it.
+    Only its own methods add to the list; callers must not change it.
 
     The parsers of this module and of runargs create and fill it; nothing changes it after they return,
     though nothing enforces that.
@@ -78,7 +78,7 @@ class GivenUsers:
         return self._chosen(UserOption(commandline.AS, name, self.accounts.user(name) if name else None))
 
     def me(self) -> UserOption:
-        """Returns the UserOption of --as-me, with the caller's own ids, and records it."""
+        """Returns the UserOption of --as-me, with the invoking user's own ids, and records it."""
         return self._chosen(UserOption(commandline.AS_ME, "", self.callers_ids))
 
     def _chosen(self, option: UserOption) -> UserOption:

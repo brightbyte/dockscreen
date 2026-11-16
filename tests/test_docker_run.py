@@ -14,7 +14,7 @@ DEFAULTS = ["--cap-drop=ALL", "--security-opt=no-new-privileges:true"]
 
 
 def runtime(docker, settings=None):
-    """The Runtime of a `docker` command line run with docker and settings, by the caller fakes.ME."""
+    """The Runtime of a `docker` command line run with docker and settings, by the invoking user fakes.ME."""
     return make_runtime(docker=docker, settings=settings or Config())
 
 
@@ -238,7 +238,7 @@ def test_a_configured_user_needs_the_image_to_have_been_pulled_from_that_reposit
     assert "--user=65534:65534" in docker.calls[3][1]  # an image tagged img locally: the normal rules
 
 
-# --- an image whose user is the caller's -----------------------------------------
+# --- an image whose user is the invoking user's -----------------------------------------
 
 def test_an_image_whose_user_is_the_caller_is_refused(capsys):
     docker = FakeDocker(image_user="4242:4343")

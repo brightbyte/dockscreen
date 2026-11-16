@@ -6,8 +6,8 @@ We need the image position and the few flags that `run` has and `create` lacks
 on this: the policy looks at the container the daemon created from the result,
 and docker_run checks that our reading of the command line matched the daemon's.
 
-Reading changes nothing but what `create` lacks: --as and --as-me are kept as their UserOption, as userargs
-keeps them, until they are resolved.
+Reading changes nothing but what `create` lacks: it keeps --as and --as-me as their UserOption, as userargs
+does, until the policy resolves them.
 """
 
 from collections.abc import Mapping, Sequence

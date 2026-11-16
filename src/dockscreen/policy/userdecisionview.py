@@ -66,7 +66,8 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
 
 def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
     """Returns the decision's reasons, with how config_file can give the image a user if they come from the
-    image's user. A container that exists keeps the user it was created with, so choosing one is no way out.
+    image's user. A container that exists keeps the user docker created it with, so choosing one is no way
+    out.
 
     Parameters:
     - decision: the UserDecision of the image of the container

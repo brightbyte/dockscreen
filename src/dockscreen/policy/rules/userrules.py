@@ -3,9 +3,9 @@ and what they work with: IdFacts, the settings and host facts the id rules judge
 UserOption, the record of a user a command line gives, and Resolution, what dockscreen's own --as and --as-me
 stand for.
 
-Ids. Every id that comes from an untrusted source is checked: `user:` and hook users in a compose file, and
-the user an image runs as. Ids from the command line and the config file are trusted and are not checked
-against these rules. Never accepted, unless they are allowed ids (below):
+Ids. The rules check every id that comes from an untrusted source: `user:` and hook users in a compose
+file, and the user an image runs as. Ids from the command line and the config file are trusted, and these
+rules do not check them. The rules never accept these, unless they are allowed ids (below):
 - 0, root;
 - an id that exists on this host: the container would share that account's kernel limits
   (processes, inotify watches), and own its files in anything it mounts;
@@ -17,45 +17,46 @@ against these rules. Never accepted, unless they are allowed ids (below):
 With host mounts (bind mounts, devices, volumes_from, secrets, configs) the id must be an allowed id,
 because what the container can write on the host depends on it.
 
-The caller's own ids are ids on this host too, and the most useful ones to a project: a container that runs
-as the caller can write all of the caller's files that it mounts, such as the project's .git/hooks, whose
-scripts the caller later runs outside any container. A project gets them only with --allow-me, for that run.
+The invoking user's own ids are ids on this host too, and the most useful ones to a project: a container
+that runs as the invoking user can write all of their files that it mounts, such as the project's
+.git/hooks, whose scripts they later run outside any container. A project gets them only with
+--allow-me, for that run.
 
-Allowed ids: the nobody range and the default user from the config file, ids the caller adds for one
-check (a configured image user), and the caller's own ids when --allow-me was given (compose).
+Allowed ids: the nobody range and the default user from the config file, ids the calling code adds for one
+check (a configured image user), and the invoking user's own ids when they gave --allow-me (compose).
 
-A service's user. `user:` and hook users must be numeric `uid:gid` once the names in them are resolved on this
-host, and pass the id rules (check_user).
+A service's user. `user:` and hook users must be numeric `uid:gid` once dockscreen has resolved the names in
+them on this host, and pass the id rules (check_user).
 
 An image's user, from what was seen of the image (model.image.Inspected), for `docker run` and compose alike
 (check_image). The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use
 (see imageuser), and the id rules decide whether the image may have it. With no user chosen, in this order:
-- the config file names a user for the image's repository, and the image was pulled from there:
+- the config file names a user for the image's repository, and docker pulled the image from there:
   that user, whatever it is (sections.section_for, sections.effective);
 - the image would run as root (uid, gid or a supplementary gid of 0): the default user instead, the
   configured one or nobody, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
 
-Whatever is accepted is not left for the runtime to resolve a second time: it runs as `uid:gid`, the
-checked numbers, so a difference between our reading of the image's passwd and group files and the
+dockscreen does not leave an accepted user for the runtime to resolve a second time: it runs as `uid:gid`,
+the checked numbers, so a difference between our reading of the image's passwd and group files and the
 runtime's can at worst refuse a good image, never run root.
 
-The users a command line gives (check_user_options). Only their form is judged, since the command line is
-trusted, but in a form docker cannot read differently from what was checked. --as and --as-me are
+The users a command line gives (check_user_options). The rules judge only their form, since the command
+line is trusted, and require a form docker cannot read differently from the checked one. --as and --as-me are
 dockscreen's own: the rules resolve them to the `--user=uid:gid` docker gets (resolve_user_options).
 
-Names in a project. Names in `user:` and hook users are resolved to ids on this host (resolve_user_names), so
-the generated file never asks the image to resolve a name; check_user then checks the ids, and refuses a name
-that does not exist here.
+Names in a project. dockscreen resolves names in `user:` and hook users to ids on this host
+(resolve_user_names), so the generated file never asks the image to resolve a name; check_user then checks the
+ids, and refuses a name that does not exist here.
 
-What runs. A user dockscreen decided is pinned as numbers: `user: "uid:gid"` for compose (user_changes),
+What runs. dockscreen pins a user it decided as numbers: `user: "uid:gid"` for compose (user_changes),
 `--user=uid:gid` for `docker run` (user_amendments). The runtime reads neither passwd nor group for that, so
-it cannot resolve the image's user to anything but what was checked. For compose, the image that was checked
-is pinned too, by id unless the service builds it, with `pull_policy: never`, so that neither a pull nor a
+it cannot resolve the image's user to anything but the checked one. For compose, dockscreen pins the checked
+image too, by id unless the service builds it, with `pull_policy: never`, so that neither a pull nor a
 moved tag changes what runs; `docker run` starts the very container it checked. A compose service that does
-not start and sets no user gets the default user, in case it does get started: a mistake in working out what
-starts must fail safe. The default user that replaces root gets a HOME of its own (default_home), unless one
-was chosen for it.
+not start and sets no user gets the default user, in case something does start it: a mistake in working out
+what starts must fail safe. The default user that replaces root gets a HOME of its own (default_home), unless
+someone chose one for it.
 """
 
 import json
@@ -76,10 +77,10 @@ from dockscreen.policy.userdecision import UserDecision
 from dockscreen.util import commandline, ids
 
 # Current docker refuses larger ids. Older daemons wrap or clamp them, which can give uid 0 or the
-# caller's own uid, so they are refused here with or without host mounts.
+# invoking user's own uid, so the rules refuse them here with or without host mounts.
 MAX_ID = 2**31 - 1
 
-# What an id of the caller's is refused with, by the command: how it can be allowed there.
+# What an id of the invoking user's is refused with, by the command: how it can be allowed there.
 COMPOSE_HINT = f"pass {commandline.ALLOW_ME} to allow it"
 RUN_HINT = f"pass {commandline.AS_ME} to run as you"
 # How the command line chooses the user of a container, instead of its image.
@@ -95,17 +96,18 @@ RESOLVE_HELP = "write the ids (uid:gid) in the project to skip the lookup"
 
 class IdFacts(NamedTuple):
     """Value object for what the id rules (UserRules.id_problems) judge uids and gids by besides the settings
-    of the config file, which the policy holds: the caller's ids and whether they are allowed, this host's
-    accounts and subordinate ranges, and how the command allows the caller's ids.
+    of the config file, which the policy holds: the invoking user's ids and whether they are allowed, this
+    host's accounts and subordinate ranges, and how the command allows the invoking user's ids.
 
     Instances come from Screener.ids, which takes them from the Runtime of the command.
 
     Attributes:
-    - me: the caller's (uid, gid)
-    - allow_me: whether the caller's ids are allowed (--allow-me)
+    - me: the invoking user's (uid, gid)
+    - allow_me: whether the invoking user's ids are allowed (--allow-me)
     - local: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
-    - own_ids_hint: how the command allows the caller's ids, said after refusing them; empty if it has no way
+    - own_ids_hint: how the command allows the invoking user's ids, said after refusing them; empty if it has
+      no way
     """
     me: tuple
     allow_me: bool
@@ -119,13 +121,13 @@ class UserOption(NamedTuple):
     value, and for --as and --as-me the ids they stand for on this host.
 
     In the arguments of a command line read by userargs or runargs, --as and --as-me are kept as their
-    UserOption until they are resolved (resolve_user_options).
+    UserOption until the rules resolve them (resolve_user_options).
 
     Attributes:
     - flag: `--user`, `--as` or `--as-me`
     - value: what the option gives; "" for --as-me
-    - account: the (uid, gid) of the account --as names on this host, or the caller's for --as-me; None if
-      there is none, and for --user
+    - account: the (uid, gid) of the account --as names on this host, or the invoking user's for --as-me;
+      None if there is none, and for --user
     """
     flag: str
     value: str
@@ -158,7 +160,7 @@ class UserRules(RuleBase):
         """Tells whether value is an allowed id of kind ("uid" or "gid").
 
         Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
-        caller if allow_me is set.
+        invoking user if allow_me is set.
         """
         index = 0 if kind == "uid" else 1
         low, high = self.nobody_range
@@ -185,7 +187,7 @@ class UserRules(RuleBase):
             return f"{kind} {value} means \"no id\" to many tools"
         if value > MAX_ID:
             return f"{kind} {value} is above {MAX_ID}, the largest id docker accepts"
-        # before the account lookup, which finds the caller too but cannot give the --allow-me hint
+        # before the account lookup, which finds the invoking user too but cannot give the --allow-me hint
         if value == self.ids.me[0 if base == "uid" else 1]:
             hint = self.ids.own_ids_hint
             return f"{kind} {value} is yours" + (f"; {hint}" if hint else "")
@@ -296,7 +298,7 @@ class UserRules(RuleBase):
 
     def resolve_user_options(self, options: Iterable[UserOption]) -> dict[UserOption, Resolution]:
         """Returns what each --as and --as-me of options stands for: the ids of the account --as names, with a
-        notice, and the caller's own for --as-me. An --as without an account, which check_user_options
+        notice, and the invoking user's own for --as-me. An --as without an account, which check_user_options
         refuses, is left out; so is --user, which docker gets as given.
         """
         found = {}
@@ -312,7 +314,7 @@ class UserRules(RuleBase):
     def check_user_option(self, spec: str) -> list[Finding]:
         """Checks a user that --user or -u gives; returns a refusal unless it is numeric `uid:gid`.
 
-        A name would be resolved in the image, or for exec in the running container, which the image
+        Docker would resolve a name in the image, or for exec in the running container, which the image
         controls. A uid alone would leave the group to the image: docker takes it, and the supplementary
         groups, from the image's own passwd and group files, which can say root.
         """
@@ -360,7 +362,7 @@ class UserRules(RuleBase):
 
     def user_changes(self, project: Project, decisions: Mapping[str, UserDecision]) -> ProjectPatch:
         """Returns the patch that makes project the one to run, by service name: services that start
-        and set no user get the decided user (decisions), pinned to the image that was checked; those that do
+        and set no user get the decided user (decisions), pinned to the checked image; those that do
         not start get this policy's default user, with its default_home as HOME (the function default_home).
 
         Parameters:
@@ -422,7 +424,7 @@ def image_problem(name: str, decision: UserDecision, config_file: str | None = N
 
 
 def _not_a_name(kind: str, value: str) -> str:
-    """Returns the problem with a user or group (kind) value that is still a name once names are resolved.
+    """Returns the problem with a user or group (kind) value that is still a name after resolve_user_names.
 
     UserRules.resolve_user_names resolves every name that exists on this host, so this one does not.
     """
@@ -457,7 +459,7 @@ def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, 
 
 def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[Substitution]:
     """Returns the substitutions that pin a started service to what the decision of its image checked:
-    the user, as numbers, the image by id unless it is built, and pull_policy never.
+    the user, as numbers, the image by id unless the service builds it, and pull_policy never.
     """
     if decision.replaces_root:
         found = _user(name, service, decision.pinned_user, decision.home, decision.origin,
@@ -470,7 +472,7 @@ def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[
     # (root) was never decided: never pulling, and naming the image by id, close that.
     found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
     if decision.image.id and "build" not in service:
-        # ... even if the name is moved to another image
+        # ... even if someone moves the name to another image
         found.append(Substitution(name, "image", decision.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
     return found
 

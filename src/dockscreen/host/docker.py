@@ -246,7 +246,7 @@ def _first_file_of_tar(data: bytes) -> str | None:
     the archive cannot be read.
 
     The archive is the image's: anything but a regular file (a device, a link that was not followed) has no
-    text to read, and is taken as no file, which docker would not find names in either.
+    text to read, so this takes it as no file, which docker would not find names in either.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:

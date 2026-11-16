@@ -24,18 +24,18 @@ Every command dockscreen screens ends its output with the verdict, right before 
 
 Messages state the facts; with `--helpful` (or `--verbose`, or in `audit`) they continue with what you can do about it. Whatever dockscreen changes is said, with a cyan mark if it rarely matters (defaults added, names resolved to ids, images pinned) or a yellow one if it can alter how things run (an image's root user replaced by the default user, or a `cap_drop` or `security_opt` of your own extended).
 
-When refusing, dockscreen says why. `dockscreen compose harden` prints a compose override file that fixes what can be fixed.
+When refusing, dockscreen says why. `dockscreen compose harden` prints a compose override file with the fixes dockscreen can make.
 
 ## Users
 
 Containers don't run as root or as you unless you say so.
 
-- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice. Its `HOME` is set to `/tmp` (the configured `default_home`), which nobody can write to unlike root's home, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
+- An image that would run as root runs as nobody (the configured `default_user`) instead, with a notice. dockscreen sets its `HOME` to `/tmp` (the configured `default_home`), which nobody can write to unlike root's home, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
 - A project or an image may not pick root, an id of a local account, an id from `/etc/subuid` or `/etc/subgid`, or 65535 and 4294967295. That applies to the uid, the gid and supplementary groups.
 - With host mounts (bind mounts, devices, `volumes_from`, secrets, configs), the id must be in the nobody range (65530–65534 unless configured), the default user, a user configured for the image, or you with `--allow-me`.
 - To run services as yourself: `dockscreen --allow-me compose up`, with `user: "${UID}:${GID}"` on those services. dockscreen sets `UID` and `GID` to your real ids.
 - To give an image a user of its own, such as mariadb's 999, set `user` in its section of the config file, `[images."mariadb"]`. A service of that image may then also name 999 in `user:` itself, with mounts too. A `user` at the top level of the config file does the same for every service of every project: with your own ids there, that is `--allow-me` everywhere.
-- Names in `user:` and `--as` are resolved on this host, not in the image. A name unknown here is refused, and so is a uid without a group.
+- dockscreen resolves names in `user:` and `--as` on this host, not in the image. It refuses a name unknown here, and a uid without a group.
 
 The full rules are in [docs/design.md](docs/design.md#users-and-groups).
 
@@ -43,11 +43,11 @@ The full rules are in [docs/design.md](docs/design.md#users-and-groups).
 
 Before starting anything, dockscreen pulls or builds each image as `up` would, and decides its user as described under [Users](#users).
 
-An accepted image user is passed on as numbers (`user: "uid:gid"`, `docker run --user uid:gid`), never as the image's name for it. The runtime then reads nothing from the image's `/etc/passwd` or `/etc/group`, so a difference between how dockscreen and docker parse those files cannot give the container another identity. The price: the image's supplementary groups are not applied.
+dockscreen passes an accepted image user on as numbers (`user: "uid:gid"`, `docker run --user uid:gid`), never as the image's name for it. The runtime then reads nothing from the image's `/etc/passwd` or `/etc/group`, so a difference between how dockscreen and docker parse those files cannot give the container another identity. The price: docker does not apply the image's supplementary groups.
 
-A service whose image was looked at also gets `pull_policy: never` and, unless it is built from a Dockerfile, `image:` set to the checked image's id, in the generated file only. Something else retagging the image between the check and the run cannot change what starts. `docker compose ps` therefore shows the id instead of the name.
+A service whose image dockscreen looked at also gets `pull_policy: never` and, unless it is built from a Dockerfile, `image:` set to the checked image's id, in the generated file only. Something else retagging the image between the check and the run cannot change what starts. `docker compose ps` therefore shows the id instead of the name.
 
-Compose interpolates the files it reads, so the generated file is written as `docker compose config` printed it (a literal `$` is `$$`, which reads back as a literal `$`). Before anything is pulled or built, dockscreen asks compose for the config of that file and refuses unless it equals the config that was checked.
+Compose interpolates the files it reads, so dockscreen writes the generated file as `docker compose config` printed it (a literal `$` is `$$`, which reads back as a literal `$`). Before anything is pulled or built, dockscreen asks compose for the config of that file and refuses unless it equals the config it checked.
 
 ## Variables from your shell
 
@@ -98,7 +98,7 @@ When dockscreen refuses something the config file could allow (a bind mount outs
 
 An image section names a repository, without tag: it trusts the image's maintainer. It applies only to an image that docker records as pulled from that repository, and never to a service that builds its image, because anything can be tagged locally under any name. Before an image is pulled, its name is enough to pass the first checks; the check right before the run needs the proof, and refuses a service that only passed because of a section its image does not have.
 
-A `mount_dirs` entry that contains your home directory, a system directory, the config file or the docker socket gets a warning on every run. A project directory that contains one of them is refused, and the search for a compose file stops at your home directory and at the first directory that is not yours.
+A `mount_dirs` entry that contains your home directory, a system directory, the config file or the docker socket gets a warning on every run. dockscreen refuses a project directory that contains one of them, and stops the search for a compose file at your home directory and at the first directory that is not yours.
 
 ## Options
 
@@ -107,8 +107,8 @@ Before the subcommand, such as `dockscreen --allow-me compose up`:
 | Option | |
 |---|---|
 | `--allow-me` | containers may run as you: in `user:`, and as an image's own user. Compose only: docker's commands refuse it, and `run`, `audit` and `create` take `--as-me` instead |
-| `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. `--verbose` is taken by dockscreen, not passed on, so docker and compose stay quiet |
-| `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten; for `compose run` (`dockscreen --strict-screen compose run …`), in the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept it: create's container is judged when it starts, and bake judges the whole definition anyway. Refused before any other subcommand |
+| `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. dockscreen takes `--verbose` and does not pass it on, so docker and compose stay quiet |
+| `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten; for `compose run` (`dockscreen --strict-screen compose run …`), in the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept it: the policy judges create's container when it starts, and bake's whole definition anyway. dockscreen refuses it before any other subcommand |
 | `--skip-screening` | turns off all checks and defaults, and prints a warning each time |
 
 After `run` or `exec` (compose or docker, and `create` and `audit`), before the service, image or container:
@@ -119,19 +119,19 @@ After `run` or `exec` (compose or docker, and `create` and `audit`), before the 
 | `--as NAME` | a local user, resolved on this host |
 | `--as-me` | yourself |
 
-`up` takes none of these; `--as-me` before the subcommand is refused.
+`up` takes none of these; dockscreen refuses `--as-me` before the subcommand.
 
 ## Images
 
 - `dockscreen run` checks the image's user like this:
-  - the container is created, checked, then started;
+  - docker creates the container, dockscreen checks it, then docker starts it;
   - an image that would run as root runs as the default user unless you choose a user;
-  - an image user that the [rules](#users) refuse, with the container's mounts, is refused;
-  - a user the config file sets for the image's repository is used, as for compose;
-  - an accepted image user is passed to docker as `--user uid:gid` (the container is created a second time with it).
+  - dockscreen refuses an image user that the [rules](#users) refuse, with the container's mounts;
+  - a user the config file sets for the image's repository applies, as for compose;
+  - dockscreen passes an accepted image user to docker as `--user uid:gid` (it creates the container a second time with it).
 - `start` and `restart` refuse existing containers that would fail that check.
 - `create` gets the hardening defaults.
-- Remote daemons are refused, here and for `dockscreen compose`.
+- dockscreen refuses remote daemons, here and for `dockscreen compose`.
 
 Choosing a user (see [Options](#options)) skips the image check. To run an image that runs as you, choose the user with `--as-me`.
 
@@ -159,7 +159,7 @@ Images that start as root and drop privileges themselves, such as postgres or re
 
 To screen every `docker` command you type, put `bin/docker`, or a symlink named `docker` to `dockscreen`, ahead of the real docker on your `PATH`. dockscreen skips itself when it looks for the real docker.
 
-Only commands that go through the wrapper are checked. Scripts, IDEs and anything else that talks to the docker socket directly bypass it.
+dockscreen checks only commands that go through the wrapper. Scripts, IDEs and anything else that talks to the docker socket directly bypass it.
 
 ### Tools that need the real docker
 

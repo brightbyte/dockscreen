@@ -15,7 +15,7 @@ from dockscreen.policy.policy import Policy
 from dockscreen.policy.rules import projectrules, servicerules
 from dockscreen.util import messages
 
-# The caller is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
+# The invoking user is 4242:4343, and --allow-me is given unless a test says otherwise (see fakes.Accounts
 # for the rest of the host).
 OWN = "4242:4343"
 
@@ -158,7 +158,7 @@ def test_with_host_mounts_only_allowed_ids_pass(project):
                    "uid 5000 is not in the nobody range 65530-65534, and there are host mounts",
                    "gid 5000 is not in the nobody range")
     assert problems_for(project, user="65534:65534", **mounts) == []
-    assert problems_for(project, user=OWN, **mounts) == []  # --allow-me: the caller's own ids
+    assert problems_for(project, user=OWN, **mounts) == []  # --allow-me: the invoking user's own ids
     assert problems_for(project, user="5000:5000", secrets=["s"]) != []  # a secret is a mounted host file
 
 

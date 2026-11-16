@@ -7,10 +7,10 @@ simulate docker and compose, and these show that the checks hold up against the 
 
 Nothing starts. dockscreen runs the real docker through `handoff.py`, which passes every call on except
 the hand-off: the call that would start, stop or change containers, or write a build's output, once the
-checks have passed. That call is recorded and answered with success, so a scenario sees exactly what
+checks have passed. `handoff.py` records that call and answers it with success, so a scenario sees exactly what
 dockscreen would have run (the arguments, the compose file it generated), and can inspect the container
 it created for `docker run`. The tests pull a few small images, build the example app image, and create
-containers that are never started; all of these are removed after the run.
+containers that nothing starts; the tests remove all of these after the run.
 
 ## Running
 
@@ -27,8 +27,8 @@ pytest -m e2e -rs tests/e2e/test_e2e_docker_run.py
 pytest -m e2e -rs -k allow_me
 ```
 
-The tests find the real docker as the first `docker` on `PATH` that is not a script, so dockscreen's own
-`bin/docker` and an installed entry point are passed over. If that finds the wrong one, name it:
+The tests find the real docker as the first `docker` on `PATH` that is not a script, so they pass over
+dockscreen's own `bin/docker` and an installed entry point. If that finds the wrong one, name it:
 
 ```
 DOCKSCREEN_E2E_DOCKER=/usr/bin/docker pytest -m e2e -rs
@@ -46,7 +46,7 @@ which of those cannot be reached from here, and why.
 
 ## Preconditions
 
-Each test checks what it needs first and is skipped with a `PreconditionWarning` if the host lacks it.
+Each test checks its needs first, and skips itself with a `PreconditionWarning` if the host lacks one.
 
 All of them need:
 
@@ -110,7 +110,7 @@ may change them.
   prints and hands on, not how it gets there.
 - Check an assumption about the host with `require(condition, reason)` before relying on it, rather
   than letting the scenario fail.
-- Give the compose file as data (`given_service`, `given_compose`); it is written as JSON, which is YAML.
+- Give the compose file as data (`given_service`, `given_compose`); the helpers write it as JSON, which is YAML.
 - Prefer the existing projects and images. Pin new images to a tag, so their users don't change under
   the tests.
 - Give dockscreen's config as TOML through the Given steps; never rely on the developer's own config file.

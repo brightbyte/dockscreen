@@ -5,7 +5,7 @@ service's `build:` and the targets of `docker buildx bake`, which share what a b
 A build runs the project's Dockerfile, which is untrusted, on this host. Its RUN steps run in a sandbox,
 but the build's inputs reach into them: the context and named contexts (COPY reads them, so a
 context of / or ~ puts host files into an image the project controls), the network (the host's reaches
-services on its localhost), the SSH agent (which authenticates as the caller to anything the agent's keys
+services on its localhost), the SSH agent (which authenticates as the user to anything the agent's keys
 open), privileges and entitlements (a privileged RUN is root on the host), secrets, and outputs and caches
 (which write files on the host). The rules keep each of these inside the project or turn it off.
 """
@@ -60,9 +60,9 @@ class BuildRules(RuleBase):
         """Checks what a build reaches on this host, however it is defined; returns the problems: its
         context, Dockerfile and named contexts outside its directory, a network, and the SSH agent.
 
-        Only sources that are paths on this host are checked, not URLs or services, which are fetched rather
-        than read from this host. A Dockerfile outside the context is held to the directory too, so that
-        everything the build reads from this host is the project's.
+        This checks only sources that are paths on this host, not URLs or services, which the builder
+        fetches rather than reads from this host. It holds a Dockerfile outside the context to the directory
+        too, so that everything the build reads from this host is the project's.
 
         Parameters:
         - build: the build (ImageBuild)
@@ -129,8 +129,8 @@ class BuildRules(RuleBase):
         directory.
 
         A secret is readable by the RUN steps that mount it, which the project writes: a file outside the
-        project (~/.ssh/id_ed25519) or a variable of the caller's (`env=AWS_SECRET_ACCESS_KEY`) can be copied
-        into a layer or sent off.
+        project (~/.ssh/id_ed25519) or a variable of the user's (`env=AWS_SECRET_ACCESS_KEY`) is one the
+        project's RUN steps can copy into a layer or send off.
         """
         problems = []
         for entry in secrets:
@@ -146,7 +146,7 @@ class BuildRules(RuleBase):
 def _check_outputs(outputs: Sequence[Any], cache_to: Sequence[Any]) -> list[str]:
     """Returns the problems with a bake target's output and cache-to entries: any that write to the host.
 
-    A local or tar output writes the build result to the project's choice of `dest`, as the caller: over
+    A local or tar output writes the build result to the project's choice of `dest`, as the user: over
     ~/.bashrc, into ~/.ssh. Outputs that stay in the image store or go to a registry write nothing here.
     """
     problems = []

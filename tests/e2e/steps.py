@@ -352,6 +352,6 @@ def my_name() -> str:
 
 
 def me_user() -> str:
-    """Returns the caller's ids as `uid:gid`."""
+    """Returns the invoking user's ids as `uid:gid`."""
     uid, gid = my_ids()
     return f"{uid}:{gid}"

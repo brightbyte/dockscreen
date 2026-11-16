@@ -56,7 +56,7 @@ class NoSubordinate:
         return False
 
 
-# The caller: alice in Accounts, so that 1000 is someone else (daniel, a local account), whatever this
+# The invoking user: alice in Accounts, so that 1000 is someone else (daniel, a local account), whatever this
 # process runs as.
 ME = (4242, 4343)
 
@@ -65,7 +65,7 @@ def id_facts(me=ME, allow_me=False, local=None, subordinate=None):
     """userrules.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says
     otherwise.
 
-    The caller is ME.
+    The invoking user is ME.
     """
     return userrules.IdFacts(me, allow_me, local or Accounts(), subordinate or NoSubordinate())
 
@@ -75,7 +75,8 @@ class Accounts:
     `docker` (999), and nobody.
 
     By name there is also alice (4242:4343), who has no matching group. Her ids are not listed as local
-    accounts: tests use them as the caller's own, which the id rules must tell apart from someone else's.
+    accounts: tests use them as the invoking user's own, which the id rules must tell apart from someone
+    else's.
     """
 
     def user(self, name):
@@ -94,8 +95,8 @@ class Accounts:
 
 def make_runtime(**fields):
     """A Runtime with the default config, the accounts of Accounts, no subordinate ids and ME as the
-    caller, whatever this host has, and a FakeImages with no images as its docker; fields replace any of
-    that. The environment, home and directory are this process's own.
+    invoking user, whatever this host has, and a FakeImages with no images as its docker; fields replace any
+    of that. The environment, home and directory are this process's own.
     """
     from dockscreen.host.runtime import Runtime
     if "docker" not in fields:

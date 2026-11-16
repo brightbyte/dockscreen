@@ -1,8 +1,8 @@
 """This module defines the Config class, dockscreen's settings as the config files give them, and the record
 of which image section of them applies to an image (SectionMatch).
 
-The files are read by host.config; which sections apply to an image and a project is worked out by
-policy.sections.
+host.config reads the files; policy.sections works out which sections apply to an image and a
+project.
 """
 
 from types import MappingProxyType
@@ -29,7 +29,7 @@ class Config(NamedTuple):
     repository and per project directory. It holds the top-level settings, filled in with the defaults, the
     sections, and which settings a file set.
 
-    The caller's settings come from host.config.load_current; those that apply to one image and project come
+    The user's settings come from host.config.load_current; those that apply to one image and project come
     from policy.sections.effective, which have no sections of their own.
 
     Attributes:

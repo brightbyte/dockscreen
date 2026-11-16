@@ -9,7 +9,7 @@ Rules (docker_run, runargs, rules.userrules):
   with the container's mounts, a user from the config file for an image pulled from its repository;
 - whatever is decided is pinned: the container is created again with --user=uid:gid;
 - a user on the command line is trusted, but taken as numbers only, or as a name of this host (--as) or the
-  caller (--as-me, which also allows the caller's ids);
+  invoking user (--as-me, which also allows the invoking user's ids);
 - every container gets --cap-drop=ALL and --security-opt=no-new-privileges:true, which the command line can
   override;
 - a daemon that may not be this host's is refused.

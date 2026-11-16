@@ -15,7 +15,7 @@ def start_line(container, strict=False):
 
 
 def runtime(docker, settings=None):
-    """The Runtime of a `docker` command line run with docker and settings, by the caller fakes.ME."""
+    """The Runtime of a `docker` command line run with docker and settings, by the invoking user fakes.ME."""
     return make_runtime(docker=docker, settings=settings or Config())
 
 

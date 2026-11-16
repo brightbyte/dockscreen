@@ -5,7 +5,7 @@ A finding says one thing about one subject (a service, an image, a container, th
 command must not run, as the verdict it makes. Refused means the policy says no. Failed means screening could
 not get far enough to judge: docker, the image or the compose config was not there, or pulling or building
 failed. A refusal is about the project, image or command line; a failure is about getting to them, and may go
-away when retried.
+away when the user tries again.
 
 The verdict of a whole screening is the worst of its findings, and the exit status of an audit. Exit status 2
 is left for usage errors.

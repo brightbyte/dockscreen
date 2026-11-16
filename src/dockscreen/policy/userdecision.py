@@ -4,8 +4,8 @@ which Policy.check_image returns.
 Where that user comes from is an origin like any other value's: the image's own user (Origin.IMAGE),
 judged by the id rules; one the config file sets (Origin.CONFIG), for the image, the project or every one;
 the default user for an image that would run as root (replaces_root), the config file's or dockscreen's
-own; or one the command line chose, which the image does not decide. An image that could not be looked at
-has no user, and so no origin.
+own; or one the command line chose, which the image does not decide. An image that dockscreen could not
+look at has no user, and so no origin.
 """
 
 from typing import NamedTuple, Self
@@ -22,10 +22,10 @@ class UserDecision(NamedTuple):
     image, what was reported, the identity read from the image, and the user dockscreen pins.
 
     Instances come from Policy.check_image, through Screener.assess for one container and Screener.decide for
-    a project; failure gives one for an image that could not be looked at.
+    a project; failure gives one for an image that dockscreen could not look at.
 
     Attributes:
-    - origin: where the user comes from; None if the image could not be looked at
+    - origin: where the user comes from; None if dockscreen could not look at the image
     - image: the image (Image)
     - notices: what is worth a look but forbids nothing: an image section that does not apply, and why
     - findings: refusals and failures to look, which forbid running the container
@@ -48,7 +48,7 @@ class UserDecision(NamedTuple):
 
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:
-        """Returns the decision of an image that could not be looked at, for reason."""
+        """Returns the decision of an image that dockscreen could not look at, for reason."""
         return cls(None, image, (), (Finding.of(reason, Verdict.FAILED),))
 
     @property

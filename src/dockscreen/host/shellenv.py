@@ -1,17 +1,17 @@
 """This module provides functions for finding which variables of the shell end up in which service of a
 compose project, and for the ids dockscreen passes to compose.
 
-dockscreen passes UID and GID, the real ids of the caller, in the environment of the compose commands
-it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); values already in the environment
-are overridden, so that `${UID}` is the caller's real uid, the one --allow-me allows, and not the value of
-an inherited variable. Running as these ids is not allowed unless --allow-me is given (see
+dockscreen passes UID and GID, the real ids of the invoking user, in the environment of the compose commands
+it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); they override values already in
+the environment, so that `${UID}` is the invoking user's real uid, the one --allow-me allows, and not the
+value of an inherited variable. The policy refuses these ids unless the invoking user gives --allow-me (see
 rules.userrules): passing them only makes the project's intent readable.
 
-`environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so a
-pass-through is recognised by the value being the shell's own under the same name. That also catches
+`environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so this
+recognises a pass-through by the value being the shell's own under the same name. That also catches
 `FOO: bar` when the shell happens to have FOO=bar, and misses `X: ${FOO}`, which copies the value under
-another name. The variables dockscreen passes to compose (EXPORTED) are left out. The policy judges what
-was found (Policy.check_shell_env).
+another name. It leaves out the variables dockscreen passes to compose (EXPORTED). The policy judges the
+result (Policy.check_shell_env).
 """
 
 from collections.abc import Mapping
@@ -24,7 +24,7 @@ def exported(me: tuple[int, int]) -> dict[str, str]:
     """Returns the variables UID and GID for me.
 
     Parameters:
-    - me: the caller's real (uid, gid)
+    - me: the invoking user's real (uid, gid)
     """
     return dict(zip(EXPORTED, (str(i) for i in me)))
 

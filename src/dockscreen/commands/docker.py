@@ -92,7 +92,7 @@ class DockerCommand:
         if cmd is not None and cmd in GATES:
             return GATES[cmd](cli, self.runtime)
         if cli.strict:
-            # refused, not ignored: a caller who asks for strict screening must not get the lenient kind.
+            # refused, not ignored: a user who asks for strict screening must not get the lenient kind.
             # Every command above that does not support it refuses it itself.
             return Report.refusal(commandline.STRICT_REFUSAL).show()
         return _passthrough(argv, self.runtime)

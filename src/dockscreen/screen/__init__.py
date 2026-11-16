@@ -18,8 +18,8 @@ Not here: the rules (policy); which command screens what, and what happens with 
 Constraints:
 - No module here decides on its own whether something may run; every judgment comes from a Policy.
 - Screening returns what was found, and leaves printing it to the command.
-- docker is asked for facts, and to create what is to be looked at. Handing over to docker, to run what
-  passed, is the command's.
+- Modules here ask docker for facts, and have it create the containers they look at. Handing over to
+  docker, to run the targets that passed, is the command's.
 
 Dependencies: util, model, host and policy. Not commands.
 """

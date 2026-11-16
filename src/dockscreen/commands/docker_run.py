@@ -2,18 +2,18 @@
 
 `docker run` becomes create, inspect, check, start: the daemon parses the
 command line, and the policy looks at the container it produced, from an image
-that cannot change between check and start. The one image-derived fact checked
-is the identity the container would run as (see imageuser), unless the command
-line sets a user: the person typing the command is trusted, the image is not.
+that cannot change between check and start. The one image-derived fact the policy
+checks is the identity the container would run as (see imageuser), unless the command
+line sets a user: the user typing the command is trusted, the image is not.
 
-With no user chosen on the command line, the policy decides it from the image (rules.userrules). Whatever
-it accepts is not left for the runtime to resolve a second time: the container is re-created with
-`--user uid:gid` as the checked numbers.
+With no user chosen on the command line, the policy decides it from the image (rules.userrules).
+dockscreen does not leave a user it accepts for the runtime to resolve a second time: it creates the
+container again with `--user uid:gid` as the checked numbers.
 
 gate creates the container and has its user decided (containerscreening.create), and starts it if it may
 run; audit creates it in the same way, reports what `run` would do and removes it. The command line is
-trusted, so what it asks for that a project or an image may not is pointed out
-(containerscreening.command_line_findings), and fails the audit only with --strict-screen.
+trusted, so audit points out the requests it makes that a project or an image may not
+(containerscreening.command_line_findings), and they fail the audit only with --strict-screen.
 """
 
 
@@ -42,10 +42,10 @@ AUDIT_USAGE = ("usage: dockscreen [--strict-screen] audit [--brief] [docker run 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs `docker run` through the gate and returns the exit status.
 
-    The container starts only if the user it would run as is accepted, given as numbers where the image or the
-    config chose it. Otherwise the refusal is printed and the status is 1, or docker's own if it could not
-    create the container. Under --strict-screen, what the command line asks for that a project or an image
-    may not have is refused too.
+    The container starts only if the policy accepts the user it would run as, given as numbers where the
+    image or the config chose it. Otherwise this prints the refusal and the status is 1, or docker's own if
+    it could not create the container. Under --strict-screen, the policy also refuses the command line's
+    requests that a project or an image may not make.
 
     Parameters:
     - parent_cli: the docker command line, with `run` as its command
@@ -111,8 +111,8 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: C
     """Creates the container (containerscreening.create); returns it with the decision of its user, or the
     exit status if it may not start.
 
-    A container that would be refused is removed and the refusal printed. Any other decision is
-    returned, for the caller to re-create the container with the user as numbers if it pins one.
+    This removes a container that the policy refuses and prints the refusal. It returns any other
+    decision, for the calling code to re-create the container with the user as numbers if it pins one.
     """
     code, created = containerscreening.create(screener, parsed, changes, decided)
     if created is None:  # docker said why
@@ -129,10 +129,10 @@ def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: C
 def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Reports what `docker run` with the arguments of audit would do, without starting anything.
 
-    The container is created as `run` would create it, pulling the image if `run` would, and removed. Returns
-    the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the command line
-    asks for something a project or an image may not; 3 if the audit failed to get that far; 2 if args cannot
-    be read. --brief, before the image, prints only the verdict, in one line.
+    This creates the container as `run` would create it, pulling the image if `run` would, and removes it.
+    Returns the verdict as exit status: 1 if `run` would refuse, or with strict (--strict-screen) if the
+    command line asks for something a project or an image may not; 3 if the audit failed to get that far; 2
+    if args cannot be read. --brief, before the image, prints only the verdict, in one line.
 
     Parameters:
     - parent_cli: the docker command line, with `audit` as its command
@@ -235,9 +235,9 @@ def help(name: str) -> helptext.HelpTopic:
             f"dockscreen [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
             "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
             "Say what run would do with the same arguments, without starting anything",
-            (("The container is created as run would create it, pulling the image if run would, judged, and "
-              "removed. It also points out what the command line asks for that a compose project or an "
-              "image may not have; run allows that, because the command line is trusted."),
+            (("dockscreen creates the container as run would, pulling the image if run would, judges it, "
+              "and removes it. It also points out the command line's requests that a compose project or an "
+              "image may not make; run allows them, because the command line is trusted."),
              ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
               "image could not be pulled or created).")),
             (helptext.BRIEF,

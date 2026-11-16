@@ -9,7 +9,7 @@ Contents:
   (the defaults, the user decided), held as patches to apply
 - sections: which sections of the config files apply to an image and a project, and the settings
   that result
-- projectfixes: the fixes `harden` writes out for a project, for the person to adopt
+- projectfixes: the fixes `harden` writes out for a project, for the user to adopt
 - finding, notice, report: what the rules find, and the verdict of a whole screening
 
 Not here: getting the facts. A Policy judges what it is given; screen gets it through docker and builds

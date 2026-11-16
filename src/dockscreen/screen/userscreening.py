@@ -9,8 +9,8 @@ The user options need screening, though the command line is trusted, because the
 meaning. Docker resolves a name in `--user` in the image's own /etc/passwd, or for `exec` in
 the running container's, which the image or container can make say root; a uid alone gets its group and
 supplementary groups from those files. So `--user` must be numeric `uid:gid`, which means the same to
-docker as it did when checked. --as and --as-me are dockscreen's own, resolved on this host, and replaced
-by the `--user=uid:gid` they stand for before docker sees the arguments.
+docker as to the policy. --as and --as-me are dockscreen's own: it resolves them on this host, and
+replaces them by the `--user=uid:gid` they stand for before docker sees the arguments.
 """
 
 from collections.abc import Collection, Mapping, Sequence

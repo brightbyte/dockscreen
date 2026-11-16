@@ -1,7 +1,8 @@
 """This module implements `docker compose exec`, which replaces the users of --as and --as-me by ids and
 checks nothing.
 
-The command line is trusted, and the service's container was checked when it was created.
+The command line is trusted, and dockscreen checked the service's container when `up` or `create` made
+it.
 """
 
 from dockscreen.commands import helptext

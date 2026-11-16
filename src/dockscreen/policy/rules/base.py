@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 class JudgedService(Protocol):
     """Protocol of a service as Policy.check_service judges it, which a compose service (project.Service) and
     a container read back as one (container.Container) both implement. It gives the service's keys, the
-    directory they are judged against, whether it reaches host files, and where each key's value comes from.
+    directory the policy judges them against, whether it reaches host files, and where each key's value comes
+    from.
     """
 
     @property
@@ -26,9 +27,9 @@ class JudgedService(Protocol):
 
     @property
     def directory(self) -> str | None:
-        """Returns the directory its relative paths and bind mounts are judged against; None for a container
-        whose directory is not known, whose bind mounts only the configured mount_dirs allow. Only a compose
-        service has keys with relative paths (directory_of).
+        """Returns the directory the policy judges its relative paths and bind mounts against; None for a
+        container whose directory is not known, whose bind mounts only the configured mount_dirs allow. Only a
+        compose service has keys with relative paths (directory_of).
         """
         ...
 
@@ -107,8 +108,8 @@ def _roots_text(directory: str | None, extra_dirs: Sequence[str]) -> str:
 
 
 def directory_of(service: JudgedService) -> str:
-    """Returns the directory of a service that has keys with relative paths: a compose service. What a
-    container asks for is read back without any (container.as_service), so its directory may be unknown.
+    """Returns the directory of a service that has keys with relative paths: a compose service.
+    container.as_service reads a container's requests back without any, so its directory may be unknown.
     """
     assert service.directory is not None, "only a compose service has keys with relative paths"
     return service.directory

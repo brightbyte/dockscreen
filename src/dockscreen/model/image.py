@@ -1,15 +1,15 @@
 """This module defines classes for representing an image as screening knows it before and after looking at it,
 and functions for reading an image reference as docker does.
 
-An image is asked for by a name (`mariadb:11`, or `<project>-<service>` for one a compose service builds).
-Once it is there, the name stands for an image id, which is what dockscreen pins, so that a tag moved in
-between does not change what runs.
+A service or command line asks for an image by a name (`mariadb:11`, or `<project>-<service>` for one a
+compose service builds). Once it is there, the name stands for an image id, which is what dockscreen pins,
+so that a tag moved in between does not change what runs.
 
-The user an image runs as is looked at through a container created from it and never started
-(Inspected): docker shows the user it would run, and the image's passwd and group files can be read from
-it, which decide what that user's ids are (UserIdentity).
+dockscreen looks at the user an image runs as through a container it creates from the image and never
+starts (Inspected): docker shows the user it would run, and dockscreen can read the image's passwd and
+group files from it, which decide what that user's ids are (UserIdentity).
 
-A reference is read as docker reads it, normalised (split_reference): `mariadb` is
+dockscreen reads a reference as docker reads it, normalised (split_reference): `mariadb` is
 docker.io/library/mariadb.
 """
 
@@ -112,9 +112,9 @@ def split_reference(reference: str) -> tuple[str, str, str]:
     """Splits an image reference into (normalised repository, tag, digest) as docker reads it:
     `mariadb` is docker.io/library/mariadb. Tag and digest are empty if not given.
 
-    Image sections of the config file are matched by the normalised repository, so that every spelling
-    docker reads as the same repository finds the same section, and none that docker reads as another
-    (`evil.example/mariadb`, `someone/mariadb`) does.
+    dockscreen matches image sections of the config file by the normalised repository, so that every
+    spelling docker reads as the same repository finds the same section, and none that docker reads as
+    another (`evil.example/mariadb`, `someone/mariadb`) does.
 
     Raises ValueError for something that is not a reference.
     """

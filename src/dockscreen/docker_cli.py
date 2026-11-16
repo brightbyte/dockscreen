@@ -16,7 +16,7 @@ from dockscreen.util import commandline, messages
 def main(argv: Sequence[str] | None = None) -> int:
     """Runs `dockscreen` with argv and returns the exit status, unless docker replaces this process.
 
-    A config file that cannot be trusted or a missing docker is reported, with status 1.
+    This reports a config file that cannot be trusted, or a missing docker, with status 1.
 
     Parameters:
     - argv: the arguments after `dockscreen`; None for sys.argv[1:]

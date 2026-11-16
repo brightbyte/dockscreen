@@ -1,8 +1,9 @@
-"""This module provides functions for printing messages to the person running dockscreen, on stderr, and for
-escaping the untrusted text they quote, so that it cannot pass for anything else.
+"""This module provides functions for printing messages to the user, on stderr, and for escaping the
+untrusted text they quote, so that it cannot pass for anything else.
 
-Every message is one line that starts with PREFIX, so it can be told apart from what docker and compose
-print. Text is escaped with printable(), because much of it quotes the untrusted project or image.
+Every message is one line that starts with PREFIX, so the user can tell it apart from the output of
+docker and compose. printable() escapes the text, because much of it quotes the untrusted project or
+image.
 Only what docker printed about a failure (a reason's output) keeps its line breaks: it follows the
 message on lines indented past PREFIX, each escaped, so none of them can pass for a message.
 Command output that is meant as data (audit reports, harden patches, help) goes to stdout and is not

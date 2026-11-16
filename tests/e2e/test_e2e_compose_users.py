@@ -4,9 +4,9 @@ Rules (Policy.check_user, rules.userrules, hardening):
 - `user:` is `uid:gid`; a name is resolved on this host, never in the image, and a name unknown here is
   refused, as is a uid without a group;
 - the project may not choose root, an account or group of this host, a subordinate id, 65535 or
-  4294967295, an id above 2147483647, nor the caller's own ids without --allow-me;
+  4294967295, an id above 2147483647, nor the invoking user's own ids without --allow-me;
 - with host mounts only the nobody range, the default user, a configured user and, with --allow-me, the
-  caller are allowed;
+  invoking user are allowed;
 - the config file widens what is allowed (nobody_range, user, default_user), for every project or one;
 - the same goes for the users of hooks.
 """

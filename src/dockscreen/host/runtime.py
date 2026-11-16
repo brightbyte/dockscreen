@@ -2,7 +2,7 @@
 gathered once by the entry point.
 
 Everything below the entry points gets these as a Runtime, so none of it reads the config file, the
-caller's ids, the environment or the host's accounts on its own.
+invoking user's ids, the environment or the host's accounts on its own.
 """
 
 import os
@@ -19,19 +19,19 @@ from dockscreen.util import messages
 class Runtime(NamedTuple):
     """Snapshot of what dockscreen takes from the process it runs in, so that nothing below the entry points
     reads the environment, the config file or this host's accounts on its own. It holds the settings, the real
-    docker, the host's accounts, and the caller's ids, environment and directories.
+    docker, the host's accounts, and the invoking user's ids, environment and directories.
 
     Instances come from load_runtime, at the entry point.
 
     Attributes:
-    - settings: the caller's settings (Config)
+    - settings: the invoking user's settings (Config)
     - docker: the real docker (Docker)
     - accounts: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
-    - me: the caller's real (uid, gid)
+    - me: the invoking user's real (uid, gid)
     - env: the environment, which compose and docker inherit; it must not be changed in place, and
       with_docker_env gives a runtime whose docker passes more variables
-    - home: the caller's home directory
+    - home: the invoking user's home directory
     - cwd: the directory dockscreen was started in
     """
     settings: Config
@@ -45,7 +45,8 @@ class Runtime(NamedTuple):
 
     @property
     def config_file(self) -> str:
-        """Returns the path of the caller's own config file, which hints point to (config.user_file)."""
+        """Returns the path of the invoking user's own config file, which hints point to
+        (config.user_file)."""
         return config.user_file(self.env, self.home)
 
     def with_docker_env(self, variables: Mapping[str, str]) -> Self:
@@ -60,7 +61,7 @@ def load_runtime() -> Runtime:
     """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted,
     and DockerNotFound if there is no real docker.
 
-    Creates the caller's config file if it is missing (config.load_current). Warns about empty or
+    Creates the user's config file if it is missing (config.load_current). Warns about empty or
     relative PATH entries.
     """
     env = os.environ
@@ -107,8 +108,8 @@ def _real_docker(settings: Config, env: Mapping[str, str],
 def _find_docker(env: Mapping[str, str], wrappers: Collection[str]) -> str | None:
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
-    Empty and relative PATH entries (an empty one means the current directory) are skipped: a
-    project must not be able to supply the binary we run.
+    This skips empty and relative PATH entries (an empty one means the current directory): a project
+    must not be able to supply the binary dockscreen runs.
     """
     for directory in env.get("PATH", "").split(os.pathsep):
         if not os.path.isabs(directory):

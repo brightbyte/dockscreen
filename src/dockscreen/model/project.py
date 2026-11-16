@@ -1,14 +1,15 @@
 """This module defines the Project class, a view of a compose project as screening sees it, with classes for
 where it is, for the services in it, and for what was found of their images.
 
-Every path below the project directory can be bind-mounted, so the directory must be the one compose
+The project may bind mount every path below its directory, so the directory must be the one compose
 uses, and must not hold anything that may not be mounted (ProjectLocation).
 
 A project's definition is what `docker compose config` resolves from all its files: every compose file,
-`.env`, `include` and `extends`, with every profile active and env files not inlined. It is what compose
-runs, so it is what is judged; the files themselves are not. The project also has what its definition
-does not say: where it is, and where the values that dockscreen changed in its definition come from. What
-docker says about it besides (its daemon, the containers with its name, its images) is not part of it.
+`.env`, `include` and `extends`, with every profile active and env files not inlined. Compose runs the
+definition, so the policy judges it, and not the files themselves. The project also has what its
+definition does not say: where it is, and where the values that dockscreen changed in its definition
+come from. What docker says about it besides (its daemon, the containers with its name, its images) is
+not part of it.
 """
 
 from collections.abc import Mapping
@@ -29,7 +30,7 @@ class ProjectLocation(NamedTuple):
     Attributes:
     - directory: the project directory
     - foreign: whether it was found by walking up from the current directory into the home directory, or into
-      one the caller does not own
+      one the user does not own
     - redirects: the .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
     - sensitive: the sensitive paths it equals or contains ($HOME, /etc, ...)
     """

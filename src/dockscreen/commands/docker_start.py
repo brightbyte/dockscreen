@@ -1,12 +1,12 @@
 """This module implements `docker start` and `docker restart`, with the same check as `run`, on containers
 that already exist.
 
-An existing container cannot be rewritten, so one whose user dockscreen would replace (by the default
-user or a configured one) is refused like one whose user is not accepted, unless it already runs as
-that user.
+dockscreen cannot rewrite an existing container, so the policy refuses one whose user dockscreen would
+replace (by the default user or a configured one), like one whose user it does not accept, unless it
+already runs as that user.
 
-Docker does not record where a container was created, and its labels, which its image can set, prove
-nothing. So it is judged without a directory: no project section of the config file applies, and only
+Docker does not record where it created a container, and its labels, which its image can set, prove
+nothing. So the policy judges it without a directory: no project section of the config file applies, and only
 the configured mount_dirs allow bind mounts.
 """
 
@@ -43,11 +43,11 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
     """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
     command line cli names.
 
-    Each container is judged as containerscreening.check_existing judges it, and a remote daemon is refused.
+    containerscreening.check_existing judges each container, and this refuses a remote daemon.
 
     Parameters:
-    - cli: the docker command line, with `start` or `restart` as its command. With --strict-screen, what
-      the command line that created a container asked for is judged as a project's would be, and refused
+    - cli: the docker command line, with `start` or `restart` as its command. With --strict-screen, the policy
+      judges the requests of the command line that created a container as a project's, and refuses them
       (Policy.check_container)
     - runtime: the Runtime of the command
     """
@@ -76,6 +76,6 @@ def help(name: str) -> helptext.HelpTopic:
     return helptext.HelpTopic(
         "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
         "Start containers, denied if they would fail the check of run",
-        (("An existing container cannot be changed, so one whose image's user dockscreen would replace or "
-          "deny is denied."), helptext.VERDICT),
+        (("dockscreen cannot change an existing container, so it denies one whose image's user it would "
+          "replace or deny."), helptext.VERDICT),
         aliases=("dockscreen container start", "dockscreen start"))

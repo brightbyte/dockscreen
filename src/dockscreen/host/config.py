@@ -1,14 +1,14 @@
 """This module provides functions for reading dockscreen's settings (model.settings.Config) from TOML files
 that only the user or root can write.
 
-The files are trusted completely, so they are only read when nothing but their owner could have put
-their content there: the file and every directory above it must be owned by the user or root and not
-writable by group or others, as ssh's StrictModes requires. A project cannot configure dockscreen;
+dockscreen trusts the files completely, so it reads them only when nothing but their owner could have
+put their content there: the user or root must own the file and every directory above it, and group
+and others may not write them, as ssh's StrictModes requires. A project cannot configure dockscreen;
 environment variables do not configure it either.
 
 The user's file overrides the system file key by key, and [images] and [projects] section by section.
-A missing user file is created from config.template.toml, with every setting commented out, so that it
-shows the defaults without overriding the system file.
+dockscreen creates a missing user file from config.template.toml, with every setting commented out, so
+that it shows the defaults without overriding the system file.
 
 The settings can also be given per image (`[images."REPOSITORY"]`) and per project
 (`[projects."DIRECTORY"]`); which of them apply to a target is the policy's (policy.sections).
@@ -39,13 +39,13 @@ class ConfigError(Exception):
 def user_file(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
-    An XDG_CONFIG_HOME in env that is not absolute is ignored, as XDG says, in favour of home/.config: it
-    would be read relative to the current directory, which is the project's, so a project could supply the
-    config that is trusted completely.
+    This ignores an XDG_CONFIG_HOME in env that is not absolute, as XDG says, in favour of home/.config:
+    the system would read it relative to the current directory, which is the project's, so a project could
+    supply the config that dockscreen trusts completely.
 
     Parameters:
-    - env: the caller's environment
-    - home: the caller's home directory
+    - env: the user's environment
+    - home: the user's home directory
     """
     base = env.get("XDG_CONFIG_HOME", "")
     if not os.path.isabs(base):
@@ -54,7 +54,7 @@ def user_file(env: Mapping[str, str], home: str) -> str:
 
 
 def load_current(env: Mapping[str, str], home: str, uid: int) -> Config:
-    """Loads the configuration of the caller with this environment, home directory and uid.
+    """Loads the configuration of the user with this environment, home directory and uid.
 
     Creates the user's file if it is missing, with a notice. Raises ConfigError as _load does.
     """
@@ -69,7 +69,7 @@ def _create_user_file(path: str) -> bool:
 
     Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
     symlink in its place, is never touched: following a link someone placed there would write the
-    template to the link's target, as the caller.
+    template to the link's target, as the user.
     """
     template = importlib.resources.files("dockscreen.host").joinpath("config.template.toml").read_bytes()
     try:

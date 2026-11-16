@@ -1,8 +1,8 @@
 """This module implements `docker compose up` and the commands that create containers from the config as it
 does (`scale`, `watch`, `alpha`).
 
-The project is checked, its images are looked at, and compose runs the config that was checked
-(projectrun.check_and_run).
+The policy checks the project, dockscreen looks at its images, and compose runs the config the policy
+checked (projectrun.check_and_run).
 """
 
 from dockscreen.commands import helptext, projectrun
@@ -30,7 +30,8 @@ def help(name: str) -> helptext.HelpTopic:
     """Returns the help of the command name.
 
     Parameters:
-    - name: the command, as the dispatcher knows it: up, or watch, scale or alpha, which are screened as it is
+    - name: the command, as the dispatcher knows it: up, or watch, scale or alpha, which dockscreen screens
+      as it screens up
     """
     usage, summary = {
         "up": ("[OPTIONS] [SERVICE...]", "Create and start containers, after the project passes the audit"),

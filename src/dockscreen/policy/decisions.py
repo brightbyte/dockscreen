@@ -1,5 +1,5 @@
 """This module defines the Decisions class, a record of what a policy decided about the users of a compose
-project's services once their images were looked at, with the substitutions that follow from it
+project's services once dockscreen has looked at their images, with the substitutions that follow from it
 (Policy.user_changes), and the functions for describing both.
 """
 

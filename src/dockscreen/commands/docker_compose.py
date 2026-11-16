@@ -132,7 +132,7 @@ class ComposeCommand:
         if target is not None:
             return self.show_help(target)
         if cli.strict and not supports_strict(sub):
-            # refused, not ignored: a caller who asks for strict screening must not get the lenient kind
+            # refused, not ignored: a user who asks for strict screening must not get the lenient kind
             return Report.refusal(commandline.STRICT_REFUSAL).show()
         if sub is None:
             return self._passthrough(cli.argv)

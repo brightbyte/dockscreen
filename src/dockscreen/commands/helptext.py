@@ -3,7 +3,7 @@ out like docker's own.
 
 An overview lists dockscreen's options and the commands it audits or adds; a topic covers one command.
 Docker's (or compose's) own help for the same thing follows ours, except for commands only dockscreen
-has. Text is wrapped as the audit report is (messages.report_width): option and command descriptions
+has. The help wraps text as the audit report does (messages.report_width): option and command descriptions
 under their own column, as docker does.
 """
 
@@ -58,10 +58,10 @@ DEFAULTS = ("It adds --cap-drop=ALL and --security-opt=no-new-privileges:true be
             "can override them.")
 IMAGE_RULES = (
     "- an image that would run as root runs as the default user instead (nobody unless configured)",
-    ("- an image user that is an account of this host, or with mounts an id outside the nobody range, is "
-     "denied"),
-    "- a user the config file sets for the image, its project or every image is used",
-    "- the user is passed to docker as numbers, so the image's passwd file cannot change it",
+    ("- dockscreen denies an image user that is an account of this host, or with mounts an id outside the "
+     "nobody range"),
+    "- an image runs as the user the config file sets for it, its project or every image",
+    "- dockscreen passes the user to docker as numbers, so the image's passwd file cannot change it",
 )
 VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖ denied by audit, or " \
           "✘ audit failed."
@@ -85,7 +85,7 @@ SCREENED_COMPOSE = (
     "dockscreen audits the project first, and runs it from the config it checked:",
     "- bind mounts and files only from the project directory or the configured mount_dirs",
     "- no privileges: privileged, cap_add, devices, host namespaces, other security options",
-    "- users the project or its images choose must pass the id rules; images are pulled first",
+    "- users the project or its images choose must pass the id rules; dockscreen pulls images first",
     "- cap_drop: [ALL] and no-new-privileges added where they are missing",
     VERDICT,
 )

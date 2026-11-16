@@ -13,11 +13,11 @@ Goal: running as root is rare and strictly opt-in. Running as the calling user (
 | Compose file: `user:`, hook `user:`, `group_add`, including values from `.env` | no | full rules |
 | Image: its `USER` and its `/etc/passwd` and `/etc/group` | no | full rules |
 
-Environment variables no longer configure dockscreen: `DCOMPOSE_UID`, `DCOMPOSE_GID`, `DCOMPOSE_DIRS` and `DCOMPOSE_DOCKER` are removed. Whatever the config file says is considered safe.
+Environment variables no longer configure dockscreen: `DCOMPOSE_UID`, `DCOMPOSE_GID`, `DCOMPOSE_DIRS` and `DCOMPOSE_DOCKER` are removed. dockscreen considers the config file's settings safe.
 
 ## Terms
 
-- **me**: the real uid and gid of the caller.
+- **me**: the real uid and gid of the invoking user.
 - **nobody range**: ids that any image or project may use. Comes from the config file. Defaults to 65530–65534.
 - **default user**: what a service or container runs as when nothing chose a user and the image's own user is root. Comes from the config file. Defaults to nobody (65534:65534).
 - **image user**: a `uid:gid` from the config file for one image repository. It replaces the image's own user when nothing else chose a user.
@@ -33,13 +33,13 @@ Environment variables no longer configure dockscreen: `DCOMPOSE_UID`, `DCOMPOSE_
 | `name:group` | no | no | yes | account and group on this host |
 | `${UID}:${GID}` and other variables | n/a | n/a | yes | interpolated first, then treated as the resulting form |
 
-`--user` and `-u` take numbers only. Docker would resolve a name in the image, which decides what the name maps to, and resolving it on this host instead would silently give `--user` a different meaning from docker's. For `exec`, docker resolves the name in the running container's `/etc/passwd`, which the container may have rewritten. A name is refused, with a pointer to `--as`.
+`--user` and `-u` take numbers only. Docker would resolve a name in the image, which decides what the name maps to, and resolving it on this host instead would silently give `--user` a different meaning from docker's. For `exec`, docker resolves the name in the running container's `/etc/passwd`, which the container may have rewritten. dockscreen refuses a name, with a pointer to `--as`.
 
-Names in `--as` and `user:` are resolved on this host. A name that does not exist on this host is rejected, even if the image defines it (`user: node`, `user: postgres`). Docker never sees a name: whatever runs is pinned as numeric `uid:gid`. A numeric gid means docker adds no supplementary groups from the image.
+dockscreen resolves names in `--as` and `user:` on this host, and rejects a name that does not exist here, even if the image defines it (`user: node`, `user: postgres`). Docker never sees a name: dockscreen pins every user that runs as numeric `uid:gid`. A numeric gid means docker adds no supplementary groups from the image.
 
 ## Ids that are never accepted from an untrusted source
 
-They apply to the uid, the gid and the supplementary gids alike. They are rejected in `user:`, in hooks, in `group_add` and as the image's user, unless they are allowed ids:
+They apply to the uid, the gid and the supplementary gids alike. The policy rejects them in `user:`, in hooks, in `group_add` and as the image's user, unless they are allowed ids:
 
 - 0 (root);
 - an id that exists on this host as a user or group;
@@ -67,22 +67,22 @@ Hook `user:` follows step 1.
 - `--user`, `--as` or `--as-me` before the image: used as given, with no checks beyond the form.
 - Otherwise, the same as compose steps 2 and 3.
 
-An image whose own user is me is refused here: choose the user with `--as-me`, `--as` or `--user`. `--allow-me` is not supported for `docker run`, `create` and `audit`.
+dockscreen refuses an image whose own user is me here: choose the user with `--as-me`, `--as` or `--user`. `--allow-me` is not supported for `docker run`, `create` and `audit`.
 
 ### `docker start` and `restart`
 
-An existing container cannot be rewritten. A container whose user would be replaced or rejected under the rules above is rejected. It keeps the user it was created with, so choosing one on the command line is no way out: the message points to a `user` in the image's section of the config file instead, which applies to an image pulled from a registry.
+dockscreen cannot rewrite an existing container, so it rejects one whose user the rules above would replace or reject. It keeps the user it was created with, so choosing one on the command line is no way out: the message points to a `user` in the image's section of the config file instead, which applies to an image pulled from a registry.
 
 ### `docker exec` and `compose exec`
 
-`-u` takes numeric `uid:gid` only (see [Forms](#forms)), and is trusted. Without `-u`, the process runs as the container's own user. That user was checked at start if dockscreen created the container.
+`-u` takes numeric `uid:gid` only (see [Forms](#forms)), and is trusted. Without `-u`, the process runs as the container's own user. dockscreen checked that user at start if it created the container.
 
 ### Applying a user from the config file
 
 A setting names a repository: it trusts the image's maintainer, not one specific image. An image matches when all of these hold:
 
-- **The repository is the same after normalisation.** Registry and namespace are filled in: `mariadb` means `docker.io/library/mariadb`, and does not match `evil.example/mariadb` or `someone/mariadb`. The tag plays no part.
-- **The image was pulled from that repository.** Its `RepoDigests` (`docker image inspect`) contain an entry for the repository. A project, or an earlier run, can build or tag a local image under any name; such an image has no repo digest for that repository, and does not match.
+- **The repository is the same after normalisation.** dockscreen fills in registry and namespace: `mariadb` means `docker.io/library/mariadb`, and does not match `evil.example/mariadb` or `someone/mariadb`. The tag plays no part.
+- **Docker pulled the image from that repository.** Its `RepoDigests` (`docker image inspect`) contain an entry for the repository. A project, or an earlier run, can build or tag a local image under any name; such an image has no repo digest for that repository, and does not match.
 - **The service has no `build:`.**
 
 Images built locally have no repository to check against, so a setting cannot match them. Trusting one exact image, by digest or image id, is deferred.
@@ -94,11 +94,11 @@ Images built locally have no repository to check against, so a setting cannot ma
 | Flag | Effect |
 |---|---|
 | `--allow-me` | compose only: me becomes an allowed id: in `user:` (literal, name or `${UID}`), and as an image's own user. docker's commands refuse it |
-| `--as-me` | after `run` or `exec`: stands for `--user=` my `uid:gid`. Before a compose subcommand it is refused with a message pointing to `--allow-me`: deciding for every service at once makes no sense, and the services that should run as me say so with `user: "${UID}:${GID}"` |
+| `--as-me` | after `run` or `exec`: stands for `--user=` my `uid:gid`. Before a compose subcommand dockscreen refuses it with a message pointing to `--allow-me`: deciding for every service at once makes no sense, and the services that should run as me say so with `user: "${UID}:${GID}"` |
 
 ## Variables for compose files
 
-dockscreen passes `UID` and `GID` to compose as the real ids, always, overriding any values already in the environment. Projects can then write `user: "${UID}:${GID}"`. This is refused unless `--allow-me` is given.
+dockscreen passes `UID` and `GID` to compose as the real ids, always, overriding any values already in the environment. Projects can then write `user: "${UID}:${GID}"`, which the policy refuses unless the invoking user gives `--allow-me`.
 
 ## Config file
 
@@ -136,7 +136,7 @@ mount_dirs = ["/xchange/daniel/data"]
   - the docker socket.
 
   The check is a handful of `realpath` calls and prefix comparisons.
-- **Finding the project directory:** the upward search for a compose file stops at `$HOME` and at the first directory that I don't own. Finding the compose file in either of those is an error. A project directory that equals or contains one of the sensitive paths above is refused.
+- **Finding the project directory:** the upward search for a compose file stops at `$HOME` and at the first directory that I don't own. Finding the compose file in either of those is an error. dockscreen refuses a project directory that equals or contains one of the sensitive paths above.
 
 ## Notices
 
@@ -146,7 +146,7 @@ One line per service on every run, whenever something other than the service or 
 
 An image user from the config file, root included, gets no per-run notice. `audit` lists it.
 
-When the configured default user is root, a notice is printed on every run.
+When the configured default user is root, dockscreen prints a notice on every run.
 
 ## Open questions
 
