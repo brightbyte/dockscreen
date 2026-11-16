@@ -34,7 +34,7 @@ An image's user, from what was seen of the image (model.image.Inspected), for `d
 - the config file names a user for the image's repository, and docker pulled the image from there:
   that user, whatever it is (sections.section_for, sections.effective);
 - the image would run as root (uid, gid or a supplementary gid of 0): the default user instead, the
-  configured one or nobody, with a notice;
+  configured one or the nobody user, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
 
 dockscreen does not leave an accepted user for the runtime to resolve a second time: it runs as `uid:gid`,
@@ -178,7 +178,7 @@ class UserRules(RuleBase):
         - extra: further allowed (uid, gid) pairs
         """
         base = "uid" if kind == "uid" else "gid"
-        # first: allowed ids such as nobody usually exist on this host too
+        # first: allowed ids such as the nobody user's usually exist on this host too
         if self._allowed_id(base, value, extra):
             return None
         if value == 0:

@@ -54,7 +54,7 @@ All of them need:
 - `docker compose`
 - to run as a user other than root
 - no `/etc/dockscreen/config.toml`, which would change what dockscreen allows
-- a home directory that nobody else can write to, nor any directory above it: the tests write their
+- a home directory that no one else can write to, nor any directory above it: the tests write their
   config files below it, and dockscreen does not read a config file from a place others can write to
 
 Some need more:

@@ -186,7 +186,7 @@ def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, A
 
 def _strict_modes(path: str, uid: int, stat_path: Callable[[str], os.stat_result] = os.stat) -> None:
     """Checks, like ssh's StrictModes, that path and every directory above it are owned by uid or root
-    and writable by nobody else; raises ConfigError if not.
+    and writable by no one else; raises ConfigError if not.
 
     Otherwise anyone who could write there could configure dockscreen.
     """

@@ -156,7 +156,7 @@ def odd_image(docker: RealDocker, pulled: Callable[[str], str], me: tuple[int, i
 
 @pytest.fixture(scope="session")
 def config_root() -> Iterator[Path]:
-    """A directory for the tests' config files, which dockscreen trusts only where nobody else can write.
+    """A directory for the tests' config files, which dockscreen trusts only where no one else can write.
 
     /tmp is writable by everyone, so it is in your home directory.
     """

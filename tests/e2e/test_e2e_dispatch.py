@@ -1,4 +1,4 @@
-"""Feature: dockscreen stands in for docker, screens what it knows, and trusts only a config file nobody else
+"""Feature: dockscreen stands in for docker, screens what it knows, and trusts only a config file no one else
 could have written
 
 Rules (docker_cli, commands.docker, docker_compose, ComposeCommand, runtime, config):
@@ -9,7 +9,7 @@ Rules (docker_cli, commands.docker, docker_compose, ComposeCommand, runtime, con
 - the real docker is the one the config file names, or the first on PATH that is not dockscreen; empty
   and relative PATH entries are skipped and warned about, and without a docker dockscreen stops;
 - the config file is read only if it and every directory above it are owned by the user or root and
-  writable by nobody else; a file that cannot be trusted or read stops everything; a missing one is
+  writable by no one else; a file that cannot be trusted or read stops everything; a missing one is
   created, with every setting commented out.
 """
 

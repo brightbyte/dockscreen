@@ -94,7 +94,7 @@ A compose feature that Docker added after these rules (`models`, a new mount opt
 
 ## Users and ids
 
-Goal: a container that runs as root, as an account of this host, or as the invoking user, which owns files on the host, although nobody chose that. The rules are in `rules.userrules`, whose docstring explains each id the rules refuse.
+Goal: a container that runs as root, as an account of this host, or as the invoking user, which owns files on the host, although no one chose that. The rules are in `rules.userrules`, whose docstring explains each id the rules refuse.
 
 ### U1. An image that runs as root
 
@@ -161,7 +161,7 @@ Someone replaces the checked image `app:1` with a root image of the same name: b
 Interpolation, YAML anchors and merge keys, duplicate keys, a second `-f` on the command line, or a project file changed after the check.
 
 - Defense: dockscreen never parses the project. The policy checks compose's own `config` output; dockscreen writes it to a private file, has compose read it back and compares the two before pulling anything, and gives compose that file as its only one, with the project directory and name pinned (`projectscreening`).
-- Tests: unit `test_projectscreening.py::test_a_config_compose_would_read_differently_is_refused_and_not_run`, `::test_dollars_are_written_as_compose_printed_them`. No e2e test: nobody knows a way to make today's compose read its own output differently.
+- Tests: unit `test_projectscreening.py::test_a_config_compose_would_read_differently_is_refused_and_not_run`, `::test_dollars_are_written_as_compose_printed_them`. No e2e test: no one knows a way to make today's compose read its own output differently.
 
 ### T3. A service behind a profile
 
@@ -245,7 +245,7 @@ A mount source, image name or service name with a newline, ANSI escapes or bidi 
 
 dockscreen trusts the config file completely, and finds the real docker on `PATH`.
 
-- Defense: the config file and every directory above it must be owned by the user or root and writable by nobody else; dockscreen ignores a relative `XDG_CONFIG_HOME`; `docker` in the config must be absolute; dockscreen skips empty and relative `PATH` entries, with a warning (`host.config`, `host.runtime`). Strict modes cannot stop an agent that runs as the user; only a root-owned file in `/etc` does.
+- Defense: the config file and every directory above it must be owned by the user or root and writable by no one else; dockscreen ignores a relative `XDG_CONFIG_HOME`; `docker` in the config must be absolute; dockscreen skips empty and relative `PATH` entries, with a warning (`host.config`, `host.runtime`). Strict modes cannot stop an agent that runs as the user; only a root-owned file in `/etc` does.
 - Tests: unit `test_config.py::test_strict_modes_refuse_what_someone_else_could_have_written`, `test_runtime.py::test_empty_and_relative_entries_are_never_searched`; e2e `test_e2e_dispatch.py::test_a_config_file_others_could_have_written_stops_everything`, `::test_empty_and_relative_path_entries_are_skipped_and_warned_about`.
 
 ### D3. Another daemon

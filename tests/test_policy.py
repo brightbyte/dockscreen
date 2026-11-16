@@ -270,7 +270,7 @@ def test_the_configured_user_is_allowed_for_the_service_with_mounts(project):
     assert policy.check_user("900:900", mounted)  # refused: not in the nobody range, with mounts
     configured = Policy(id_facts(), configured_user=(900, 900))
     assert configured.check_user("900:900", mounted) == []
-    assert configured.check_user("900:65534", mounted) == []  # each id on its own, as for nobody
+    assert configured.check_user("900:65534", mounted) == []  # each id on its own, as for the nobody user
     assert configured.check_user("901:900", mounted) == [
         "user '901:900': uid 901 is not in the nobody range 65530-65534, and there are host mounts"]
 

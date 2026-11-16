@@ -33,7 +33,7 @@ Out of scope:
 3. Allowlist, fail closed. dockscreen refuses a compose key that is not on its lists, so a new Compose feature stays denied until someone reviews it. Any error while inspecting counts as a refusal.
 4. Decide users by ids, never by names. Docker resolves names in the image's own `/etc/passwd`, which the image controls; dockscreen resolves names on the host and hands docker numbers.
 5. Fix the problems that have a safe fix, refuse the rest. dockscreen adds missing hardening, runs an image that would run as root as the default user, and refuses everything else with a message that names the way forward.
-6. The config file is trusted completely, so dockscreen reads it only when nobody but its owner or root can have written it.
+6. The config file is trusted completely, so dockscreen reads it only when no one but its owner or root can have written it.
 
 ## Users and groups
 
@@ -287,7 +287,7 @@ The point is less to keep in mind: one way from a rule to the running thing. A c
 | Allowlist of keys | denylist of known-bad keys | false refusals until a new key is reviewed and listed |
 | Run compose from the generated config | re-run compose on the project's own files | compose runs as a child, not via `exec`, and shows a temporary file as its config |
 | Ask docker (`config`, `create` + `inspect`) | parse compose files and run options ourselves | an extra daemon round trip per image; depends on compose's output format |
-| The default user (nobody) for root images | refuse | images that start as root and drop privileges (postgres, redis) fail on their data directories until a user is configured or chosen |
+| The default user (`nobody`) for root images | refuse | images that start as root and drop privileges (postgres, redis) fail on their data directories until a user is configured or chosen |
 | With mounts, only allowed ids | accept any non-root image user | more images are refused; a `user` in the image's section and `--user` are the way out |
 | Names resolved on the host, never in the image | let docker resolve them | `user: postgres` means the host's postgres, or is refused, unlike plain compose |
 | A uid without a group is refused | derive the gid | a silent change in behaviour would be confusing |

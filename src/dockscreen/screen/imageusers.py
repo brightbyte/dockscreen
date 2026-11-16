@@ -7,7 +7,7 @@ An image is untrusted, so dockscreen cannot take its user from its name or its c
 acquires the images of the services that start, following the project's own pull policy so that automatic
 updates keep happening (pull, or build if the service builds it from a Dockerfile); they are then the
 images that run, since the policy pins them. It then looks at each image asked about through a container
-that docker creates from it and nobody starts (Screener.look).
+that docker creates from it and no one starts (Screener.look).
 """
 
 from collections.abc import Collection, Sequence
@@ -107,7 +107,7 @@ def _look(project: Project, name: str, screener: Screener) -> Inspected | Unseen
     service = config["services"][name]
     image = Image(image_name(config, name, service), built="build" in service)
     platform = ["--platform", service["platform"]] if service.get("platform") else []
-    # a container that nobody starts shows the user docker would run, and docker cp can copy its files out;
+    # a container that no one starts shows the user docker would run, and docker cp can copy its files out;
     # --pull=never: the image looked at must be the one acquired above, not a newer one pulled in between
     _, container = screener.docker.create(["--pull=never", *platform, "--", image.reference])
     if container is None:

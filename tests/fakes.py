@@ -72,7 +72,7 @@ def id_facts(me=ME, allow_me=False, local=None, subordinate=None):
 
 class Accounts:
     """hostusers.HostAccounts for a host with root, an account `daniel` with uid and gid 1000, the group
-    `docker` (999), and nobody.
+    `docker` (999), and `nobody`.
 
     By name there is also alice (4242:4343), who has no matching group. Her ids are not listed as local
     accounts: tests use them as the invoking user's own, which the id rules must tell apart from someone

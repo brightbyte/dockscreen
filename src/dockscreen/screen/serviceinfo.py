@@ -4,7 +4,7 @@ that sets no user would run it as (imageusers), and the images that an image sec
 names, with where they were pulled from, which shows whether the section applies (ServiceImages).
 
 A project file is untrusted, so dockscreen cannot just assume that a service without `user:` runs as root
-or as its image says; a service whose user the command line chose (`run -u`) runs as that one, so nobody
+or as its image says; a service whose user the command line chose (`run -u`) runs as that one, so no one
 asks its image. The rest is the policy's and decisions': the policy pins the users it accepts in the
 generated config only, with the image it checked, so that neither the files the project owns nor `harden`
 output turn off the project's updates; a service that does not start, or whose user the command line

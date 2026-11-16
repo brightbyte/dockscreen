@@ -57,7 +57,7 @@ USER_OPTIONS = (
 DEFAULTS = ("It adds --cap-drop=ALL and --security-opt=no-new-privileges:true before your options, which "
             "can override them.")
 IMAGE_RULES = (
-    "- an image that would run as root runs as the default user instead (nobody unless configured)",
+    "- an image that would run as root runs as the default user instead (the nobody user unless configured)",
     ("- dockscreen denies an image user that is an account of this host, or with mounts an id outside the "
      "nobody range"),
     "- an image runs as the user the config file sets for it, its project or every image",

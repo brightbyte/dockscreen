@@ -12,7 +12,7 @@ It is not done yet, for three reasons:
 - A script will not pass `--strict-screen` itself. To protect against untrusted scripts it would have to be a config setting (`strict_screen = true` in the config file), with the flag only for one-off use.
 - Strict `run` alone leaves gaps: `create`, `start` of a container created elsewhere, `exec --privileged`, `compose run -v` and `--cap-add`, `docker cp`. Each needs its own decision, or strict mode promises more than it does.
 
-Until then, dockscreen refuses `--strict-screen` for every subcommand except `audit`, so that nobody gets lenient screening while asking for strict.
+Until then, dockscreen refuses `--strict-screen` for every subcommand except `audit`, so that no one gets lenient screening while asking for strict.
 
 ## Image sections pinned by digest
 
@@ -26,4 +26,4 @@ Two sections could match one image: one for the repository (`mariadb`) and one f
 
 `dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`runtime.real_docker`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
 
-It is not done yet because nobody has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.
+It is not done yet because no one has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.
