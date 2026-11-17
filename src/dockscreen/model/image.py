@@ -6,7 +6,7 @@ compose service builds). Once it is there, the name stands for an image id, whic
 so that a tag moved in between does not change what runs.
 
 dockscreen looks at the user an image runs as through a container it creates from the image and never
-starts (Inspected): docker shows the user it would run, and dockscreen can read the image's passwd and
+starts (ImageInspection): docker shows the user it would run, and dockscreen can read the image's passwd and
 group files from it, which decide what that user's ids are (UserIdentity).
 
 dockscreen reads a reference as docker reads it, normalised (split_reference): `mariadb` is
@@ -32,16 +32,16 @@ class Image(NamedTuple):
     Attributes:
     - reference: the name, as the command line or the service gives it
     - id: the image id; None until it was looked at, or if it could not be
-    - built: whether a compose service builds it, so that no image section of the config file applies
+    - is_built: whether a compose service builds it, so that no image section of the config file applies
     - digests: its RepoDigests, where docker says it was pulled from
     """
     reference: str
     id: str | None = None
-    built: bool = False
+    is_built: bool = False
     digests: tuple[str, ...] = ()
 
 
-class Inspected(NamedTuple):
+class ImageInspection(NamedTuple):
     """Record of what was seen of an image through a container created from it and never started, for the
     policy to decide the user from. It holds the image, its own user, the container's user, whether the
     container reaches host files, whether its HOME was chosen, and the image's passwd and group files once
@@ -54,8 +54,8 @@ class Inspected(NamedTuple):
     - image_user: the user the image's config sets
     - user: the user the container was created with, as given to docker
     - reaches_host: whether the container, or the service it stands for, reaches host files
-    - home_chosen: whether the container's HOME differs from the image's, so the command line or an env file
-      chose it; never for a compose service, whose image is looked at without the service's environment
+    - is_home_chosen: whether the container's HOME differs from the image's, so the command line or an env
+      file chose it; never for a compose service, whose image is looked at without the service's environment
     - passwd, group: the image's passwd and group files as the container has them, "" for a missing one; None
       until they are read (with_user_files)
     """
@@ -63,7 +63,7 @@ class Inspected(NamedTuple):
     image_user: str
     user: str
     reaches_host: bool
-    home_chosen: bool = False
+    is_home_chosen: bool = False
     passwd: str | None = None
     group: str | None = None
 
@@ -79,7 +79,7 @@ class Inspected(NamedTuple):
         return self._replace(passwd=passwd, group=group)
 
 
-class Unseen(NamedTuple):
+class UnseenImage(NamedTuple):
     """Record of an image that could not be looked at, and why.
 
     Attributes:
@@ -123,10 +123,10 @@ def split_reference(reference: str) -> tuple[str, str, str]:
     last_slash = name.rfind("/")
     if ":" in name[last_slash + 1:]:  # a colon before the last slash is a registry's port, not a tag
         name, _, tag = name.rpartition(":")
-    first, slash, rest = name.partition("/")
+    first_part, slash, remainder = name.partition("/")
     # docker's rule: the first component is a registry only if it looks like a host
-    if slash and ("." in first or ":" in first or first == "localhost"):
-        domain, path = first, rest
+    if slash and ("." in first_part or ":" in first_part or first_part == "localhost"):
+        domain, path = first_part, remainder
     else:
         domain, path = DEFAULT_DOMAIN, name
     if domain in LEGACY_DOMAINS:
@@ -146,7 +146,7 @@ def repository(reference: str) -> str | None:
         return None
 
 
-def _shown(repository: str) -> str:
+def _display_name(repository: str) -> str:
     """Returns a normalised repository as people write it: `mariadb` for docker.io/library/mariadb."""
     for prefix in (f"{DEFAULT_DOMAIN}/library/", f"{DEFAULT_DOMAIN}/"):
         if repository.startswith(prefix):
@@ -154,16 +154,16 @@ def _shown(repository: str) -> str:
     return repository
 
 
-def section_hint(reference: str, config_file: str, built: bool = False) -> str | None:
+def section_hint(reference: str, config_file: str, is_built: bool = False) -> str | None:
     """Returns how config_file could give this image a user, or None for a built image or a reference
     that is not one.
 
     Parameters:
     - reference: the image name
     - config_file: the config file to name
-    - built: a compose service builds the image
+    - is_built: a compose service builds the image
     """
     name = repository(reference)
-    if built or not name:
+    if is_built or not name:
         return None
-    return f"set user under [images.\"{_shown(name)}\"] in {config_file}"
+    return f"set user under [images.\"{_display_name(name)}\"] in {config_file}"

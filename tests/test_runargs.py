@@ -11,7 +11,7 @@ ME = (4242, 4343)
 
 def refusals(parsed):
     """Returns the texts of the policy's refusals of the users that parsed gives."""
-    return fakes.texts(policy.Policy(fakes.id_facts()).check_user_options(parsed.users.given))
+    return fakes.texts(policy.Policy(fakes.id_facts()).check_user_options(parsed.users.options))
 
 
 def parse(*args):
@@ -20,13 +20,14 @@ def parse(*args):
 
 def screened(parsed):
     """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
-    return userscreening.screened(parsed, Screener(fakes.make_runtime()))
+    return userscreening.screen_user_options(parsed, Screener(fakes.make_runtime()))
 
 
 def test_plain_command():
     parsed = parse("-it", "--rm", "alpine", "sh", "-c", "echo hi")
     assert list(parsed.create_args) == ["-it", "--rm", "alpine", "sh", "-c", "echo hi"]
-    assert (parsed.image, list(parsed.command), parsed.detach) == ("alpine", ["sh", "-c", "echo hi"], False)
+    expected = ("alpine", ["sh", "-c", "echo hi"], False)
+    assert (parsed.image, list(parsed.command), parsed.should_detach) == expected
 
 
 def test_values_are_not_mistaken_for_the_image():
@@ -59,7 +60,7 @@ def test_attached_short_values():
 def test_flags_that_create_lacks_are_dropped(flags, detach, kept):
     parsed = parse(*flags, "img")
     assert list(parsed.create_args) == [*kept, "img"]
-    assert parsed.detach is detach
+    assert parsed.should_detach is detach
 
 
 def test_detach_keys_are_remembered():
@@ -70,7 +71,7 @@ def test_detach_keys_are_remembered():
 def test_flags_after_the_image_belong_to_the_command():
     parsed = parse("img", "ls", "-d", "--detach", "-a")
     assert list(parsed.create_args) == ["img", "ls", "-d", "--detach", "-a"]
-    assert not parsed.detach
+    assert not parsed.should_detach
 
 
 def test_double_dash_ends_the_options():
@@ -90,13 +91,13 @@ def test_as_me_means_the_callers_ids_and_resolves_nothing():
     assert list(parsed.create_args) == [UserOption("--as-me", "", ME), "img"]  # reading changes nothing
     report, parsed = screened(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
-    assert parsed.users.chosen and report.passed and report.notices == ()
+    assert parsed.users.is_user_chosen and report.has_passed and report.notices == ()
 
 
 def test_current_user_is_no_longer_a_flag_of_ours():
     parsed = parse("--current-user", "img")
     assert list(parsed.create_args) == ["--current-user", "img"]  # docker will reject it
-    assert not parsed.users.chosen
+    assert not parsed.users.is_user_chosen
 
 
 @pytest.mark.parametrize("flags", [["--as", "alice"], ["--as=alice"]])
@@ -106,15 +107,15 @@ def test_as_resolves_a_local_account_on_the_host(flags):
     report, parsed = screened(parsed)
     assert list(parsed.create_args) == ["--user=4242:4343", "img"]
     assert fakes.texts(report.notices) == ["Resolving user alice to uid 4242, gid 4343"]
-    assert parsed.users.chosen
+    assert parsed.users.is_user_chosen
 
 
 def test_an_as_that_was_not_resolved_cannot_reach_docker():
     parsed = runargs.parse(["--as", "ghost", "img"], ME, fakes.Accounts())
     report, resolved = screened(parsed)
-    assert not report.passed and resolved is None
+    assert not report.has_passed and resolved is None
     with pytest.raises(KeyError):
-        parsed.resolved({})  # nothing to stand for
+        parsed.with_users_resolved({})  # nothing to stand for
 
 
 def test_as_with_an_unknown_account_or_an_id_is_refused():
@@ -136,8 +137,8 @@ def test_as_with_an_unknown_account_or_an_id_is_refused():
 def test_user_ids_are_passed_on_as_typed_and_recorded(flags, user):
     report, parsed = screened(parse(*flags, "img"))
     assert list(parsed.create_args) == [*flags, "img"]
-    assert parsed.users.given == [UserOption("--user", user)]
-    assert parsed.users.chosen and report.notices == ()
+    assert parsed.users.options == [UserOption("--user", user)]
+    assert parsed.users.is_user_chosen and report.notices == ()
 
 
 @pytest.mark.parametrize("flags", [
@@ -156,9 +157,9 @@ def test_a_user_flag_in_a_cluster_stays_in_it():
 
 def test_user_flags_after_the_image_belong_to_the_command():
     parsed = parse("img", "id", "-u", "--as-me", "--as", "alice")
-    assert not parsed.users.chosen
+    assert not parsed.users.is_user_chosen
     assert list(parsed.create_args) == ["img", "id", "-u", "--as-me", "--as", "alice"]
 
 
 def test_no_user_flag_means_not_given():
-    assert not parse("-it", "img").users.chosen
+    assert not parse("-it", "img").users.is_user_chosen

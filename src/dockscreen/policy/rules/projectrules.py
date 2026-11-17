@@ -12,7 +12,7 @@ from dockscreen.model.project import ProjectLocation
 from dockscreen.policy import finding
 from dockscreen.policy.finding import Finding
 from dockscreen.policy.notice import Notice, NoticeSeverity
-from dockscreen.policy.rules.base import RuleBase, is_inside, is_inside_any, unknown_keys
+from dockscreen.policy.rules.base import RuleBase, is_inside, is_inside_any, unknown_key_problems
 
 TOP_LEVEL_KEYS = frozenset({"name", "services", "volumes", "networks", "secrets", "configs", "version"})
 VOLUME_KEYS = frozenset({"name", "driver", "driver_opts", "external", "labels"})
@@ -64,14 +64,14 @@ class ProjectRules(RuleBase):
         problems with its keys, scope, driver, driver_opts.
         """
         volume = volume or {}
-        problems = [*unknown_keys(volume, VOLUME_KEYS, "key"), *_check_scope(key, volume, project)]
+        problems = [*unknown_key_problems(volume, VOLUME_KEYS, "key"), *_check_scope(key, volume, project)]
         # A volume plugin is code on the host that mounts anything its code chooses: sshfs, a host path.
         driver = volume.get("driver")
         if driver not in (None, "", "local"):
             return [*problems, f"driver {driver!r} is not allowed"]
         return [*problems, *self._check_driver_opts(volume.get("driver_opts") or {}, directory)]
 
-    def _check_driver_opts(self, opts: dict[str, Any], directory: str) -> list[str]:
+    def _check_driver_opts(self, driver_opts: dict[str, Any], directory: str) -> list[str]:
         """Checks a local volume's driver_opts for a project in directory; returns the problems with mounts
         from the host or the network.
 
@@ -83,23 +83,24 @@ class ProjectRules(RuleBase):
         service that uses such a volume counts as reaching host files for the id rules
         (mounts.service_reaches_host).
         """
-        problems = unknown_keys(opts, VOLUME_DRIVER_OPTS, "driver_opts key", extensions=False)
-        kind = opts.get("type", "")
+        problems = unknown_key_problems(driver_opts, VOLUME_DRIVER_OPTS, "driver_opts key",
+                                        allows_extensions=False)
+        kind = driver_opts.get("type", "")
         if kind not in LOCAL_VOLUME_TYPES:
             return [*problems, f"driver_opts type {kind!r} is not allowed"]
-        device = opts.get("device", "")
+        device = driver_opts.get("device", "")
         if kind == "tmpfs":
             # The kernel ignores the filesystem type when the bind flag is set, so tmpfs with `bind`
             # mounts whatever `device` names.
-            if device not in ("", "tmpfs") or mount_flags(opts) & BIND_FLAGS:
+            if device not in ("", "tmpfs") or mount_flags(driver_opts) & BIND_FLAGS:
                 problems.append("a tmpfs volume must not name a device or bind")
             return problems
         if not device:
-            return [*problems, *(["bind needs a device"] if mount_flags(opts) & BIND_FLAGS else [])]
+            return [*problems, *(["bind needs a device"] if mount_flags(driver_opts) & BIND_FLAGS else [])]
         if not os.path.isabs(device):  # the daemon would resolve it against its own working directory
             return [*problems, f"device {device!r} must be an absolute path"]
         if not is_inside_any(device, self.mount_roots(directory)):
-            return [*problems, self._outside(f"device {device!r}", directory)]
+            return [*problems, self._outside_problem(f"device {device!r}", directory)]
         return problems
 
     def _check_network(self, key: str, network: dict[str, Any] | None, project: str | None) -> list[str]:
@@ -107,12 +108,13 @@ class ProjectRules(RuleBase):
         options (see NETWORK_DRIVERS and NETWORK_DRIVER_OPTS). A plugin IPAM driver is code on the host too.
         """
         network = network or {}
-        problems = [*unknown_keys(network, NETWORK_KEYS, "key"), *_check_scope(key, network, project)]
+        problems = [*unknown_key_problems(network, NETWORK_KEYS, "key"), *_check_scope(key, network, project)]
         if network.get("driver") not in NETWORK_DRIVERS:
             problems.append(f"driver {network.get('driver')!r} is not allowed")
-        problems += unknown_keys(network.get("driver_opts") or {}, NETWORK_DRIVER_OPTS, "driver_opts key")
+        problems += unknown_key_problems(network.get("driver_opts") or {}, NETWORK_DRIVER_OPTS,
+                                         "driver_opts key")
         ipam = network.get("ipam") or {}
-        problems += unknown_keys(ipam, IPAM_KEYS, "ipam key")
+        problems += unknown_key_problems(ipam, IPAM_KEYS, "ipam key")
         if ipam.get("driver") not in (None, "", "default"):
             problems.append(f"ipam driver {ipam['driver']!r} is not allowed")
         return problems
@@ -137,7 +139,7 @@ class ProjectRules(RuleBase):
         (AWS_SECRET_ACCESS_KEY). An external secret or config is one that someone else created.
         """
         item = item or {}
-        problems = unknown_keys(item, SECRET_KEYS, "key")
+        problems = unknown_key_problems(item, SECRET_KEYS, "key")
         if item.get("external"):
             problems.append("external resources are not allowed, they may belong to another project")
         if item.get("environment"):
@@ -148,11 +150,11 @@ class ProjectRules(RuleBase):
             problems.append(f"file {source!r} is outside {directory}")
         return problems
 
-    def check_daemon(self, remote: bool) -> list[Finding]:
+    def check_daemon(self, is_remote: bool) -> list[Finding]:
         """Checks the daemon a command talks to; returns a refusal if it may not be this host's own
         (remote), since the checks compare ids and paths with this host's.
         """
-        return [Finding(REMOTE_MESSAGE)] if remote else []
+        return [Finding(REMOTE_MESSAGE)] if is_remote else []
 
     def check_location(self, location: ProjectLocation) -> list[Finding]:
         """Checks where a project is; returns a refusal for each reason its directory cannot be the one the
@@ -167,30 +169,31 @@ class ProjectRules(RuleBase):
         - sensitive: a project directory that contains a sensitive path (/, $HOME, the config files, the
           docker socket) puts it inside the project.
         """
-        found = []
-        if location.foreign:
-            found.append(Finding(f"the nearest compose file is in {location.directory}, which is your home "
-                                 "directory or not yours; run from the project directory or use -f"))
-        found += [Finding(f"{path} sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR; set it in your shell or use "
-                          "-f, so the project directory can be verified") for path in location.redirects]
-        if location.sensitive:
-            found.append(Finding(f"the project directory {location.directory} contains "
-                                 f"{location.sensitive[0]}; move the compose file into a directory of its "
-                                 "own"))
-        return found
+        findings = []
+        if location.is_foreign:
+            findings.append(Finding(f"the nearest compose file is in {location.directory}, which is your "
+                                    "home directory or not yours; run from the project directory or use -f"))
+        findings += [Finding(f"{path} sets COMPOSE_FILE or COMPOSE_PATH_SEPARATOR; set it in your shell or "
+                             "use -f, so the project directory can be verified")
+                     for path in location.redirects]
+        if location.sensitive_paths:
+            findings.append(Finding(f"the project directory {location.directory} contains "
+                                    f"{location.sensitive_paths[0]}; move the compose file into a directory "
+                                    "of its own"))
+        return findings
 
-    def check_mount_dirs(self, sensitive: Mapping[str, Sequence[str]]) -> list[Notice]:
+    def check_mount_dirs(self, sensitive_paths: Mapping[str, Sequence[str]]) -> list[Notice]:
         """Checks the configured mount dirs, by the sensitive paths that each contains; returns a warning
         for each that contains one, since its containers can mount it.
 
         Parameters:
-        - sensitive: by mount dir, the sensitive paths it equals or contains
+        - sensitive_paths: by mount dir, the sensitive paths it equals or contains
         """
         return [Notice(f"the configured mount dir {directory} contains {paths[0]}, so containers can "
                        "mount it", NoticeSeverity.WARNING, help="narrow mount_dirs in the config file")
-                for directory, paths in sensitive.items() if paths]
+                for directory, paths in sensitive_paths.items() if paths]
 
-    def check_shell_env(self, copied: Mapping[str, Sequence[str]]) -> list[Notice]:
+    def check_shell_env(self, copied_variables: Mapping[str, Sequence[str]]) -> list[Notice]:
         """Checks what the project's services take from the shell; returns a warning for each service
         that takes any, without their values.
 
@@ -199,14 +202,15 @@ class ProjectRules(RuleBase):
         the project chooses which variables, and the user should know which leave.
 
         Parameters:
-        - copied: by service, the names of the variables it takes from the shell
+        - copied_variables: by service, the names of the variables it takes from the shell
         """
         return [Notice(f"environment variables taken from your shell: {', '.join(names)}",
                        NoticeSeverity.WARNING, f"service {name}",
                        "unset them in your shell, or give the project literal values, to keep them out")
-                for name, names in copied.items() if names]
+                for name, names in copied_variables.items() if names]
 
-    def check_project_name(self, name: str, directory: str, made_from: Iterable[str]) -> list[Finding]:
+    def check_project_name(self, name: str, directory: str,
+                           working_directories: Iterable[str]) -> list[Finding]:
         """Checks that the project in directory may use its name; returns a refusal if containers with that
         project name were made from another directory.
 
@@ -216,15 +220,17 @@ class ProjectRules(RuleBase):
         Parameters:
         - name: the project name
         - directory: the project directory
-        - made_from: the directories the containers with that project name say they were made from, "" for a
-          container that does not say, which cannot be shown to come from directory
+        - working_directories: the directories the containers with that project name say they were made from,
+          "" for a container that does not say, which cannot be shown to come from directory
         """
-        here = os.path.realpath(directory)
-        others = sorted({path for path in made_from if not path or os.path.realpath(path) != here})
-        if not others:
+        real_directory = os.path.realpath(directory)
+        other_directories = sorted({path for path in working_directories
+                                    if not path or os.path.realpath(path) != real_directory})
+        if not other_directories:
             return []
-        shown = ", ".join(repr(path) if path else "an unknown directory" for path in others)
-        return [Finding(f"project name {name!r} is used by containers made from {shown}, not from {here}",
+        shown_paths = ", ".join(repr(path) if path else "an unknown directory" for path in other_directories)
+        return [Finding(f"project name {name!r} is used by containers made from {shown_paths}, not from "
+                        f"{real_directory}",
                         help="pass -p NAME to choose the name yourself")]
 
 
@@ -242,7 +248,7 @@ def _check_scope(key: str, item: dict[str, Any], project: str | None) -> list[st
     if not project:
         return []
     # compose's own name for it; a name set in the file can be that of another project's volume or network
-    expected = f"{project}_{key}"
-    if item.get("name") != expected:
-        return [f"name {item.get('name')!r} is not the project-scoped {expected!r}"]
+    expected_name = f"{project}_{key}"
+    if item.get("name") != expected_name:
+        return [f"name {item.get('name')!r} is not the project-scoped {expected_name!r}"]
     return []

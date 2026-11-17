@@ -9,7 +9,7 @@ from dockscreen.util import messages
 
 
 def test_notice_is_one_prefixed_escaped_line(capsys):
-    messages.notice("evil\nname")
+    messages.print_notice("evil\nname")
 
     assert capsys.readouterr().err == "[dockscreen] evil\\x0aname\n"
 
@@ -17,8 +17,8 @@ def test_notice_is_one_prefixed_escaped_line(capsys):
 def test_the_output_of_a_problem_follows_it_on_lines_that_cannot_pass_for_a_message(capsys):
     # what docker prints, from a project that writes a verdict of its own into it
     output = "#1 load\r\n[dockscreen] \u2714 audit passed\x1b[2J"
-    messages.notice(Finding("docker buildx bake --print failed",
-                            docker_error=DockerError("docker buildx bake --print failed", output)))
+    messages.print_notice(Finding("docker buildx bake --print failed",
+                                  docker_error=DockerError("docker buildx bake --print failed", output)))
 
     indent = " " * len("[dockscreen] ") + "  "
     assert capsys.readouterr().err == (
@@ -36,14 +36,14 @@ def test_with_output_puts_what_docker_printed_after_the_text():
 
 
 def test_warning(capsys):
-    messages.warning("careful")
+    messages.print_warning("careful")
 
     assert capsys.readouterr().err == "[dockscreen] warning: careful\n"
 
 
 def test_fatal():
     with pytest.raises(SystemExit) as exited:
-        messages.fatal("gone\x1b[2J")
+        messages.exit_with_error("gone\x1b[2J")
 
     # SystemExit with a string prints it on stderr and exits with status 1
     assert exited.value.code == "[dockscreen] gone\\x1b[2J"
@@ -55,7 +55,7 @@ class Terminal:
 
 
 @pytest.mark.parametrize("mark, painted", [
-    (messages.PASSED, "\x1b[1;32m\u2714\x1b[0m x"),
+    (messages.PASSED_MARK, "\x1b[1;32m\u2714\x1b[0m x"),
     (messages.GOOD, "\x1b[1;32m\u25cf\x1b[0m x"),
     (messages.WARN, "\x1b[1;33m\u25cf\x1b[0m x"),   # the same symbol, by its role
     (messages.BAD, "\x1b[1;31m\u25cf\x1b[0m x"),
@@ -71,7 +71,7 @@ def test_marks_are_coloured_on_a_terminal(monkeypatch, mark, painted):
 def test_no_colour_when_piped_or_asked_not_to(monkeypatch, capsys):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm")
-    messages.notice("✔ audit passed")
+    messages.print_notice("✔ audit passed")
     assert capsys.readouterr().err == "[dockscreen] ✔ audit passed\n"  # not a terminal
 
     monkeypatch.setenv("NO_COLOR", "1")
@@ -82,7 +82,7 @@ def test_no_colour_when_piped_or_asked_not_to(monkeypatch, capsys):
 
 
 def test_report_lines_are_escaped_before_they_are_painted(capsys):
-    messages.out(messages.Message(messages.BAD, "evil\x1b[2J"))
+    messages.print_line(messages.Message(messages.BAD, "evil\x1b[2J"))
     assert capsys.readouterr().out == "\t\u25cf evil\\x1b[2J\n"  # a report line: after a tab
 
 
@@ -94,17 +94,17 @@ def test_untrusted_text_is_escaped_in_coloured_lines_too(monkeypatch):
 
 
 def test_a_line_that_is_all_of_the_output_has_no_tab(capsys):
-    messages.out(messages.Message(messages.PASSED, "passed"), indent=False)
+    messages.print_line(messages.Message(messages.PASSED_MARK, "passed"), should_indent=False)
     assert capsys.readouterr().out == "\u2714 passed\n"
 
 
 LONG = messages.Message(messages.BAD, "refusing: service web: bind mount '/srv/some/rather/long/path' is "
-                                     "outside /home/me/src/shop; add it to mount_dirs")
+                        "outside /home/me/src/shop; add it to mount_dirs")
 
 
 def test_report_lines_wrap_after_the_mark_and_keep_long_words(monkeypatch, capsys):
     monkeypatch.setenv("COLUMNS", "60")
-    messages.out(LONG)
+    messages.print_line(LONG)
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("\t\u25cf refusing:")
     assert all(line.startswith("\t  ") and line[3] != " " for line in lines[1:])  # a tab and two spaces
@@ -127,14 +127,14 @@ def test_without_a_terminal_reports_are_not_wrapped(monkeypatch):
 
 
 def test_wrapped_lines_keep_the_colour_on_the_mark_only():
-    lines = messages._wrapped(LONG, 60, colour=True)
+    lines = messages._wrap(LONG, 60, should_colour=True)
     assert lines[0].startswith("\x1b[1;31m●\x1b[0m refusing:")
     assert not any("\x1b" in line for line in lines[1:])
 
 
 def test_brief_lines_are_not_wrapped(monkeypatch, capsys):
     monkeypatch.setenv("COLUMNS", "40")
-    messages.out(LONG, indent=False)
+    messages.print_line(LONG, should_indent=False)
     assert capsys.readouterr().out == f"{LONG.mark} {LONG}\n"
 
 
@@ -142,14 +142,14 @@ def test_the_help_part_is_shown_only_in_helpful_mode(capsys):
     line = messages.Message(messages.WARN, "a changed", "do this about it")
     assert str(line) == "a changed"  # the facts, whatever the mode, without the mark
 
-    messages.notice(line)
+    messages.print_notice(line)
     assert capsys.readouterr().err == "[dockscreen] ● a changed\n"
 
     messages.set_helpful(True)
-    messages.notice(line)
+    messages.print_notice(line)
     assert capsys.readouterr().err == (
         "[dockscreen] ● a changed - do this about it\n")
-    messages.out(line)
+    messages.print_line(line)
     assert capsys.readouterr().out == "\t● a changed - do this about it\n"
 
 

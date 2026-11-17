@@ -13,7 +13,7 @@ NOBODY = "65534:65534"
 def harden(config, accounts):
     """(config hardened, the substitutions that hardened it)."""
     found = hardening.changes(config, Policy(id_facts(local=accounts)))
-    return found.applied_to_definition(config), found
+    return found.apply_to_definition(config), found
 
 
 def config(**service):
@@ -202,7 +202,7 @@ def test_nobody_passes_and_root_is_refused_once_resolved():
     root, _ = harden(config(user="root", **keep), Accounts())
     assert policy.check_project(project_of(nobody)) == []
     assert texts(policy.check_project(project_of(root))) == ["service web: user '0:0': uid 0 is root",
-                                                          "service web: user '0:0': gid 0 is root"]
+                                                             "service web: user '0:0': gid 0 is root"]
 
 
 def test_hook_users_are_resolved_too():

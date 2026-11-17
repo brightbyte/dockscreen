@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import NamedTuple, Self
 
 from dockscreen.host import hostusers
-from dockscreen.model.image import Inspected, Unseen
+from dockscreen.model.image import ImageInspection, UnseenImage
 from dockscreen.model.project import Project
 from dockscreen.policy import userdecisionview
 from dockscreen.policy.finding import Finding
@@ -30,54 +30,55 @@ class Decisions(NamedTuple):
     Attributes:
     - project: the project decided about
     - policy: the policy that decided, with image sections only where the images proved them
-    - decisions: by service, the UserDecision of each started service that sets no user; a dict that must not
+    - by_service: by service, the UserDecision of each started service that sets no user; a dict that must not
       be changed in place
     - report: the failures to acquire the images, and the services whose image must not run
     - changes: the patch that makes the project the one to run
-    - local: this host's accounts, for naming the users in describe
+    - local_accounts: this host's accounts, for naming the users in describe
     """
     project: Project
     policy: Policy
-    local: hostusers.HostAccounts
-    decisions: dict[str, UserDecision]
+    local_accounts: hostusers.HostAccounts
+    by_service: dict[str, UserDecision]
     report: Report
     changes: ProjectPatch
 
     @classmethod
-    def of(cls, project: Project, project_policy: Policy, local: hostusers.HostAccounts,
-           inspected: Mapping[str, Inspected | Unseen], failures: Sequence[Finding] = ()) -> Self:
+    def of(cls, project: Project, project_policy: Policy, local_accounts: hostusers.HostAccounts,
+           inspections: Mapping[str,
+                                ImageInspection | UnseenImage], failures: Sequence[Finding] = ()) -> Self:
         """Returns what project_policy decides about project from what was seen of its services' images, with
         the failures to acquire them.
 
         Parameters:
         - project: the project
         - project_policy: the policy that decides, with the image sections the images proved
-        - local: this host's accounts, for naming the users
-        - inspected: by service, what was seen of the images that decide the users
+        - local_accounts: this host's accounts, for naming the users
+        - inspections: by service, what was seen of the images that decide the users
         - failures: the failures to pull, build or list its services
         """
-        decided = project_policy.assess_images(inspected)
-        report = Report.of([*failures, *project_policy.check_images(inspected)])
-        return cls(project, project_policy, local, decided, report,
-                   project_policy.user_changes(project, decided))
+        decisions = project_policy.assess_images(inspections)
+        report = Report.of([*failures, *project_policy.check_images(inspections)])
+        return cls(project, project_policy, local_accounts, decisions, report,
+                   project_policy.user_changes(project, decisions))
 
     def describe(self) -> list[messages.HasMark]:
         """Describes, in one line per service that sets no user, what dockscreen does about it."""
         lines: list[messages.HasMark] = []
-        decisions = self.decisions
+        decisions = self.by_service
         for name in sorted(self.project.services_without_user):
             decision = decisions.get(name)
             if decision is None:
-                default = ids.format_user(self.policy.default_user)
+                default_user = ids.format_user(self.policy.default_user)
                 text = (f"no user set and not started by default; dockscreen runs it as the default user "
-                        f"({default}) if it is started")
+                        f"({default_user}) if it is started")
                 lines.append(Notice(text, NoticeSeverity.WARNING, f"service {name}", USER_HELP))
                 continue
-            outcome = userdecisionview.outcome(decision, self.local)
+            outcome = userdecisionview.outcome(decision, self.local_accounts)
             text = f"no user set; image {decision.image.reference} {outcome}"
-            if decision.accepted:
+            if decision.is_accepted:
                 lines.append(messages.Message(userdecisionview.dot(decision), f"service {name}: {text}"))
-            elif decision.replaces_root and not decision.refused:
+            elif decision.replaces_root and not decision.is_refused:
                 lines.append(Notice(text, NoticeSeverity.WARNING, f"service {name}", USER_HELP))
             for note in decision.notices:
                 lines.append(Notice(f"note: {note}", NoticeSeverity.WARNING, f"service {name}"))

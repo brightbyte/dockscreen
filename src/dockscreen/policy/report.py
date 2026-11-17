@@ -9,12 +9,13 @@ and to show it (Report.show, Report.show_screening).
 from collections.abc import Iterable
 from typing import NamedTuple, Self
 
-from dockscreen.policy.finding import Finding, Reportable, Verdict, failure_of
+from dockscreen.policy.finding import Finding, ReportEntry, Verdict, failure_of
 from dockscreen.policy.notice import Notice
 from dockscreen.util import messages
-from dockscreen.util.messages import printable
+from dockscreen.util.messages import printable_text
 
-ICONS = {Verdict.PASSED: messages.PASSED, Verdict.REFUSED: messages.REFUSED, Verdict.FAILED: messages.FAILED}
+ICONS = {Verdict.PASSED: messages.PASSED_MARK, Verdict.REFUSED: messages.REFUSED_MARK,
+         Verdict.FAILED: messages.FAILED_MARK}
 
 # The closing line, the same for an audit, for --brief and for the check before a command runs.
 LINES = {Verdict.PASSED: "audit passed", Verdict.REFUSED: "denied by audit", Verdict.FAILED: "audit failed"}
@@ -35,11 +36,11 @@ class Report(NamedTuple):
     findings: tuple[Finding, ...] = ()
 
     @classmethod
-    def of(cls, reported: Iterable[Reportable]) -> Self:
-        """Returns the report of reported, with the notices and the findings each in their order."""
-        reported = list(reported)
-        return cls(tuple(r for r in reported if isinstance(r, Notice)),
-                   tuple(r for r in reported if isinstance(r, Finding)))
+    def of(cls, entries: Iterable[ReportEntry]) -> Self:
+        """Returns the report of entries, with the notices and the findings each in their order."""
+        entries = list(entries)
+        return cls(tuple(r for r in entries if isinstance(r, Notice)),
+                   tuple(r for r in entries if isinstance(r, Finding)))
 
     @classmethod
     def refusal(cls, reason: object) -> Self:
@@ -57,9 +58,9 @@ class Report(NamedTuple):
             return cls((), (failure_of(reason),))
         return cls((), (Finding.of(reason, Verdict.FAILED),))
 
-    def with_more_findings(self, more: Iterable[Reportable]) -> Self:
+    def with_more_findings(self, extra_entries: Iterable[ReportEntry]) -> Self:
         """Returns a report of what this one holds, then more."""
-        return type(self).of([*self.notices, *self.findings, *more])
+        return type(self).of([*self.notices, *self.findings, *extra_entries])
 
     @property
     def verdict(self) -> Verdict:
@@ -69,7 +70,7 @@ class Report(NamedTuple):
         return max((f.verdict for f in self.findings), default=Verdict.PASSED)
 
     @property
-    def passed(self) -> bool:
+    def has_passed(self) -> bool:
         """Tells whether the command may run."""
         return not self.findings
 
@@ -79,35 +80,38 @@ class Report(NamedTuple):
         return messages.Message(ICONS[self.verdict], LINES[self.verdict])
 
     @property
-    def brief(self) -> messages.Message:
+    def brief_line(self) -> messages.Message:
         """Returns the verdict as one line, for --brief: the closing line, then the first reason if it did
         not pass and how many more there are.
         """
-        if self.passed:
+        if self.has_passed:
             return self.closing_line
-        first = printable(messages.with_output(self.findings[0]))
-        more = f" (+{len(self.findings) - 1} more)" if len(self.findings) > 1 else ""
-        return messages.Message(ICONS[self.verdict], f"{LINES[self.verdict]}: {first}{more}")
+        first_finding = printable_text(messages.with_output(self.findings[0]))
+        count_suffix = f" (+{len(self.findings) - 1} more)" if len(self.findings) > 1 else ""
+        return messages.Message(ICONS[self.verdict], f"{LINES[self.verdict]}: {first_finding}{count_suffix}")
 
-    def show(self, brief_mode: bool = False) -> int:
+    def show(self, should_be_brief: bool = False) -> int:
         """Prints the verdict and returns its int value as the exit status.
 
         Parameters:
-        - brief_mode: print one line on stdout (brief); otherwise each notice, each finding and the closing
-          line go to stderr
+        - should_be_brief: print one line on stdout (brief); otherwise each notice, each finding and the
+          closing line go to stderr
         """
-        if brief_mode:
-            messages.out(self.brief, indent=False)
+        if should_be_brief:
+            messages.print_line(self.brief_line, should_indent=False)
             return int(self.verdict)
         for notice in self.notices:
-            messages.notice(notice)
+            messages.print_notice(notice)
         for finding in self.findings:
-            flat = Finding.of(finding)  # the subject becomes part of the text
-            messages.notice(flat.with_text(f"refusing: {flat}") if self.verdict is Verdict.REFUSED else flat)
-        messages.notice(self.closing_line)
+            flat_finding = Finding.of(finding)  # the subject becomes part of the text
+            is_refusal = self.verdict is Verdict.REFUSED
+            if is_refusal:
+                flat_finding = flat_finding.with_text(f"refusing: {flat_finding}")
+            messages.print_notice(flat_finding)
+        messages.print_notice(self.closing_line)
         return int(self.verdict)
 
     def show_screening(self) -> bool:
         """Prints the verdict of screening a command and returns whether it may run."""
         self.show()
-        return self.passed
+        return self.has_passed

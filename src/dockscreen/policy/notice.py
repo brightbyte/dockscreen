@@ -50,7 +50,7 @@ class Notice:
         return MARKS[self.severity]
 
     @property
-    def shown(self) -> str:
+    def display_text(self) -> str:
         """Returns the subject and text, followed by the help if there is one and helpful mode is on."""
         return messages.with_help(str(self), self.help)
 
@@ -62,6 +62,6 @@ class Notice:
         """Returns a copy of this notice with help as what to do about it; None for nothing."""
         return replace(self, help=help)
 
-    def about(self, subject: str) -> "Notice":
+    def with_subject(self, subject: str) -> "Notice":
         """Returns a copy of this notice about subject, which its own subject becomes part of the text of."""
         return replace(self, text=str(self), subject=subject)

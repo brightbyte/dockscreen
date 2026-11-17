@@ -27,14 +27,14 @@ from types import MappingProxyType
 from typing import Self
 
 from dockscreen.model.container import Container
-from dockscreen.model.image import Inspected, Unseen
-from dockscreen.model.origin import TRUSTED, Origin
+from dockscreen.model.image import ImageInspection, UnseenImage
+from dockscreen.model.origin import TRUSTED_ORIGINS, Origin
 from dockscreen.model.project import Project
 from dockscreen.model.settings import NO_SECTION, Config, SectionMatch
 from dockscreen.policy import finding
-from dockscreen.policy.finding import Finding, Reportable
+from dockscreen.policy.finding import Finding, ReportEntry
 from dockscreen.policy.rules import userrules
-from dockscreen.policy.rules.base import JudgedService, unknown_keys
+from dockscreen.policy.rules.base import JudgedService, unknown_key_problems
 from dockscreen.policy.rules.buildrules import BuildRules
 from dockscreen.policy.rules.projectrules import TOP_LEVEL_KEYS, ProjectRules
 from dockscreen.policy.rules.servicerules import (
@@ -70,7 +70,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     """
     ids: userrules.IdFacts
     extra_dirs: tuple = ()  # mount_dirs from the config file
-    trust: frozenset[Origin] = TRUSTED
+    trust: frozenset[Origin] = TRUSTED_ORIGINS
     config_file: str | None = None
     security_opts: tuple = ()  # allowed besides no-new-privileges (security_opts in the config file)
     # The user the config file sets for this service (its image's or project's, or the top level's):
@@ -88,10 +88,10 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     @classmethod
     def for_settings(cls, settings: Config, ids: userrules.IdFacts,
                      config_file: str | None = None) -> Self:
-        """Returns the policy with these settings (sections.effective).
+        """Returns the policy with these settings (sections.effective_settings).
 
         Parameters:
-        - settings: the settings of the config file that apply (sections.effective)
+        - settings: the settings of the config file that apply (sections.effective_settings)
         - ids: what the id rules judge by besides the settings: the invoking user, with allow_me, and this
           host
         - config_file: named in hints, as in Policy
@@ -105,8 +105,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """Returns the policy to check the service called name with: per_service's for it, with this one's
         trust, else this one.
         """
-        found = self.per_service.get(name)
-        return found.with_trust(self.trust) if found else self
+        service_policy = self.per_service.get(name)
+        return service_policy.with_trust(self.trust) if service_policy else self
 
     def with_section(self, section: SectionMatch) -> Self:
         """Returns this policy for an image that section says which image section applies to."""
@@ -120,7 +120,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """Returns this policy with per_service as the policy of each service (for_service)."""
         return dataclasses.replace(self, per_service=MappingProxyType(dict(per_service)))
 
-    def check_project(self, project: Project) -> list[Reportable]:
+    def check_project(self, project: Project) -> list[ReportEntry]:
         """Checks a compose project's definition and where it is; returns what it finds, each about what it
         concerns.
 
@@ -129,14 +129,14 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         project's name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
-        top_level = [*unknown_keys(config, TOP_LEVEL_KEYS, "top-level key"),
-                     *self._check_service_names(config)]
-        problems: list[Reportable] = [*finding.refusals(top_level)]
+        top_level_problems = [*unknown_key_problems(config, TOP_LEVEL_KEYS, "top-level key"),
+                              *self._check_service_names(config)]
+        problems: list[ReportEntry] = [*finding.refusals(top_level_problems)]
         if not name:  # volumes and networks are scoped to the project by its name
             problems += finding.refusals(["config has no project name"])
         for service in project.services:
-            found = self.for_service(service.name).check_service(service)
-            problems += finding.about(found, f"service {service.name}")
+            service_findings = self.for_service(service.name).check_service(service)
+            problems += finding.with_subject(service_findings, f"service {service.name}")
         for key, volume in project.volumes.items():
             volume_problems = self._check_volume(key, volume, name, project.directory)
             problems += finding.refusals(volume_problems, f"volume {key}")
@@ -156,31 +156,33 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         problems = finding.refusals(self._check_service_names(project.definition))
         for service in project.services:
             if "build" in service.definition:
-                build = self._check_build(service.definition["build"], service)
-                problems += finding.refusals(build, f"service {service.name}")
+                build_problems = self._check_build(service.definition["build"], service)
+                problems += finding.refusals(build_problems, f"service {service.name}")
         # build secrets refer to these
         return problems + self._check_file_sources(project.definition, project.directory)
 
-    def check_service(self, service: JudgedService) -> list[Reportable]:
+    def check_service(self, service: JudgedService) -> list[ReportEntry]:
         """Checks one service; returns what it finds, empty if there is nothing.
 
         A problem is refused, or a warning if its value comes from an origin that this policy trusts
-        (finding.judged). This leaves a user from the image to the image decision.
+        (finding.judge). This leaves a user from the image to the image decision.
         """
-        keys = service.definition
-        found: list[Reportable] = []
-        for key in keys:
-            unknown = unknown_keys({key: keys[key]}, HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(), "key")
-            found += finding.judged(unknown, service.origin_of(key), self.trust)
+        definition = service.definition
+        findings: list[ReportEntry] = []
+        for key in definition:
+            unknown_problems = unknown_key_problems({key: definition[key]},
+                                                    HARMLESS_SERVICE_KEYS | SERVICE_CHECKS.keys(),
+                                                    "key")
+            findings += finding.judge(unknown_problems, service.origin_of(key), self.trust)
         for key, check in SERVICE_CHECKS.items():
             origin = service.origin_of(key)
             if key == "user" and origin is Origin.IMAGE:
                 continue
-            if key in REQUIRED_SERVICE_KEYS or key in keys:
-                found += finding.judged(check(self, keys.get(key), service), origin, self.trust)
-        return found
+            if key in REQUIRED_SERVICE_KEYS or key in definition:
+                findings += finding.judge(check(self, definition.get(key), service), origin, self.trust)
+        return findings
 
-    def check_container(self, container: Container) -> list[Reportable]:
+    def check_container(self, container: Container) -> list[ReportEntry]:
         """Checks what a container asks for as check_service would check a service that asked for the same
         (Container.definition); returns what it finds.
 
@@ -189,33 +191,34 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         """
         return self.check_service(container)
 
-    def check_images(self, inspected: Mapping[str, Inspected | Unseen]) -> list[Finding]:
+    def check_images(self, inspections: Mapping[str, ImageInspection | UnseenImage]) -> list[Finding]:
         """Checks the images that decide the users of a project's services, as they were looked at; returns
         one finding per service that must not run (image_problem).
 
         Parameters:
-        - inspected: by service, what was seen of the images (Inspected, or Unseen)
+        - inspections: by service, what was seen of the images (ImageInspection, or UnseenImage)
         """
         return [image_problem(name, decision, self.config_file)
-                for name, decision in self.assess_images(inspected).items() if decision.refused]
+                for name, decision in self.assess_images(inspections).items() if decision.is_refused]
 
-    def assess_images(self, inspected: Mapping[str, Inspected | Unseen]) -> dict[str, UserDecision]:
+    def assess_images(self, inspections: Mapping[str, ImageInspection | UnseenImage]
+                      ) -> dict[str, UserDecision]:
         """Decides the user of each service of a project whose image decides it, from its image as it was
         looked at, with the policy for that service (for_service); returns the UserDecisions by service.
 
         Parameters:
-        - inspected: by service, what was seen of the images (Inspected, or Unseen)
+        - inspections: by service, what was seen of the images (ImageInspection, or UnseenImage)
         """
-        found = {}
-        for name, image in inspected.items():
-            if isinstance(image, Unseen):
-                found[name] = UserDecision.failure(image.image, image.reason)
+        decisions = {}
+        for name, inspection in inspections.items():
+            if isinstance(inspection, UnseenImage):
+                decisions[name] = UserDecision.failure(inspection.image, inspection.reason)
             else:
                 service_policy = self.for_service(name)
-                found[name] = service_policy.check_image(image, Origin.IMAGE)
-        return found
+                decisions[name] = service_policy.check_image(inspection, Origin.IMAGE)
+        return decisions
 
 
 def _origin_of(settings: Config, key: str) -> Origin:
     """Returns where the setting called key comes from: the config file if one sets it, else dockscreen."""
-    return Origin.CONFIG if key in settings.configured else Origin.DOCKSCREEN
+    return Origin.CONFIG if key in settings.configured_keys else Origin.DOCKSCREEN

@@ -26,7 +26,7 @@ Exceptions:
 - report prints a verdict when a caller asks it to show itself (Report.show), where only the commands
   should print.
 - The rules on paths (rules.base.is_inside, and projectrules where it compares the directories of
-  containers), and sections.effective where it matches project sections, resolve paths with
+  containers), and sections.effective_settings where it matches project sections, resolve paths with
   os.path.realpath, which reads the file system itself rather than facts gathered by screen.
 
 Dependencies: util, model, and from host only hostusers and DockerError. Not screen or commands.

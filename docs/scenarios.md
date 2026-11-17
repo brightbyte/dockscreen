@@ -89,7 +89,7 @@ A `post_start` or `pre_stop` hook, or a `develop.watch` rule with `sync+exec`, r
 
 A compose feature that Docker added after these rules (`models`, a new mount option) may be a new way out.
 
-- Defense: an allowlist. Every structure has its own list of keys; the policy refuses an unknown key (`servicerules.HARMLESS_SERVICE_KEYS`, `base.unknown_keys`), except `x-` keys, which compose ignores, and not in `build`, where bake reads `x-bake`.
+- Defense: an allowlist. Every structure has its own list of keys; the policy refuses an unknown key (`servicerules.HARMLESS_SERVICE_KEYS`, `base.unknown_key_problems`), except `x-` keys, which compose ignores, and not in `build`, where bake reads `x-bake`.
 - Tests: unit `test_policy.py::test_unknown_service_key_is_refused_and_extension_keys_are_not`, `::test_unknown_keys_are_refused_in_nested_structures`; e2e `test_e2e_compose_services.py::test_keys_off_the_allow_list_are_refused_and_extension_fields_ignored`, `::test_a_service_that_uses_a_model_is_refused`.
 
 ## Users and ids
@@ -153,7 +153,7 @@ Goal: pass the checks with one thing and run another.
 
 Someone replaces the checked image `app:1` with a root image of the same name: by the project's `pull_policy: always`, a build, or anyone who can tag on this daemon.
 
-- Defense: the generated file names each looked-at image by id, with `pull_policy: never` (`userrules._pinned`); dockscreen looks at images with `--pull=never`, by the id of the container it made from them (`imageusers._look`, `Screener.look`). `docker run` starts the very container it checked.
+- Defense: the generated file names each looked-at image by id, with `pull_policy: never` (`userrules._pin`); dockscreen looks at images with `--pull=never`, by the id of the container it made from them (`imageusers._look`, `Screener.look`). `docker run` starts the very container it checked.
 - Tests: unit `test_serviceinfo.py::test_a_looked_at_image_is_pinned_by_id_so_a_moved_tag_cannot_change_what_runs`; e2e `test_e2e_compose_images.py::test_an_image_that_would_run_as_root_runs_as_the_default_user` (asserts the pin). No e2e test moves a tag.
 
 ### T2. Compose reads the files differently
@@ -238,7 +238,7 @@ A `macvlan` or `ipvlan` network puts the container on the host's LAN with an add
 
 A mount source, image name or service name with a newline, ANSI escapes or bidi overrides, to forge a "passed" line, hide a refusal, or inject keys into the `harden` override the user saves.
 
-- Defense: dockscreen escapes everything from a project or image before printing it (`messages.printable`); `harden` escapes comments and quotes names and keys (`compose_harden._render`).
+- Defense: dockscreen escapes everything from a project or image before printing it (`messages.printable_text`); `harden` escapes comments and quotes names and keys (`compose_harden._render`).
 - Tests: unit `test_text.py::test_refusal_output_cannot_forge_lines_or_move_the_cursor`, `::test_newline_in_untrusted_text_cannot_leave_the_patch_comment`, `::test_patch_quotes_unusual_keys`; e2e `test_e2e_escaping.py::test_a_mount_source_cannot_forge_a_verdict`, `::test_bidi_overrides_are_shown_as_text`.
 
 ### D2. The config, or the docker binary, from the project

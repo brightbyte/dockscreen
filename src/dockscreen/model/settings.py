@@ -30,7 +30,7 @@ class Config(NamedTuple):
     sections, and which settings a file set.
 
     The user's settings come from host.config.load_current; those that apply to one image and project come
-    from policy.sections.effective, which have no sections of their own.
+    from policy.sections.effective_settings, which have no sections of their own.
 
     Attributes:
     - user: the (uid, gid) an image runs as when nothing chose a user, or None
@@ -42,7 +42,7 @@ class Config(NamedTuple):
     - docker: the absolute path of the real docker, or None
     - images: the image sections, by normalised repository (ConfigSection)
     - projects: the project sections, by absolute directory (ConfigSection)
-    - configured: the names of the settings a config file sets; the others are defaults
+    - configured_keys: the names of the settings a config file sets; the others are defaults
     """
     user: tuple[int, int] | None = None
     default_user: tuple[int, int] = (65534, 65534)
@@ -53,7 +53,7 @@ class Config(NamedTuple):
     docker: str | None = None
     images: MappingProxyType = MappingProxyType({})
     projects: MappingProxyType = MappingProxyType({})
-    configured: frozenset = frozenset()
+    configured_keys: frozenset = frozenset()
 
 
 class SectionMatch(NamedTuple):

@@ -14,7 +14,7 @@ from collections.abc import Collection, Sequence
 from typing import Any
 
 from dockscreen.host.docker import Docker, DockerError
-from dockscreen.model.image import Image, Inspected, Unseen
+from dockscreen.model.image import Image, ImageInspection, UnseenImage
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.policy import finding
@@ -23,26 +23,28 @@ from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, messages
 
 
-def find(command: Sequence[str], project: Project, started: Collection[str], looked_at: Collection[str],
-         args: Sequence[str], screener: Screener) -> tuple[dict[str, Inspected | Unseen], list[Finding]]:
-    """Gets the images of the services in started as `up` would, and looks at those of the services in
-    looked_at, as far as the policy needs to decide what they may run as.
+def find(command: Sequence[str], project: Project, started_services: Collection[str],
+         services_to_look_at: Collection[str],
+         args: Sequence[str], screener: Screener) -> tuple[dict[str, ImageInspection | UnseenImage],
+                                                           list[Finding]]:
+    """Gets the images of the services in started_services as `up` would, and looks at those of the services
+    in services_to_look_at, as far as the policy needs to decide what they may run as.
 
-    Returns (what was seen of each image looked at, by service, Unseen for one that could not be looked at;
-    the failures to get the images), with nothing looked at if getting one failed.
+    Returns (what was seen of each image looked at, by service, UnseenImage for one that could not be looked
+    at; the failures to get the images), with nothing looked at if getting one failed.
 
     Parameters:
     - command: the compose command line (up to the subcommand) on the project's definition, as it will run
     - project: the project the services are in
-    - started: the services that start, whose images are got
-    - looked_at: the services whose images are looked at; each must be in started
+    - started_services: the services that start, whose images are got
+    - services_to_look_at: the services whose images are looked at; each must be in started_services
     - args: the arguments after the subcommand, which may carry --build or --pull
     - screener: the Screener to pull, build and look with
     """
-    failures = _acquire(command, project.definition, started, args, screener.docker)
+    failures = _acquire(command, project.definition, started_services, args, screener.docker)
     if failures:
         return {}, finding.failures(failures)
-    return {name: _look(project, name, screener) for name in sorted(looked_at)}, []
+    return {name: _look(project, name, screener) for name in sorted(services_to_look_at)}, []
 
 
 def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
@@ -57,33 +59,35 @@ def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> st
     return service.get("image") or f"{config.get('name', '')}-{name}"
 
 
-def _acquire(command: Sequence[str], config: dict[str, Any], started: Collection[str], args: Sequence[str],
+def _acquire(command: Sequence[str], config: dict[str, Any], started_services: Collection[str],
+             args: Sequence[str],
              docker: Docker) -> list[str]:
-    """Pulls and builds the images of the services in started that `up` would, by each service's pull policy
-    and args.
+    """Pulls and builds the images of the services in started_services that `up` would, by each service's pull
+    policy and args.
 
     Returns the failures, empty if everything was acquired.
     """
-    pull, build = [], []
-    override = commandline.option_value(args, "--pull")
-    for name in sorted(started):
+    services_to_pull, services_to_build = [], []
+    pull_override = commandline.option_value(args, "--pull")
+    for name in sorted(started_services):
         service = config["services"][name]
         image = image_name(config, name, service)
-        present = _image_exists(docker, image)
+        is_present = _image_exists(docker, image)
         if "build" in service:
-            wanted = service.get("pull_policy") == "build" or "--build" in args or not present
-            if wanted and "--no-build" not in args:
-                build.append(name)
+            is_build_wanted = service.get("pull_policy") == "build" or "--build" in args or not is_present
+            if is_build_wanted and "--no-build" not in args:
+                services_to_build.append(name)
             continue
-        policy = override or service.get("pull_policy") or "missing"
-        if policy == "never":
+        pull_policy = pull_override or service.get("pull_policy") or "missing"
+        if pull_policy == "never":
             continue
-        if policy in ("missing", "if_not_present"):
-            if not present:
-                pull.append(name)
+        if pull_policy in ("missing", "if_not_present"):
+            if not is_present:
+                services_to_pull.append(name)
         else:
-            pull.append(name)  # always, and the periodic ones: pulling each run never serves stale images
-    for subcommand, names in (("pull", pull), ("build", build)):
+            # always, and the periodic ones: pulling each run never serves stale images
+            services_to_pull.append(name)
+    for subcommand, names in (("pull", services_to_pull), ("build", services_to_build)):
         # `--`: the names are the project's; the policy refuses those that start with `-` as well
         if names and docker.run_child([*command, subcommand, "--", *names]) != 0:
             return [f"docker compose {subcommand} {' '.join(names)} failed"]
@@ -99,26 +103,26 @@ def _image_exists(docker: Docker, image: str) -> bool:
     return True
 
 
-def _look(project: Project, name: str, screener: Screener) -> Inspected | Unseen:
+def _look(project: Project, name: str, screener: Screener) -> ImageInspection | UnseenImage:
     """Looks at the image of the service called name, as far as the policy needs to decide what it may run
-    as (Screener.look), through a container created from it and removed again; Unseen if that fails.
+    as (Screener.look), through a container created from it and removed again; UnseenImage if that fails.
     """
     config = project.definition
     service = config["services"][name]
-    image = Image(image_name(config, name, service), built="build" in service)
+    image = Image(image_name(config, name, service), is_built="build" in service)
     platform = ["--platform", service["platform"]] if service.get("platform") else []
     # a container that no one starts shows the user docker would run, and docker cp can copy its files out;
     # --pull=never: the image looked at must be the one acquired above, not a newer one pulled in between
     _, container = screener.docker.create(["--pull=never", *platform, "--", image.reference])
     if container is None:
-        return Unseen(image, "the image is not available locally")
+        return UnseenImage(image, "the image is not available locally")
     try:
-        info = screener.docker.inspect_container(container)
-        inspected, _ = screener.look(project.directory, container, info, Origin.IMAGE,
-                                mounts=project.service(name).reaches_host, reference=image.reference,
-                                built=image.built)
-        return inspected
+        container_info = screener.docker.inspect_container(container)
+        inspection, _ = screener.look(project.directory, container, container_info, Origin.IMAGE,
+                                      has_mounts=project.service(name).reaches_host,
+                                      reference=image.reference, is_built=image.is_built)
+        return inspection
     except (DockerError, ValueError, KeyError) as e:
-        return Unseen(image, messages.with_output(e))
+        return UnseenImage(image, messages.with_output(e))
     finally:
         screener.docker.remove(container)

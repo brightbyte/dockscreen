@@ -4,8 +4,8 @@ import pytest
 from fakes import id_facts, project_of, texts
 
 from dockscreen.model.container import Container
-from dockscreen.model.image import Image, Inspected, Unseen
-from dockscreen.model.origin import STRICT, Origin
+from dockscreen.model.image import Image, ImageInspection, UnseenImage
+from dockscreen.model.origin import STRICT_ORIGINS, Origin
 from dockscreen.model.project import ProjectLocation
 from dockscreen.model.settings import Config
 from dockscreen.policy import policy
@@ -36,13 +36,13 @@ def service(**overrides):
     return {"user": OWN, "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"], **overrides}
 
 
-def context(project, extra_dirs=(), allow_me=True):
-    return policy.Policy(id_facts(allow_me=allow_me), tuple(str(d) for d in extra_dirs))
+def context(project, extra_dirs=(), is_me_allowed=True):
+    return policy.Policy(id_facts(is_me_allowed=is_me_allowed), tuple(str(d) for d in extra_dirs))
 
 
-def check(project, config, extra_dirs=(), allow_me=True):
+def check(project, config, extra_dirs=(), is_me_allowed=True):
     definition = project_of({"name": "proj", **config}, project)
-    return texts(context(project, extra_dirs, allow_me).check_project(definition))
+    return texts(context(project, extra_dirs, is_me_allowed).check_project(definition))
 
 
 def web(definition=None, project="/p"):
@@ -50,8 +50,8 @@ def web(definition=None, project="/p"):
     return project_of({"services": {"web": definition or {}}}, project).service("web")
 
 
-def problems_for(project, allow_me=True, **overrides):
-    return check(project, {"services": {"web": service(**overrides)}}, allow_me=allow_me)
+def problems_for(project, is_me_allowed=True, **overrides):
+    return check(project, {"services": {"web": service(**overrides)}}, is_me_allowed=is_me_allowed)
 
 
 def assert_refused(problems, *reasons):
@@ -148,7 +148,7 @@ def test_disallowed_users(project, user, reasons):
 
 
 def test_the_callers_own_ids_need_allow_me(project):
-    assert_refused(problems_for(project, allow_me=False, user=OWN),
+    assert_refused(problems_for(project, is_me_allowed=False, user=OWN),
                    "uid 4242 is yours; pass --allow-me", "gid 4343 is yours; pass --allow-me")
 
 
@@ -284,7 +284,7 @@ def test_security_opts_from_the_config_file_are_allowed_too(project):
 
 def test_a_mount_outside_says_how_the_config_file_can_allow_it(project):
     config_file = "/home/me/.config/dockscreen/config.toml"
-    policy = Policy(id_facts(allow_me=True), config_file=config_file)
+    policy = Policy(id_facts(is_me_allowed=True), config_file=config_file)
     assert policy._check_mounts([bind("/srv/data")], web(project=project)) == [
         (f"bind mount '/srv/data' is outside {project}; to allow it, add a directory that contains it to "
          f'mount_dirs under [projects."{project}"] in /home/me/.config/dockscreen/config.toml')]
@@ -422,7 +422,7 @@ def test_the_id_rules_for_host_mounts_apply_to_a_service_of_a_bind_volume(projec
 
     named = {"d": {"name": "proj_d"}}
     bound = {"d": {"name": "proj_d", "driver_opts": {"type": "none", "o": "bind",
-                                                      "device": str(project / "data")}}}
+                                                     "device": str(project / "data")}}}
     assert check_user(named) == []  # nothing on the host is owned by 5000
     assert check_user(bound)  # with the project's files in reach, it is refused like any bind mount
 
@@ -542,7 +542,8 @@ def test_a_containers_user_is_judged_only_when_the_command_line_chose_it():
 
 def test_what_a_containers_command_line_asks_for_is_refused_only_where_it_is_not_trusted():
     found = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, Privileged=True)
-    strict = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, trust=STRICT, Privileged=True)
+    strict = check_container(user="0:0", user_origin=Origin.COMMAND_LINE, trust=STRICT_ORIGINS,
+                             Privileged=True)
 
     assert {(type(f), f.severity) for f in found} == {(Notice, NoticeSeverity.WARNING)}
     assert {(type(f), f.verdict) for f in strict} == {(Finding, Verdict.REFUSED)}
@@ -572,8 +573,8 @@ def test_a_daemon_that_may_not_be_this_hosts_is_refused():
 def test_a_project_directory_is_refused_for_each_reason_it_cannot_be_trusted():
     assert policy.Policy(id_facts()).check_location(ProjectLocation("/p")) == []
 
-    location = ProjectLocation("/home/me", foreign=True, redirects=("/home/me/.env",),
-                               sensitive=("/home/me",))
+    location = ProjectLocation("/home/me", is_foreign=True, redirects=("/home/me/.env",),
+                               sensitive_paths=("/home/me",))
     found = policy.Policy(id_facts()).check_location(location)
 
     assert [f.verdict for f in found] == [Verdict.REFUSED] * 3
@@ -595,7 +596,7 @@ def test_what_services_take_from_the_shell_is_pointed_out_by_name_per_service():
 
     assert [(f.subject, f.severity) for f in found] == [("service db", NoticeSeverity.WARNING)] + [
         ("service web", NoticeSeverity.WARNING)]
-    assert found[1].shown == "service web: environment variables taken from your shell: A, TOKEN"
+    assert found[1].display_text == "service web: environment variables taken from your shell: A, TOKEN"
 
 
 @pytest.mark.parametrize("spec", ["1000:1000", "0:0", "65534:65534", "1000:0"])
@@ -633,7 +634,7 @@ PASSWD = "root:x:0:0::/root:/bin/sh\napp:x:100000:100001::/home/app:/bin/sh\n"
 
 def inspected(user, mounts=False):
     """An image whose own user is user, looked at through a container created with it, files read."""
-    return Inspected(Image("app:1", "sha256:1"), user, user, mounts).with_user_files(PASSWD, "")
+    return ImageInspection(Image("app:1", "sha256:1"), user, user, mounts).with_user_files(PASSWD, "")
 
 
 @pytest.mark.parametrize("user, origin, root, runs_as", [
@@ -643,18 +644,18 @@ def inspected(user, mounts=False):
 def test_an_images_own_user_is_judged_from_its_files_without_docker(user, origin, root, runs_as):
     found = policy.Policy(id_facts()).check_image(inspected(user), Origin.IMAGE)
 
-    assert (found.origin, found.replaces_root, found.user, found.refused) == (origin, root, runs_as, False)
+    assert (found.origin, found.replaces_root, found.user, found.is_refused) == (origin, root, runs_as, False)
 
 
 def test_the_default_user_the_config_file_sets_comes_from_it():
-    settings = Config(default_user=(9, 9), configured=frozenset({"default_user"}))
+    settings = Config(default_user=(9, 9), configured_keys=frozenset({"default_user"}))
     found = policy.Policy.for_settings(settings, id_facts()).check_image(inspected("root"), Origin.IMAGE)
     assert (found.origin, found.replaces_root, found.user) == (Origin.CONFIG, True, (9, 9))
 
 
 def test_an_image_user_the_id_rules_refuse_with_host_mounts_is_refused():
     found = policy.Policy(id_facts()).check_image(inspected("app", mounts=True), Origin.IMAGE)
-    assert found.refused and str(found.findings[0]).startswith("the image's uid 100000")
+    assert found.is_refused and str(found.findings[0]).startswith("the image's uid 100000")
 
 
 def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configured():
@@ -668,12 +669,12 @@ def test_the_files_are_needed_only_for_the_images_own_user_when_none_is_configur
 
 
 def test_a_projects_images_are_judged_as_they_were_looked_at(project):
-    looked_at = {"web": inspected("app", mounts=True), "db": Unseen(Image("db:1"), "not here")}
+    looked_at = {"web": inspected("app", mounts=True), "db": UnseenImage(Image("db:1"), "not here")}
 
     found = context(project).check_images(looked_at)
 
     assert [(f.subject, f.verdict) for f in found] == [("service web", Verdict.REFUSED),
-                                                    ("service db", Verdict.FAILED)]
+                                                       ("service db", Verdict.FAILED)]
     assert str(found[1]) == "service db: image db:1: not here"
 
 

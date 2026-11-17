@@ -24,7 +24,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `docker._first_file_of_tar`: `docker cp` sending something that is not a tar archive.
 - `Policy.check_project`: a config without a project name; compose always gives one. `_check_scope`
   without a project name, likewise.
-- `policy.unknown_keys` for top-level keys: compose refuses unknown top-level keys itself, and leaves
+- `base.unknown_key_problems` for top-level keys: compose refuses unknown top-level keys itself, and leaves
   out the ones it knows but does not use (`models`).
 - `Policy.check_cap_drop` and `check_security_opt` refusing a missing ALL or no-new-privileges, and
   `compose_harden._fix_config` adding them: hardening adds both to every service before the policy sees
@@ -47,7 +47,7 @@ They guard against a docker, compose or buildx that behaves differently from tod
 
 Something has to change between two of dockscreen's calls to docker.
 
-- `docker_run._create_checked` refusing the container created again with the pinned user.
+- `docker_run._create_and_check` refusing the container created again with the pinned user.
 - `containerscreening.create` failing to inspect the container it just created, or its image.
 - `imageusers._look` failing to inspect the container it just created.
 - `config._read`: the config file replaced between the check of its modes and the read.
@@ -62,8 +62,8 @@ Something has to change between two of dockscreen's calls to docker.
 
 ## Not reachable from the command line
 
-- `Docker.new_for_testing`, `Subordinate.new_for_testing`, `runtime._real_docker` with wrappers given,
-  `sections.effective` without a directory: for the unit tests.
+- `Docker.new_for_testing`, `Subordinate.new_for_testing`, `runtime._real_docker_path` with wrappers given,
+  `sections.effective_settings` without a directory: for the unit tests.
 - `imageuser.describe` without the host's accounts.
 - `messages._escape` for a character above U+FFFF: the messages that quote project text with one in it
   quote it with `repr`, which escapes it first (`test_characters_beyond_the_basic_plane_are_shown_as_text`).
@@ -82,8 +82,8 @@ Something has to change between two of dockscreen's calls to docker.
 - `inspect._find_compose_dir` refusing a compose file in the home directory or a directory that is not
   yours, and reaching `/` without one: the tests would have to put a compose file in your home or in a
   directory of another user.
-- `config._strict_modes` for a file or directory owned by another user: the tests run as one user.
-- `config.user_file` without an absolute `XDG_CONFIG_HOME`: dockscreen would read your own config file.
+- `config._check_strict_modes` for a file or directory owned by another user: the tests run as one user.
+- `config.user_file_path` without an absolute `XDG_CONFIG_HOME`: dockscreen would read your own config file.
 - `hostusers._read_ranges` for a missing `/etc/subuid` or a malformed line in it.
 - The scenarios that need a user 101, or none, an account with uid 1, or a subordinate range are skipped
   where the host does not have them (see the README).

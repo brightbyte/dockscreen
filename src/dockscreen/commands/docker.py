@@ -69,29 +69,29 @@ class DockerCommand:
         """
         cli = _short_form(self.commandline)
         argv, cmd = cli.argv, cli.cmd
-        messages.set_helpful(cli.helpful or cmd == "audit")
-        if cli.skip_screening:
+        messages.set_helpful(cli.is_helpful or cmd == "audit")
+        if cli.is_screening_skipped:
             for warning in commandline.SKIP_SCREENING_WARNINGS:
-                messages.warning(warning)
+                messages.print_warning(warning)
             return _passthrough(argv, self.runtime)
         target = _help_request(cli)
         if target is not None:
             return self.show_help(cli, target)
-        if cli.allow_me and cmd != "compose":
+        if cli.is_me_allowed and cmd != "compose":
             return Report.refusal(commandline.ALLOW_ME_REFUSAL).show()
         if cmd == "audit":
             return docker_run.audit(cli, self.runtime)
         if cmd == "compose":
             return docker_compose.gate(cli, self.runtime)
         if cmd == "buildx":
-            sub = cli.subcommand(BUILDX_OPTS_WITH_VALUE)
-            if sub.cmd == "bake":
-                return docker_bake.gate(sub, self.runtime)
+            buildx_cli = cli.subcommand(BUILDX_OPTS_WITH_VALUE)
+            if buildx_cli.cmd == "bake":
+                return docker_bake.gate(buildx_cli, self.runtime)
         if cmd in ("run", "create") and not cli.args:
             return _passthrough(argv, self.runtime)  # docker says what is missing
         if cmd is not None and cmd in GATES:
             return GATES[cmd](cli, self.runtime)
-        if cli.strict:
+        if cli.is_strict:
             # refused, not ignored: a user who asks for strict screening must not get the lenient kind.
             # Every command above that does not support it refuses it itself.
             return Report.refusal(commandline.STRICT_REFUSAL).show()
@@ -105,20 +105,20 @@ class DockerCommand:
         - target: the command to give the help of; "" for dockscreen itself
         """
         if target == "":
-            commands = helptext.topics(HELP)
-            helptext.show(lambda width: helptext.docker_overview(commands, width))
+            topics = helptext.topics(HELP)
+            helptext.show(lambda width: helptext.docker_overview(topics, width))
             return _passthrough(cli.argv, self.runtime)
         if target == "compose":  # after help compose
-            compose = commandline.CommandLine("help", cli.args[1:], own_args=cli.own_args,
-                                              prefix=[*cli.lead_args, "compose"])
-            return docker_compose.ComposeCommand(compose, self.runtime).dispatch()
+            compose_cli = commandline.CommandLine("help", cli.args[1:], own_args=cli.own_args,
+                                                  prefix=[*cli.lead_args, "compose"])
+            return docker_compose.ComposeCommand(compose_cli, self.runtime).dispatch()
         argv = cli.argv
         if cli.cmd == "help":
             argv = [*cli.lead_args, target, "--help"]
         if target in HELP:
             topic = HELP[target](target)
-            helptext.show(lambda width: helptext.topic(topic, "Docker's own", width))
-            if not topic.docker_help:
+            helptext.show(lambda width: helptext.topic_lines(topic, "Docker's own", width))
+            if not topic.has_docker_help:
                 return 0
         return _passthrough(argv, self.runtime)
 
@@ -130,7 +130,7 @@ def _short_form(cli: commandline.CommandLine) -> commandline.CommandLine:
     """
     if cli.cmd != "container" or not cli.args or cli.args[0] not in GATES:
         return cli
-    return cli.subcommand(inherit_lead=True)
+    return cli.subcommand(should_inherit_lead=True)
 
 
 def _help_request(cli: commandline.CommandLine) -> str | None:
@@ -140,8 +140,8 @@ def _help_request(cli: commandline.CommandLine) -> str | None:
     --hostname. `compose` gives its own help (ComposeCommand), except for `help compose`.
     """
     if cli.cmd is None:
-        lead = cli.lead_args
-        return "" if not lead or "--help" in lead or "-h" in lead else None
+        lead_args = cli.lead_args
+        return "" if not lead_args or "--help" in lead_args or "-h" in lead_args else None
     if cli.cmd == "help":
         return cli.args[0] if cli.args else ""
     if cli.cmd == "compose":
@@ -151,8 +151,8 @@ def _help_request(cli: commandline.CommandLine) -> str | None:
 
 def _wants_command_help(sub: str, args: Sequence[str]) -> bool:
     """Tells whether args ask for help: --help, or -h, first. For run and create, -h is --hostname."""
-    first = tuple(args[:1])
-    return first == ("--help",) or (first == ("-h",) and sub not in ("run", "create"))
+    first_arg = tuple(args[:1])
+    return first_arg == ("--help",) or (first_arg == ("-h",) and sub not in ("run", "create"))
 
 
 def _passthrough(argv: Sequence[str], runtime: Runtime) -> NoReturn:

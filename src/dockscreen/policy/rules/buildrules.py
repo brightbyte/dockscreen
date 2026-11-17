@@ -17,7 +17,13 @@ from typing import Any
 from dockscreen.model.imagebuild import BakeDefinition, ImageBuild, fields
 from dockscreen.policy import finding
 from dockscreen.policy.finding import Finding
-from dockscreen.policy.rules.base import JudgedService, RuleBase, directory_of, is_inside, unknown_keys
+from dockscreen.policy.rules.base import (
+    JudgedService,
+    RuleBase,
+    directory_of,
+    is_inside,
+    unknown_key_problems,
+)
 
 # secrets names the project's top-level secrets, which ProjectRules checks where they are defined.
 BUILD_HARMLESS_KEYS = frozenset({
@@ -50,7 +56,7 @@ class BuildRules(RuleBase):
         build = ImageBuild.from_compose(value, directory_of(service))
         # No extension fields here: `docker buildx bake` reads `x-bake` from compose files, and it can
         # set outputs and cache destinations on the host. Compose's own build does not pass it on.
-        problems = unknown_keys(build.definition, BUILD_KEYS, "build key", extensions=False)
+        problems = unknown_key_problems(build.definition, BUILD_KEYS, "build key", allows_extensions=False)
         problems += self.check_build(build, "build ")
         if build.definition.get("privileged"):  # RUN steps with every capability: root on the host
             problems.append("build privileged is not allowed")
@@ -90,7 +96,7 @@ class BuildRules(RuleBase):
 
     def check_bake(self, bake: BakeDefinition) -> list[Finding]:
         """Checks what `docker buildx bake` would build; returns the refusals, each about its target."""
-        problems = unknown_keys(bake.definition, BAKE_TOP_LEVEL_KEYS, "key", extensions=False)
+        problems = unknown_key_problems(bake.definition, BAKE_TOP_LEVEL_KEYS, "key", allows_extensions=False)
         for name, build in bake.targets.items():
             problems += [f"target {name}: {p}" for p in self._check_bake_target(build)]
         return finding.refusals(problems)
@@ -100,7 +106,7 @@ class BuildRules(RuleBase):
         it writes to or reads from the host besides.
         """
         target = build.definition
-        problems = unknown_keys(target, BAKE_TARGET_KEYS, "key", extensions=False)
+        problems = unknown_key_problems(target, BAKE_TARGET_KEYS, "key", allows_extensions=False)
         problems += self.check_build(build)
         # security.insecure (privileged RUN steps), network.host, device: the access a build sandbox exists
         # to deny
@@ -117,10 +123,11 @@ class BuildRules(RuleBase):
         """
         problems = []
         for entry in entries:
-            found = fields(entry)
-            if found is None:
+            entry_fields = fields(entry)
+            if entry_fields is None:
                 problems.append(f"cache-from {entry!r} cannot be read")
-            elif found.get("type") == "local" and not is_inside(found.get("src", ""), directory):
+            elif (entry_fields.get("type") == "local"
+                  and not is_inside(entry_fields.get("src", ""), directory)):
                 problems.append(f"cache-from {entry!r} is outside {directory}")
         return problems
 
@@ -134,8 +141,9 @@ class BuildRules(RuleBase):
         """
         problems = []
         for entry in secrets:
-            found = fields(entry)
-            source = (found or {}).get("src") or (found or {}).get("source")  # buildx takes either name
+            entry_fields = fields(entry)
+            # buildx takes either name
+            source = (entry_fields or {}).get("src") or (entry_fields or {}).get("source")
             if source is None:
                 problems.append(f"secret {entry!r} copies a variable or cannot be read, and is not allowed")
             elif not is_inside(source, directory):
@@ -151,13 +159,14 @@ def _check_outputs(outputs: Sequence[Any], cache_to: Sequence[Any]) -> list[str]
     """
     problems = []
     for entry in outputs:
-        found = fields(entry)
+        entry_fields = fields(entry)
         # a bare path is a local directory
-        if found is None or found.get("type") not in BAKE_OUTPUT_TYPES or "dest" in found:
+        if (entry_fields is None or entry_fields.get("type") not in BAKE_OUTPUT_TYPES
+            or "dest" in entry_fields):
             problems.append(f"output {entry!r} writes to the host and is not allowed")
     for entry in cache_to:
-        found = fields(entry)
-        if found is None or found.get("type") not in BAKE_CACHE_TO_TYPES:
+        entry_fields = fields(entry)
+        if entry_fields is None or entry_fields.get("type") not in BAKE_CACHE_TO_TYPES:
             problems.append(f"cache-to {entry!r} writes to the host or an unknown store and is not allowed")
     return problems
 

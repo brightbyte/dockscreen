@@ -28,8 +28,8 @@ from dockscreen.util import commandline, messages
 
 # dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
 OWN_OPTIONS = frozenset({
-    commandline.SKIP_SCREENING, commandline.ALLOW_ME, commandline.AS_ME, commandline.HELPFUL,
-    commandline.VERBOSE,
+    commandline.SKIP_SCREENING_OPTION, commandline.ALLOW_ME_OPTION, commandline.AS_ME_OPTION,
+    commandline.HELPFUL_OPTION, commandline.VERBOSE_OPTION,
 })
 
 # Global `docker compose` options that consume the following token as their value.
@@ -50,7 +50,7 @@ GLOBAL_OPTS_WITH_VALUE = frozenset({
 RUNTIME_SUBCOMMANDS = frozenset({"up", "create", "run", "watch", "scale", "alpha"})
 # Subcommands that only build: they get the build-related checks, not the runtime policy.
 BUILD_SUBCOMMANDS = frozenset({"build", "bake"})
-SCREENED = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
+SCREENED_SUBCOMMANDS = RUNTIME_SUBCOMMANDS | BUILD_SUBCOMMANDS
 # Subcommands that stop, change or remove what the project's name stands for. Only the name is checked.
 NAMED_PROJECT_SUBCOMMANDS = frozenset({"down", "rm", "stop", "kill", "restart", "start", "pause", "unpause"})
 
@@ -79,7 +79,7 @@ SCREENED_HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyT
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """Runs `docker compose …`, screened, and returns the exit status unless docker replaces this process.
 
-    Errors that stop everything (config.ConfigError, DockerNotFound) are left to docker_cli.main.
+    Errors that stop everything (config.ConfigError, DockerNotFoundError) are left to docker_cli.main.
 
     Parameters:
     - parent_cli: the docker command line, with `compose` as its command
@@ -89,16 +89,16 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     # the compose commands are run without them; -H or --context would choose a daemon or config that the
     # screening did not look at
     if parent_cli.lead_args:
-        messages.notice("docker options before `compose` are not supported")
+        messages.print_notice("docker options before `compose` are not supported")
         return 1
     cli = parent_cli.subcommand(GLOBAL_OPTS_WITH_VALUE, OWN_OPTIONS)
-    if cli.skip_screening:
+    if cli.is_screening_skipped:
         for warning in commandline.SKIP_SCREENING_WARNINGS:
-            messages.warning(warning)
+            messages.print_warning(warning)
         return runtime.docker.exec(cli.full_argv)
     # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
     # with --skip-screening, which leaves compose as it is
-    return ComposeCommand(cli, runtime.with_docker_env(shellenv.exported(runtime.me))).dispatch()
+    return ComposeCommand(cli, runtime.with_docker_env(shellenv.exported_variables(runtime.me))).dispatch()
 
 
 class ComposeCommand:
@@ -123,32 +123,32 @@ class ComposeCommand:
         Docker replaces this process if the command runs.
         """
         cli, runtime = self.commandline, self.runtime
-        sub = cli.cmd
-        messages.set_helpful(cli.helpful or sub == "audit")
-        if cli.as_me:
-            messages.notice(commandline.AS_ME_MESSAGE)
+        subcommand = cli.cmd
+        messages.set_helpful(cli.is_helpful or subcommand == "audit")
+        if cli.has_as_me:
+            messages.print_notice(commandline.AS_ME_MESSAGE)
             return 2
         target = self._help_request()
         if target is not None:
             return self.show_help(target)
-        if cli.strict and not supports_strict(sub):
+        if cli.is_strict and not supports_strict(subcommand):
             # refused, not ignored: a user who asks for strict screening must not get the lenient kind
             return Report.refusal(commandline.STRICT_REFUSAL).show()
-        if sub is None:
+        if subcommand is None:
             return self._passthrough(cli.argv)
-        if sub in COMMANDS:
-            return COMMANDS[sub](cli, runtime)
-        if sub in SCREENED:
-            if sub == "run":
+        if subcommand in COMMANDS:
+            return COMMANDS[subcommand](cli, runtime)
+        if subcommand in SCREENED_SUBCOMMANDS:
+            if subcommand == "run":
                 return compose_run.gate(cli, runtime)
-            if sub == "create":
+            if subcommand == "create":
                 return compose_create.gate(cli, runtime)
-            if sub in BUILD_SUBCOMMANDS:
+            if subcommand in BUILD_SUBCOMMANDS:
                 return compose_build.gate(cli, runtime)
             return compose_up.gate(cli, runtime)
-        if sub in NAMED_PROJECT_SUBCOMMANDS:
+        if subcommand in NAMED_PROJECT_SUBCOMMANDS:
             return compose_lifecycle.gate(cli, runtime)
-        if sub == "exec":
+        if subcommand == "exec":
             return compose_exec.gate(cli, runtime)
         return self._passthrough(cli.argv)
 
@@ -160,8 +160,8 @@ class ComposeCommand:
         """
         cli = self.commandline
         if cli.cmd is None:
-            lead = cli.lead_args
-            return "" if not lead or "--help" in lead or "-h" in lead else None
+            lead_args = cli.lead_args
+            return "" if not lead_args or "--help" in lead_args or "-h" in lead_args else None
         if cli.cmd == "help":
             return cli.args[0] if cli.args else ""
         return cli.cmd if cli.args[:1] in (("--help",), ("-h",)) else None
@@ -173,16 +173,16 @@ class ComposeCommand:
         - target: the subcommand to give the help of; "" for compose itself
         """
         if target == "":
-            screened, own = helptext.topics(SCREENED_HELP), helptext.topics(COMMAND_HELP)
-            helptext.show(lambda width: helptext.compose_overview(screened, own, width))
+            screened_topics, own_topics = helptext.topics(SCREENED_HELP), helptext.topics(COMMAND_HELP)
+            helptext.show(lambda width: helptext.compose_overview(screened_topics, own_topics, width))
         elif target in COMMANDS:
             name = ALIASES.get(target, target)
             topic = COMMAND_HELP[name](name)
-            helptext.show(lambda width: helptext.topic(topic, "", width))
+            helptext.show(lambda width: helptext.topic_lines(topic, "", width))
             return 0
         elif target in SCREENED_HELP:
             topic = SCREENED_HELP[target](target)
-            helptext.show(lambda width: helptext.topic(topic, "Docker Compose's own", width))
+            helptext.show(lambda width: helptext.topic_lines(topic, "Docker Compose's own", width))
         cli = self.commandline
         argv = cli.argv
         if cli.cmd == "help":  # compose has no help command of its own
@@ -194,13 +194,13 @@ class ComposeCommand:
         self.runtime.docker.exec([*self.commandline.prefix, *argv])
 
 
-def supports_strict(sub: str | None) -> bool:
+def supports_strict(subcommand: str | None) -> bool:
     """Tells whether the compose subcommand sub can be screened with the command line untrusted.
 
     Parameters:
-    - sub: the subcommand; None for none
+    - subcommand: the subcommand; None for none
     """
-    return sub == "run"
+    return subcommand == "run"
 
 
 def help(name: str) -> helptext.HelpTopic:

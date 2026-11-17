@@ -18,13 +18,13 @@ trusted, so audit points out the requests it makes that a project or an image ma
 
 
 from dockscreen.commands import helptext
-from dockscreen.host.docker import DockerNotFound, is_remote
+from dockscreen.host.docker import DockerNotFoundError, is_remote
 from dockscreen.host.runtime import Runtime
 from dockscreen.model.container import Container
-from dockscreen.model.origin import STRICT, TRUSTED, Origin
+from dockscreen.model.origin import STRICT_ORIGINS, TRUSTED_ORIGINS, Origin
 from dockscreen.policy import finding, hardening, userdecisionview
 from dockscreen.policy.commandlinepatch import CommandLinePatch
-from dockscreen.policy.finding import Finding, Reportable
+from dockscreen.policy.finding import Finding, ReportEntry
 from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.policy.report import Report
 from dockscreen.policy.rules import userrules
@@ -33,7 +33,7 @@ from dockscreen.policy.userdecisionview import explain, root_default_notice
 from dockscreen.screen import containerscreening, runargs, userscreening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline, ids, messages
-from dockscreen.util.messages import printable
+from dockscreen.util.messages import printable_text
 
 AUDIT_USAGE = ("usage: dockscreen [--strict-screen] audit [--brief] [docker run options] "
                "IMAGE [COMMAND]")
@@ -53,77 +53,78 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "run"
     screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
-    remote = is_remote(parent_cli.lead_args, runtime.docker)
-    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(remote))
-    if not daemon.passed:
-        return daemon.show()
+    is_remote_daemon = is_remote(parent_cli.lead_args, runtime.docker)
+    daemon_report = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote_daemon))
+    if not daemon_report.has_passed:
+        return daemon_report.show()
     try:
-        read = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
+        parsed_args = runargs.parse(parent_cli.args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
         refusal = Finding(f"cannot read the command line: {e}", help="use the real docker for this one")
         Report.of([refusal]).show_screening()
         return 1
-    given, parsed = userscreening.screened(read, screener)
-    if parsed is None:
-        given.show()
+    user_report, run_args = userscreening.screen_user_options(parsed_args, screener)
+    if run_args is None:
+        user_report.show()
         return 1
-    root_default = root_default_notice(screener.policy(runtime.cwd).default_user)
-    defaults = hardening.container_defaults()
-    for message in [*given.notices, root_default, *defaults.notices()]:
+    default_user_notice = root_default_notice(screener.policy(runtime.cwd).default_user)
+    default_patch = hardening.container_defaults()
+    for message in [*user_report.notices, default_user_notice, *default_patch.notices()]:
         if message:
-            messages.notice(message)
+            messages.print_notice(message)
 
-    created = _create_checked(screener, parsed, defaults)
-    if isinstance(created, int):
-        return created
-    container, decision = created
-    if parent_cli.strict:
-        found = Report.of(containerscreening.command_line_findings(screener, container, decision, STRICT))
-        if not found.passed:
+    creation_result = _create_and_check(screener, run_args, default_patch)
+    if isinstance(creation_result, int):
+        return creation_result
+    container, decision = creation_result
+    if parent_cli.is_strict:
+        strict_report = Report.of(
+            containerscreening.command_line_findings(screener, container, decision, STRICT_ORIGINS))
+        if not strict_report.has_passed:
             screener.docker.remove(container.id)
-            found.show_screening()
+            strict_report.show_screening()
             return 1
 
     if decision.pins_user:
         # All are re-created with the user spelled as numbers: the runtime then has nothing of the
         # image's to resolve, whatever its passwd and group files say.
         screener.docker.remove(container.id)
-        user = screener.policy(runtime.cwd).user_amendments(decision, parsed.image)
-        for notice in user.notices():
-            messages.notice(notice)
-        created = _create_checked(screener, parsed, defaults + user, decision)
-        if isinstance(created, int):
-            return created
-        container, decision = created
+        user_patch = screener.policy(runtime.cwd).user_amendments(decision, run_args.image)
+        for notice in user_patch.notices():
+            messages.print_notice(notice)
+        creation_result = _create_and_check(screener, run_args, default_patch + user_patch, decision)
+        if isinstance(creation_result, int):
+            return creation_result
+        container, decision = creation_result
 
     Report().show_screening()
     return screener.docker.start(
         container.id,
-        attach=not parsed.detach,
+        should_attach=not run_args.should_detach,
         # -i is kept by create; start needs it again
-        interactive=bool(container.info["Config"].get("OpenStdin")),
-        detach_keys=parsed.detach_keys,
+        should_be_interactive=bool(container.info["Config"].get("OpenStdin")),
+        detach_keys=run_args.detach_keys,
     )
 
 
-def _create_checked(screener: Screener, parsed: runargs.RunArgs[str], changes: CommandLinePatch,
-                    decided: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
+def _create_and_check(screener: Screener, run_args: runargs.RunArgs[str], changes: CommandLinePatch,
+                      first_decision: UserDecision | None = None) -> tuple[Container, UserDecision] | int:
     """Creates the container (containerscreening.create); returns it with the decision of its user, or the
     exit status if it may not start.
 
     This removes a container that the policy refuses and prints the refusal. It returns any other
     decision, for the calling code to re-create the container with the user as numbers if it pins one.
     """
-    code, created = containerscreening.create(screener, parsed, changes, decided)
-    if created is None:  # docker said why
-        Report.failure(f"docker could not create a container for {parsed.image}").show_screening()
+    code, creation_result = containerscreening.create(screener, run_args, changes, first_decision)
+    if creation_result is None:  # docker said why
+        Report.failure(f"docker could not create a container for {run_args.image}").show_screening()
         return code
-    container, decision = created
-    if decision.refused:
+    container, decision = creation_result
+    if decision.is_refused:
         screener.docker.remove(container.id)
         Report.of(explain(decision, screener.runtime.config_file)).show_screening()
         return 1
-    return created
+    return creation_result
 
 
 def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
@@ -140,88 +141,88 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "audit"
     if not parent_cli.args:
-        messages.notice(AUDIT_USAGE)
-        messages.notice("Run 'dockscreen audit --help' for more.")
+        messages.print_notice(AUDIT_USAGE)
+        messages.print_notice("Run 'dockscreen audit --help' for more.")
         return 2
 
-    line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF})
-    brief, args = line.has_own(commandline.BRIEF), line.argv
+    line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF_OPTION})
+    is_brief, args = line.has_own(commandline.BRIEF_OPTION), line.argv
     screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
-    daemon = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote(parent_cli.lead_args,
-                                                                            runtime.docker)))
-    if not daemon.passed:
-        return daemon.show(brief)
+    is_remote_daemon = is_remote(parent_cli.lead_args, runtime.docker)
+    daemon_report = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote_daemon))
+    if not daemon_report.has_passed:
+        return daemon_report.show(is_brief)
     try:
-        read = runargs.parse(args, runtime.me, runtime.accounts)
+        parsed_args = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError as e:
-        messages.notice(e)
-        messages.notice(AUDIT_USAGE)
+        messages.print_notice(e)
+        messages.print_notice(AUDIT_USAGE)
         return 2
-    given, parsed = userscreening.screened(read, screener)
-    if parsed is None:
-        return given.show(brief)
-    if not brief:
-        for message in given.notices:
-            messages.notice(message)
+    user_report, run_args = userscreening.screen_user_options(parsed_args, screener)
+    if run_args is None:
+        return user_report.show(is_brief)
+    if not is_brief:
+        for message in user_report.notices:
+            messages.print_notice(message)
 
     try:
-        _, created = containerscreening.create(screener, parsed, hardening.container_defaults())
-    except DockerNotFound as e:
-        return Report.failure(str(e)).show(brief)
-    if created is None:
-        reason = f"docker could not create a container for {parsed.image}"
-        return Report.failure(reason).show(brief)
-    container, decision = created
+        _, creation_result = containerscreening.create(screener, run_args, hardening.container_defaults())
+    except DockerNotFoundError as e:
+        return Report.failure(str(e)).show(is_brief)
+    if creation_result is None:
+        reason = f"docker could not create a container for {run_args.image}"
+        return Report.failure(reason).show(is_brief)
+    container, decision = creation_result
     try:
-        trust = STRICT if line.strict else TRUSTED
-        found = containerscreening.command_line_findings(screener, container, decision, trust)
+        trust = STRICT_ORIGINS if line.is_strict else TRUSTED_ORIGINS
+        findings = containerscreening.command_line_findings(screener, container, decision, trust)
     finally:
         screener.docker.remove(container.id)
 
-    refused = explain(decision, screener.runtime.config_file)
-    outcome = Report.of([*refused, *found])
-    if brief:
-        messages.out(outcome.brief, indent=False)
+    refusals = explain(decision, screener.runtime.config_file)
+    outcome = Report.of([*refusals, *findings])
+    if is_brief:
+        messages.print_line(outcome.brief_line, should_indent=False)
     else:
-        _report_decision(screener, parsed.image, decision)
-        _report_findings(found)
-        messages.notice(outcome.closing_line)
+        _report_decision(screener, run_args.image, decision)
+        _report_findings(findings)
+        messages.print_notice(outcome.closing_line)
     return int(outcome.verdict)
 
 
 def _report_decision(screener: Screener, image: str, decision: UserDecision) -> None:
     """Prints what `docker run` would do about the user the image runs as, and the defaults it adds."""
-    name, dot = printable(image), userdecisionview.dot(decision)
+    name, dot = printable_text(image), userdecisionview.dot(decision)
     if decision.origin is Origin.COMMAND_LINE:
-        messages.out(messages.Message(
+        messages.print_line(messages.Message(
             dot, f"image {name}: the user is set on the command line; the image's own user is not checked"))
     else:
-        outcome = userdecisionview.outcome(decision, screener.local)
-        messages.out(messages.Message(dot, f"image {name}: {outcome}"))
+        outcome = userdecisionview.outcome(decision, screener.local_accounts)
+        messages.print_line(messages.Message(dot, f"image {name}: {outcome}"))
         for note in decision.notices:
-            messages.out(Notice(f"note: {note}", NoticeSeverity.WARNING))
-    if decision.refused:
-        if not decision.failed:
-            messages.out(messages.Message(messages.HINT, userrules.CHOOSE_HINT))
+            messages.print_line(Notice(f"note: {note}", NoticeSeverity.WARNING))
+    if decision.is_refused:
+        if not decision.has_failed:
+            messages.print_line(messages.Message(messages.HINT, userrules.CHOOSE_HINT))
             hint = userdecisionview.config_hint(image, screener.runtime.config_file)
-            messages.out(messages.Message(messages.HINT, hint))
+            messages.print_line(messages.Message(messages.HINT, hint))
         return
     if decision.pins_user:
         user = ids.format_user(decision.pinned_user)
-        messages.out(f"  docker run would create it again with --user={user}, as numbers")
-    defaults = " ".join(hardening.container_defaults().args)
-    messages.out(f"  docker run also adds {defaults}; later options override them")
+        messages.print_line(f"  docker run would create it again with --user={user}, as numbers")
+    default_args = " ".join(hardening.container_defaults().args)
+    messages.print_line(f"  docker run also adds {default_args}; later options override them")
 
 
-def _report_findings(found: list[Reportable]) -> None:
+def _report_findings(findings: list[ReportEntry]) -> None:
     """Prints what the command line asks for that a project or an image may not: as refusals, or as worth a
     look where the command line is trusted.
     """
-    for item in finding.about(found, "command line"):
-        messages.out(item)
-    if any(isinstance(item, Notice) for item in found):
-        messages.out(messages.Message(messages.HINT, "docker run allows these because you gave them; "
-                                                   "--strict-screen makes them fail the audit"))
+    for item in finding.with_subject(findings, "command line"):
+        messages.print_line(item)
+    if any(isinstance(item, Notice) for item in findings):
+        messages.print_line(messages.Message(messages.HINT, "docker run allows these because you gave them; "
+                                             "--strict-screen makes them fail the audit"))
 
 
 def help(name: str) -> helptext.HelpTopic:
@@ -232,7 +233,7 @@ def help(name: str) -> helptext.HelpTopic:
     """
     if name == "audit":
         return helptext.HelpTopic(
-            f"dockscreen [{commandline.STRICT_SCREEN}] audit [{commandline.BRIEF}] "
+            f"dockscreen [{commandline.STRICT_SCREEN_OPTION}] audit [{commandline.BRIEF_OPTION}] "
             "[RUN OPTIONS] IMAGE [COMMAND] [ARG...]",
             "Say what run would do with the same arguments, without starting anything",
             (("dockscreen creates the container as run would, pulling the image if run would, judges it, "
@@ -240,11 +241,11 @@ def help(name: str) -> helptext.HelpTopic:
               "image may not make; run allows them, because the command line is trusted."),
              ("Exit status: 0 audit passed, 1 denied by audit, 2 usage error, 3 audit failed (no docker, the "
               "image could not be pulled or created).")),
-            (helptext.BRIEF,
-             helptext.HelpOption(commandline.STRICT_SCREEN,
+            (helptext.BRIEF_HELP,
+             helptext.HelpOption(commandline.STRICT_SCREEN_OPTION,
                                  "(before audit) Deny for what the command line asks for, too"),
              *helptext.USER_OPTIONS),
-            docker_help=False)
+            has_docker_help=False)
     assert name == "run"
     return helptext.HelpTopic(
         "dockscreen run [OPTIONS] IMAGE [COMMAND] [ARG...]",

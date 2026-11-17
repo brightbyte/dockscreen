@@ -19,7 +19,7 @@ from dockscreen.util import messages
     (Report.of([Notice("fine"), Finding("a")]), "⊖ denied by audit: a"),
 ])
 def test_brief(found, line):
-    assert marked([found.brief]) == [line]
+    assert marked([found.brief_line]) == [line]
 
 
 def test_report(capsys):
@@ -32,7 +32,7 @@ def test_report(capsys):
         "[dockscreen] ✔ audit passed",
     ]
 
-    assert Report.refusal("a").show(brief_mode=True) == 1
+    assert Report.refusal("a").show(should_be_brief=True) == 1
     assert capsys.readouterr() == ("⊖ denied by audit: a\n", "")
 
 
@@ -64,13 +64,13 @@ def test_the_verdict_is_the_worst_of_the_findings(verdicts, outcome):
     found = Report.of(Finding(v.name, v) for v in verdicts)
 
     assert found.verdict is outcome
-    assert found.passed == (outcome is Verdict.PASSED)
+    assert found.has_passed == (outcome is Verdict.PASSED)
 
 
 def test_notices_never_stop_the_command():
     found = Report.of([Notice("a", NoticeSeverity.INFO), Notice("b", NoticeSeverity.WARNING)])
 
-    assert found.verdict is Verdict.PASSED and found.passed and found.findings == ()
+    assert found.verdict is Verdict.PASSED and found.has_passed and found.findings == ()
 
 
 def test_of_sorts_notices_from_findings_each_in_their_order():

@@ -36,7 +36,7 @@ class ConfigError(Exception):
     """Exception raised when a config file cannot be trusted or read, which stops dockscreen from running."""
 
 
-def user_file(env: Mapping[str, str], home: str) -> str:
+def user_file_path(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
     This ignores an XDG_CONFIG_HOME in env that is not absolute, as XDG says, in favour of home/.config:
@@ -58,9 +58,9 @@ def load_current(env: Mapping[str, str], home: str, uid: int) -> Config:
 
     Creates the user's file if it is missing, with a notice. Raises ConfigError as _load does.
     """
-    path = user_file(env, home)
+    path = user_file_path(env, home)
     if _create_user_file(path):
-        messages.notice(f"created {path}, which shows the defaults")
+        messages.print_notice(f"created {path}, which shows the defaults")
     return _load([SYSTEM_FILE, path], uid)
 
 
@@ -85,10 +85,10 @@ def _create_user_file(path: str) -> bool:
 def _load(paths: Iterable[str], uid: int, check: Callable[[str, int], None] | None = None) -> Config:
     """Reads the files in paths and merges them over the defaults, later ones winning; skips missing ones.
 
-    check(path, uid) raises ConfigError for a file that cannot be trusted (_strict_modes by default).
+    check(path, uid) raises ConfigError for a file that cannot be trusted (_check_strict_modes by default).
     Raises ConfigError too for a file that cannot be read or parsed, or that sets something invalid.
     """
-    check = check or _strict_modes
+    check = check or _check_strict_modes
     config = Config()
     for path in paths:
         data = _read(path, uid, check)
@@ -102,23 +102,23 @@ def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
 
     Raises ConfigError, naming path, for an unknown key or an invalid value.
     """
-    unknown = sorted(set(data) - KEYS)
-    if unknown:
-        raise ConfigError(f"{path}: unknown key {unknown[0]!r}")
-    images_ = {_repository_key(path, name): _section(path, f"images {name!r}", value)
-               for name, value in _table(path, "images", data.get("images", {})).items()}
-    projects = {_project_key(path, name): _section(path, f"projects {name!r}", value)
-                for name, value in _table(path, "projects", data.get("projects", {})).items()}
-    top = _section(path, "", {k: v for k, v in data.items() if k in SETTINGS})
-    changes = {key: value for key, value in top._asdict().items() if key in data}
+    unknown_keys = sorted(set(data) - KEYS)
+    if unknown_keys:
+        raise ConfigError(f"{path}: unknown key {unknown_keys[0]!r}")
+    image_sections = {_repository_key(path, name): _section(path, f"images {name!r}", value)
+                      for name, value in _table(path, "images", data.get("images", {})).items()}
+    project_sections = {_project_key(path, name): _section(path, f"projects {name!r}", value)
+                        for name, value in _table(path, "projects", data.get("projects", {})).items()}
+    top_level_section = _section(path, "", {k: v for k, v in data.items() if k in SETTINGS})
+    changes = {key: value for key, value in top_level_section._asdict().items() if key in data}
     if "docker" in data:
         # a relative path would be found from the current directory, which is the project's
         if not isinstance(data["docker"], str) or not os.path.isabs(data["docker"]):
             raise ConfigError(f"{path}: docker must be an absolute path")
         changes["docker"] = data["docker"]
-    return config._replace(**changes, images=MappingProxyType({**config.images, **images_}),
-                           projects=MappingProxyType({**config.projects, **projects}),
-                           configured=config.configured | (set(data) & SETTINGS))
+    return config._replace(**changes, images=MappingProxyType({**config.images, **image_sections}),
+                           projects=MappingProxyType({**config.projects, **project_sections}),
+                           configured_keys=config.configured_keys | (set(data) & SETTINGS))
 
 
 def _table(path: str, key: str, value: object) -> dict[str, Any]:
@@ -128,21 +128,21 @@ def _table(path: str, key: str, value: object) -> dict[str, Any]:
     return value
 
 
-def _section(path: str, where: str, data: object) -> ConfigSection:
+def _section(path: str, section_name: str, data: object) -> ConfigSection:
     """Returns the ConfigSection that data sets; raises ConfigError for an unknown key or an invalid value.
 
     where: names the section in errors ("" for the top level).
     """
-    prefix = f"{path}: {where} " if where else f"{path}: "
+    prefix = f"{path}: {section_name} " if section_name else f"{path}: "
     if not isinstance(data, dict):
         raise ConfigError(f"{prefix}must be a table")
-    unknown = sorted(set(data) - SETTINGS)
-    if unknown:
-        raise ConfigError(f"{prefix}unknown key {unknown[0]!r}")
+    unknown_keys = sorted(set(data) - SETTINGS)
+    if unknown_keys:
+        raise ConfigError(f"{prefix}unknown key {unknown_keys[0]!r}")
     fields: dict[str, Any] = {}
     for key in ("user", "default_user"):
         if key in data:
-            fields[key] = _user_value(path, f"{where} {key}".strip(), data[key])
+            fields[key] = _user_value(path, f"{section_name} {key}".strip(), data[key])
     if "default_home" in data:
         value = data["default_home"]
         if not isinstance(value, str) or (value and not os.path.isabs(value)):
@@ -172,8 +172,8 @@ def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, A
         with open(path, "rb") as f:
             check(path, uid)
             # check looked at the path; what is read is the file already open, so they must be the same
-            opened, checked = os.fstat(f.fileno()), os.stat(path)
-            if (opened.st_dev, opened.st_ino) != (checked.st_dev, checked.st_ino):
+            opened_stat, path_stat = os.fstat(f.fileno()), os.stat(path)
+            if (opened_stat.st_dev, opened_stat.st_ino) != (path_stat.st_dev, path_stat.st_ino):
                 raise ConfigError(f"{path}: the file was replaced while it was read")
             return tomllib.load(f)
     except FileNotFoundError:
@@ -184,23 +184,24 @@ def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, A
         raise ConfigError(f"{path}: {e.strerror}") from None
 
 
-def _strict_modes(path: str, uid: int, stat_path: Callable[[str], os.stat_result] = os.stat) -> None:
+def _check_strict_modes(path: str, uid: int, stat_path: Callable[[str], os.stat_result] = os.stat) -> None:
     """Checks, like ssh's StrictModes, that path and every directory above it are owned by uid or root
     and writable by no one else; raises ConfigError if not.
 
     Otherwise anyone who could write there could configure dockscreen.
     """
-    current = os.path.realpath(path)
+    current_path = os.path.realpath(path)
     while True:
-        info = stat_path(current)
-        if info.st_uid not in (uid, 0):
-            raise ConfigError(f"{path}: {current} is owned by uid {info.st_uid}, not by you or root")
-        if info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise ConfigError(f"{path}: {current} is writable by group or others")
-        parent = os.path.dirname(current)
-        if parent == current:
+        path_stat = stat_path(current_path)
+        if path_stat.st_uid not in (uid, 0):
+            raise ConfigError(f"{path}: {current_path} is owned by uid {path_stat.st_uid}, not by you or "
+                              "root")
+        if path_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise ConfigError(f"{path}: {current_path} is writable by group or others")
+        parent = os.path.dirname(current_path)
+        if parent == current_path:
             return
-        current = parent
+        current_path = parent
 
 
 def _user_value(path: str, key: str, value: object) -> tuple[int, int]:
@@ -215,8 +216,8 @@ def _id_range(path: str, value: Any) -> tuple[int, ...]:
     """Returns value as an inclusive (low, high); raises ConfigError unless it leaves out root and the ids
     that mean "no id".
     """
-    valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
-    if not (valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in ids.NO_ID)
+    is_valid = isinstance(value, list) and len(value) == 2 and all(isinstance(v, int) for v in value)
+    if not (is_valid and 0 < value[0] <= value[1] and not any(value[0] <= n <= value[1] for n in ids.NO_ID)
             and value[1] < max(ids.NO_ID)):  # also keeps out ids beyond 32 bits
         raise ConfigError(f"{path}: nobody_range must be [low, high] with 0 < low <= high < 4294967295, "
                           "leaving out 65535")

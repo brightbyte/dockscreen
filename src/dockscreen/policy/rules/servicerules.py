@@ -22,7 +22,7 @@ from dockscreen.policy.rules.base import (
     directory_of,
     is_inside,
     is_inside_any,
-    unknown_keys,
+    unknown_key_problems,
 )
 from dockscreen.policy.rules.buildrules import BuildRules
 from dockscreen.policy.rules.userrules import UserRules
@@ -140,9 +140,9 @@ class ServiceRules(RuleBase):
         - service: the service (JudgedService)
         """
         options = [str(o) for o in value or []]
-        allowed = NO_NEW_PRIVILEGES | set(self.security_opts)
+        allowed_options = NO_NEW_PRIVILEGES | set(self.security_opts)
         problems = [f"security_opt {o!r} is not allowed{SELINUX_HINT if _is_selinux_label(o) else ''}"
-                    for o in options if o not in allowed]
+                    for o in options if o not in allowed_options]
         if not has_no_new_privileges(options):
             problems.append(f"security_opt must include {SECURITY_OPT}")
         return problems
@@ -190,13 +190,15 @@ class ServiceRules(RuleBase):
         """
         problems = []
         for mount in value or []:
-            problems += unknown_keys(mount, MOUNT_KEYS, "mount key")
-            for sub, allowed in MOUNT_SUBKEYS.items():
-                problems += unknown_keys(mount.get(sub) or {}, allowed, f"mount {sub} key")
+            problems += unknown_key_problems(mount, MOUNT_KEYS, "mount key")
+            for mount_type, allowed_keys in MOUNT_SUBKEYS.items():
+                problems += unknown_key_problems(mount.get(mount_type) or {}, allowed_keys,
+                                                 f"mount {mount_type} key")
             kind = mount.get("type")
             if kind == "bind":
                 if not is_inside_any(mount.get("source", ""), self.mount_roots(service.directory)):
-                    problems.append(self._outside(f"bind mount {mount.get('source')!r}", service.directory))
+                    problems.append(self._outside_problem(f"bind mount {mount.get('source')!r}",
+                                                          service.directory))
             elif kind not in ("volume", "tmpfs", "image"):
                 problems.append(f"mount type {kind!r} is not allowed")
         return problems
@@ -209,9 +211,9 @@ class ServiceRules(RuleBase):
         outside the project would hand the container host files, such as ~/.aws, as they change.
         """
         value, directory = value or {}, directory_of(service)
-        problems = unknown_keys(value, DEVELOP_KEYS, "develop key")
+        problems = unknown_key_problems(value, DEVELOP_KEYS, "develop key")
         for rule in value.get("watch") or []:
-            problems += unknown_keys(rule, WATCH_KEYS, "develop.watch key")
+            problems += unknown_key_problems(rule, WATCH_KEYS, "develop.watch key")
             if rule.get("action") not in WATCH_ACTIONS:
                 problems.append(f"develop.watch action {rule.get('action')!r} is not allowed")
             if not is_inside(rule.get("path", ""), directory):
@@ -224,7 +226,7 @@ class ServiceRules(RuleBase):
         A device reservation is another way to ask for GPUs and other host devices (see FORBIDDEN_KEYS).
         """
         value = value or {}
-        problems = unknown_keys(value, DEPLOY_KEYS, "deploy key")
+        problems = unknown_key_problems(value, DEPLOY_KEYS, "deploy key")
         reservations = (value.get("resources") or {}).get("reservations") or {}
         for key in ("devices", "generic_resources"):
             if reservations.get(key):
@@ -237,7 +239,7 @@ class ServiceRules(RuleBase):
 Check = Callable[["Policy", Any, JudgedService], list[str]]
 
 
-def _forbidden(key: str) -> Check:
+def _forbid(key: str) -> Check:
     """Returns a check that refuses key whenever it carries a value."""
     return lambda policy, value, service: [f"{key} is not allowed"] if value else []
 
@@ -281,7 +283,7 @@ def _check_hooks(key: str) -> Check:
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems = []
         for hook in value or []:
-            problems += unknown_keys(hook, HOOK_KEYS, f"{key} key")
+            problems += unknown_key_problems(hook, HOOK_KEYS, f"{key} key")
             if hook.get("privileged"):
                 problems.append(f"{key} privileged is not allowed")
             if hook.get("user") is not None:  # without one, the hook runs as the service's checked user
@@ -293,7 +295,7 @@ SERVICE_CHECKS: dict[str, Check] = {
     "user": UserRules.check_user,
     "cap_drop": ServiceRules.check_cap_drop,
     "security_opt": ServiceRules.check_security_opt,
-    **{key: _forbidden(key) for key in FORBIDDEN_KEYS},
+    **{key: _forbid(key) for key in FORBIDDEN_KEYS},
     "runtime": ServiceRules._check_runtime,
     **{key: _check_namespace(key) for key in NAMESPACE_KEYS},
     "volumes": ServiceRules._check_mounts,

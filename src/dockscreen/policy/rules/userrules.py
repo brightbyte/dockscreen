@@ -28,11 +28,12 @@ check (a configured image user), and the invoking user's own ids when they gave 
 A service's user. `user:` and hook users must be numeric `uid:gid` once dockscreen has resolved the names in
 them on this host, and pass the id rules (check_user).
 
-An image's user, from what was seen of the image (model.image.Inspected), for `docker run` and compose alike
-(check_image). The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker would use
-(see imageuser), and the id rules decide whether the image may have it. With no user chosen, in this order:
+An image's user, from what was seen of the image (model.image.ImageInspection), for `docker run` and compose
+alike (check_image). The image is untrusted: its own /etc/passwd and /etc/group decide the identity docker
+would use (see imageuser), and the id rules decide whether the image may have it. With no user chosen, in this
+order:
 - the config file names a user for the image's repository, and docker pulled the image from there:
-  that user, whatever it is (sections.section_for, sections.effective);
+  that user, whatever it is (sections.section_for, sections.effective_settings);
 - the image would run as root (uid, gid or a supplementary gid of 0): the default user instead, the
   configured one or the nobody user, with a notice;
 - otherwise the image's own user, if the id rules accept it; refused if not.
@@ -64,7 +65,7 @@ from collections.abc import Collection, Iterable, Mapping
 from typing import Any, NamedTuple
 
 from dockscreen.host import hostusers
-from dockscreen.model.image import Inspected, UserIdentity, section_hint
+from dockscreen.model.image import ImageInspection, UserIdentity, section_hint
 from dockscreen.model.origin import Origin
 from dockscreen.model.project import Project
 from dockscreen.policy import imageuser
@@ -81,12 +82,13 @@ from dockscreen.util import commandline, ids
 MAX_ID = 2**31 - 1
 
 # What an id of the invoking user's is refused with, by the command: how it can be allowed there.
-COMPOSE_HINT = f"pass {commandline.ALLOW_ME} to allow it"
-RUN_HINT = f"pass {commandline.AS_ME} to run as you"
+COMPOSE_HINT = f"pass {commandline.ALLOW_ME_OPTION} to allow it"
+RUN_HINT = f"pass {commandline.AS_ME_OPTION} to run as you"
 # How the command line chooses the user of a container, instead of its image.
-CHOOSE_HINT = f"pass --user UID:GID, {commandline.AS} NAME or {commandline.AS_ME} to choose a user"
+CHOOSE_HINT = (f"pass --user UID:GID, {commandline.AS_OPTION} NAME or {commandline.AS_ME_OPTION} to choose a "
+               "user")
 
-PINNED = SubstitutionGroup(
+PINNED_GROUP = SubstitutionGroup(
     "services {services}: user, image id and pull_policy: never fixed to what was checked, "
     "in the generated file only")
 USER_HELP = ("set user: on the service to choose one; the default user may not be able to use files and "
@@ -103,15 +105,15 @@ class IdFacts(NamedTuple):
 
     Attributes:
     - me: the invoking user's (uid, gid)
-    - allow_me: whether the invoking user's ids are allowed (--allow-me)
-    - local: the accounts on this host (HostAccounts)
+    - is_me_allowed: whether the invoking user's ids are allowed (--allow-me)
+    - local_accounts: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
     - own_ids_hint: how the command allows the invoking user's ids, said after refusing them; empty if it has
       no way
     """
     me: tuple
-    allow_me: bool
-    local: hostusers.HostAccounts
+    is_me_allowed: bool
+    local_accounts: hostusers.HostAccounts
     subordinate: hostusers.SubordinateRanges
     own_ids_hint: str = COMPOSE_HINT
 
@@ -156,30 +158,30 @@ class UserRules(RuleBase):
     (resolve_user_names), and the decided users pinned in what runs (user_changes, user_amendments).
     """
 
-    def _allowed_id(self, kind: str, value: int, extra: Iterable[tuple[int, int]] = ()) -> bool:
+    def _is_allowed_id(self, kind: str, value: int, allowed_pairs: Iterable[tuple[int, int]] = ()) -> bool:
         """Tells whether value is an allowed id of kind ("uid" or "gid").
 
-        Allowed are the nobody range, and the ids of the default user, of the pairs in extra, and of the
-        invoking user if allow_me is set.
+        Allowed are the nobody range, and the ids of the default user, of the pairs in allowed_pairs, and of
+        the invoking user if allow_me is set.
         """
         index = 0 if kind == "uid" else 1
         low, high = self.nobody_range
-        pairs = [self.default_user, *extra, *([self.ids.me] if self.ids.allow_me else [])]
+        pairs = [self.default_user, *allowed_pairs, *([self.ids.me] if self.ids.is_me_allowed else [])]
         return low <= value <= high or any(pair[index] == value for pair in pairs)
 
-    def id_problem(self, kind: str, value: int, mounts: bool,
-                extra: Iterable[tuple[int, int]] = ()) -> str | None:
+    def id_problem(self, kind: str, value: int, has_mounts: bool,
+                   allowed_pairs: Iterable[tuple[int, int]] = ()) -> str | None:
         """Returns why value may not be used as an id of kind, or None if it may.
 
         Parameters:
         - kind: "uid", "gid" or "supplementary gid"
         - value: the id
-        - mounts: the container has host mounts, which leaves only allowed ids
-        - extra: further allowed (uid, gid) pairs
+        - has_mounts: the container has host mounts, which leaves only allowed ids
+        - allowed_pairs: further allowed (uid, gid) pairs
         """
         base = "uid" if kind == "uid" else "gid"
         # first: allowed ids such as the nobody user's usually exist on this host too
-        if self._allowed_id(base, value, extra):
+        if self._is_allowed_id(base, value, allowed_pairs):
             return None
         if value == 0:
             return f"{kind} 0 is root"
@@ -191,29 +193,31 @@ class UserRules(RuleBase):
         if value == self.ids.me[0 if base == "uid" else 1]:
             hint = self.ids.own_ids_hint
             return f"{kind} {value} is yours" + (f"; {hint}" if hint else "")
-        name = self.ids.local.user_name(value) if base == "uid" else self.ids.local.group_name(value)
+        accounts = self.ids.local_accounts
+        name = accounts.user_name(value) if base == "uid" else accounts.group_name(value)
         if name is not None:
             account = "user" if base == "uid" else "group"
             return f"{kind} {value} exists on this host (local {account} {name})"
         if self.ids.subordinate.contains(base, value):
             return f"{kind} {value} is in a subordinate id range of this host (rootless containers)"
-        if mounts:
+        if has_mounts:
             low, high = self.nobody_range
             return f"{kind} {value} is not in the nobody range {low}-{high}, and there are host mounts"
         return None
 
     def id_problems(self, uid: int | None, gid: int | None, supplementary: Iterable[int] = (),
-                 mounts: bool = False, extra: Collection[tuple[int, int]] = ()) -> list[str]:
+                    has_mounts: bool = False, allowed_pairs: Collection[tuple[int, int]] = ()) -> list[str]:
         """Returns the problems with running as uid, gid and the supplementary gids; empty if there are none.
 
         Parameters:
         - uid, gid: the ids; None for one that is not checked
         - supplementary: the supplementary gids
-        - mounts, extra: as id_problem takes them
+        - has_mounts, allowed_pairs: as id_problem takes them
         """
         checks = [("uid", uid), ("gid", gid), *(("supplementary gid", g) for g in supplementary)]
-        found = [self.id_problem(kind, value, mounts, extra) for kind, value in checks if value is not None]
-        return [p for p in found if p]
+        problems = [self.id_problem(kind, value, has_mounts, allowed_pairs) for kind,
+                    value in checks if value is not None]
+        return [p for p in problems if p]
 
     def check_user(self, value: Any, service: JudgedService) -> list[str]:
         """Checks a `user:` of service with its names resolved; returns the problems, empty for an acceptable
@@ -229,87 +233,89 @@ class UserRules(RuleBase):
         """
         if not value:
             return ["user is not set, the image default may be root"]
-        user, has_group, group = str(value).partition(":")
+        user, colon, group = str(value).partition(":")
         uid, gid = ids.parse_id(user), ids.parse_id(group)
         if uid is None:
-            return [_not_a_name("user", user)]
-        if not has_group:
+            return [_unknown_name_problem("user", user)]
+        if not colon:
             # docker would take the group, and supplementary groups, from the image
             return [f"user {value!r} has no group, use uid:gid"]
         if gid is None:
-            return [_not_a_name("group", group)]
-        configured = (self.configured_user,) if self.configured_user else ()
+            return [_unknown_name_problem("group", group)]
+        configured_pairs = (self.configured_user,) if self.configured_user else ()
         return [f"user {value!r}: {p}"
-                for p in self.id_problems(uid, gid, mounts=service.reaches_host, extra=configured)]
+                for p in self.id_problems(uid, gid, has_mounts=service.reaches_host,
+                                          allowed_pairs=configured_pairs)]
 
     def needs_user_files(self, origin: Origin) -> bool:
-        """Tells whether check_image needs the image's passwd and group files (Inspected.passwd) for a
+        """Tells whether check_image needs the image's passwd and group files (ImageInspection.passwd) for a
         container whose user comes from origin: only to judge the image's own user, when the config file
         sets none for it.
         """
         return origin is Origin.IMAGE and not self.configured_user
 
-    def check_image(self, inspected: Inspected, origin: Origin) -> UserDecision:
-        """Decides which user the container that inspected looked through may run as, by the rules in this
+    def check_image(self, inspection: ImageInspection, origin: Origin) -> UserDecision:
+        """Decides which user the container that inspection looked through may run as, by the rules in this
         module's docstring; returns the UserDecision.
 
         The image section that applies is this policy's (section). The passwd and group files must have been
         read if needs_user_files says so.
 
         Parameters:
-        - inspected: what was seen of the image (Inspected)
+        - inspection: what was seen of the image (ImageInspection)
         - origin: where the container's user comes from; one that is not the image's is not judged here, and
           is the decision's origin
         """
-        image, match = inspected.image, self.section
+        image, match = inspection.image, self.section
         notes = (Notice(match.problem, NoticeSeverity.WARNING),) if match.problem else ()
-        found: dict[str, Any] = {"section": match}
+        decision_fields: dict[str, Any] = {"section": match}
         if origin is not Origin.IMAGE:
-            return UserDecision(origin, image, notes, **found)
+            return UserDecision(origin, image, notes, **decision_fields)
         if self.configured_user:
             return UserDecision(Origin.CONFIG, image, notes, identity=UserIdentity(*self.configured_user),
-                                user=self.configured_user, **found)
-        assert inspected.passwd is not None and inspected.group is not None, "the user files were read"
+                                user=self.configured_user, **decision_fields)
+        assert inspection.passwd is not None and inspection.group is not None, "the user files were read"
         try:
-            identity = imageuser.resolve(inspected.user, inspected.passwd, inspected.group)
+            identity = imageuser.resolve(inspection.user, inspection.passwd, inspection.group)
         except ValueError as e:
-            return UserDecision(Origin.IMAGE, image, notes, (Finding(str(e)),), **found)
+            return UserDecision(Origin.IMAGE, image, notes, (Finding(str(e)),), **decision_fields)
         if identity.involves_root:
             return UserDecision(self.default_origin, image, notes, identity=identity, user=self.default_user,
-                                home="" if inspected.home_chosen else self.default_home, replaces_root=True,
-                                **found)
+                                home="" if inspection.is_home_chosen else self.default_home,
+                                replaces_root=True,
+                                **decision_fields)
         problems = self.id_problems(identity.uid, identity.gid, identity.supplementary,
-                                     mounts=inspected.reaches_host)
+                                    has_mounts=inspection.reaches_host)
         refusals = tuple(Finding(f"the image's {p}") for p in problems)
         return UserDecision(Origin.IMAGE, image, notes, refusals, identity,
-                            user=(identity.uid, identity.gid), **found)
+                            user=(identity.uid, identity.gid), **decision_fields)
 
     def check_user_options(self, options: Iterable[UserOption]) -> list[Finding]:
         """Checks the users a command line gives (check_user_option, check_as_option); returns the
         refusals.
         """
-        found = []
+        findings = []
         for option in options:
-            if option.flag == commandline.AS:
-                found += self.check_as_option(option.value, option.account)
+            if option.flag == commandline.AS_OPTION:
+                findings += self.check_as_option(option.value, option.account)
             elif option.flag == "--user":
-                found += self.check_user_option(option.value)
-        return found
+                findings += self.check_user_option(option.value)
+        return findings
 
     def resolve_user_options(self, options: Iterable[UserOption]) -> dict[UserOption, Resolution]:
         """Returns what each --as and --as-me of options stands for: the ids of the account --as names, with a
         notice, and the invoking user's own for --as-me. An --as without an account, which check_user_options
         refuses, is left out; so is --user, which docker gets as given.
         """
-        found = {}
+        resolutions = {}
         for option in options:
-            if option.flag == commandline.AS_ME and option.account:
-                found[option] = Resolution(ids.format_user(option.account))
-            elif option.flag == commandline.AS and option.account:
+            if option.flag == commandline.AS_ME_OPTION and option.account:
+                resolutions[option] = Resolution(ids.format_user(option.account))
+            elif option.flag == commandline.AS_OPTION and option.account:
                 uid, gid = option.account
                 notice = Notice(f"Resolving user {option.value} to uid {uid}, gid {gid}", NoticeSeverity.INFO)
-                found[option] = Resolution(ids.format_user(option.account), notice)
-        return found
+                resolutions[option] = Resolution(ids.format_user(option.account), notice)
+        return resolutions
 
     def check_user_option(self, spec: str) -> list[Finding]:
         """Checks a user that --user or -u gives; returns a refusal unless it is numeric `uid:gid`.
@@ -344,21 +350,21 @@ class UserRules(RuleBase):
         Numbers and names unknown here stay as they are: check_user refuses such a name. A uid alone stays
         alone, refused rather than given a guessed group.
         """
-        accounts = self.ids.local
-        found = []
+        accounts = self.ids.local_accounts
+        substitutions = []
         if service.get("user"):
-            resolved = _resolve_spec(service["user"], accounts)
-            if resolved != service["user"]:
-                message = _resolved_message("user", service["user"], resolved)
-                found.append(Substitution(name, "user", resolved, _resolved_notice(message)))
+            resolved_spec = _resolve_spec(service["user"], accounts)
+            if resolved_spec != service["user"]:
+                message = _resolved_message("user", service["user"], resolved_spec)
+                substitutions.append(Substitution(name, "user", resolved_spec, _resolution_notice(message)))
         for key in ("post_start", "pre_stop"):
             hooks = service.get(key) or []
             resolved_hooks = [_with_resolved_user(hook, accounts) for hook in hooks]
             for hook, resolved_hook in zip(hooks, resolved_hooks):
                 if resolved_hook is not hook:
                     message = _resolved_message(f"{key} user", hook["user"], resolved_hook["user"])
-                    found.append(Substitution(name, key, resolved_hooks, _resolved_notice(message)))
-        return ProjectPatch.of(found)
+                    substitutions.append(Substitution(name, key, resolved_hooks, _resolution_notice(message)))
+        return ProjectPatch.of(substitutions)
 
     def user_changes(self, project: Project, decisions: Mapping[str, UserDecision]) -> ProjectPatch:
         """Returns the patch that makes project the one to run, by service name: services that start
@@ -369,17 +375,18 @@ class UserRules(RuleBase):
         - project: the project
         - decisions: by service, the UserDecision of each started service that sets no user
         """
-        found = []
+        substitutions = []
         for name, service in sorted((project.definition.get("services") or {}).items()):
             service = service or {}
             if service.get("user"):
                 continue
             decision = decisions.get(name)
             if decision is None:  # not started by this command
-                found += _user(name, service, self.default_user, self.default_home, self.default_origin)
+                substitutions += _user_substitutions(name, service, self.default_user, self.default_home,
+                                                     self.default_origin)
             elif decision.pins_user:
-                found += _pinned(name, service, decision)
-        return ProjectPatch.of(found)
+                substitutions += _pin(name, service, decision)
+        return ProjectPatch.of(substitutions)
 
     def user_amendments(self, decision: UserDecision, image: str) -> CommandLinePatch:
         """Returns the patch that runs a `docker run` container as the user decision pins
@@ -396,13 +403,13 @@ class UserRules(RuleBase):
             return CommandLinePatch.of([Amendment(args, Notice(
                 f"image {image} runs as {user}, passed to docker as numbers", NoticeSeverity.INFO))])
         home = default_home(decision.pinned_user, decision.home)
-        found = [Amendment(args, Notice(
+        amendments = [Amendment(args, Notice(
             instead_of_root(decision), NoticeSeverity.WARNING,
             help=f"the default user replaces root; {CHOOSE_HINT}; files and volumes set up for root may not "
             "be accessible to it" + (f", and its HOME is set to {home} unless you set it" if home else "")))]
         if home:
-            found.append(Amendment(("-e", f"HOME={home}")))  # reported with the user
-        return CommandLinePatch.of(found)
+            amendments.append(Amendment(("-e", f"HOME={home}")))  # reported with the user
+        return CommandLinePatch.of(amendments)
 
 
 def image_problem(name: str, decision: UserDecision, config_file: str | None = None) -> Finding:
@@ -416,14 +423,14 @@ def image_problem(name: str, decision: UserDecision, config_file: str | None = N
     """
     image = decision.image
     text = f"image {image.reference}: {'; '.join(r.text for r in decision.findings)}"
-    if decision.failed:
+    if decision.has_failed:
         return Finding(text, Verdict.FAILED, f"service {name}")
-    hint = section_hint(image.reference, config_file, image.built) if config_file else None
+    hint = section_hint(image.reference, config_file, image.is_built) if config_file else None
     return Finding(text, Verdict.REFUSED, f"service {name}",
                    "set user: to choose one" + (f", or {hint}" if hint else ""))
 
 
-def _not_a_name(kind: str, value: str) -> str:
+def _unknown_name_problem(kind: str, value: str) -> str:
     """Returns the problem with a user or group (kind) value that is still a name after resolve_user_names.
 
     UserRules.resolve_user_names resolves every name that exists on this host, so this one does not.
@@ -445,39 +452,43 @@ def default_home(user: tuple[int, int], home: str) -> str:
     return "" if 0 in user else home
 
 
-def _user(name: str, service: dict[str, Any], user: tuple[int, int], home: str, origin: Origin | None,
-          text: str | None = None, group: SubstitutionGroup | None = None) -> list[Substitution]:
+def _user_substitutions(name: str, service: dict[str, Any], user: tuple[int, int], home: str,
+                        origin: Origin | None, text: str | None = None,
+                        group: SubstitutionGroup | None = None) -> list[Substitution]:
     """Returns the substitutions that set the service's user to the default one, which comes from origin,
     reported by text if given, and the HOME that comes with it (default_home) unless the service sets HOME.
     """
     notice = Notice(text, NoticeSeverity.WARNING, help=USER_HELP) if text else None
-    found = [Substitution(name, "user", ids.format_user(user), notice, group=group, origin=origin)]
+    substitutions = [Substitution(name, "user", ids.format_user(user), notice, group=group, origin=origin)]
     if home := default_home(user, home):
-        found.append(Substitution(name, "environment", {"HOME": home, **(service.get("environment") or {})}))
-    return found
+        environment = {"HOME": home, **(service.get("environment") or {})}
+        substitutions.append(Substitution(name, "environment", environment))
+    return substitutions
 
 
-def _pinned(name: str, service: dict[str, Any], decision: UserDecision) -> list[Substitution]:
+def _pin(name: str, service: dict[str, Any], decision: UserDecision) -> list[Substitution]:
     """Returns the substitutions that pin a started service to what the decision of its image checked:
     the user, as numbers, the image by id unless the service builds it, and pull_policy never.
     """
     if decision.replaces_root:
-        found = _user(name, service, decision.pinned_user, decision.home, decision.origin,
-                      instead_of_root(decision), PINNED)
+        substitutions = _user_substitutions(name, service, decision.pinned_user, decision.home,
+                                            decision.origin, instead_of_root(decision), PINNED_GROUP)
     else:  # the image's user, or the one its image section configures
-        found = [Substitution(name, "user", ids.format_user(decision.pinned_user), group=PINNED,
-                              origin=decision.origin)]
+        substitutions = [Substitution(name, "user", ids.format_user(decision.pinned_user), group=PINNED_GROUP,
+                                      origin=decision.origin)]
     # The checked image is the one that runs. Between the check and `up`, the project's own pull_policy, a
     # build, or anyone who can tag images on this daemon could point the name at another image, whose user
     # (root) was never decided: never pulling, and naming the image by id, close that.
-    found.append(Substitution(name, "pull_policy", "never", group=PINNED, origin=Origin.DOCKSCREEN))
+    substitutions.append(Substitution(name, "pull_policy", "never", group=PINNED_GROUP,
+                                      origin=Origin.DOCKSCREEN))
     if decision.image.id and "build" not in service:
         # ... even if someone moves the name to another image
-        found.append(Substitution(name, "image", decision.image.id, group=PINNED, origin=Origin.DOCKSCREEN))
-    return found
+        substitutions.append(Substitution(name, "image", decision.image.id, group=PINNED_GROUP,
+                                          origin=Origin.DOCKSCREEN))
+    return substitutions
 
 
-def _resolved_notice(message: str) -> Notice:
+def _resolution_notice(message: str) -> Notice:
     """Returns the notice that message, a name resolved to ids, is reported by."""
     return Notice(message, NoticeSeverity.INFO, help=RESOLVE_HELP)
 
@@ -488,8 +499,8 @@ def _with_resolved_user(hook: Any, accounts: hostusers.HostAccounts) -> Any:
     """
     if not (isinstance(hook, dict) and hook.get("user")):
         return hook
-    resolved = _resolve_spec(hook["user"], accounts)
-    return hook if resolved == hook["user"] else {**hook, "user": resolved}
+    resolved_spec = _resolve_spec(hook["user"], accounts)
+    return hook if resolved_spec == hook["user"] else {**hook, "user": resolved_spec}
 
 
 def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
@@ -497,10 +508,10 @@ def _resolve_spec(spec: object, accounts: hostusers.HostAccounts) -> str:
 
     Numbers and unknown names stay. A uid alone stays alone: the policy refuses it rather than guess a group.
     """
-    user, has_group, group = str(spec).partition(":")
-    account = accounts.user(user) if user and ids.parse_id(user) is None else None
+    user, colon, group = str(spec).partition(":")
+    account = accounts.user_ids(user) if user and ids.parse_id(user) is None else None
     uid = str(account[0]) if account else user
-    if has_group:
+    if colon:
         gid = _resolve_group(group, accounts)
     elif account:
         gid = str(account[1])  # a name brings its primary group, as with --as
@@ -513,7 +524,7 @@ def _resolve_group(group: str, accounts: hostusers.HostAccounts) -> str:
     """Returns group as a gid if accounts knows its name; ids and unknown names are unchanged."""
     if ids.parse_id(group) is not None:
         return group
-    gid = accounts.group(str(group))
+    gid = accounts.group_id(str(group))
     return group if gid is None else str(gid)
 
 

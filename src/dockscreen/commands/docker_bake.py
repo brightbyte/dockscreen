@@ -15,12 +15,12 @@ from dockscreen.screen import bakescreening
 from dockscreen.screen.screener import Screener
 from dockscreen.util import commandline
 
-NOT_SCREENED = {"--print", "--help", "-h"}  # builds nothing
+PASSTHROUGH_OPTIONS = {"--print", "--help", "-h"}  # builds nothing
 
 
 def _wants_screening(args: Collection[str]) -> bool:
     """Tells whether `bake` with these arguments builds, and so needs screening."""
-    return not NOT_SCREENED & set(args)
+    return not PASSTHROUGH_OPTIONS & set(args)
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:

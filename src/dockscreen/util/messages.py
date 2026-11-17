@@ -2,7 +2,7 @@
 untrusted text they quote, so that it cannot pass for anything else.
 
 Every message is one line that starts with PREFIX, so the user can tell it apart from the output of
-docker and compose. printable() escapes the text, because much of it quotes the untrusted project or
+docker and compose. printable_text() escapes the text, because much of it quotes the untrusted project or
 image.
 Only what docker printed about a failure (a reason's output) keeps its line breaks: it follows the
 message on lines indented past PREFIX, each escaped, so none of them can pass for a message.
@@ -21,7 +21,7 @@ import textwrap
 from typing import NoReturn, Protocol, Self, TextIO, runtime_checkable
 
 PREFIX = "[dockscreen]"
-DOCKER_NOT_FOUND = "'docker' not found in PATH"
+DOCKER_NOT_FOUND_MESSAGE = "'docker' not found in PATH"
 
 
 class Mark(str):
@@ -65,7 +65,7 @@ class Message(str):
         return line
 
     @property
-    def shown(self) -> str:
+    def display_text(self) -> str:
         """Returns the text, followed by the help if there is one and helpful mode is on (with_help)."""
         return with_help(self.text, self.help)
 
@@ -76,19 +76,19 @@ class HasMark(Protocol):
 
     Attributes:
     - mark: the Mark
-    - shown: the text, followed by its help if there is one and helpful mode is on (with_help)
+    - display_text: the text, followed by its help if there is one and helpful mode is on (with_help)
     """
 
     @property
     def mark(self) -> Mark: ...
 
     @property
-    def shown(self) -> str: ...
+    def display_text(self) -> str: ...
 
 
 def with_help(text: str, help: str | None) -> str:
     """Returns text followed by help, if there is help and helpful mode is on (set_helpful)."""
-    return f"{text} - {help}" if help and _helpful else text
+    return f"{text} - {help}" if help and _is_helpful else text
 
 
 def help_of(text: object) -> str | None:
@@ -121,13 +121,13 @@ def with_output(text: object) -> str:
     return f"{text}: {output}" if output else str(text)
 
 
-_helpful = False
+_is_helpful = False
 
 
-def set_helpful(on: bool) -> None:
+def set_helpful(is_helpful: bool) -> None:
     """Turns helpful mode on or off: whether messages show their help (--helpful, --verbose, audit)."""
-    global _helpful
-    _helpful = on
+    global _is_helpful
+    _is_helpful = is_helpful
 
 
 GREEN, YELLOW, RED, BLUE, CYAN = "32", "33", "31", "34", "36"
@@ -136,9 +136,9 @@ WARN = Mark("\u25cf", YELLOW)   # ● allowed, but worth a look; also a change t
 BAD = Mark("\u25cf", RED)       # ● refused, or could not be checked
 HINT = Mark("\u24d8", BLUE)     # ⓘ how to get past something
 ROUTINE = Mark("\u25cf", CYAN)  # \u25cf changed by dockscreen, rarely matters
-PASSED = Mark("\u2714", GREEN)  # ✔
-REFUSED = Mark("\u2296", RED)   # ⊖
-FAILED = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
+PASSED_MARK = Mark("\u2714", GREEN)  # ✔
+REFUSED_MARK = Mark("\u2296", RED)   # ⊖
+FAILED_MARK = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
 
 
 # Report lines are wrapped to the terminal, but never wider than MAX_WIDTH, and not at all on a
@@ -150,7 +150,7 @@ CONTINUATION = "  "
 OUTPUT_INDENT = " " * (len(PREFIX) + 1) + "  "
 
 
-def notice(text: object) -> None:
+def print_notice(text: object) -> None:
     """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted.
 
     What docker printed about text (output_of) follows, each of its lines escaped and indented by
@@ -158,22 +158,22 @@ def notice(text: object) -> None:
     """
     print(f"{PREFIX} {_paint(text, sys.stderr)}", file=sys.stderr)
     for line in (output_of(text) or "").splitlines():
-        print(f"{OUTPUT_INDENT}{printable(line)}", file=sys.stderr)
+        print(f"{OUTPUT_INDENT}{printable_text(line)}", file=sys.stderr)
 
 
-def out(text: str | HasMark, indent: bool = True) -> None:
+def print_line(text: str | HasMark, should_indent: bool = True) -> None:
     """Prints a line of a report to stdout, escaped and with its mark coloured.
 
     Parameters:
     - text: the line, which may start with a mark (HasMark)
-    - indent: print it after a tab, which sets the report apart from the [dockscreen] messages on stderr,
-      wrapped to report_width() with the text lined up after the mark. Without it, the line is printed as it
-      is, for output that is all one line (--brief)
+    - should_indent: print it after a tab, which sets the report apart from the [dockscreen] messages on
+      stderr, wrapped to report_width() with the text lined up after the mark. Without it, the line is printed
+      as it is, for output that is all one line (--brief)
     """
-    if not indent:
+    if not should_indent:
         print(_paint(text, sys.stdout))
         return
-    for line in _wrapped(text, report_width(), _wants_colour(sys.stdout)):
+    for line in _wrap(text, report_width(), _wants_colour(sys.stdout)):
         print(f"\t{line}")
 
 
@@ -188,35 +188,36 @@ def report_width(fallback: int = 0) -> int | None:
     return None if columns < MIN_WIDTH else min(columns, MAX_WIDTH)
 
 
-def _wrapped(text: str | HasMark, width: int | None, colour: bool) -> list[str]:
+def _wrap(text: str | HasMark, width: int | None, should_colour: bool) -> list[str]:
     """Splits text into escaped lines that fit width columns after a tab, never breaking a word.
 
-    Continued lines line up under the text after the mark. width: None for one line; colour: whether
+    Continued lines line up under the text after the mark. width: None for one line; should_colour: whether
     to colour the mark.
     """
     if isinstance(text, HasMark):
-        lead, body = f"{text.mark} ", printable(text.shown)
+        lead, body = f"{text.mark} ", printable_text(text.display_text)
     else:
-        lead, body = "", printable(text)
+        lead, body = "", printable_text(text)
     if width is None:
         lines = [lead + body]
     else:
         lines = textwrap.wrap(lead + body, width=width - TAB_WIDTH, subsequent_indent=CONTINUATION,
                               break_long_words=False, break_on_hyphens=False) or [""]
-    if isinstance(text, HasMark) and colour:  # coloured after wrapping, so the escape codes take up no width
-        lines[0] = _coloured(text.mark) + lines[0][len(text.mark):]
+    if isinstance(text,
+                  HasMark) and should_colour:  # coloured after wrapping, so the escape codes take up no width
+        lines[0] = _colour(text.mark) + lines[0][len(text.mark):]
     return lines
 
 
 def _paint(line: object, stream: TextIO) -> str:
     """Returns line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
     if not isinstance(line, HasMark):
-        return printable(line)
-    mark = _coloured(line.mark) if _wants_colour(stream) else line.mark
-    return f"{mark} {printable(line.shown)}"
+        return printable_text(line)
+    mark = _colour(line.mark) if _wants_colour(stream) else line.mark
+    return f"{mark} {printable_text(line.display_text)}"
 
 
-def _coloured(mark: Mark) -> str:
+def _colour(mark: Mark) -> str:
     """Returns mark wrapped in the terminal escapes for its colour, bold."""
     return f"\x1b[1;{mark.colour}m{mark}\x1b[0m"  # bold, for all alike
 
@@ -231,12 +232,12 @@ def _wants_colour(stream: TextIO) -> bool:
         return False
 
 
-def warning(text: str) -> None:
+def print_warning(text: str) -> None:
     """Prints text as a warning message (notice)."""
-    notice(f"warning: {text}")
+    print_notice(f"warning: {text}")
 
 
-def printable(text: object) -> str:
+def printable_text(text: object) -> str:
     """Returns str(text) as one line, with every character that is not printable escaped.
 
     Stops a config from forging output lines (newlines), rewriting the terminal
@@ -253,6 +254,6 @@ def _escape(char: str) -> str:
     return f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}"
 
 
-def fatal(text: object) -> NoReturn:
+def exit_with_error(text: object) -> NoReturn:
     """Exits with status 1, printing text (escaped) as a dockscreen message."""
-    sys.exit(f"{PREFIX} {printable(text)}")
+    sys.exit(f"{PREFIX} {printable_text(text)}")

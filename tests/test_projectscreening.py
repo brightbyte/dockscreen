@@ -21,9 +21,9 @@ def project_config(**service):
     return {"name": "proj", "services": {"web": {"image": "x:1", "user": "65534:65534", **service}}}
 
 
-def up(argv, idx, runtime, allow_me=False):
+def up(argv, idx, runtime, is_me_allowed=False):
     """Runs the compose subcommand at argv[idx], `up` or `run`, through its gate."""
-    own = [commandline.ALLOW_ME] if allow_me else []
+    own = [commandline.ALLOW_ME_OPTION] if is_me_allowed else []
     line = commandline.CommandLine(argv[idx], argv[idx + 1:], argv[:idx], own, prefix=["compose"])
     return (compose_run.gate if line.cmd == "run" else compose_up.gate)(line, runtime)
 
@@ -120,7 +120,7 @@ def test_the_callers_own_ids_need_allow_me(tmp_path, capsys):
     assert f"uid {UID} is yours; pass --allow-me to allow it" in capsys.readouterr().err
     assert recorder.children == []
 
-    assert up(["up"], 0, runtime, allow_me=True) == 0
+    assert up(["up"], 0, runtime, is_me_allowed=True) == 0
     assert last(recorder)[1]["services"]["web"]["user"] == f"{UID}:{GID}"
 
 
@@ -451,7 +451,7 @@ def test_first_difference_names_the_path(expected, actual, where):
 def test_strict_screening_judges_the_service_as_runs_options_change_it(tmp_path, capsys):
     def run(*args, strict):
         runtime, recorder = compose_project(tmp_path, project_config(), FakeImages(users={"x:1": "app"}))
-        strict_option = [commandline.STRICT_SCREEN] if strict else []
+        strict_option = [commandline.STRICT_SCREEN_OPTION] if strict else []
         code = compose_run.gate(compose_line("run", *args, "web", docker_options=strict_option), runtime)
         return code, recorder
 
@@ -475,4 +475,4 @@ def test_a_project_the_checks_refuse_is_not_cleared_for_its_images(tmp_path):
 
     found = projectscreening.check(loaded, Screener(runtime))
 
-    assert isinstance(found, Report) and not found.passed
+    assert isinstance(found, Report) and not found.has_passed

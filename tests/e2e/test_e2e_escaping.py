@@ -1,6 +1,6 @@
 """Feature: what the project and the image say cannot pass for what dockscreen says
 
-Rules (messages.printable): text from the project or the image is escaped wherever dockscreen prints it,
+Rules (messages.printable_text): text from the project or the image is escaped wherever dockscreen prints it,
 so it cannot add lines that look like dockscreen's (a forged verdict), move the cursor or recolour the
 terminal. The verdict is the last line dockscreen prints.
 """

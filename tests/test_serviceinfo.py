@@ -33,7 +33,7 @@ def project(**services):
 
 def prepare(config, images, args=(), active=("web",), codes=None, settings=None, chosen=frozenset()):
     screener, recorder = make_screener(images, active=active, codes=codes, reads=lambda _: config,
-                                         screener=configured_screener(images, settings))
+                                       screener=configured_screener(images, settings))
     found, failures = serviceinfo.prepare(COMMAND, project_of(config), list(args), screener, chosen)
     return screener.decide(project_of(config), found, failures), recorder, images
 
@@ -75,7 +75,7 @@ def test_images_are_pulled_by_the_projects_pull_policy(policy_, present, pulled)
     prepared, recorder, _ = prepare(project(web=fields), images)
 
     assert subcommands(recorder) == ([["pull", "--", "web"]] if pulled else [])
-    assert set(prepared.decisions) == {"web"}
+    assert set(prepared.by_service) == {"web"}
 
 
 def test_the_command_line_pull_policy_overrides_the_projects():
@@ -114,7 +114,7 @@ def test_pulling_before_building_and_failure_stops_everything():
                                          codes={"pull": 1})
     assert texts(prepared.report.findings) == ["docker compose pull web failed"]
     # build never started
-    assert prepared.decisions == {} and subcommands(recorder) == [["pull", "--", "web"]]
+    assert prepared.by_service == {} and subcommands(recorder) == [["pull", "--", "web"]]
     assert images.calls == []  # and nothing was created
 
 
@@ -146,9 +146,9 @@ def test_listing_the_services_can_fail_closed():
 def test_the_images_own_user_is_judged_as_docker_run_does(image_user, replaces_root, refused):
     prepared, _, images = prepare(project(), FakeImages(users={"web:1": image_user}))
 
-    decision = prepared.decisions["web"]
-    assert (decision.replaces_root, decision.refused) == (replaces_root, refused)
-    assert prepared.report.passed is not refused
+    decision = prepared.by_service["web"]
+    assert (decision.replaces_root, decision.is_refused) == (replaces_root, refused)
+    assert prepared.report.has_passed is not refused
     assert [call for call in images.calls if call[0] == "remove"] == [("remove", "c1")]  # nothing is left
 
 
@@ -170,14 +170,14 @@ def test_a_built_image_is_not_pointed_at_an_image_section():
 def test_services_with_a_user_are_not_looked_at():
     images = FakeImages(users={"web:1": ""})
     prepared, _, _ = prepare(project(web={"user": "1:1"}), images)
-    assert prepared.decisions == {} and images.created == []
+    assert prepared.by_service == {} and images.created == []
 
 
 def test_only_started_services_are_looked_at_and_the_platform_is_passed():
     config = project(web={"platform": "linux/arm64"}, debug={})
     images = FakeImages(users={"web:1": "app", "debug:1": ""})
     prepared, _, _ = prepare(config, images, active=("web",))
-    assert set(prepared.decisions) == {"web"}
+    assert set(prepared.by_service) == {"web"}
     assert images.created == [("web:1", ["--pull=never", "--platform", "linux/arm64", "--", "web:1"])]
 
 
@@ -191,7 +191,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
     images = FakeImages(users={"web:1": "app"})
     images.inspect_container = lambda ref: (_ for _ in ()).throw(DockerError("boom"))
     prepared, _, _ = prepare(project(), images)
-    assert texts(prepared.decisions["web"].findings) == ["boom"] and prepared.decisions["web"].failed
+    assert texts(prepared.by_service["web"].findings) == ["boom"] and prepared.by_service["web"].has_failed
     assert ("remove", "c1") in images.calls
 
 
@@ -200,7 +200,7 @@ def test_inspection_errors_are_refusals_and_the_container_is_still_removed():
 def decided(config, images, active=("web",), settings=None, **kwargs):
     prepared, _, _ = prepare(config, images, active=active, settings=settings, **kwargs)
     changes = prepared.changes
-    return prepared, changes.applied_to_definition(prepared.project.definition), changes.origins()
+    return prepared, changes.apply_to_definition(prepared.project.definition), changes.origins()
 
 
 def user_origins(origins):
@@ -300,7 +300,7 @@ BIND = {"volumes": [{"type": "bind", "source": "/p/data", "target": "/data"}]}
 
 def test_with_mounts_an_image_user_outside_the_nobody_range_is_refused():
     prepared, _, _ = prepare(project(web=BIND), FakeImages(users={"web:1": "app"}))
-    assert prepared.decisions["web"].refused
+    assert prepared.by_service["web"].is_refused
     assert "the image's uid 100000 is not in the nobody range 65530-65534" in str(prepared.report.findings[0])
 
 
@@ -308,8 +308,8 @@ def test_without_mounts_a_low_unknown_id_is_accepted_and_with_mounts_it_is_not()
     images = FakeImages(users={"web:1": "pg"})
     plain, _, _ = prepare(project(web={}), images)
     mounted, _, _ = prepare(project(web=BIND), images)
-    assert plain.decisions["web"].origin is Origin.IMAGE and not plain.decisions["web"].refused
-    assert mounted.decisions["web"].refused
+    assert plain.by_service["web"].origin is Origin.IMAGE and not plain.by_service["web"].is_refused
+    assert mounted.by_service["web"].is_refused
 
 
 def test_with_mounts_a_root_image_still_runs_as_the_default_user():
@@ -332,7 +332,7 @@ def test_a_configured_user_applies_to_an_image_pulled_from_that_repository():
     images = FakeImages(users={"mariadb:11": ""}, digests={"mariadb:11": ["mariadb@sha256:abc"]})
     prepared, final, origins = decided(mariadb_project(**BIND), images, active=("db",), settings=MARIADB)
 
-    assert prepared.decisions["db"].origin is Origin.CONFIG and not prepared.decisions["db"].replaces_root
+    assert prepared.by_service["db"].origin is Origin.CONFIG and not prepared.by_service["db"].replaces_root
     assert final["services"]["db"]["user"] == "999:999" and user_origins(origins) == {"db": Origin.CONFIG}
     assert marked(prepared.notices()) == [  # configured: routine only, no surprise
         f"{messages.ROUTINE} services db: {PIN}"]
@@ -352,7 +352,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
     config = mariadb_project(**fields)
     prepared, _, _ = prepare(config, images, active=("db",), settings=MARIADB)
 
-    decision = prepared.decisions["db"]
+    decision = prepared.by_service["db"]
     assert decision.replaces_root  # the normal rules: root runs as the default user
     lines = marked(prepared.describe())
     assert (f"{WARN} service db: note: the config has a section for docker.io/library/mariadb, "
@@ -362,7 +362,7 @@ def test_a_configured_user_does_not_apply_to_an_image_that_only_has_the_name(fie
 def test_services_whose_user_the_command_line_chooses_are_not_decided():
     images = FakeImages(users={"web:1": "web"})  # would be refused
     prepared, _, _ = prepare(project(), images, chosen=frozenset({"web"}))
-    assert prepared.report.passed and prepared.decisions == {}
+    assert prepared.report.has_passed and prepared.by_service == {}
 
 
 def test_the_vetting_belongs_to_dockscreen_not_to_the_project():
@@ -378,7 +378,7 @@ def test_the_policy_decides_from_what_serviceinfo_saw():
     screener, _ = make_screener(FakeImages(users={"web:1": ""}), reads=lambda _: project())
     found, _ = serviceinfo.prepare(COMMAND, project_of(project()), [], screener)
     prepared = screener.decide(project_of(project()), found)
-    assert found and prepared.decisions == prepared.policy.assess_images(found.inspected)
+    assert found and prepared.by_service == prepared.policy.assess_images(found.inspections)
 
 
 def test_an_image_name_that_looks_like_an_option_is_not_read_as_one():

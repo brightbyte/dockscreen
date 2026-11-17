@@ -32,4 +32,4 @@ def test_what_is_not_a_reference_is_an_error(reference):
     ("ghcr.io/acme/app", "ghcr.io/acme/app"),
 ])
 def test_shown(repository, shown):
-    assert image._shown(repository) == shown
+    assert image._display_name(repository) == shown

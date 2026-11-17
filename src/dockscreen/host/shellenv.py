@@ -10,42 +10,42 @@ rules.userrules): passing them only makes the project's intent readable.
 `environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so this
 recognises a pass-through by the value being the shell's own under the same name. That also catches
 `FOO: bar` when the shell happens to have FOO=bar, and misses `X: ${FOO}`, which copies the value under
-another name. It leaves out the variables dockscreen passes to compose (EXPORTED). The policy judges the
-result (Policy.check_shell_env).
+another name. It leaves out the variables dockscreen passes to compose (EXPORTED_VARIABLES). The policy judges
+the result (Policy.check_shell_env).
 """
 
 from collections.abc import Mapping
 from typing import Any
 
-EXPORTED = ("UID", "GID")
+EXPORTED_VARIABLES = ("UID", "GID")
 
 
-def exported(me: tuple[int, int]) -> dict[str, str]:
+def exported_variables(me: tuple[int, int]) -> dict[str, str]:
     """Returns the variables UID and GID for me.
 
     Parameters:
     - me: the invoking user's real (uid, gid)
     """
-    return dict(zip(EXPORTED, (str(i) for i in me)))
+    return dict(zip(EXPORTED_VARIABLES, (str(i) for i in me)))
 
 
-def shell_values(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
+def copied_shell_variables(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
     """Returns {service: [variable names]} for the environment values of services that are the shell's own.
 
     Parameters:
     - config: the project's resolved definition
     - env: the shell's environment
     """
-    found = {}
+    names_by_service = {}
     for name, service in sorted((config.get("services") or {}).items()):
         environment = (service or {}).get("environment")
         if not isinstance(environment, dict):
             continue
         names = sorted(
             key for key, value in environment.items()
-            if value and key not in EXPORTED and env.get(key) == value
+            if value and key not in EXPORTED_VARIABLES and env.get(key) == value
         )
         if names:
-            found[name] = names
-    return found
+            names_by_service[name] = names
+    return names_by_service
 

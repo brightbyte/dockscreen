@@ -259,4 +259,4 @@ def test_strict_screen_reaches_compose_run_and_no_other_compose_subcommand(monke
     monkeypatch.setattr(compose_run, "gate", lambda *args: seen.append(args) or 0)
 
     assert dispatch(["--strict-screen", "compose", "run", "web"])[0] == 0
-    assert seen[0][0].strict
+    assert seen[0][0].is_strict

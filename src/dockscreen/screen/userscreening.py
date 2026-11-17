@@ -25,10 +25,10 @@ from dockscreen.screen.userargs import GivenUsers
 
 # The record a command line as read resolves to.
 Resolved_co = TypeVar("Resolved_co", covariant=True)
-Resolved = TypeVar("Resolved")
+ArgsT = TypeVar("ArgsT")
 
 
-class _Resolvable(Protocol[Resolved_co]):
+class _ResolvableArgs(Protocol[Resolved_co]):
     """Protocol for a command line as read whose --as and --as-me can be resolved: userargs.UserArgs and
     runargs.RunArgs.
     """
@@ -36,26 +36,28 @@ class _Resolvable(Protocol[Resolved_co]):
     @property
     def users(self) -> GivenUsers: ...
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Resolved_co: ...
+    def with_users_resolved(self, resolutions: Mapping[UserOption, Resolution]) -> Resolved_co: ...
 
 
-def screened(parsed: _Resolvable[Resolved], screener: Screener) -> tuple[Report, Resolved | None]:
-    """Has the policy judge the users parsed gives and resolve its --as and --as-me
-    (Screener.check_given_users, Screener.resolve_given_users); returns the report, and parsed with them
-    replaced by ids (userargs.resolved).
+def screen_user_options(parsed_args: _ResolvableArgs[ArgsT], screener: Screener
+                        ) -> tuple[Report, ArgsT | None]:
+    """Has the policy judge the users parsed_args gives and resolve its --as and --as-me
+    (Screener.check_given_users, Screener.resolve_given_users); returns the report, and parsed_args with them
+    replaced by ids (userargs.resolve_user_options).
 
     The report holds the refusals, and the record is None; or, if the users pass, the notices of resolving
     them.
 
     Parameters:
-    - parsed: the command line as read (userargs.UserArgs, runargs.RunArgs)
+    - parsed_args: the command line as read (userargs.UserArgs, runargs.RunArgs)
     - screener: the Screener of the command
     """
-    refused = screener.check_given_users(parsed.users.given)
-    if not refused.passed:
-        return refused, None
-    resolutions = screener.resolve_given_users(parsed.users.given)
-    return Report(tuple(r.notice for r in resolutions.values() if r.notice)), parsed.resolved(resolutions)
+    check_report = screener.check_given_users(parsed_args.users.options)
+    if not check_report.has_passed:
+        return check_report, None
+    resolutions = screener.resolve_given_users(parsed_args.users.options)
+    resolution_report = Report(tuple(r.notice for r in resolutions.values() if r.notice))
+    return resolution_report, parsed_args.with_users_resolved(resolutions)
 
 
 def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
@@ -68,6 +70,6 @@ def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime
     - value_flags: as userargs.parse takes them
     - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
     """
-    read = userargs.parse(args, value_flags, runtime.me, runtime.accounts)
-    report, parsed = screened(read, Screener(runtime))
-    return report, None if parsed is None else list(parsed.args)
+    parsed_args = userargs.parse(args, value_flags, runtime.me, runtime.accounts)
+    report, resolved_args = screen_user_options(parsed_args, Screener(runtime))
+    return report, None if resolved_args is None else list(resolved_args.args)

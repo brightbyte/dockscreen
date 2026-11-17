@@ -11,7 +11,7 @@ from collections.abc import Collection, Mapping, MutableMapping
 from typing import NamedTuple, Self
 
 from dockscreen.host import config, hostusers
-from dockscreen.host.docker import Docker, DockerNotFound
+from dockscreen.host.docker import Docker, DockerNotFoundError
 from dockscreen.model.settings import Config
 from dockscreen.util import messages
 
@@ -46,8 +46,8 @@ class Runtime(NamedTuple):
     @property
     def config_file(self) -> str:
         """Returns the path of the invoking user's own config file, which hints point to
-        (config.user_file)."""
-        return config.user_file(self.env, self.home)
+        (config.user_file_path)."""
+        return config.user_file_path(self.env, self.home)
 
     def with_docker_env(self, variables: Mapping[str, str]) -> Self:
         """Returns this runtime with variables added to the environment of what its docker runs.
@@ -59,7 +59,7 @@ class Runtime(NamedTuple):
 
 def load_runtime() -> Runtime:
     """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted,
-    and DockerNotFound if there is no real docker.
+    and DockerNotFoundError if there is no real docker.
 
     Creates the user's config file if it is missing (config.load_current). Warns about empty or
     relative PATH entries.
@@ -71,7 +71,7 @@ def load_runtime() -> Runtime:
     settings = config.load_current(env, home, me[0])
     return Runtime(
         settings=settings,
-        docker=Docker(_real_docker(settings, env)),
+        docker=Docker(_real_docker_path(settings, env)),
         accounts=hostusers.HostAccounts(),
         subordinate=hostusers.SubordinateRanges(),
         me=me,
@@ -85,24 +85,24 @@ def _warn_about_relative_path(env: Mapping[str, str]) -> None:
     """Warns if PATH in env has empty or relative entries."""
     # docker, compose and their plugins and credential helpers look up programs on PATH too
     if any(not os.path.isabs(directory) for directory in env.get("PATH", "").split(os.pathsep)):
-        messages.warning("PATH has empty or relative entries: a project directory can supply the programs "
-                         "that docker and compose run")
+        messages.print_warning("PATH has empty or relative entries: a project directory can supply the "
+                               "programs that docker and compose run")
 
 
-def _real_docker(settings: Config, env: Mapping[str, str],
-                 wrappers: Collection[str] | None = None) -> str:
+def _real_docker_path(settings: Config, env: Mapping[str, str],
+                      wrappers: Collection[str] | None = None) -> str:
     """Returns the docker to run: the one settings names, else the first one on PATH that is not a
-    wrapper. Raises DockerNotFound if there is none.
+    wrapper. Raises DockerNotFoundError if there is none.
 
     wrappers: real paths of the wrappers to skip; by default the one this process was started as.
     """
     if wrappers is None:
         wrappers = {os.path.realpath(sys.argv[0])}
     # not plain "docker" as a fallback: exec would search PATH for it and find the wrapper or ./docker
-    docker = settings.docker or _find_docker(env, wrappers)
-    if not docker:
-        raise DockerNotFound(messages.DOCKER_NOT_FOUND)
-    return docker
+    docker_path = settings.docker or _find_docker(env, wrappers)
+    if not docker_path:
+        raise DockerNotFoundError(messages.DOCKER_NOT_FOUND_MESSAGE)
+    return docker_path
 
 
 def _find_docker(env: Mapping[str, str], wrappers: Collection[str]) -> str | None:

@@ -37,7 +37,7 @@ SENSITIVE_DIRS = ("/", "/etc", "/usr", "/var", "/boot", "/root", "/run", "/proc"
 DOCKER_SOCKET = "/var/run/docker.sock"
 
 
-class ProjectRefused(Exception):
+class ProjectRefusal(Exception):
     """Exception raised when the policy refuses a project before its config is looked at. It holds the
     policy's findings.
 
@@ -53,7 +53,7 @@ class ProjectRefused(Exception):
 def project(args: Sequence[str], runtime: Runtime) -> Project:
     """Returns the project args select, with its definition as compose resolves it.
 
-    Raises ProjectRefused if the policy refuses where the project is (Policy.check_location); DockerError if
+    Raises ProjectRefusal if the policy refuses where the project is (Policy.check_location); DockerError if
     compose cannot give the definition.
 
     Parameters:
@@ -63,7 +63,7 @@ def project(args: Sequence[str], runtime: Runtime) -> Project:
     location = locate(args, runtime)
     refusals = Screener(runtime).policy(location.directory).check_location(location)
     if refusals:
-        raise ProjectRefused(refusals)
+        raise ProjectRefusal(refusals)
     return Project(_load_config(args, runtime.docker), location)
 
 
@@ -77,7 +77,7 @@ def locate(args: Sequence[str], runtime: Runtime) -> ProjectLocation:
     - runtime: the Runtime of the command, whose current directory and environment compose would start from
     """
     location = _project_location(args, runtime.cwd, runtime)
-    return location._replace(sensitive=tuple(_sensitive_inside(location.directory, runtime)))
+    return location._replace(sensitive_paths=tuple(_sensitive_paths_inside(location.directory, runtime)))
 
 
 def _sensitive_paths(runtime: Runtime) -> list[str]:
@@ -87,7 +87,7 @@ def _sensitive_paths(runtime: Runtime) -> list[str]:
     return [*SENSITIVE_DIRS, runtime.home, config.SYSTEM_FILE, runtime.config_file, DOCKER_SOCKET]
 
 
-def _sensitive_inside(directory: str, runtime: Runtime) -> list[str]:
+def _sensitive_paths_inside(directory: str, runtime: Runtime) -> list[str]:
     """Returns the sensitive paths that directory equals or contains, with symlinks resolved."""
     root = os.path.realpath(directory)
     return [path for path in _sensitive_paths(runtime) if is_inside(os.path.realpath(path), root)]
@@ -97,7 +97,7 @@ def sensitive_mount_dirs(runtime: Runtime) -> dict[str, list[str]]:
     """Returns the sensitive paths that each configured mount dir equals or contains, by mount dir, for
     Policy.check_mount_dirs.
     """
-    return {directory: _sensitive_inside(directory, runtime)
+    return {directory: _sensitive_paths_inside(directory, runtime)
             for directory in all_mount_dirs(runtime.settings)}
 
 
@@ -127,7 +127,7 @@ PROJECT_LABEL = "com.docker.compose.project"
 WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
-def made_from(name: str, docker: Docker) -> list[str]:
+def working_directories(name: str, docker: Docker) -> list[str]:
     """Returns the directories that the containers with the project name say they were made from, "" for
     one that does not say.
 
@@ -138,7 +138,7 @@ def made_from(name: str, docker: Docker) -> list[str]:
 
 
 def name_lookup_failure(name: str, error: DockerError) -> Finding:
-    """Returns the failure to look at the containers called by the project name (made_from).
+    """Returns the failure to look at the containers called by the project name (working_directories).
 
     It is a failure, which stops the command like a refusal: dockscreen does not take a name it could not
     check to be free.
@@ -162,10 +162,10 @@ def name_conflicts(project_policy: policy.Policy, name: str, directory: str, doc
     - docker: the docker to ask
     """
     try:
-        found = made_from(name, docker)
+        directories = working_directories(name, docker)
     except DockerError as e:
         return [name_lookup_failure(name, e)]
-    return project_policy.check_project_name(name, directory, found)
+    return project_policy.check_project_name(name, directory, directories)
 
 
 def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
@@ -178,8 +178,8 @@ def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
     - args: the compose options before the subcommand, which select the project
     - env: the user's environment
     """
-    chosen = commandline.option_values(args, "--project-name", "-p")
-    return bool(chosen or env.get("COMPOSE_PROJECT_NAME"))
+    chosen_names = commandline.option_values(args, "--project-name", "-p")
+    return bool(chosen_names or env.get("COMPOSE_PROJECT_NAME"))
 
 
 def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> ProjectLocation:
@@ -188,9 +188,9 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Projec
     Raises DockerError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
     """
     env = runtime.env
-    explicit = commandline.option_values(args, "--project-directory", None)
-    if explicit:  # the last one wins, as in compose
-        return ProjectLocation(os.path.realpath(os.path.join(cwd, explicit[-1])))
+    explicit_directories = commandline.option_values(args, "--project-directory", None)
+    if explicit_directories:  # the last one wins, as in compose
+        return ProjectLocation(os.path.realpath(os.path.join(cwd, explicit_directories[-1])))
 
     files = commandline.option_values(args, "--file", "-f")
     if not files and env.get("COMPOSE_FILE"):
@@ -220,7 +220,7 @@ def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int)
         has_file = any(os.path.exists(os.path.join(directory, n)) for n in COMPOSE_FILE_NAMES)
         if directory != os.path.realpath(start) and (directory == home or os.stat(directory).st_uid != uid):
             if has_file:
-                return ProjectLocation(directory, foreign=True, redirects=tuple(redirects))
+                return ProjectLocation(directory, is_foreign=True, redirects=tuple(redirects))
             raise DockerError("no compose file found")
         if _sets_compose_vars(env_file := os.path.join(directory, ".env")):
             redirects.append(env_file)

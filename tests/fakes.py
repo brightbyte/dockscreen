@@ -29,8 +29,8 @@ def docker_dispatch(argv, runtime):
 
 def compose_line(*argv, docker_options=()):
     """Returns compose's part of `docker docker_options compose argv`, as docker_compose reads it."""
-    return docker_line(*docker_options, "compose", *argv).subcommand(docker_compose.GLOBAL_OPTS_WITH_VALUE,
-                                                                     docker_compose.OWN_OPTIONS)
+    line = docker_line(*docker_options, "compose", *argv)
+    return line.subcommand(docker_compose.GLOBAL_OPTS_WITH_VALUE, docker_compose.OWN_OPTIONS)
 
 
 SUBCOMMANDS = ("pull", "build", "up", "run", "create", "watch", "scale")
@@ -61,13 +61,13 @@ class NoSubordinate:
 ME = (4242, 4343)
 
 
-def id_facts(me=ME, allow_me=False, local=None, subordinate=None):
+def id_facts(me=ME, is_me_allowed=False, local=None, subordinate=None):
     """userrules.IdFacts for the host of Accounts, with no subordinate ranges unless subordinate says
     otherwise.
 
     The invoking user is ME.
     """
-    return userrules.IdFacts(me, allow_me, local or Accounts(), subordinate or NoSubordinate())
+    return userrules.IdFacts(me, is_me_allowed, local or Accounts(), subordinate or NoSubordinate())
 
 
 class Accounts:
@@ -79,11 +79,11 @@ class Accounts:
     else's.
     """
 
-    def user(self, name):
+    def user_ids(self, name):
         users = {"root": (0, 0), "nobody": (65534, 65534), "daniel": (1000, 1000), "alice": (4242, 4343)}
         return users.get(name)
 
-    def group(self, name):
+    def group_id(self, name):
         return {"root": 0, "nogroup": 65534, "nobody": 65534, "daniel": 1000, "docker": 999}.get(name)
 
     def user_name(self, uid):
@@ -227,8 +227,8 @@ class FakeDocker(Executing):
     def read_file(self, container, path):
         return {"/etc/passwd": self.passwd, "/etc/group": self.group}[path]
 
-    def start(self, container, attach, interactive, detach_keys):
-        self.calls.append(("start", container, attach, interactive, detach_keys))
+    def start(self, container, should_attach, should_be_interactive, detach_keys):
+        self.calls.append(("start", container, should_attach, should_be_interactive, detach_keys))
         return 42
 
     def remove(self, container):

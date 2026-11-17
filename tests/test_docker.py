@@ -2,18 +2,18 @@ import subprocess
 
 import pytest
 
-from dockscreen.host.docker import Docker, DockerError, DockerNotFound, _first_file_of_tar
+from dockscreen.host.docker import Docker, DockerError, DockerNotFoundError, _first_file_of_tar
 
 
 def test_a_missing_binary_is_docker_not_found(tmp_path):
     docker = Docker(str(tmp_path / "no-docker"))
 
-    with pytest.raises(DockerNotFound, match="'docker' not found in PATH"):
+    with pytest.raises(DockerNotFoundError, match="'docker' not found in PATH"):
         docker.context()
-    with pytest.raises(DockerNotFound):
+    with pytest.raises(DockerNotFoundError):
         docker.read_file("c1", "/etc/passwd")
-    with pytest.raises(DockerNotFound):
-        docker.start("c1", attach=True, interactive=False, detach_keys=None)
+    with pytest.raises(DockerNotFoundError):
+        docker.start("c1", should_attach=True, should_be_interactive=False, detach_keys=None)
 
 
 def test_with_env_adds_variables_to_the_environment_of_what_it_runs(monkeypatch):

@@ -37,10 +37,10 @@ def test_ids_that_are_not_root_and_unknown_to_the_host_are_accepted_without_moun
 @pytest.mark.parametrize("value", [2**31, 2**32, 2**32 + 1000, 10**20])
 def test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts(value, mounts):
     reason = f"{value} is above 2147483647, the largest id docker accepts"
-    problems = policy_with(local=Accounts()).id_problems(value, 65534, (value,), mounts=mounts)
+    problems = policy_with(local=Accounts()).id_problems(value, 65534, (value,), has_mounts=mounts)
     assert [p for p in problems if "supplementary" not in p] == [f"uid {reason}"]
     assert problems[1] == f"supplementary gid {reason}"
-    assert policy_with(local=Accounts()).id_problems(65534, value, mounts=mounts) == [f"gid {reason}"]
+    assert policy_with(local=Accounts()).id_problems(65534, value, has_mounts=mounts) == [f"gid {reason}"]
 
 
 def test_the_largest_id_docker_accepts_is_not_refused_for_its_size():
@@ -71,16 +71,16 @@ def test_the_nobody_range_and_the_default_user_are_allowed_even_where_they_exist
     local = Accounts(uids={65534: "nobody", 4000: "svc"}, gids={65534: "nogroup", 4001: "svc"})
     settings = Config(default_user=(4000, 4001))
     policy = policy_with(local=local, settings=settings)
-    assert policy.id_problems(65534, 65534, (65534,), mounts=True) == []
-    assert policy.id_problems(4000, 4001, mounts=True) == []
+    assert policy.id_problems(65534, 65534, (65534,), has_mounts=True) == []
+    assert policy.id_problems(4000, 4001, has_mounts=True) == []
 
 
 def test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with_it():
     assert policy_with(me=(1000, 1000), local=Accounts()).id_problems(1000, 1000) == [
         "uid 1000 is yours; pass --allow-me to allow it",
         "gid 1000 is yours; pass --allow-me to allow it"]
-    allowed = policy_with(me=(1000, 1000), allow_me=True, local=Accounts())
-    assert allowed.id_problems(1000, 1000, mounts=True) == []
+    allowed = policy_with(me=(1000, 1000), is_me_allowed=True, local=Accounts())
+    assert allowed.id_problems(1000, 1000, has_mounts=True) == []
 
 
 @pytest.mark.parametrize("hint, said", [
@@ -95,13 +95,14 @@ def test_what_the_refusal_of_the_callers_ids_says_depends_on_the_command(hint, s
 
 def test_with_mounts_only_allowed_ids_pass():
     settings = Config(nobody_range=(70000, 70010))
-    assert policy_with(local=Accounts(), settings=settings).id_problems(70005, 70010, mounts=True) == []
-    assert policy_with(local=Accounts(), settings=settings).id_problems(5000, 70010, mounts=True) == [
+    assert policy_with(local=Accounts(), settings=settings).id_problems(70005, 70010, has_mounts=True) == []
+    assert policy_with(local=Accounts(), settings=settings).id_problems(5000, 70010, has_mounts=True) == [
         "uid 5000 is not in the nobody range 70000-70010, and there are host mounts"]
 
 
 def test_extra_ids_are_allowed_for_one_check():
-    assert policy_with(local=Accounts()).id_problems(5000, 5001, mounts=True, extra=[(5000, 5001)]) == []
+    policy = policy_with(local=Accounts())
+    assert policy.id_problems(5000, 5001, has_mounts=True, allowed_pairs=[(5000, 5001)]) == []
 
 
 def test_subordinate_ranges_are_read_from_subuid_and_subgid(tmp_path):

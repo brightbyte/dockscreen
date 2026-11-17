@@ -14,7 +14,7 @@ POLICY = Policy(id_facts())
 def test_the_arguments_go_before_the_command_lines_own_in_order():
     first = CommandLinePatch.of([Amendment(("--cap-drop=ALL",))])
     then = CommandLinePatch.of([Amendment(("-e", "HOME=/tmp"))])
-    assert (first + then).applied_to(["-i", "img"]) == ["--cap-drop=ALL", "-e", "HOME=/tmp", "-i", "img"]
+    assert (first + then).apply_to(["-i", "img"]) == ["--cap-drop=ALL", "-e", "HOME=/tmp", "-i", "img"]
 
 
 def test_the_defaults_of_a_container_are_reported_with_how_to_override_them():
@@ -36,7 +36,7 @@ def test_a_pinned_user_is_passed_as_numbers():
 def test_the_default_user_instead_of_root_gets_its_home_and_one_warning():
     decision = UserDecision(Origin.DOCKSCREEN, Image("img"), user=(9, 9), home="/tmp", replaces_root=True)
     found = POLICY.user_amendments(decision, "img")
-    assert found.applied_to([]) == ["--user=9:9", "-e", "HOME=/tmp"]
+    assert found.apply_to([]) == ["--user=9:9", "-e", "HOME=/tmp"]
     [warning] = found.notices()
     assert warning.severity is NoticeSeverity.WARNING
     assert "its HOME is set to /tmp" in warning.help
@@ -45,5 +45,5 @@ def test_the_default_user_instead_of_root_gets_its_home_and_one_warning():
 def test_without_a_home_the_default_user_gets_none():
     decision = UserDecision(Origin.DOCKSCREEN, Image("img"), user=(9, 9), home="", replaces_root=True)
     found = POLICY.user_amendments(decision, "img")
-    assert found.applied_to([]) == ["--user=9:9"]
+    assert found.apply_to([]) == ["--user=9:9"]
     assert "HOME" not in found.notices()[0].help

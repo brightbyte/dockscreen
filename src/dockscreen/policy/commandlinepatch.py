@@ -30,7 +30,7 @@ class Amendment(NamedTuple):
 @dataclass(frozen=True)
 class CommandLinePatch:
     """Value object for a set of changes to the arguments of a `docker run` or `create` command line, which
-    are made together (applied_to) and reported together (notices). It holds the amendments, in their order.
+    are made together (apply_to) and reported together (notices). It holds the amendments, in their order.
 
     Instances come from the rules and hardening (Policy.user_amendments, hardening.container_defaults); of
     makes one of amendments, and `a + b` one with b's arguments after a's. Iterating over a patch gives its
@@ -60,7 +60,7 @@ class CommandLinePatch:
         """Returns the arguments of the amendments, in their order."""
         return tuple(arg for a in self.amendments for arg in a.args)
 
-    def applied_to(self, args: Sequence[str]) -> list[str]:
+    def apply_to(self, args: Sequence[str]) -> list[str]:
         """Returns args with the arguments of the amendments before them."""
         return [*self.args, *args]
 

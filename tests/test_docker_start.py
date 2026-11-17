@@ -11,7 +11,7 @@ IMG_USERS = Config(images={"docker.io/library/img": ConfigSection(user=(999, 999
 
 def start_line(container, strict=False):
     """Returns the command line of `docker start container`, with --strict-screen if strict."""
-    return docker_line(*([commandline.STRICT_SCREEN] if strict else []), "start", container)
+    return docker_line(*([commandline.STRICT_SCREEN_OPTION] if strict else []), "start", container)
 
 
 def runtime(docker, settings=None):
@@ -107,7 +107,7 @@ def test_an_existing_container_is_judged_without_the_current_directory_which_did
     # and the current directory does not allow bind mounts, only the configured mount_dirs do
     [refusal] = docker_start.check(start_line("c1", strict=True), make_runtime(docker=docker, cwd=here))
     assert str(refusal).startswith(f"c1: bind mount {here!r} is outside the configured mount_dirs, which are "
-                              "none; to allow it, add a directory that contains it to mount_dirs in ")
+                                   "none; to allow it, add a directory that contains it to mount_dirs in ")
     allowed = Config(mount_dirs=(here,))
     assert docker_start.check(start_line("c1", strict=True),
                               make_runtime(docker=docker, settings=allowed, cwd=here)) == []

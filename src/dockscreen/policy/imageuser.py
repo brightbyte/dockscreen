@@ -31,8 +31,8 @@ def _lines(text: str) -> list[str]:
     """Returns the non-empty lines of a passwd or group file as moby reads them: split on newlines only,
     each stripped of surrounding whitespace as Go defines it.
     """
-    stripped = (line.strip(GO_SPACE) for line in text.split("\n"))
-    return [line for line in stripped if line]
+    stripped_lines = (line.strip(GO_SPACE) for line in text.split("\n"))
+    return [line for line in stripped_lines if line]
 
 
 def _atoi(text: str) -> int:
@@ -80,12 +80,12 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity
     - spec: the `user[:group]`; None or "" for the image's default, root
     - passwd_text, group_text: the image's passwd and group files
     """
-    passwd = _parse_passwd(passwd_text)
-    groups = _parse_group(group_text)
+    passwd_entries = _parse_passwd(passwd_text)
+    group_entries = _parse_group(group_text)
     user_part, _, group_part = (spec or "0").partition(":")
     user_part = user_part or "0"  # moby: no user means the default, uid 0
 
-    entry = _find(passwd, user_part)
+    entry = _find(passwd_entries, user_part)
     if entry:
         username, uid, default_gid = entry
     elif _is_id(user_part):
@@ -95,9 +95,9 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity
 
     gid = default_gid
     if group_part:
-        group = _find(groups, group_part)
-        if group:
-            gid = group[1]
+        group_entry = _find(group_entries, group_part)
+        if group_entry:
+            gid = group_entry[1]
         elif _is_id(group_part):
             gid = int(group_part)
         else:
@@ -106,7 +106,7 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity
     if min(uid, gid) < 0:
         raise ValueError("the image's user has a negative id")
     # moby finds supplementary groups by user name, so a uid without a passwd entry has none
-    supplementary = tuple(sorted({g[1] for g in groups if username and username in g[2]}))
+    supplementary = tuple(sorted({g[1] for g in group_entries if username and username in g[2]}))
     return UserIdentity(uid, gid, supplementary)
 
 
@@ -125,20 +125,20 @@ def _is_id(text: str) -> bool:
     return bool(digits) and all(c in "0123456789" for c in digits)
 
 
-def describe(identity: UserIdentity, local: hostusers.HostAccounts | None = None) -> str:
+def describe(identity: UserIdentity, local_accounts: hostusers.HostAccounts | None = None) -> str:
     """Describes the identity in words, and which local accounts the ids are.
 
     Parameters:
     - identity: the ids
-    - local: this host's accounts (hostusers.HostAccounts); None to leave them out
+    - local_accounts: this host's accounts (hostusers.HostAccounts); None to leave them out
     """
-    def who(kind: str, value: int) -> str:
-        if local is None:
+    def describe_id(kind: str, value: int) -> str:
+        if local_accounts is None:
             return str(value)
-        name = local.user_name(value) if kind == "user" else local.group_name(value)
+        name = local_accounts.user_name(value) if kind == "user" else local_accounts.group_name(value)
         return f"{value} (local {kind} {name})" if name else f"{value} (no local {kind})"
 
-    text = f"uid {who('user', identity.uid)}, gid {who('group', identity.gid)}"
+    text = f"uid {describe_id('user', identity.uid)}, gid {describe_id('group', identity.gid)}"
     if identity.supplementary:
-        text += ", supplementary gids " + ", ".join(who("group", g) for g in identity.supplementary)
+        text += ", supplementary gids " + ", ".join(describe_id("group", g) for g in identity.supplementary)
     return text

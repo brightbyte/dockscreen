@@ -33,7 +33,7 @@ class UserDecision(NamedTuple):
     - user: the (uid, gid) dockscreen pins (pins_user), or None
     - section: which image section of the config file applied (SectionMatch)
     - home: the HOME to set for the default user that replaces root; "" leaves it alone, as when the command
-      line or an env file chose one (Inspected.home_chosen)
+      line or an env file chose one (ImageInspection.home_chosen)
     - replaces_root: whether the default user runs instead of the image's root
     """
     origin: Origin | None
@@ -52,12 +52,12 @@ class UserDecision(NamedTuple):
         return cls(None, image, (), (Finding.of(reason, Verdict.FAILED),))
 
     @property
-    def refused(self) -> bool:
+    def is_refused(self) -> bool:
         """Tells whether the container must not run: refused, or not assessed at all."""
         return bool(self.findings)
 
     @property
-    def failed(self) -> bool:
+    def has_failed(self) -> bool:
         """Tells whether the image could not be assessed at all."""
         return any(f.verdict is Verdict.FAILED for f in self.findings)
 
@@ -66,10 +66,10 @@ class UserDecision(NamedTuple):
         """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers: the
         image's own, the config file's, or the default user; not one the command line chose.
         """
-        return self.user is not None and not self.refused
+        return self.user is not None and not self.is_refused
 
     @property
-    def accepted(self) -> bool:
+    def is_accepted(self) -> bool:
         """Tells whether the image runs as the user decided for it without replacing its root (pins_user):
         its own user, accepted, or the one the config file sets for it.
         """

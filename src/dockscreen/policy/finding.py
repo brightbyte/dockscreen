@@ -67,7 +67,7 @@ class Finding:
         return messages.BAD
 
     @property
-    def shown(self) -> str:
+    def display_text(self) -> str:
         """Returns the subject and text, followed by the help if there is one and helpful mode is on."""
         return messages.with_help(str(self), self.help)
 
@@ -101,13 +101,13 @@ class Finding:
         """Returns a copy of this finding with help as what to do about it; None for nothing."""
         return replace(self, help=help)
 
-    def about(self, subject: str) -> "Finding":
+    def with_subject(self, subject: str) -> "Finding":
         """Returns a copy of this finding about subject, which its own subject becomes part of the text of."""
         return Finding.of(self, subject=subject)
 
 
 # What a check of the policy returns a list of: findings, and notices for what a trusted value gets.
-Reportable = Finding | Notice
+ReportEntry = Finding | Notice
 
 
 def failure_of(error: BaseException, subject: str | None = None, help: str | None = None) -> Finding:
@@ -122,11 +122,11 @@ def failure_of(error: BaseException, subject: str | None = None, help: str | Non
     return Finding.of(error, Verdict.FAILED, subject).with_help(help)
 
 
-def about(found: Iterable[Reportable], subject: str) -> list[Reportable]:
+def with_subject(entries: Iterable[ReportEntry], subject: str) -> list[ReportEntry]:
     """Returns each of found as one about subject, which its own subject becomes part of the text of, with
     its own verdict or severity.
     """
-    return [f.about(subject) for f in found]
+    return [f.with_subject(subject) for f in entries]
 
 
 def refusals(reasons: Iterable[object], subject: str | None = None) -> list[Finding]:
@@ -139,8 +139,8 @@ def failures(reasons: Iterable[object], subject: str | None = None) -> list[Find
     return [Finding.of(r, Verdict.FAILED, subject) for r in reasons]
 
 
-def judged(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], subject: str | None = None
-           ) -> list[Reportable]:
+def judge(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], subject: str | None = None
+           ) -> list[ReportEntry]:
     """Returns each of reasons, what the policy refuses in a value from origin, as a refusal; or as a
     warning if origin is in trust, whose values are taken as given.
 

@@ -5,12 +5,12 @@ from dockscreen.commands import docker, docker_exec, docker_run, helptext
 from dockscreen.util import messages
 
 OPTIONS = (helptext.HelpOption("--long-option", "Some text that is long enough to need wrapping at a narrow "
-                                           "width"),
+                               "width"),
            helptext.HelpOption("--user", "Short", short="u", value="string"))
 
 
 def test_tables_wrap_descriptions_under_their_own_column():
-    lines = helptext._table([(o._left(), o.text) for o in OPTIONS], 60)
+    lines = helptext._table([(o._left_column(), o.text) for o in OPTIONS], 60)
     column = len("  -u, --user string") + 3  # three spaces after the widest option, as docker does
     assert lines[0].startswith("      --long-option".ljust(column) + "Some text that is long enough")
     assert lines[1].startswith(" " * column) and lines[1][column] != " "
@@ -19,7 +19,8 @@ def test_tables_wrap_descriptions_under_their_own_column():
 
 
 def test_without_a_width_nothing_is_wrapped():
-    assert helptext._table([(o._left(), o.text) for o in OPTIONS], None)[0].endswith("at a narrow width")
+    assert helptext._table([(o._left_column(), o.text) for o in OPTIONS],
+                           None)[0].endswith("at a narrow width")
     assert helptext._paragraph("a " * 100, None) == ["a " * 100]
 
 
@@ -29,11 +30,12 @@ def test_list_items_continue_under_their_text():
 
 
 def test_a_topic_has_docker_like_parts_and_says_whose_help_follows():
-    lines = helptext.topic(docker_exec.help("exec"), "Docker's own", None)
+    lines = helptext.topic_lines(docker_exec.help("exec"), "Docker's own", None)
     assert lines[0] == "Usage:  dockscreen exec [OPTIONS] CONTAINER COMMAND [ARG...]"
     assert "Aliases:" in lines and "Options:" in lines
     assert lines[-2] == "Docker's own help follows:"
-    assert helptext.topic(docker_run.help("audit"), "Docker's own", None)[-1] != ""  # nothing follows audit
+    assert helptext.topic_lines(docker_run.help("audit"), "Docker's own",
+                                None)[-1] != ""  # nothing follows audit
 
 
 def test_help_without_a_terminal_is_wrapped_at_80_unlike_reports(monkeypatch, capsys):

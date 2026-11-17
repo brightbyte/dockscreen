@@ -38,7 +38,7 @@ LONG_VALUE_FLAGS = frozenset({
 })
 SHORT_VALUE_FLAGS = frozenset("acehlmpuvw")
 # Every option that takes the next argument as its value, ours included, as it is typed.
-VALUE_OPTIONS = LONG_VALUE_FLAGS | {commandline.AS} | {f"-{c}" for c in SHORT_VALUE_FLAGS}
+VALUE_OPTIONS = LONG_VALUE_FLAGS | {commandline.AS_OPTION} | {f"-{c}" for c in SHORT_VALUE_FLAGS}
 # Options of `docker exec` that take a value in the next argument, as userargs reads them.
 EXEC_VALUE_FLAGS = frozenset({
     "--detach-keys", "-e", "--env", "--env-file", "-u", "--user", "-w", "--workdir",
@@ -67,29 +67,31 @@ class RunArgs(NamedTuple, Generic[ArgT]):
       resolved
     - image: the image, as the command line names it
     - command: what follows the image
-    - detach: whether `-d` or `--detach` was given
+    - should_detach: whether `-d` or `--detach` was given
     - detach_keys: the value of `--detach-keys`, or None
     - users: what the command line says about the user before the image (GivenUsers)
     """
     create_args: tuple[ArgT, ...]
     image: str
     command: tuple[str, ...]
-    detach: bool
+    should_detach: bool
     detach_keys: str | None
     users: userargs.GivenUsers
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "RunArgs[str]":
-        """Returns this record with --as and --as-me replaced by `--user=uid:gid` (userargs.resolved)."""
-        return RunArgs(userargs.resolved(self.create_args, resolutions), self.image, self.command,
-                       self.detach, self.detach_keys, self.users)
+    def with_users_resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "RunArgs[str]":
+        """Returns this record with --as and --as-me replaced by `--user=uid:gid`
+        (userargs.resolve_user_options).
+        """
+        return RunArgs(userargs.resolve_user_options(self.create_args, resolutions), self.image, self.command,
+                       self.should_detach, self.detach_keys, self.users)
 
 
 class _State:
     """Private helper of parse that holds what it has read of a command line so far."""
     def __init__(self, users: userargs.GivenUsers) -> None:
         self.users = users
-        self.kept: list[Arg] = []
-        self.detach = False
+        self.kept_args: list[Arg] = []
+        self.should_detach = False
         self.detach_keys: str | None = None
 
 
@@ -111,7 +113,7 @@ def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAcco
     while i < len(args):
         token = args[i]
         if token == "--":
-            state.kept.append(token)
+            state.kept_args.append(token)
             i += 1
             break
         if token.startswith("--"):
@@ -122,39 +124,39 @@ def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAcco
             break
     if i >= len(args):
         raise ParseError("no image found in the command line")
-    return RunArgs((*state.kept, *args[i:]), args[i], tuple(args[i + 1:]), state.detach,
+    return RunArgs((*state.kept_args, *args[i:]), args[i], tuple(args[i + 1:]), state.should_detach,
                    state.detach_keys, users)
 
 
 def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
     """Reads the --option at args[i] into state and returns the index after it, and after its value."""
     token = args[i]
-    name, has_value, value = token.partition("=")
-    if name == commandline.AS_ME:
-        state.kept.append(state.users.me())
-    elif name == commandline.AS:
-        if not has_value:
+    name, equals_sign, value = token.partition("=")
+    if name == commandline.AS_ME_OPTION:
+        state.kept_args.append(state.users.record_me())
+    elif name == commandline.AS_OPTION:
+        if not equals_sign:
             i += 1
             value = _value_at(args, i, name)
-        state.kept.append(state.users.account(value))
+        state.kept_args.append(state.users.record_account(value))
     elif name == "--detach":
-        state.detach = value.lower() != "false" if has_value else True
+        state.should_detach = value.lower() != "false" if equals_sign else True
     elif name == "--sig-proxy":
         pass
     elif name in ("--detach-keys", "--attach"):
-        if not has_value:
+        if not equals_sign:
             i += 1
             value = _value_at(args, i, name)
         if name == "--detach-keys":
             state.detach_keys = value
     else:
-        state.kept.append(token)
-        if name in LONG_VALUE_FLAGS and not has_value:
+        state.kept_args.append(token)
+        if name in LONG_VALUE_FLAGS and not equals_sign:
             i += 1
             value = _value_at(args, i, name)
-            state.kept.append(value)
+            state.kept_args.append(value)
         if name == "--user":
-            state.users.numeric(value)
+            state.users.record_numeric(value)
     return i + 1
 
 
@@ -163,33 +165,33 @@ def _parse_short(args: Sequence[str], i: int, state: _State) -> int:
     after it, and after its value.
     """
     token = args[i]
-    keep = ""
-    next_is_value = False
-    consumed = 1
+    kept_flags = ""
+    is_next_value = False
+    consumed_count = 1
     for j in range(1, len(token)):
         char = token[j]
         if char == "d":
-            state.detach = True
+            state.should_detach = True
         elif char in SHORT_VALUE_FLAGS:
-            rest = token[j + 1:]
+            remainder = token[j + 1:]
             if char == "a":  # --attach has no `create` equivalent; dropped with its value
-                if not rest:
+                if not remainder:
                     _value_at(args, i + 1, token)
-                    consumed = 2
+                    consumed_count = 2
                 break
             if char == "u":
-                state.users.numeric(rest or _value_at(args, i + 1, token))
-            keep += char + rest
-            next_is_value = not rest
+                state.users.record_numeric(remainder or _value_at(args, i + 1, token))
+            kept_flags += char + remainder
+            is_next_value = not remainder
             break
         else:
-            keep += char
-    if keep:
-        state.kept.append("-" + keep)
-    if next_is_value:
-        state.kept.append(_value_at(args, i + 1, token))
-        consumed = 2
-    return i + consumed
+            kept_flags += char
+    if kept_flags:
+        state.kept_args.append("-" + kept_flags)
+    if is_next_value:
+        state.kept_args.append(_value_at(args, i + 1, token))
+        consumed_count = 2
+    return i + consumed_count
 
 
 def _value_at(args: Sequence[str], index: int, flag: str) -> str:

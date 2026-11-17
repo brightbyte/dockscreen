@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 from dockscreen.commands.docker import DOCKER_OPTS_WITH_VALUE, DockerCommand
 from dockscreen.host import config
-from dockscreen.host.docker import DockerNotFound
+from dockscreen.host.docker import DockerNotFoundError
 from dockscreen.host.runtime import load_runtime
 from dockscreen.policy.report import Report
 from dockscreen.util import commandline, messages
@@ -28,8 +28,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return DockerCommand(cli, load_runtime()).dispatch()
     except config.ConfigError as e:
         return Report.refusal(f"config file {e}").show()
-    except DockerNotFound as e:
-        messages.notice(e)
+    except DockerNotFoundError as e:
+        messages.print_notice(e)
         return 1
 
 

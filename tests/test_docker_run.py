@@ -2,7 +2,7 @@ import pytest
 from fakes import FakeDocker, docker_line, make_runtime
 
 from dockscreen.commands import docker_run
-from dockscreen.host.docker import DockerError, DockerNotFound
+from dockscreen.host.docker import DockerError, DockerNotFoundError
 from dockscreen.model.origin import Origin
 from dockscreen.model.settings import Config, ConfigSection
 from dockscreen.policy.commandlinepatch import Amendment, CommandLinePatch
@@ -498,7 +498,7 @@ def test_audit_of_an_image_docker_cannot_create_fails(capsys):
 
 def test_audit_without_docker_fails(capsys):
     docker = FakeDocker()
-    docker.create = lambda args: (_ for _ in ()).throw(DockerNotFound("'docker' not found in PATH"))
+    docker.create = lambda args: (_ for _ in ()).throw(DockerNotFoundError("'docker' not found in PATH"))
     assert audited(docker, "--brief", "img") == 3
     assert capsys.readouterr().out == "\u2718 audit failed: 'docker' not found in PATH\n"
 

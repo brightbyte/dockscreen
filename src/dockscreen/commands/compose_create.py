@@ -20,9 +20,9 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "create"
-    parsed = userargs.UserArgs.unread(list(parent_cli.args), runtime)
-    return projectrun.check_and_run(list(parent_cli.lead_args), "create", parsed, runtime,
-                                          parent_cli.allow_me)
+    user_args = userargs.UserArgs.from_args(list(parent_cli.args), runtime)
+    return projectrun.check_and_run(list(parent_cli.lead_args), "create", user_args, runtime,
+                                    parent_cli.is_me_allowed)
 
 
 def help(name: str) -> helptext.HelpTopic:

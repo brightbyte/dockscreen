@@ -14,7 +14,7 @@ def test_applied_to_definition_sets_each_key_on_a_copy():
 
     found = ProjectPatch.of([Substitution("web", "user", "1:1"), Substitution("db", "env", {"A": 1})])
 
-    changed = found.applied_to_definition(config)
+    changed = found.apply_to_definition(config)
 
     assert changed == {"services": {"web": {"user": "1:1"}, "db": {"env": {"A": 1}}}}
     assert config == {"services": {"web": {"user": "0:0"}, "db": {}}}
@@ -54,7 +54,7 @@ def test_notices_give_a_line_each_then_one_per_group_naming_its_services_once():
 def test_applied_to_makes_them_in_a_projects_definition_with_their_origins():
     found = Project({"services": {"web": {}}}, ProjectLocation("/p"))
 
-    changed = ProjectPatch.of([Substitution("web", "user", "1:1", origin=Origin.CONFIG)]).applied_to(found)
+    changed = ProjectPatch.of([Substitution("web", "user", "1:1", origin=Origin.CONFIG)]).apply_to(found)
 
     assert changed.definition == {"services": {"web": {"user": "1:1"}}}
     assert changed.service("web").origin_of("user") is Origin.CONFIG
@@ -66,5 +66,5 @@ def test_a_patch_added_to_another_makes_its_changes_after_the_others():
     then = ProjectPatch.of([Substitution("web", "user", "2:2")])
     config = {"services": {"web": {}}}
 
-    assert (first + then).applied_to_definition(config) == {"services": {"web": {"user": "2:2"}}}
+    assert (first + then).apply_to_definition(config) == {"services": {"web": {"user": "2:2"}}}
     assert list(first + then) == [*first, *then] and len(ProjectPatch()) == 0

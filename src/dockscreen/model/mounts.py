@@ -45,9 +45,9 @@ def volume_reaches_host(volume: Mapping[str, Any] | None) -> bool:
     """
     opts = (volume or {}).get("driver_opts") or {}
     # memory, not a host path; with a device or the bind flag it is not plain, and the policy refuses it
-    plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
-                   and not mount_flags(opts) & BIND_FLAGS)
-    return bool(opts.get("device") or opts.get("o")) and not plain_tmpfs
+    is_plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
+                      and not mount_flags(opts) & BIND_FLAGS)
+    return bool(opts.get("device") or opts.get("o")) and not is_plain_tmpfs
 
 
 def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] | None = None) -> bool:
@@ -59,11 +59,11 @@ def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] 
     - volumes: the config's top-level volumes, which the service's named volumes refer to
     """
     mounts = [m for m in service.get("volumes") or [] if isinstance(m, dict)]
-    binds = any(m.get("type") == "bind"
-                or m.get("type") == "volume" and volume_reaches_host((volumes or {}).get(m.get("source")))
-                for m in mounts)
-    others = ("volumes_from", "devices", "secrets", "configs")
-    return binds or any(service.get(key) for key in others)
+    has_binds = any(m.get("type") == "bind"
+                    or m.get("type") == "volume" and volume_reaches_host((volumes or {}).get(m.get("source")))
+                    for m in mounts)
+    other_mount_keys = ("volumes_from", "devices", "secrets", "configs")
+    return has_binds or any(service.get(key) for key in other_mount_keys)
 
 
 def container_mounts(info: Mapping[str, Any]) -> list[Mount]:
@@ -75,20 +75,20 @@ def container_mounts(info: Mapping[str, Any]) -> list[Mount]:
     Parameters:
     - info: what docker inspect shows of the container
     """
-    host = info.get("HostConfig") or {}
-    found = []
-    for bind in host.get("Binds") or []:
-        source, _, rest = str(bind).partition(":")
+    host_config = info.get("HostConfig") or {}
+    mounts = []
+    for bind in host_config.get("Binds") or []:
+        source, _, target_and_options = str(bind).partition(":")
         if source.startswith("/"):  # otherwise the source names a volume
-            found.append(Mount("bind", source, rest.partition(":")[0]))
-    for mount in [*(host.get("Mounts") or []), *(info.get("Mounts") or [])]:
+            mounts.append(Mount("bind", source, target_and_options.partition(":")[0]))
+    for mount in [*(host_config.get("Mounts") or []), *(info.get("Mounts") or [])]:
         kind = str(mount.get("Type") or "").lower()
         target = mount.get("Target") or mount.get("Destination") or ""
-        found.append(Mount(kind, mount.get("Source") or "", target))
-    unique: dict[tuple[str, str], Mount] = {}
-    for mount in found:
-        unique.setdefault((mount.kind, mount.source), mount)
-    return list(unique.values())
+        mounts.append(Mount(kind, mount.get("Source") or "", target))
+    mounts_by_target: dict[tuple[str, str], Mount] = {}
+    for mount in mounts:
+        mounts_by_target.setdefault((mount.kind, mount.source), mount)
+    return list(mounts_by_target.values())
 
 
 def container_reaches_host(info: Mapping[str, Any]) -> bool:
@@ -98,6 +98,6 @@ def container_reaches_host(info: Mapping[str, Any]) -> bool:
     Parameters:
     - info: what docker inspect shows of the container
     """
-    host = info.get("HostConfig") or {}
-    binds = any(m.kind == "bind" for m in container_mounts(info))
-    return bool(binds or host.get("Devices") or host.get("VolumesFrom"))
+    host_config = info.get("HostConfig") or {}
+    has_binds = any(m.kind == "bind" for m in container_mounts(info))
+    return bool(has_binds or host_config.get("Devices") or host_config.get("VolumesFrom"))

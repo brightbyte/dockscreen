@@ -42,7 +42,8 @@ ArgT = TypeVar("ArgT", bound=Arg)
 
 class GivenUsers:
     """Collector of the users a command line gives, filled while the line is read, for the policy to judge and
-    resolve (userscreening.screened). It holds each user option given, and whether a user was chosen.
+    resolve (userscreening.screen_user_options). It holds each user option given, and whether a user was
+    chosen.
 
     Only its own methods add to the list; callers must not change it.
 
@@ -50,8 +51,8 @@ class GivenUsers:
     though nothing enforces that.
 
     Attributes:
-    - chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
-    - given: the user options given, as UserOption records
+    - is_user_chosen: whether the command line chooses a user (--user, -u, --as or --as-me)
+    - options: the user options given, as UserOption records
     """
 
     def __init__(self, me: tuple[int, int], accounts: hostusers.HostAccounts) -> None:
@@ -63,28 +64,29 @@ class GivenUsers:
         """
         self.callers_ids = me
         self.accounts = accounts
-        self.chosen = False
-        self.given: list[UserOption] = []
+        self.is_user_chosen = False
+        self.options: list[UserOption] = []
 
-    def numeric(self, spec: str) -> None:
+    def record_numeric(self, spec: str) -> None:
         """Records spec, the value of --user or -u, which docker gets as given."""
-        self.chosen = True
-        self.given.append(UserOption("--user", spec))
+        self.is_user_chosen = True
+        self.options.append(UserOption("--user", spec))
 
-    def account(self, name: str) -> UserOption:
+    def record_account(self, name: str) -> UserOption:
         """Returns the UserOption of --as with name, with the ids of the local account of that name if there
         is one, and records it.
         """
-        return self._chosen(UserOption(commandline.AS, name, self.accounts.user(name) if name else None))
+        return self._record_choice(UserOption(commandline.AS_OPTION, name,
+                                              self.accounts.user_ids(name) if name else None))
 
-    def me(self) -> UserOption:
+    def record_me(self) -> UserOption:
         """Returns the UserOption of --as-me, with the invoking user's own ids, and records it."""
-        return self._chosen(UserOption(commandline.AS_ME, "", self.callers_ids))
+        return self._record_choice(UserOption(commandline.AS_ME_OPTION, "", self.callers_ids))
 
-    def _chosen(self, option: UserOption) -> UserOption:
+    def _record_choice(self, option: UserOption) -> UserOption:
         """Records option, of --as or --as-me, as the user chosen, and returns it."""
-        self.chosen = True
-        self.given.append(option)
+        self.is_user_chosen = True
+        self.options.append(option)
         return option
 
 
@@ -100,8 +102,8 @@ class UserArgs(NamedTuple, Generic[ArgT]):
     (userscreening.resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also
     holds the image and the options only `run` has; both keep the users in a GivenUsers.
 
-    Instances come from parse and parse_compose, or from unread for a subcommand that takes neither a service
-    nor a user.
+    Instances come from parse and parse_compose, or from from_args for a subcommand that takes neither a
+    service nor a user.
 
     Attributes:
     - service: the service or container it names, or None
@@ -115,16 +117,16 @@ class UserArgs(NamedTuple, Generic[ArgT]):
     users: GivenUsers
     values: tuple[tuple[str, ArgT], ...] = ()
 
-    def resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "UserArgs[str]":
+    def with_users_resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "UserArgs[str]":
         """Returns this record with --as and --as-me replaced by the users they stand for: `--user=uid:gid`
         in args (the function resolved), `uid:gid` in values.
         """
-        values = tuple((option, _resolved_arg(value, resolutions, bare=True))
+        values = tuple((option, _resolve_arg(value, resolutions, should_omit_option=True))
                        for option, value in self.values)
-        return UserArgs(self.service, resolved(self.args, resolutions), self.users, values)
+        return UserArgs(self.service, resolve_user_options(self.args, resolutions), self.users, values)
 
     @classmethod
-    def unread(cls, args: list[str], runtime: Runtime) -> "UserArgs[str]":
+    def from_args(cls, args: list[str], runtime: Runtime) -> "UserArgs[str]":
         """Returns args as a command line that names no service and gives no user, for a subcommand that
         takes neither (`up`, `create`).
         """
@@ -143,22 +145,22 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
     - me: the (uid, gid) that --as-me stands for
     - accounts: where the name given to --as is looked up (hostusers.HostAccounts)
     """
-    read = _Reading(GivenUsers(me, accounts))
+    reading = _Reading(GivenUsers(me, accounts))
     i = 0
     while i < len(args):
         token = args[i]
         if token == "--":
-            return read.result(args[i + 1] if i + 1 < len(args) else None, args[i:])
-        if token == commandline.AS_ME:
-            read.keep_chosen(read.users.me())
+            return reading.result(args[i + 1] if i + 1 < len(args) else None, args[i:])
+        if token == commandline.AS_ME_OPTION:
+            reading.keep_choice(reading.users.record_me())
             i += 1
         elif token.startswith("--"):
-            i = _parse_long(args, i, value_flags, read)
+            i = _parse_long(args, i, value_flags, reading)
         elif token.startswith("-") and token != "-":
-            i = _parse_short(args, i, value_flags, read)
+            i = _parse_short(args, i, value_flags, reading)
         else:
-            return read.result(token, args[i:])
-    return read.result(None, ())
+            return reading.result(token, args[i:])
+    return reading.result(None, ())
 
 
 class _Reading:
@@ -166,17 +168,17 @@ class _Reading:
 
     def __init__(self, users: GivenUsers) -> None:
         self.users = users
-        self.kept: list[Arg] = []
+        self.kept_args: list[Arg] = []
         self.values: list[tuple[str, Arg]] = []
 
-    def keep_chosen(self, option: UserOption) -> None:
+    def keep_choice(self, option: UserOption) -> None:
         """Keeps option, of --as or --as-me, in the arguments, and as the value of --user."""
-        self.kept.append(option)
+        self.kept_args.append(option)
         self.values.append(("--user", option))
 
-    def result(self, service: str | None, rest: Sequence[str]) -> UserArgs[Arg]:
+    def result(self, service: str | None, remaining_args: Sequence[str]) -> UserArgs[Arg]:
         """Returns what was read, with service and the rest of the arguments after it."""
-        return UserArgs(service, (*self.kept, *rest), self.users, tuple(self.values))
+        return UserArgs(service, (*self.kept_args, *remaining_args), self.users, tuple(self.values))
 
 
 
@@ -192,41 +194,45 @@ def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
     return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
-def resolved(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]) -> tuple[str, ...]:
+def resolve_user_options(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]
+                         ) -> tuple[str, ...]:
     """Returns args with --as and --as-me replaced by `--user=uid:gid`, with the user each stands for. Raises
     KeyError for one that resolutions lacks: it must not reach docker.
     """
-    return tuple(_resolved_arg(arg, resolutions) for arg in args)
+    return tuple(_resolve_arg(arg, resolutions) for arg in args)
 
 
-def _resolved_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution], bare: bool = False) -> str:
-    """Returns arg, or for a UserOption the user it stands for: `--user=uid:gid`, or with bare `uid:gid`."""
+def _resolve_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution],
+                 should_omit_option: bool = False) -> str:
+    """Returns arg, or for a UserOption the user it stands for: `--user=uid:gid`, or with should_omit_option
+    `uid:gid`.
+    """
     if isinstance(arg, str):
         return arg
     user = resolutions[arg].user
-    return user if bare else f"--user={user}"
+    return user if should_omit_option else f"--user={user}"
 
 
-def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], read: _Reading) -> int:
-    """Reads the --option at args[i] into read, --as as its UserOption, and returns the index after it."""
-    name, has_value, value = args[i].partition("=")
+def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], reading: _Reading) -> int:
+    """Reads the --option at args[i] into reading, --as as its UserOption, and returns the index after it."""
+    name, equals_sign, value = args[i].partition("=")
     end = i
-    if (name in value_flags or name == commandline.AS) and not has_value:
+    if (name in value_flags or name == commandline.AS_OPTION) and not equals_sign:
         end = i + 1
         value = args[end] if end < len(args) else ""
-    if name == commandline.AS:
-        read.keep_chosen(read.users.account(value))
+    if name == commandline.AS_OPTION:
+        reading.keep_choice(reading.users.record_account(value))
         return end + 1
     if name == "--user":
-        read.users.numeric(value)
+        reading.users.record_numeric(value)
     if name in value_flags:
-        read.values.append((name, value))
-    read.kept += args[i:end + 1]
+        reading.values.append((name, value))
+    reading.kept_args += args[i:end + 1]
     return end + 1
 
 
-def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], read: _Reading) -> int:
-    """Reads the cluster at args[i] (such as -it or -u0:0) into read, and returns the index after it."""
+def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], reading: _Reading) -> int:
+    """Reads the cluster at args[i] (such as -it or -u0:0) into reading, and returns the index after it."""
     token = args[i]
     short_values = {flag[1] for flag in value_flags if len(flag) == 2}
     end = i
@@ -238,8 +244,8 @@ def _parse_short(args: Sequence[str], i: int, value_flags: Collection[str], read
             end = i + 1
             value = args[end] if end < len(args) else ""
         if char == "u":
-            read.users.numeric(value)
-        read.values.append((f"-{char}", value))
+            reading.users.record_numeric(value)
+        reading.values.append((f"-{char}", value))
         break  # a flag that takes a value ends the cluster: the rest of it is the value
-    read.kept += args[i:end + 1]
+    reading.kept_args += args[i:end + 1]
     return end + 1

@@ -22,13 +22,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "exec"
     value_flags = userargs.COMPOSE_VALUE_FLAGS["exec"]
-    report, resolved = userscreening.resolve_user_args(list(parent_cli.args), value_flags, runtime)
-    if resolved is None:
+    report, resolved_args = userscreening.resolve_user_args(list(parent_cli.args), value_flags, runtime)
+    if resolved_args is None:
         report.show()
         return 1
     for notice in report.notices:
-        messages.notice(notice)
-    runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved])
+        messages.print_notice(notice)
+    runtime.docker.exec(["compose", *parent_cli.lead_args, "exec", *resolved_args])
 
 
 def help(name: str) -> helptext.HelpTopic:

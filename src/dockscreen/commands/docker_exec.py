@@ -22,16 +22,17 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "exec"
-    if parent_cli.strict:
+    if parent_cli.is_strict:
         return Report.refusal(commandline.STRICT_REFUSAL).show()
 
-    report, resolved = userscreening.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS, runtime)
-    if resolved is None:
+    report, resolved_args = userscreening.resolve_user_args(parent_cli.args, runargs.EXEC_VALUE_FLAGS,
+                                                            runtime)
+    if resolved_args is None:
         report.show()
         return 1
     for notice in report.notices:
-        messages.notice(notice)
-    runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved])
+        messages.print_notice(notice)
+    runtime.docker.exec([*parent_cli.lead_args, "exec", *resolved_args])
 
 
 def help(name: str) -> helptext.HelpTopic:

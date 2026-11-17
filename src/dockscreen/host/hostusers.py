@@ -14,7 +14,7 @@ class HostAccounts:
     count. It holds no state of its own: every lookup asks NSS.
     """
 
-    def user(self, name: str) -> tuple[int, int] | None:
+    def user_ids(self, name: str) -> tuple[int, int] | None:
         """Returns (uid, primary gid) of the user called name, or None if there is none."""
         try:
             account = pwd.getpwnam(name)
@@ -22,7 +22,7 @@ class HostAccounts:
             return None
         return account.pw_uid, account.pw_gid
 
-    def group(self, name: str) -> int | None:
+    def group_id(self, name: str) -> int | None:
         """Returns the gid of the group called name, or None if there is none."""
         try:
             return grp.getgrnam(name).gr_gid

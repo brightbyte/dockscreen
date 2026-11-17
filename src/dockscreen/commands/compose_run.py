@@ -24,13 +24,13 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    read = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
-    users, parsed = userscreening.screened(read, Screener(runtime))
-    if parsed is None:
-        users.show()
+    parsed_args = userargs.parse_compose("run", list(parent_cli.args), runtime.me, runtime.accounts)
+    user_report, user_args = userscreening.screen_user_options(parsed_args, Screener(runtime))
+    if user_args is None:
+        user_report.show()
         return 1
-    return projectrun.check_and_run(list(parent_cli.lead_args), "run", parsed, runtime,
-                                          parent_cli.allow_me, parent_cli.strict, users.notices)
+    return projectrun.check_and_run(list(parent_cli.lead_args), "run", user_args, runtime,
+                                    parent_cli.is_me_allowed, parent_cli.is_strict, user_report.notices)
 
 
 def help(name: str) -> helptext.HelpTopic:

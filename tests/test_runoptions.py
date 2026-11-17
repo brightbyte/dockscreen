@@ -11,7 +11,7 @@ def run(service, *args, cwd="/work", home="/home/me"):
     parsed = userargs.parse_compose("run", [*args, "web"], ME, None)
     project = project_of({"services": {"web": service}})
     found = runoptions.substitutions(parsed, project.service("web"), make_runtime(cwd=cwd, home=home))
-    return found.applied_to(project).service("web")
+    return found.apply_to(project).service("web")
 
 
 def test_options_that_set_no_checked_key_change_nothing():

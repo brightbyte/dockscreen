@@ -14,7 +14,7 @@ the configured mount_dirs allow bind mounts.
 from dockscreen.commands import helptext
 from dockscreen.host.docker import is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.policy.finding import Reportable
+from dockscreen.policy.finding import ReportEntry
 from dockscreen.policy.report import Report
 from dockscreen.screen import containerscreening
 from dockscreen.screen.screener import Screener
@@ -39,7 +39,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     runtime.docker.exec(parent_cli.argv)
 
 
-def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
+def check(cli: commandline.CommandLine, runtime: Runtime) -> list[ReportEntry]:
     """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
     command line cli names.
 
@@ -54,9 +54,9 @@ def check(cli: commandline.CommandLine, runtime: Runtime) -> list[Reportable]:
     screener = Screener(runtime, own_ids_hint="")  # the image's user is set in the config file, see the hint
     if is_remote(cli.lead_args, runtime.docker):
         return [*screener.policy(None).check_daemon(True)]
-    problems: list[Reportable] = []
+    problems: list[ReportEntry] = []
     for ref in commandline.positionals(cli.args, VALUE_LONG, VALUE_SHORT):
-        problems += containerscreening.check_existing(screener, ref, cli.strict)
+        problems += containerscreening.check_existing(screener, ref, cli.is_strict)
     return problems
 
 

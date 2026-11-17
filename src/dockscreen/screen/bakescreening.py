@@ -35,11 +35,11 @@ def check(docker: Docker, bake: commandline.CommandLine, bake_policy: policy.Pol
     - directory: the directory bake runs in, which its relative paths are relative to
     """
     try:
-        found = _definition(docker, bake)
+        definition = _definition(docker, bake)
     except DockerError as e:
         hint = "fix the bake files, or use --print to see what docker makes of them"
         return [finding.failure_of(e, help=hint)]
-    return bake_policy.check_bake(BakeDefinition(found, directory))
+    return bake_policy.check_bake(BakeDefinition(definition, directory))
 
 
 def _definition(docker: Docker, bake: commandline.CommandLine) -> dict[str, Any]:
@@ -53,9 +53,9 @@ def _definition(docker: Docker, bake: commandline.CommandLine) -> dict[str, Any]
     if result.returncode != 0:
         raise DockerError("docker buildx bake --print failed", result.stderr.strip())
     try:
-        found = json.loads(result.stdout)
+        definition = json.loads(result.stdout)
     except ValueError as e:
         raise DockerError(f"cannot read the bake definition: {e}") from e
-    if not isinstance(found, dict):
+    if not isinstance(definition, dict):
         raise DockerError("cannot read the bake definition: not an object")
-    return found
+    return definition

@@ -3,7 +3,7 @@ import os
 import pytest
 
 from dockscreen.host import runtime
-from dockscreen.host.docker import DockerNotFound
+from dockscreen.host.docker import DockerNotFoundError
 from dockscreen.model.settings import Config
 
 
@@ -29,10 +29,10 @@ def test_skips_our_own_wrapper_even_through_a_symlink(tmp_path):
 def test_the_configured_path_wins(tmp_path):
     make_docker(tmp_path / "real")
     env = {"PATH": str(tmp_path / "real")}
-    assert runtime._real_docker(Config(docker="/opt/docker"), env, set()) == "/opt/docker"
-    assert runtime._real_docker(Config(), env, set()) == str(tmp_path / "real" / "docker")
-    with pytest.raises(DockerNotFound):
-        runtime._real_docker(Config(), {"PATH": ""}, set())
+    assert runtime._real_docker_path(Config(docker="/opt/docker"), env, set()) == "/opt/docker"
+    assert runtime._real_docker_path(Config(), env, set()) == str(tmp_path / "real" / "docker")
+    with pytest.raises(DockerNotFoundError):
+        runtime._real_docker_path(Config(), {"PATH": ""}, set())
 
 
 def test_empty_and_relative_entries_are_never_searched(tmp_path, monkeypatch):

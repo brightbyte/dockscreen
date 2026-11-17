@@ -40,7 +40,7 @@ class Container(NamedTuple):
     against, and where its user comes from.
 
     Everything else it has comes from the command line that created it. A container that could not be
-    inspected comes from uninspected and has only its id.
+    inspected comes from placeholder and has only its id.
 
     Attributes:
     - info: what docker inspect shows of it; a dict that must not be changed in place
@@ -54,7 +54,7 @@ class Container(NamedTuple):
     user_origin: Origin = Origin.COMMAND_LINE
 
     @classmethod
-    def uninspected(cls, container: str, directory: str | None) -> Self:
+    def placeholder(cls, container: str, directory: str | None) -> Self:
         """Returns the container called container, created in directory, which exists but could not be
         inspected.
 
@@ -70,7 +70,7 @@ class Container(NamedTuple):
         return self.info["Id"]
 
     @property
-    def inspected(self) -> bool:
+    def is_inspected(self) -> bool:
         """Tells whether docker inspect showed it; if not, only its id is known."""
         return "Config" in self.info
 
@@ -94,7 +94,7 @@ class Container(NamedTuple):
         """Returns the compose service keys that ask for what it has (as_service), with its user unless that
         comes from its image.
         """
-        return self.as_service(with_user=self.user_origin is not Origin.IMAGE)
+        return self.as_service(includes_user=self.user_origin is not Origin.IMAGE)
 
     def origin_of(self, key: str) -> Origin:
         """Returns where the value of the service key of definition comes from."""
@@ -104,19 +104,19 @@ class Container(NamedTuple):
         """Returns this container with its user coming from user_origin."""
         return self._replace(user_origin=user_origin)
 
-    def as_service(self, with_user: bool) -> dict[str, Any]:
+    def as_service(self, includes_user: bool) -> dict[str, Any]:
         """Returns the compose service keys that ask for what this container has; its user only if
-        with_user.
+        includes_user.
         """
-        host = self.info.get("HostConfig") or {}
-        service = {key: host[field] for field, key in SERVICE_FIELDS.items() if host.get(field)}
+        host_config = self.info.get("HostConfig") or {}
+        service = {key: host_config[field] for field, key in SERVICE_FIELDS.items() if host_config.get(field)}
         service.setdefault("cap_drop", [])
         service.setdefault("security_opt", [])
-        if host.get("VolumesFrom"):
-            service["volumes_from"] = [f"container:{source}" for source in host["VolumesFrom"]]
-        if found := self.mounts:
-            service["volumes"] = [{"type": m.kind, "source": m.source, "target": m.target} for m in found]
-        if with_user:
+        if host_config.get("VolumesFrom"):
+            service["volumes_from"] = [f"container:{source}" for source in host_config["VolumesFrom"]]
+        if mounts := self.mounts:
+            service["volumes"] = [{"type": m.kind, "source": m.source, "target": m.target} for m in mounts]
+        if includes_user:
             service["user"] = self.user
         return service
 

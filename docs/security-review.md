@@ -76,13 +76,13 @@ dockscreen passes `docker sandbox run`, `docker model run`, swarm `service creat
 
 ### 14. Config trust
 
-`config._strict_modes` walks the realpath chain only, not the directory that holds a symlinked path. Project sections match by cwd prefix (documented). `/etc/subuid` is read directly, so NSS subid sources are not covered.
+`config._check_strict_modes` walks the realpath chain only, not the directory that holds a symlinked path. Project sections match by cwd prefix (documented). `/etc/subuid` is read directly, so NSS subid sources are not covered.
 
 ### 15. Uncaught exceptions end in a traceback
 
 `getpwnam` with a NUL, `getgrgid` with a huge id, `int()` on more than 4300 digits; `screen.containerscreening.create` catches only `DockerError`, `ValueError` and `KeyError` and leaves the created container behind for others.
 
-### 16. `messages.printable` does not escape `\`
+### 16. `messages.printable_text` does not escape `\`
 
 A literal `\x0a` in a project name looks like an escape; invisible printable characters (U+2800, U+3164) pass. The verdict line cannot be forged inside project strings, because every sink escapes. Raw docker, pull and build output can print `[dockscreen] ✔ audit passed` before the real verdict, and container output follows it; inherent to passing output through.
 

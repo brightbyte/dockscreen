@@ -31,7 +31,7 @@ class DockerError(Exception):
         self.output = output or None
 
 
-class DockerNotFound(DockerError):
+class DockerNotFoundError(DockerError):
     """Exception raised when the real docker binary cannot be found."""
 
 
@@ -47,7 +47,7 @@ class Docker:
     """
 
     def __init__(self, binary: str, env: Mapping[str, str] | None = None) -> None:
-        """Wraps binary, the real docker (runtime._real_docker).
+        """Wraps binary, the real docker (runtime._real_docker_path).
 
         Parameters:
         - binary: the path of the real docker
@@ -80,8 +80,8 @@ class Docker:
         return docker
 
     def run(self, args: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        """Runs `docker args` to completion and returns the completed process. Raises DockerNotFound if the
-        binary does not exist.
+        """Runs `docker args` to completion and returns the completed process. Raises DockerNotFoundError if
+        the binary does not exist.
 
         Parameters:
         - args: docker's arguments
@@ -100,7 +100,7 @@ class Docker:
             else:
                 os.execvpe(self.binary, [self.binary, *args], self.env)
         except FileNotFoundError:
-            messages.fatal(messages.DOCKER_NOT_FOUND)
+            messages.exit_with_error(messages.DOCKER_NOT_FOUND_MESSAGE)
 
     def create(self, args: Sequence[str]) -> tuple[int, str | None]:
         """Runs `docker create args` and returns (exit code, container id or None if it failed).
@@ -136,7 +136,7 @@ class Docker:
         # `docker cp SRC -` streams a tar archive to stdout, so nothing from the image is written
         # to the host; -L reads through a symlink, as docker does when it resolves the user
         process = self._launch(subprocess.Popen, [self.binary, "cp", "-L", f"{container}:{path}", "-"],
-                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         data = process.stdout.read(MAX_FILE_BYTES + 1)
         if len(data) > MAX_FILE_BYTES:
             process.kill()
@@ -148,18 +148,19 @@ class Docker:
         # `docker cp` returns a tar archive of one file
         return _first_file_of_tar(data)
 
-    def start(self, container: str, attach: bool, interactive: bool, detach_keys: str | None) -> int:
+    def start(self, container: str, should_attach: bool, should_be_interactive: bool,
+              detach_keys: str | None) -> int:
         """Runs `docker start` on container and returns its exit status.
 
         Parameters:
         - container: the container's name or id
-        - attach, interactive: --attach and --interactive
+        - should_attach, should_be_interactive: --attach and --interactive
         - detach_keys: --detach-keys; None for docker's default
         """
         args = ["start"]
-        if attach:
+        if should_attach:
             args.append("--attach")
-        if interactive:
+        if should_be_interactive:
             args.append("--interactive")
         if detach_keys:
             args.append(f"--detach-keys={detach_keys}")
@@ -169,18 +170,19 @@ class Docker:
         """Removes container, running or not, ignoring failures."""
         self.run(["rm", "--force", "--", container], capture_output=True)
 
-    def label_values(self, label: str, value: str, wanted: str) -> list[str]:
-        """Returns the value of the label wanted of each container, running or not, whose label is value.
+    def label_values(self, label: str, value: str, wanted_label: str) -> list[str]:
+        """Returns the value of the label wanted_label of each container, running or not, whose label is
+        value.
 
-        Empty for a container without wanted. Raises DockerError if docker cannot say.
+        Empty for a container without wanted_label. Raises DockerError if docker cannot say.
 
         Parameters:
         - label: the label to filter by
         - value: its value
-        - wanted: the label whose values are returned
+        - wanted_label: the label whose values are returned
         """
         result = self.run(["ps", "--all", "--filter", f"label={label}={value}", "--format",
-                           f'{{{{.Label "{wanted}"}}}}'], capture_output=True, text=True)
+                           f'{{{{.Label "{wanted_label}"}}}}'], capture_output=True, text=True)
         if result.returncode != 0:
             raise DockerError("docker ps failed", result.stderr.strip())
         return result.stdout.splitlines()
@@ -209,14 +211,14 @@ class Docker:
         """
         try:
             process = self._launch(subprocess.Popen, cmd)
-        except DockerNotFound:
-            messages.notice(messages.DOCKER_NOT_FOUND)
+        except DockerNotFoundError:
+            messages.print_notice(messages.DOCKER_NOT_FOUND_MESSAGE)
             return 127
 
         def forward(number: int, frame: Any) -> None:
             process.send_signal(number)
 
-        previous = {s: signal.signal(s, forward) for s in FORWARDED_SIGNALS}
+        previous_handlers = {s: signal.signal(s, forward) for s in FORWARDED_SIGNALS}
         try:
             while True:
                 try:
@@ -225,20 +227,20 @@ class Docker:
                 except KeyboardInterrupt:
                     continue  # the terminal sent the same SIGINT to the child
         finally:
-            for number, handler in previous.items():
+            for number, handler in previous_handlers.items():
                 signal.signal(number, handler)
         return 128 - code if code < 0 else code
 
     def _launch(self, launch: Callable[..., Any], cmd: Sequence[str], **kwargs: Any) -> Any:
         """Returns what launch (_run_proc or subprocess.Popen) returns for cmd, run with env if that is
-        set. Raises DockerNotFound if the binary does not exist.
+        set. Raises DockerNotFoundError if the binary does not exist.
         """
         if self.env is not None:
             kwargs["env"] = self.env
         try:
             return launch(cmd, **kwargs)
         except FileNotFoundError:
-            raise DockerNotFound(messages.DOCKER_NOT_FOUND) from None
+            raise DockerNotFoundError(messages.DOCKER_NOT_FOUND_MESSAGE) from None
 
 
 def _first_file_of_tar(data: bytes) -> str | None:
@@ -270,8 +272,8 @@ def is_remote(global_args: Sequence[str], docker: Docker) -> bool:
         return True
     if commandline.option_values(global_args, "--context", "-c"):
         return True
-    host = env.get("DOCKER_HOST", "")
-    if host and not host.startswith("unix://"):
+    docker_host = env.get("DOCKER_HOST", "")
+    if docker_host and not docker_host.startswith("unix://"):
         return True
     if env.get("DOCKER_CONTEXT") not in (None, "", "default"):
         return True

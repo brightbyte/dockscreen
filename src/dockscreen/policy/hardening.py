@@ -31,11 +31,12 @@ def changes(config: dict[str, Any], policy: Policy) -> ProjectPatch:
     - config: the project's resolved config
     - policy: the policy whose rules resolve the names
     """
-    found = ProjectPatch()
+    patch = ProjectPatch()
     for name, service in (config.get("services") or {}).items():
         service = service or {}
-        found += policy.resolve_user_names(name, service) + ProjectPatch.of(_defaults(name, service))
-    return found
+        default_patch = ProjectPatch.of(_default_substitutions(name, service))
+        patch += policy.resolve_user_names(name, service) + default_patch
+    return patch
 
 
 def container_defaults() -> CommandLinePatch:
@@ -47,33 +48,36 @@ def container_defaults() -> CommandLinePatch:
     return CommandLinePatch.of([Amendment(args, notice)])
 
 
-def _defaults(name: str, service: dict[str, Any]) -> list[Substitution]:
+def _default_substitutions(name: str, service: dict[str, Any]) -> list[Substitution]:
     """Returns the substitutions that add cap_drop ALL and no-new-privileges where the service lacks them.
 
     Where the service sets nothing, they are routine, and dockscreen reports them for all services in one
     line; where it sets the key itself, dockscreen extends its choice, which is notable.
     """
-    found = []
+    substitutions = []
     if not drops_all(service.get("cap_drop")):
-        found.append(_default(name, "cap_drop", service.get("cap_drop"), CAP_DROP, f"lacks {CAP_DROP}"))
+        substitutions.append(_default_substitution(name, "cap_drop", service.get("cap_drop"), CAP_DROP,
+                                                   f"lacks {CAP_DROP}"))
     if not has_no_new_privileges(service.get("security_opt")):
-        found.append(_default(name, "security_opt", service.get("security_opt"), SECURITY_OPT,
-                              "lacks no-new-privileges"))
-    return found
+        substitutions.append(_default_substitution(name, "security_opt", service.get("security_opt"),
+                                                   SECURITY_OPT, "lacks no-new-privileges"))
+    return substitutions
 
 
-def _default(name: str, key: str, declared: list[Any] | None, value: str, lacks: str) -> Substitution:
+def _default_substitution(name: str, key: str, declared_values: list[Any] | None, value: str,
+                          lacks: str) -> Substitution:
     """Returns the substitution that adds value to the list the service declared for key, if any; the key
     then still holds what the project chose, and the policy judges it as the project's.
     """
-    if not declared:
+    if not declared_values:
         return Substitution(name, key, [value], group=DEFAULTS, origin=Origin.DOCKSCREEN)
     text = f"{key} {lacks}; added {json.dumps([value])}"
-    notice = Notice(text, NoticeSeverity.WARNING, help=NOT_REMOVABLE)
-    return Substitution(name, key, [*declared, value], notice)
+    notice = Notice(text, NoticeSeverity.WARNING, help=NOT_REMOVABLE_REASON)
+    return Substitution(name, key, [*declared_values, value], notice)
 
 
-NOT_REMOVABLE = "dockscreen always adds it, and cap_add is refused: a service that needs more cannot run"
+NOT_REMOVABLE_REASON = ("dockscreen always adds it, and cap_add is refused: a service that needs more cannot "
+                        "run")
 DEFAULTS_HELP = ("a service that needs a capability or a setuid program fails, and cap_add is refused: "
                  "it cannot run under dockscreen")
 CONTAINER_DEFAULTS_HELP = ("a program that needs a capability or setuid fails: add --cap-add or "

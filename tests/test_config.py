@@ -61,7 +61,7 @@ nobody_range = [80000, 80010]
     assert settings.mount_dirs == ("/data",)
     assert settings.security_opts == ("seccomp=/etc/docker/strict.json",)
     assert settings.docker == "/usr/local/bin/docker"
-    assert settings.configured == config.SETTINGS  # docker is not a setting the sections can have
+    assert settings.configured_keys == config.SETTINGS  # docker is not a setting the sections can have
     assert dict(settings.images) == {
         "docker.io/library/mariadb": ConfigSection(user=(999, 999), mount_dirs=("/srv/db",)),
         "ghcr.io/acme/app": ConfigSection(security_opts=("apparmor=acme",)),
@@ -136,7 +136,7 @@ MINE = {"/home/me": (1000, 0o755), "/home/me/.config": (1000, 0o700),
 
 
 def test_strict_modes_accept_a_file_that_only_its_owner_or_root_can_write():
-    config._strict_modes(PATH, 1000, fake_stat(MINE))
+    config._check_strict_modes(PATH, 1000, fake_stat(MINE))
 
 
 @pytest.mark.parametrize("change, message", [
@@ -149,7 +149,7 @@ def test_strict_modes_accept_a_file_that_only_its_owner_or_root_can_write():
 ])
 def test_strict_modes_refuse_what_someone_else_could_have_written(change, message):
     with pytest.raises(config.ConfigError, match=message):
-        config._strict_modes(PATH, 1000, fake_stat({**MINE, **change}))
+        config._check_strict_modes(PATH, 1000, fake_stat({**MINE, **change}))
 
 
 def test_a_file_that_fails_strict_modes_is_an_error(tmp_path):
@@ -163,10 +163,10 @@ def test_a_file_that_fails_strict_modes_is_an_error(tmp_path):
 
 
 def test_the_user_file_follows_xdg(tmp_path):
-    assert config.user_file({"XDG_CONFIG_HOME": "/x"}, "/home/me") == "/x/dockscreen/config.toml"
+    assert config.user_file_path({"XDG_CONFIG_HOME": "/x"}, "/home/me") == "/x/dockscreen/config.toml"
     default = "/home/me/.config/dockscreen/config.toml"
-    assert config.user_file({}, "/home/me") == default
-    assert config.user_file({"XDG_CONFIG_HOME": "relative"}, "/home/me") == default
+    assert config.user_file_path({}, "/home/me") == default
+    assert config.user_file_path({"XDG_CONFIG_HOME": "relative"}, "/home/me") == default
 
 
 def test_a_missing_user_file_is_created_with_every_setting_commented_out(tmp_path):
@@ -185,7 +185,7 @@ def test_the_template_examples_are_valid_settings(tmp_path):
         text = text.replace(empty, "")
     # settings and section headers are commented out as `#key` and `#[section]`, prose as `# text`
     path.write_text("\n".join(line[1:] if line.startswith("#") and not line.startswith("# ") else line
-                               for line in text.splitlines()))
+                              for line in text.splitlines()))
     settings = load(str(path))
     assert settings.mount_dirs == ("/srv/shared-data",)
     assert settings.images["docker.io/library/mariadb"].user == (999, 999)

@@ -12,7 +12,7 @@ VALUE_FLAGS = {**userargs.COMPOSE_VALUE_FLAGS, "docker exec": runargs.EXEC_VALUE
 
 def refusals(parsed):
     """Returns the texts of the policy's refusals of the users that parsed gives."""
-    return texts(policy.Policy(id_facts()).check_user_options(parsed.users.given))
+    return texts(policy.Policy(id_facts()).check_user_options(parsed.users.options))
 
 
 
@@ -22,7 +22,7 @@ def parse(command, args):
 
 def screened(parsed):
     """The report of judging the users parsed gives, and parsed with --as and --as-me resolved."""
-    return userscreening.screened(parsed, Screener(make_runtime()))
+    return userscreening.screen_user_options(parsed, Screener(make_runtime()))
 
 
 @pytest.mark.parametrize("args, service, user_given", [
@@ -39,7 +39,7 @@ def screened(parsed):
 ])
 def test_run_arguments(args, service, user_given):
     parsed = parse("run", args)
-    assert (parsed.service, parsed.users.chosen, list(parsed.args)) == (service, user_given, args)
+    assert (parsed.service, parsed.users.is_user_chosen, list(parsed.args)) == (service, user_given, args)
 
 
 @pytest.mark.parametrize("args", [
@@ -54,16 +54,16 @@ def test_users_must_be_numeric_uid_gid(args):
 def test_exec_and_docker_exec_have_their_own_options():
     exec_args = ["--index", "2", "-u", "0:0", "web", "sh"]
     parsed = parse("exec", exec_args)
-    assert (parsed.service, parsed.users.chosen) == ("web", True)
+    assert (parsed.service, parsed.users.is_user_chosen) == ("web", True)
     parsed = parse("docker exec", ["--detach-keys", "x", "-it", "c", "sh"])
-    assert (parsed.service, parsed.users.chosen) == ("c", False)
+    assert (parsed.service, parsed.users.is_user_chosen) == ("c", False)
     assert refusals(parse("docker exec", ["--env-file", "e", "-u", "www-data", "c", "sh"]))
 
 
 class Accounts:
     """A host whose only account is alice, 1001:1002."""
 
-    def user(self, name):
+    def user_ids(self, name):
         return (1001, 1002) if name == "alice" else None
 
 
@@ -81,7 +81,7 @@ ACCOUNTS = Accounts()
 def test_as_is_resolved_on_this_host_and_replaced_by_numeric_ids(subcommand, args, rewritten):
     report, parsed = screened(parse(subcommand, args))
     assert list(parsed.args) == rewritten
-    assert parsed.users.chosen == ("--as" not in rewritten)
+    assert parsed.users.is_user_chosen == ("--as" not in rewritten)
     resolving = ["Resolving user alice to uid 1001, gid 1002"]
     assert texts(report.notices) == ([] if "--as" in rewritten else resolving)
 
@@ -99,14 +99,14 @@ def test_a_name_given_to_user_points_to_as():
 def test_check_given_users_reports_what_the_policy_refuses():
     screener = Screener(make_runtime())
 
-    assert screener.check_given_users(parse("exec", ["-u", "1000:1000", "web"]).users.given).passed
-    refused = screener.check_given_users(parse("exec", ["-u", "postgres", "web"]).users.given)
+    assert screener.check_given_users(parse("exec", ["-u", "1000:1000", "web"]).users.options).has_passed
+    refused = screener.check_given_users(parse("exec", ["-u", "postgres", "web"]).users.options)
     # the same refusals as the policy gives, as a report that stops the command
-    assert not refused.passed
+    assert not refused.has_passed
     assert texts(refused.findings) == refusals(parse("exec", ["-u", "postgres", "web"]))
 
 
 @pytest.mark.parametrize("subcommand", ["run", "exec", "docker exec"])
 def test_as_me_is_the_callers_ids(subcommand):
     _, parsed = screened(parse(subcommand, ["-it", "--as-me", "c", "sh"]))
-    assert list(parsed.args) == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.chosen
+    assert list(parsed.args) == ["-it", "--user=1000:1001", "c", "sh"] and parsed.users.is_user_chosen

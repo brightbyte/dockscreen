@@ -6,14 +6,14 @@ from dockscreen.commands import compose_audit, compose_harden
 from dockscreen.policy import projectfixes
 from dockscreen.policy.policy import Policy
 from dockscreen.policy.report import Report
-from dockscreen.util.messages import printable
+from dockscreen.util.messages import printable_text
 
 UID, GID = os.getuid(), os.getgid()
 
 
 def test_printable_escapes_control_line_separator_and_bidi_characters():
-    assert printable("a\nb\r\x1b[2Jc\u2028d\u202ee") == "a\\x0ab\\x0d\\x1b[2Jc\\u2028d\\u202ee"
-    assert printable("plain /path with spaces and ünïcode") == "plain /path with spaces and ünïcode"
+    assert printable_text("a\nb\r\x1b[2Jc\u2028d\u202ee") == "a\\x0ab\\x0d\\x1b[2Jc\\u2028d\\u202ee"
+    assert printable_text("plain /path with spaces and ünïcode") == "plain /path with spaces and ünïcode"
 
 
 def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
@@ -22,8 +22,8 @@ def test_newline_in_untrusted_text_cannot_leave_the_patch_comment():
         "user": f"{UID}:{GID}", "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
         "volumes": [{"type": "bind", "source": evil, "target": "/e"}],
     }}}
-    policy = Policy(id_facts(me=(UID, GID), allow_me=True))
-    fixed = projectfixes.fixed_config(project_of(original, "/proj"), policy)
+    policy = Policy(id_facts(me=(UID, GID), is_me_allowed=True))
+    fixed = projectfixes.fix_config(project_of(original, "/proj"), policy)
 
     text = compose_harden._render(original, fixed, ["bind mount " + evil])
 

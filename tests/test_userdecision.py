@@ -24,13 +24,13 @@ NOTE = Notice("hm", NoticeSeverity.WARNING)
 ])
 def test_decision_predicates(origin, root, user, notices, findings, refused, pins_user, accepted):
     decision = UserDecision(origin, IMAGE, notices, findings, user=user, replaces_root=root)
-    assert (decision.refused, decision.pins_user, decision.accepted) == (refused, pins_user, accepted)
+    assert (decision.is_refused, decision.pins_user, decision.is_accepted) == (refused, pins_user, accepted)
 
 
 def test_a_decision_tells_failures_from_refusals():
     decision = UserDecision(Origin.IMAGE, IMAGE, (NOTE,), (REFUSAL,))
-    assert (decision.findings, decision.notices, decision.failed) == ((REFUSAL,), (NOTE,), False)
+    assert (decision.findings, decision.notices, decision.has_failed) == ((REFUSAL,), (NOTE,), False)
     failure = UserDecision.failure(IMAGE, "lost")
-    assert failure.failed and failure.image is IMAGE
+    assert failure.has_failed and failure.image is IMAGE
     assert failure.findings == (Finding("lost", Verdict.FAILED),)
     assert failure.origin is None  # it has no user to come from anywhere

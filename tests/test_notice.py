@@ -20,5 +20,5 @@ def test_with_text_with_help_and_about_keep_the_rest_of_a_notice():
         "service web", NoticeSeverity.WARNING)
     assert notice.with_text("other").help == "help"
     assert notice.with_help(None).help is None
-    about = notice.about("command line")
+    about = notice.with_subject("command line")
     assert str(about) == "command line: service web: text" and about.severity is NoticeSeverity.WARNING

@@ -28,35 +28,36 @@ VOLUME = ("--volume", "-v")
 ENV_FILE = ("--env-from-file",)
 
 
-def substitutions(parsed: userargs.UserArgs[str], service: Service, runtime: Runtime) -> ProjectPatch:
-    """Returns the patch that makes service what `run` with parsed's options runs.
+def substitutions(user_args: userargs.UserArgs[str], service: Service, runtime: Runtime) -> ProjectPatch:
+    """Returns the patch that makes service what `run` with the options of user_args runs.
 
     Parameters:
-    - parsed: the arguments of `run`
+    - user_args: the arguments of `run`
     - service: the service that `run` runs
     - runtime: the Runtime of the command, whose current directory relative paths are read from, with its home
       directory as `~`
     """
-    found = []
+    substitutions = []
     definition = service.definition
-    if users := _values(parsed, USER):
-        found.append(_set(service, "user", users[-1]))  # the last one wins, as in docker
-    if mounts := [_mount(spec, runtime.home) for spec in _values(parsed, VOLUME)]:
-        found.append(_set(service, "volumes", [*(definition.get("volumes") or []), *mounts]))
-    if env_files := [os.path.join(runtime.cwd, path) for path in _values(parsed, ENV_FILE)]:
-        found.append(_set(service, "env_file", [*_as_list(definition.get("env_file")), *env_files]))
-    added, dropped = _values(parsed, ("--cap-add",)), _values(parsed, ("--cap-drop",))
-    cap_add, cap_drop = _capabilities(definition, added, dropped)
+    if users := _values(user_args, USER):
+        substitutions.append(_set(service, "user", users[-1]))  # the last one wins, as in docker
+    if mounts := [_mount(spec, runtime.home) for spec in _values(user_args, VOLUME)]:
+        substitutions.append(_set(service, "volumes", [*(definition.get("volumes") or []), *mounts]))
+    if env_files := [os.path.join(runtime.cwd, path) for path in _values(user_args, ENV_FILE)]:
+        substitutions.append(_set(service, "env_file", [*_to_list(definition.get("env_file")), *env_files]))
+    added_capabilities = _values(user_args, ("--cap-add",))
+    dropped_capabilities = _values(user_args, ("--cap-drop",))
+    cap_add, cap_drop = _capabilities(definition, added_capabilities, dropped_capabilities)
     if cap_add != list(definition.get("cap_add") or []):
-        found.append(_set(service, "cap_add", cap_add))
+        substitutions.append(_set(service, "cap_add", cap_add))
     if cap_drop != list(definition.get("cap_drop") or []):
-        found.append(_set(service, "cap_drop", cap_drop))
-    return ProjectPatch.of(found)
+        substitutions.append(_set(service, "cap_drop", cap_drop))
+    return ProjectPatch.of(substitutions)
 
 
-def _values(parsed: userargs.UserArgs[str], options: Sequence[str]) -> list[str]:
-    """Returns the values parsed gives to any of options, in their order."""
-    return [value for option, value in parsed.values if option in options]
+def _values(user_args: userargs.UserArgs[str], options: Sequence[str]) -> list[str]:
+    """Returns the values user_args gives to any of options, in their order."""
+    return [value for option, value in user_args.values if option in options]
 
 
 def _set(service: Service, key: str, value: Any) -> Substitution:
@@ -64,17 +65,19 @@ def _set(service: Service, key: str, value: Any) -> Substitution:
     return Substitution(service.name, key, value, origin=Origin.COMMAND_LINE)
 
 
-def _capabilities(definition: dict[str, Any], added: list[str], dropped: list[str]) -> tuple[list, list]:
-    """Returns (cap_add, cap_drop) of the service with definition once compose applies --cap-add (added)
-    and --cap-drop (dropped): each is appended to its own list and taken out of the other, added first.
+def _capabilities(definition: dict[str, Any], added_capabilities: list[str],
+                  dropped_capabilities: list[str]) -> tuple[list, list]:
+    """Returns (cap_add, cap_drop) of the service with definition once compose applies --cap-add
+    (added_capabilities) and --cap-drop (dropped_capabilities): each is appended to its own list and taken out
+    of the other, added_capabilities first.
     """
     cap_add, cap_drop = list(definition.get("cap_add") or []), list(definition.get("cap_drop") or [])
-    if added:
-        cap_add = [*cap_add, *added]
-        cap_drop = [c for c in cap_drop if c not in added]
-    if dropped:
-        cap_drop = [*cap_drop, *dropped]
-        cap_add = [c for c in cap_add if c not in dropped]
+    if added_capabilities:
+        cap_add = [*cap_add, *added_capabilities]
+        cap_drop = [c for c in cap_drop if c not in added_capabilities]
+    if dropped_capabilities:
+        cap_drop = [*cap_drop, *dropped_capabilities]
+        cap_add = [c for c in cap_add if c not in dropped_capabilities]
     return cap_add, cap_drop
 
 
@@ -99,7 +102,7 @@ def _mount(spec: str, home: str) -> dict[str, Any]:
     return mount
 
 
-def _as_list(value: Any) -> list[Any]:
+def _to_list(value: Any) -> list[Any]:
     """Returns an env_file value as a list of its entries."""
     if value is None:
         return []

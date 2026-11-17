@@ -71,32 +71,33 @@ class RuleBase:
         """
         return (*([directory] if directory is not None else []), *self.extra_dirs)
 
-    def _outside(self, subject: str, directory: str | None) -> str:
+    def _outside_problem(self, subject: str, directory: str | None) -> str:
         """Returns the problem that subject is outside the mount roots of a project in directory (None: none
         known), with how the config file can allow it.
         """
         text = f"{subject} is outside {_roots_text(directory, self.extra_dirs)}"
         if self.config_file:
-            where = f" under [projects.\"{directory}\"]" if directory is not None else ""
-            text += (f"; to allow it, add a directory that contains it to mount_dirs{where} "
+            config_location = f" under [projects.\"{directory}\"]" if directory is not None else ""
+            text += (f"; to allow it, add a directory that contains it to mount_dirs{config_location} "
                      f"in {self.config_file}")
         return text
 
 
-def unknown_keys(mapping: Mapping[str, Any], allowed: Collection[str], what: str,
-                 extensions: bool = True) -> list[str]:
-    """Returns a problem for each key of mapping not in allowed; `x-` keys pass unless extensions is False.
+def unknown_key_problems(mapping: Mapping[str, Any], allowed_keys: Collection[str], key_kind: str,
+                         allows_extensions: bool = True) -> list[str]:
+    """Returns a problem for each key of mapping not in allowed_keys; `x-` keys pass unless allows_extensions
+    is False.
 
     Parameters:
     - mapping: the keys to check, with their values
-    - allowed: the keys that may be there
-    - what: names the kind of key in the problems
-    - extensions: `x-` keys pass
+    - allowed_keys: the keys that may be there
+    - key_kind: names the kind of key in the problems
+    - allows_extensions: `x-` keys pass
     """
     return [
-        f"{what} {key!r} is not on the allow list"
+        f"{key_kind} {key!r} is not on the allow list"
         for key in mapping
-        if key not in allowed and not (extensions and str(key).startswith("x-"))
+        if key not in allowed_keys and not (allows_extensions and str(key).startswith("x-"))
     ]
 
 
@@ -129,5 +130,5 @@ def is_inside(path: str, root: str) -> bool:
     afterwards (docs/design.md, Known gaps).
     """
     real_root = os.path.realpath(root)
-    real = os.path.realpath(os.path.join(real_root, path))
-    return os.path.commonpath([real_root, real]) == real_root
+    real_path = os.path.realpath(os.path.join(real_root, path))
+    return os.path.commonpath([real_root, real_path]) == real_root

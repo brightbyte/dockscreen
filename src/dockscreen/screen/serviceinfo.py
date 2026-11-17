@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dockscreen.host.docker import DockerError
-from dockscreen.model.image import Image, Inspected
+from dockscreen.model.image import Image, ImageInspection
 from dockscreen.model.project import Project, ServiceImages
 from dockscreen.policy import sections
 from dockscreen.policy.finding import Finding, failure_of
@@ -24,7 +24,7 @@ from dockscreen.screen.screener import Screener
 
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], screener: Screener,
-            chosen: frozenset[str] = frozenset()) -> tuple[ServiceImages | None, list[Finding]]:
+            chosen_services: frozenset[str] = frozenset()) -> tuple[ServiceImages | None, list[Finding]]:
     """Finds out what screening needs to know about project's services, for the policy to decide on
     (Screener.decide): pulls and builds the images of the services that start as `up` would, and looks at
     those of the services that set no user.
@@ -36,20 +36,22 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], scree
     - project: the hardened project
     - args: the arguments after the subcommand, which name services and may carry --build or --pull
     - screener: the Screener to pull, build, decide and run with
-    - chosen: services whose user the command line chooses (`run -u`); their images are not looked at
+    - chosen_services: services whose user the command line chooses (`run -u`); their images are not looked at
     """
     config = project.definition
     try:
-        started = _services_to_run(command, config, args, screener)
-        looked_at = (started - chosen) & project.services_without_user
-        inspected, failures = imageusers.find(command, project, started, looked_at, args, screener)
+        started_services = _services_to_run(command, config, args, screener)
+        services_to_look_at = (started_services - chosen_services) & project.services_without_user
+        inspections, failures = imageusers.find(command, project, started_services, services_to_look_at,
+                                                args, screener)
     except DockerError as e:
         return None, [failure_of(e)]
     if failures:
         return None, failures
-    found = {**_find_section_images(config, screener),
-             **{name: image.image for name, image in inspected.items() if isinstance(image, Inspected)}}
-    return ServiceImages(found, inspected), []
+    inspected_images = {name: inspection.image for name, inspection in inspections.items()
+                        if isinstance(inspection, ImageInspection)}
+    section_images = {**_find_section_images(config, screener), **inspected_images}
+    return ServiceImages(section_images, inspections), []
 
 
 def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str, Image]:
@@ -65,17 +67,18 @@ def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str
     Returns {service: image} for those that are here.
     """
     settings = screener.runtime.settings
-    found = {}
+    section_images = {}
     for name, service in (config.get("services") or {}).items():
-        image, built = imageusers.image_name(config, name, service), "build" in service
-        if sections.name_matches(settings, image, built) is None:
+        image, is_built = imageusers.image_name(config, name, service), "build" in service
+        if sections.repository_for_name(settings, image, is_built) is None:
             continue
         try:
-            inspected = screener.docker.inspect_image(image)
+            image_info = screener.docker.inspect_image(image)
         except DockerError:
             continue  # not there: the section does not apply, and the final check says what that means
-        found[name] = Image(image, inspected.get("Id"), built, tuple(inspected.get("RepoDigests") or ()))
-    return found
+        section_images[name] = Image(image, image_info.get("Id"), is_built,
+                                     tuple(image_info.get("RepoDigests") or ()))
+    return section_images
 
 
 def _services_to_run(command: Sequence[str], config: dict[str, Any], args: Sequence[str],

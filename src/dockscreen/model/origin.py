@@ -22,6 +22,6 @@ class Origin(enum.Enum):
 # The origins whose values the policy takes as given: it points out its objections to them instead of
 # refusing. It checks the values dockscreen sets once more like the project's, so that a mistake in them
 # stops the command.
-TRUSTED = frozenset({Origin.COMMAND_LINE, Origin.CONFIG})
+TRUSTED_ORIGINS = frozenset({Origin.COMMAND_LINE, Origin.CONFIG})
 # --strict-screen: the policy judges the command line like a project.
-STRICT = TRUSTED - {Origin.COMMAND_LINE}
+STRICT_ORIGINS = TRUSTED_ORIGINS - {Origin.COMMAND_LINE}

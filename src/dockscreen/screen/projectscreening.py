@@ -50,7 +50,7 @@ from typing import Any, NamedTuple, Self
 from dockscreen.host import shellenv
 from dockscreen.host.docker import Docker, DockerError, is_remote
 from dockscreen.host.runtime import Runtime
-from dockscreen.model.origin import STRICT, TRUSTED, Origin
+from dockscreen.model.origin import STRICT_ORIGINS, TRUSTED_ORIGINS, Origin
 from dockscreen.model.project import Project
 from dockscreen.policy import finding, hardening, policy
 from dockscreen.policy.decisions import Decisions
@@ -82,44 +82,45 @@ class LoadedProject(NamedTuple):
 
     Attributes:
     - global_args: the compose options that select the project
-    - resolved: the project as compose resolved it
-    - remote: whether its daemon may not be this host's
+    - resolved_project: the project as compose resolved it
+    - is_remote: whether its daemon may not be this host's
     - hardening: the patch that adds the defaults
     """
     global_args: tuple[str, ...]
-    resolved: Project
-    remote: bool
+    resolved_project: Project
+    is_remote: bool
     hardening: ProjectPatch
 
     @property
-    def hardened(self) -> Project:
+    def hardened_project(self) -> Project:
         """Returns the project with the defaults added, which is what the images are acquired for."""
-        return self.hardening.applied_to(self.resolved)
+        return self.hardening.apply_to(self.resolved_project)
 
     @property
     def directory(self) -> str:
         """Returns the project directory."""
-        return self.resolved.directory
+        return self.resolved_project.directory
 
-    def static(self) -> Project:
+    def static_project(self) -> Project:
         """Returns the hardened project as the checks before any image is looked at see it, which leave the
         users that the images decide to later.
         """
-        hardened = self.hardened
-        unset = hardened.services_without_user
-        return hardened.with_origins({name: {"user": Origin.IMAGE} for name in unset})
+        hardened_project = self.hardened_project
+        services_without_user = hardened_project.services_without_user
+        return hardened_project.with_origins({name: {"user": Origin.IMAGE} for name in services_without_user})
 
-    def with_hardened(self, definition: dict[str, Any]) -> Self:
+    def with_hardened_definition(self, definition: dict[str, Any]) -> Self:
         """Returns this project with definition as its resolved one.
 
         Parameters:
         - definition: a definition with the defaults already added, as hardened has it
         """
-        return self._replace(resolved=self.hardened.with_definition(definition), hardening=ProjectPatch())
+        return self._replace(resolved_project=self.hardened_project.with_definition(definition),
+                             hardening=ProjectPatch())
 
-    def generated(self, docker_binary: str) -> contextlib.AbstractContextManager[Command]:
+    def generated_files(self, docker_binary: str) -> contextlib.AbstractContextManager[Command]:
         """Returns _generated() for this project."""
-        return _generated(self.global_args, self.directory, docker_binary)
+        return _generated_files(self.global_args, self.directory, docker_binary)
 
 
 class ClearedProject(NamedTuple):
@@ -129,9 +130,9 @@ class ClearedProject(NamedTuple):
     Instances come from check.
 
     Attributes:
-    - loaded: the project (LoadedProject)
+    - loaded_project: the project (LoadedProject)
     """
-    loaded: LoadedProject
+    loaded_project: LoadedProject
 
 
 class RunnableProject(NamedTuple):
@@ -142,46 +143,48 @@ class RunnableProject(NamedTuple):
 
     Attributes:
     - project: the project that will run
-    - decided: the Decisions about its images
+    - decisions: the Decisions about its images
     - report: what the check of the project that will run found
     """
     project: Project
-    decided: Decisions
+    decisions: Decisions
     report: Report
 
 
 def load_project(args: Sequence[str], runtime: Runtime) -> LoadedProject:
     """Loads the project args select, with the defaults to add.
 
-    Raises inspect.ProjectRefused if the policy refuses where it is, DockerError if it cannot be inspected,
+    Raises inspect.ProjectRefusal if the policy refuses where it is, DockerError if it cannot be inspected,
     ValueError if it cannot be hardened.
 
     Parameters:
     - args: the compose options before the subcommand, which select the project
     - runtime: the Runtime of the command
     """
-    found = inspect.project(args, runtime)
-    remote = is_remote(args, runtime.docker)
-    changes = hardening.changes(found.definition, Screener(runtime).policy(found.directory))
-    return LoadedProject(tuple(args), found, remote, changes)
+    inspected_project = inspect.project(args, runtime)
+    is_remote_daemon = is_remote(args, runtime.docker)
+    hardening_patch = hardening.changes(inspected_project.definition,
+                                        Screener(runtime).policy(inspected_project.directory))
+    return LoadedProject(tuple(args), inspected_project, is_remote_daemon, hardening_patch)
 
 
-def check(loaded: LoadedProject, screener: Screener) -> ClearedProject | Report:
-    """Checks the project before any image is looked at (LoadedProject.static): its definition, its daemon,
-    and, once those pass, the containers that already have its name.
+def check(loaded_project: LoadedProject, screener: Screener) -> ClearedProject | Report:
+    """Checks the project before any image is looked at (LoadedProject.static_project): its definition, its
+    daemon, and, once those pass, the containers that already have its name.
 
     Returns the project cleared for acquiring its images, or the report that stops it.
     """
-    static_policy = screener.project_policy(loaded.resolved)
-    found = Report.of([*static_policy.check_project(loaded.static()),
-                       *static_policy.check_daemon(loaded.remote)])
-    if found.passed:  # asking docker about the name is left until nothing else stands in the way
-        found = found.with_more_findings(_name_conflicts(loaded, static_policy, screener))
-    return ClearedProject(loaded) if found.passed else found
+    static_policy = screener.project_policy(loaded_project.resolved_project)
+    static_report = Report.of([*static_policy.check_project(loaded_project.static_project()),
+                               *static_policy.check_daemon(loaded_project.is_remote)])
+    if static_report.has_passed:  # asking docker about the name is left until nothing else stands in the way
+        conflicts = _name_conflicts(loaded_project, static_policy, screener)
+        static_report = static_report.with_more_findings(conflicts)
+    return ClearedProject(loaded_project) if static_report.has_passed else static_report
 
 
-def decide(cleared: ClearedProject, screener: Screener, command: Command, args: Sequence[str] = (),
-           chosen: frozenset[str] = frozenset()) -> Decisions:
+def decide(cleared_project: ClearedProject, screener: Screener, command: Command, args: Sequence[str] = (),
+           chosen_services: frozenset[str] = frozenset()) -> Decisions:
     """Finds out what screening needs to know about the services of the hardened project (serviceinfo.prepare)
     and decides their users (Screener.decide), once compose has been shown to read the generated file back as
     its definition.
@@ -189,22 +192,23 @@ def decide(cleared: ClearedProject, screener: Screener, command: Command, args: 
     Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
 
     Parameters:
-    - cleared: the project, as check cleared it
+    - cleared_project: the project, as check cleared it
     - screener: the Screener to pull, build, look and decide with
     - command: writes the generated file (generated())
-    - args, chosen: as serviceinfo.prepare takes them
+    - args, chosen_services: as serviceinfo.prepare takes them
     """
-    project = cleared.loaded.hardened
-    on_file = command(project.definition)
-    problem = _read_back_problem(on_file, project.definition, screener.docker)
-    if problem:
-        return screener.decide(project, None, [Finding(problem, Verdict.FAILED)])
-    images, failures = serviceinfo.prepare(on_file, project, list(args), screener, chosen)
-    return screener.decide(project, images, failures)
+    project = cleared_project.loaded_project.hardened_project
+    compose_command = command(project.definition)
+    read_back_problem = _read_back_problem(compose_command, project.definition, screener.docker)
+    if read_back_problem:
+        return screener.decide(project, None, [Finding(read_back_problem, Verdict.FAILED)])
+    service_images, failures = serviceinfo.prepare(compose_command, project, list(args), screener,
+                                                   chosen_services)
+    return screener.decide(project, service_images, failures)
 
 
-def finish(cleared: ClearedProject, decided: Decisions, screener: Screener,
-           parsed: userargs.UserArgs[str] | None = None, strict: bool = False
+def finish(cleared_project: ClearedProject, decisions: Decisions, screener: Screener,
+           user_args: userargs.UserArgs[str] | None = None, is_strict: bool = False
            ) -> RunnableProject | Report:
     """Makes the project that will run, the resolved one with the hardening and then what the images decided
     (Decisions.changes), and checks it with the policy that decided, with image sections only where the
@@ -213,32 +217,37 @@ def finish(cleared: ClearedProject, decided: Decisions, screener: Screener,
     Returns it as runnable, or the report that stops it, which is decided's if that did not pass.
 
     Parameters:
-    - cleared: the project, as check cleared it
-    - decided: what decide decided about its images
+    - cleared_project: the project, as check cleared it
+    - decisions: what decide decided about its images
     - screener: the Screener of the command
-    - parsed: the arguments of the subcommand, with the user the command line chose (compose_run)
-    - strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is judged,
-      with the command line untrusted; otherwise those options are taken as given, as for `docker run`
+    - user_args: the arguments of the subcommand, with the user the command line chose (compose_run)
+    - is_strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is
+      judged, with the command line untrusted; otherwise those options are taken as given, as for `docker run`
     """
-    if not decided.report.passed:
-        return decided.report
-    loaded = cleared.loaded
-    final = (loaded.hardening + decided.changes).applied_to(loaded.resolved)
-    judged, trust = (final, TRUSTED)
-    if strict and parsed:
-        judged, trust = _as_run(final, parsed, screener.runtime), STRICT
-    checked = Report.of(decided.policy.with_trust(trust).check_project(judged))
-    return RunnableProject(final, decided, checked) if checked.passed else checked
+    if not decisions.report.has_passed:
+        return decisions.report
+    loaded_project = cleared_project.loaded_project
+    final_project = (loaded_project.hardening + decisions.changes).apply_to(loaded_project.resolved_project)
+    judged_project, trust = (final_project, TRUSTED_ORIGINS)
+    if is_strict and user_args:
+        judged_project, trust = _as_run(final_project, user_args, screener.runtime), STRICT_ORIGINS
+    final_report = Report.of(decisions.policy.with_trust(trust).check_project(judged_project))
+    if not final_report.has_passed:
+        return final_report
+    return RunnableProject(final_project, decisions, final_report)
 
 
-def surroundings(loaded: LoadedProject, screener: Screener) -> list[Notice]:
+def surroundings(loaded_project: LoadedProject, screener: Screener) -> list[Notice]:
     """Returns what the policy finds in what the project gets from around it: configured mount dirs that
     contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
     (Policy.check_shell_env).
     """
-    runtime, here = screener.runtime, screener.policy(loaded.directory)
-    return [*here.check_mount_dirs(inspect.sensitive_mount_dirs(runtime)),
-            *here.check_shell_env(shellenv.shell_values(loaded.hardened.definition, runtime.env))]
+    runtime, project_policy = screener.runtime, screener.policy(loaded_project.directory)
+    sensitive_mount_dirs = inspect.sensitive_mount_dirs(runtime)
+    copied_variables = shellenv.copied_shell_variables(loaded_project.hardened_project.definition,
+                                                       runtime.env)
+    return [*project_policy.check_mount_dirs(sensitive_mount_dirs),
+            *project_policy.check_shell_env(copied_variables)]
 
 
 def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
@@ -255,7 +264,7 @@ def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         return []
     try:
         project = inspect.project(global_args, runtime)
-    except (inspect.ProjectRefused, DockerError):
+    except (inspect.ProjectRefusal, DockerError):
         # these commands start nothing and build nothing, so compose may as well say what is wrong
         return []
     if not project.name:
@@ -279,34 +288,36 @@ def check_build(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
         project = inspect.project(global_args, runtime)
     except DockerError as e:
         return [finding.failure_of(e)]
-    except inspect.ProjectRefused as e:
+    except inspect.ProjectRefusal as e:
         return list(e.findings)
     return Screener(runtime).project_policy(project).check_project_build(project)
 
 
-def _name_conflicts(loaded: LoadedProject, static_policy: policy.Policy, screener: Screener) -> list[Finding]:
+def _name_conflicts(loaded_project: LoadedProject, static_policy: policy.Policy,
+                    screener: Screener) -> list[Finding]:
     """Returns what static_policy finds in the containers that have the project's name, or the failure to
     look (inspect.name_conflicts).
 
     Not looked at for a name the user chose, or on a daemon that may not be this host's.
     """
-    name = loaded.resolved.name
-    if not name or loaded.remote or inspect.names_project(loaded.global_args, screener.runtime.env):
+    name = loaded_project.resolved_project.name
+    is_name_chosen = inspect.names_project(loaded_project.global_args, screener.runtime.env)
+    if not name or loaded_project.is_remote or is_name_chosen:
         return []
-    return inspect.name_conflicts(static_policy, name, loaded.directory, screener.docker)
+    return inspect.name_conflicts(static_policy, name, loaded_project.directory, screener.docker)
 
 
-def _as_run(final: Project, parsed: userargs.UserArgs[str], runtime: Runtime) -> Project:
+def _as_run(final_project: Project, user_args: userargs.UserArgs[str], runtime: Runtime) -> Project:
     """Returns the final project with the service that `run` runs changed by its options (runoptions)."""
-    name = parsed.service
-    if name is None or name not in (final.definition.get("services") or {}):
-        return final  # compose refuses to run it
-    return runoptions.substitutions(parsed, final.service(name), runtime).applied_to(final)
+    name = user_args.service
+    if name is None or name not in (final_project.definition.get("services") or {}):
+        return final_project  # compose refuses to run it
+    return runoptions.substitutions(user_args, final_project.service(name), runtime).apply_to(final_project)
 
 
 @contextlib.contextmanager
-def _generated(global_args: Sequence[str], project_dir: str,
-               docker_binary: str) -> Iterator[Command]:
+def _generated_files(global_args: Sequence[str], project_dir: str,
+                     docker_binary: str) -> Iterator[Command]:
     """Provides a private temporary directory for generated configs, and yields command(config).
 
     command writes config there and returns the `docker compose` command line on it alone, with the project
@@ -341,30 +352,31 @@ def _read_back_problem(command: Sequence[str], config: dict[str, Any], docker: D
     result = docker.capture(
         [*command, "--profile", "*", "config", "--format", "json", "--no-env-resolution"])
     try:
-        resolved = json.loads(result.stdout) if result.returncode == 0 else None
+        read_back_config = json.loads(result.stdout) if result.returncode == 0 else None
     except ValueError:
-        resolved = None
-    if resolved is None:
+        read_back_config = None
+    if read_back_config is None:
         return "docker compose could not read back the config that was checked"
-    where = _first_difference(config, resolved)
-    if where:
-        return f"docker compose reads the checked config differently at {where}; not running it"
+    difference_path = _first_difference(config, read_back_config)
+    if difference_path:
+        return f"docker compose reads the checked config differently at {difference_path}; not running it"
     return None
 
 
-def _first_difference(expected: Any, actual: Any, path: str = "config") -> str | None:
+def _first_difference(expected_value: Any, actual_value: Any, path: str = "config") -> str | None:
     """Returns the path at which two JSON values first differ, or None if they are equal."""
-    if isinstance(expected, dict) and isinstance(actual, dict):
-        for key in sorted(set(expected) | set(actual), key=str):
-            if key not in expected or key not in actual:
+    if isinstance(expected_value, dict) and isinstance(actual_value, dict):
+        for key in sorted(set(expected_value) | set(actual_value), key=str):
+            if key not in expected_value or key not in actual_value:
                 return f"{path}.{key}"
-            if where := _first_difference(expected[key], actual[key], f"{path}.{key}"):
-                return where
+            if difference_path := _first_difference(expected_value[key], actual_value[key], f"{path}.{key}"):
+                return difference_path
         return None
-    if isinstance(expected, list) and isinstance(actual, list) and len(expected) == len(actual):
-        for i, (e, a) in enumerate(zip(expected, actual)):
-            if where := _first_difference(e, a, f"{path}[{i}]"):
-                return where
+    if isinstance(expected_value, list) and isinstance(actual_value,
+                                                       list) and len(expected_value) == len(actual_value):
+        for i, (e, a) in enumerate(zip(expected_value, actual_value)):
+            if difference_path := _first_difference(e, a, f"{path}[{i}]"):
+                return difference_path
         return None
     # True == 1 and 1 == 1.0 in Python, but not to compose
-    return None if expected == actual and type(expected) is type(actual) else path
+    return None if expected_value == actual_value and type(expected_value) is type(actual_value) else path

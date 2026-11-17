@@ -30,49 +30,53 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     """
     assert parent_cli.cmd == "audit"
     args, global_args = list(parent_cli.args), list(parent_cli.lead_args)
-    brief = args == [commandline.BRIEF]
-    if args and not brief:
-        messages.notice(f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF}]")
+    is_brief = args == [commandline.BRIEF_OPTION]
+    if args and not is_brief:
+        usage = f"usage: dockscreen compose [compose options] audit [{commandline.BRIEF_OPTION}]"
+        messages.print_notice(usage)
         return 2
     try:
-        loaded = projectscreening.load_project(global_args, runtime)
+        loaded_project = projectscreening.load_project(global_args, runtime)
     except DockerError as e:
-        return Report.failure(e).show(brief)
-    except inspect.ProjectRefused as e:
-        return Report.of(e.findings).show(brief)
+        return Report.failure(e).show(is_brief)
+    except inspect.ProjectRefusal as e:
+        return Report.of(e.findings).show(is_brief)
     except ValueError as e:
-        return Report.refusal(str(e)).show(brief)
+        return Report.refusal(str(e)).show(is_brief)
 
-    screener = Screener(runtime, parent_cli.allow_me)
-    outcome, lines = _audit_images(loaded, screener, brief)
-    if not brief:
-        around = projectscreening.surroundings(loaded, screener)
-        report_lines: list[str | messages.HasMark] = [*loaded.hardening.notices(), *around, *lines]
+    screener = Screener(runtime, parent_cli.is_me_allowed)
+    outcome, lines = _audit_images(loaded_project, screener, is_brief)
+    if not is_brief:
+        around = projectscreening.surroundings(loaded_project, screener)
+        report_lines: list[str | messages.HasMark] = [*loaded_project.hardening.notices(), *around, *lines]
         for line in report_lines:
-            messages.out(line)
-        if outcome.findings or loaded.hardening:
-            messages.out(messages.Message(messages.HINT, HARDEN_HINT))
-    return outcome.show(brief)
+            messages.print_line(line)
+        if outcome.findings or loaded_project.hardening:
+            messages.print_line(messages.Message(messages.HINT, HARDEN_HINT))
+    return outcome.show(is_brief)
 
 
-def _audit_images(loaded: projectscreening.LoadedProject, screener: Screener, brief: bool
+def _audit_images(loaded_project: projectscreening.LoadedProject, screener: Screener, should_be_brief: bool
                   ) -> tuple[Report, Sequence[str | messages.HasMark]]:
     """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
     if the checks before them pass.
 
     Returns (what the last stage found, report lines).
     """
-    cleared = projectscreening.check(loaded, screener)
-    if isinstance(cleared, Report):
-        return cleared, [
+    check_result = projectscreening.check(loaded_project, screener)
+    if isinstance(check_result, Report):
+        return check_result, [
             "the images were not looked at because of the problems below: nothing was pulled or built"]
-    if not brief:
-        messages.notice("pulling or building the images as `up` would, to look at the users they run as")
-    with loaded.generated(screener.docker.binary) as command:
-        decided = projectscreening.decide(cleared, screener, command)
+    if not should_be_brief:
+        messages.print_notice("pulling or building the images as `up` would, to look at the users they run "
+                              "as")
+    cleared_project = check_result
+    with loaded_project.generated_files(screener.docker.binary) as command:
+        decisions = projectscreening.decide(cleared_project, screener, command)
     # the last stage is what `up` checks once more before it runs: image sections need proof then
-    runnable = projectscreening.finish(cleared, decided, screener)
-    return (runnable if isinstance(runnable, Report) else runnable.report), decided.describe()
+    finish_result = projectscreening.finish(cleared_project, decisions, screener)
+    final_report = finish_result if isinstance(finish_result, Report) else finish_result.report
+    return final_report, decisions.describe()
 
 
 def help(name: str) -> helptext.HelpTopic:
@@ -81,4 +85,4 @@ def help(name: str) -> helptext.HelpTopic:
     Parameters:
     - name: the command, as the dispatcher knows it
     """
-    return helptext.command_topic(name, audit, options=(helptext.BRIEF,))
+    return helptext.command_topic(name, audit, options=(helptext.BRIEF_HELP,))

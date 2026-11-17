@@ -11,42 +11,43 @@ from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.policy.rules import userrules
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.util import ids, messages
-from dockscreen.util.messages import printable
+from dockscreen.util.messages import printable_text
 
 
 def dot(decision: UserDecision) -> messages.Mark:
     """Returns the mark for a decision of an image's user: BAD if refused, GOOD if accepted, else WARN."""
-    if decision.refused:
+    if decision.is_refused:
         return messages.BAD
-    return messages.GOOD if decision.accepted else messages.WARN
+    return messages.GOOD if decision.is_accepted else messages.WARN
 
 
-def outcome(decision: UserDecision, local: hostusers.HostAccounts) -> str:
+def outcome(decision: UserDecision, local_accounts: hostusers.HostAccounts) -> str:
     """Describes what a decision of an image's user means for running it, after the image's name: what it
     runs as if accepted, what runs instead of its root, or why it may not run.
 
     Parameters:
     - decision: the UserDecision of the image
-    - local: this host's accounts, for naming the image's user
+    - local_accounts: this host's accounts, for naming the image's user
     """
-    who = imageuser.describe(decision.identity, local) if decision.identity else None
-    if decision.accepted and decision.origin is Origin.CONFIG:
+    identity_text = imageuser.describe(decision.identity, local_accounts) if decision.identity else None
+    if decision.is_accepted and decision.origin is Origin.CONFIG:
         return f"runs as {ids.format_user(decision.pinned_user)}, the user the config file sets for it"
-    if decision.accepted:
-        return f"runs as {who}; accepted"
-    if decision.replaces_root and not decision.refused:
-        return f"would run as {who}; {userrules.instead_of_root(decision)}"
-    reasons = "; ".join(printable(r.text) for r in decision.findings)
-    if decision.failed:
+    if decision.is_accepted:
+        return f"runs as {identity_text}; accepted"
+    if decision.replaces_root and not decision.is_refused:
+        return f"would run as {identity_text}; {userrules.instead_of_root(decision)}"
+    reasons = "; ".join(printable_text(r.text) for r in decision.findings)
+    if decision.has_failed:
         return f"could not be assessed: {reasons}"
-    return "would be refused" + (f" (runs as {who})" if who else "") + f": {reasons}"
+    return "would be refused" + (f" (runs as {identity_text})" if identity_text else "") + f": {reasons}"
 
 
 def root_default_notice(default_user: tuple[int, int]) -> Notice | None:
     """Returns the warning to give on every run if the configured default user is root, else None."""
     if 0 in default_user:
-        default = ids.format_user(default_user)
-        return Notice(f"the configured default user is {default}: images that would run as root run as root",
+        default_user_text = ids.format_user(default_user)
+        return Notice(f"the configured default user is {default_user_text}: images that would run as root "
+                      "run as root",
                       NoticeSeverity.WARNING, help="set default_user in the config file to change it")
     return None
 
@@ -73,7 +74,7 @@ def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
     - decision: the UserDecision of the image of the container
     - config_file: where an image section can give the image a user
     """
-    hint = section_hint(decision.image.reference, config_file, decision.image.built)
+    hint = section_hint(decision.image.reference, config_file, decision.image.is_built)
     if not decision.identity or hint is None:
         return list(decision.findings)
     return [r.with_help(f"for an image pulled from a registry, {hint}") for r in decision.findings]

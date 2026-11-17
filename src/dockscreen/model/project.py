@@ -17,7 +17,7 @@ from types import MappingProxyType
 from typing import Any, NamedTuple, Self
 
 from dockscreen.model import mounts
-from dockscreen.model.image import Image, Inspected, Unseen
+from dockscreen.model.image import Image, ImageInspection, UnseenImage
 from dockscreen.model.origin import Origin
 
 
@@ -29,22 +29,22 @@ class ProjectLocation(NamedTuple):
 
     Attributes:
     - directory: the project directory
-    - foreign: whether it was found by walking up from the current directory into the home directory, or into
-      one the user does not own
+    - is_foreign: whether it was found by walking up from the current directory into the home directory, or
+      into one the user does not own
     - redirects: the .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
-    - sensitive: the sensitive paths it equals or contains ($HOME, /etc, ...)
+    - sensitive_paths: the sensitive paths it equals or contains ($HOME, /etc, ...)
     """
     directory: str
-    foreign: bool = False
+    is_foreign: bool = False
     redirects: tuple[str, ...] = ()
-    sensitive: tuple[str, ...] = ()
+    sensitive_paths: tuple[str, ...] = ()
 
 
 class Project(NamedTuple):
     """View of a compose project's resolved definition, for judging it. It holds the definition, where the
     project is, and where the values dockscreen set in the definition come from.
 
-    Instances come from inspect.project; projectpatch.ProjectPatch.applied_to gives one with values changed.
+    Instances come from inspect.project; projectpatch.ProjectPatch.apply_to gives one with values changed.
 
     Attributes:
     - definition: what `docker compose config` resolves from all the project's files; a dict that must not
@@ -97,10 +97,11 @@ class Project(NamedTuple):
         Parameters:
         - origins: by service and key, where the values come from
         """
-        merged = {name: dict(keys) for name, keys in self.origins.items()}
+        merged_origins = {name: dict(keys) for name, keys in self.origins.items()}
         for name, keys in origins.items():
-            merged.setdefault(name, {}).update(keys)
-        return self._replace(origins=MappingProxyType({n: MappingProxyType(k) for n, k in merged.items()}))
+            merged_origins.setdefault(name, {}).update(keys)
+        return self._replace(origins=MappingProxyType({n: MappingProxyType(k) for n,
+                                                       k in merged_origins.items()}))
 
 
 class Service(NamedTuple):
@@ -144,10 +145,10 @@ class ServiceImages(NamedTuple):
     Instances come from serviceinfo.prepare.
 
     Attributes:
-    - found: by service, the images that an image section of the config file could apply to, with where they
-      were pulled from
-    - inspected: by service, what was seen of the images that decide the services' users (Inspected, or
-      Unseen)
+    - section_images: by service, the images that an image section of the config file could apply to, with
+      where they were pulled from
+    - inspections: by service, what was seen of the images that decide the services' users (ImageInspection,
+      or UnseenImage)
     """
-    found: Mapping[str, Image] = MappingProxyType({})
-    inspected: Mapping[str, Inspected | Unseen] = MappingProxyType({})
+    section_images: Mapping[str, Image] = MappingProxyType({})
+    inspections: Mapping[str, ImageInspection | UnseenImage] = MappingProxyType({})

@@ -156,7 +156,7 @@ def test_help_request(argv, help_for):
     ([], False),
 ])
 def test_is_screened(argv, screened):
-    assert (compose_line(*argv).cmd in docker_compose.SCREENED) == screened
+    assert (compose_line(*argv).cmd in docker_compose.SCREENED_SUBCOMMANDS) == screened
 
 
 # --- dockscreen's own options and the config file ------------------------------------

@@ -1,6 +1,6 @@
 from fakes import FakeImages, make_screener, project_of, texts
 
-from dockscreen.model.image import Inspected, Unseen
+from dockscreen.model.image import ImageInspection, UnseenImage
 from dockscreen.screen import imageusers
 
 COMMAND = ["docker", "compose", "-f", "/gen/compose-0.yaml"]  # only the tail matters
@@ -18,7 +18,7 @@ def test_every_started_image_is_got_but_only_those_asked_about_are_looked_at():
     seen, failures = imageusers.find(COMMAND, project(web={}, db={"user": "7:7"}), {"web", "db"}, {"web"}, [],
                                      screener)
 
-    assert failures == [] and list(seen) == ["web"] and isinstance(seen["web"], Inspected)
+    assert failures == [] and list(seen) == ["web"] and isinstance(seen["web"], ImageInspection)
     assert [cmd[len(COMMAND):] for cmd in recorder.children] == [["pull", "--", "db"]]
 
 
@@ -36,4 +36,4 @@ def test_an_image_that_is_not_there_is_unseen():
 
     seen, _ = imageusers.find(COMMAND, project(web={"pull_policy": "never"}), {"web"}, {"web"}, [], screener)
 
-    assert isinstance(seen["web"], Unseen) and seen["web"].reason == "the image is not available locally"
+    assert isinstance(seen["web"], UnseenImage) and seen["web"].reason == "the image is not available locally"

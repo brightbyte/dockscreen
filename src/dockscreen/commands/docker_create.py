@@ -25,20 +25,20 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     assert parent_cli.cmd == "create"
     args = parent_cli.args
     try:
-        read = runargs.parse(args, runtime.me, runtime.accounts)
+        parsed_args = runargs.parse(args, runtime.me, runtime.accounts)
     except runargs.ParseError:  # docker will report what is wrong with them
-        resolved: Sequence[str] = args
+        create_args: Sequence[str] = args
     else:
-        users, parsed = userscreening.screened(read, Screener(runtime))
-        if parsed is None:
-            return users.show()
-        for message in users.notices:
-            messages.notice(message)
-        resolved = parsed.create_args
-    defaults = hardening.container_defaults()
-    for notice in defaults.notices():
-        messages.notice(notice)
-    runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *defaults.applied_to(resolved)])
+        user_report, run_args = userscreening.screen_user_options(parsed_args, Screener(runtime))
+        if run_args is None:
+            return user_report.show()
+        for message in user_report.notices:
+            messages.print_notice(message)
+        create_args = run_args.create_args
+    default_patch = hardening.container_defaults()
+    for notice in default_patch.notices():
+        messages.print_notice(notice)
+    runtime.docker.exec([*parent_cli.lead_args, parent_cli.cmd, *default_patch.apply_to(create_args)])
 
 
 def help(name: str) -> helptext.HelpTopic:

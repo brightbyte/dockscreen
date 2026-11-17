@@ -63,7 +63,7 @@ class Substitution(NamedTuple):
 @dataclass(frozen=True)
 class ProjectPatch:
     """Value object for a set of changes to the services of a compose project, which are made together
-    (applied_to) and reported together (notices). It holds the substitutions, in the order they are made: of
+    (apply_to) and reported together (notices). It holds the substitutions, in the order they are made: of
     two that set the same key, the later one wins.
 
     Instances come from the functions that work out changes (hardening.changes, Policy.user_changes,
@@ -89,36 +89,37 @@ class ProjectPatch:
     def __len__(self) -> int:
         return len(self.substitutions)
 
-    def applied_to(self, project: Project) -> Project:
+    def apply_to(self, project: Project) -> Project:
         """Returns project with the substitutions made in its definition (applied_to_definition), and the
         origins they name (origins).
         """
-        definition = self.applied_to_definition(project.definition)
+        definition = self.apply_to_definition(project.definition)
         return project.with_definition(definition).with_origins(self.origins())
 
-    def applied_to_definition(self, definition: dict[str, Any]) -> dict[str, Any]:
+    def apply_to_definition(self, definition: dict[str, Any]) -> dict[str, Any]:
         """Returns a copy of the compose definition with the substitutions made, in their order."""
-        changed = copy.deepcopy(definition)
+        changed_definition = copy.deepcopy(definition)
         for s in self.substitutions:
-            changed["services"][s.service][s.key] = copy.deepcopy(s.value)
-        return changed
+            changed_definition["services"][s.service][s.key] = copy.deepcopy(s.value)
+        return changed_definition
 
     def origins(self) -> dict[str, dict[str, Origin]]:
         """Returns where the keys the substitutions set get their values from, by service and key: from the
         origin of the last substitution of the key that names one. Keys that none names are left out.
         """
-        found: dict[str, dict[str, Origin]] = {}
+        origins: dict[str, dict[str, Origin]] = {}
         for s in self.substitutions:
             if s.origin is not None:
-                found.setdefault(s.service, {})[s.key] = s.origin
-        return found
+                origins.setdefault(s.service, {})[s.key] = s.origin
+        return origins
 
     def notices(self) -> list[Notice]:
         """Returns the notices that report the substitutions, for an audit or a run: one for each that is
         reported on its own line, about its service, in their order; then one for each group (group_notices).
         """
-        own = [replace(s.notice, subject=f"service {s.service}") for s in self.substitutions if s.notice]
-        return [*own, *self.group_notices()]
+        own_notices = [replace(s.notice,
+                               subject=f"service {s.service}") for s in self.substitutions if s.notice]
+        return [*own_notices, *self.group_notices()]
 
     def group_notices(self) -> list[Notice]:
         """Returns one notice for each group of the substitutions, naming its services, in the order the

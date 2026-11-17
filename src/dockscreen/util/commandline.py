@@ -32,25 +32,26 @@ from collections.abc import Collection, Sequence
 
 from dockscreen.util import messages
 
-SKIP_SCREENING = "--skip-screening"
-ALLOW_ME = "--allow-me"
-AS = "--as"
-AS_ME = "--as-me"
-STRICT_SCREEN = "--strict-screen"
+SKIP_SCREENING_OPTION = "--skip-screening"
+ALLOW_ME_OPTION = "--allow-me"
+AS_OPTION = "--as"
+AS_ME_OPTION = "--as-me"
+STRICT_SCREEN_OPTION = "--strict-screen"
 # What --strict-screen is refused with before a command that does not support it.
-STRICT_REFUSAL = (f"{STRICT_SCREEN} is only supported for audit, create, restart, run, start, buildx bake "
-                  "and compose run so far")
+STRICT_REFUSAL = (f"{STRICT_SCREEN_OPTION} is only supported for audit, create, restart, run, start, buildx "
+                  "bake and compose run so far")
 # What --allow-me is refused with before a command that does not support it.
-ALLOW_ME_REFUSAL = (f"{ALLOW_ME} is only supported for compose; for run, audit and create, choose the user "
-                    f"after the command with {AS_ME}, {AS} NAME or --user UID:GID")
+ALLOW_ME_REFUSAL = (f"{ALLOW_ME_OPTION} is only supported for compose; for run, audit and create, choose the "
+                    f"user after the command with {AS_ME_OPTION}, {AS_OPTION} NAME or --user UID:GID")
 # The warnings that --skip-screening turns screening off for a command.
-SKIP_SCREENING_WARNINGS = (f"{SKIP_SCREENING} given: screening is disabled.",
+SKIP_SCREENING_WARNINGS = (f"{SKIP_SCREENING_OPTION} given: screening is disabled.",
                            "nothing in this command is checked, and no defaults are added.")
-HELPFUL = "--helpful"
-VERBOSE = "--verbose"
-BRIEF = "--brief"
+HELPFUL_OPTION = "--helpful"
+VERBOSE_OPTION = "--verbose"
+BRIEF_OPTION = "--brief"
 # dockscreen's own options before the docker command
-OWN_OPTIONS = frozenset({SKIP_SCREENING, ALLOW_ME, STRICT_SCREEN, HELPFUL, VERBOSE})
+OWN_OPTIONS = frozenset({SKIP_SCREENING_OPTION, ALLOW_ME_OPTION, STRICT_SCREEN_OPTION, HELPFUL_OPTION,
+                         VERBOSE_OPTION})
 
 AS_ME_MESSAGE = messages.Message(
     messages.BAD, "--as-me goes after run or exec, before the service",
@@ -71,29 +72,31 @@ def _split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts:
       not the command
     - own_opts: dockscreen's own options, to take out of those before the command
     """
-    taken: set[str] = set()
-    kept: list[str] = []
+    taken_options: set[str] = set()
+    kept_args: list[str] = []
     i = 0
     while i < len(argv):
         token = argv[i]
         if token == "--":
             break
         if token in own_opts:
-            taken.add(token)
+            taken_options.add(token)
             i += 1
         elif token in value_opts:
-            kept += argv[i:i + 2]
+            kept_args += argv[i:i + 2]
             i += 2
         elif token.startswith("-"):
-            kept.append(token)
+            kept_args.append(token)
             i += 1
         else:
             break
-    rest = (*kept, *argv[i:])
-    idx = _find_subcommand(rest, value_opts)
-    if idx is None:
-        return None, (), rest, frozenset(taken)
-    return rest[idx], rest[idx + 1:], rest[:idx], frozenset(taken)
+    remaining_args = (*kept_args, *argv[i:])
+    subcommand_index = _find_subcommand(remaining_args, value_opts)
+    if subcommand_index is None:
+        return None, (), remaining_args, frozenset(taken_options)
+    subcommand = remaining_args[subcommand_index]
+    lead_args, args = remaining_args[:subcommand_index], remaining_args[subcommand_index + 1:]
+    return subcommand, args, lead_args, frozenset(taken_options)
 
 
 class CommandLine:
@@ -116,20 +119,20 @@ class CommandLine:
       (`compose` for compose's); empty for docker's own
     """
 
-    def __init__(self, cmd: str | None, args: Collection[str], lead: Collection[str] = (),
+    def __init__(self, cmd: str | None, args: Collection[str], lead_args: Collection[str] = (),
                  own_args: Collection[str] = (), prefix: Collection[str] = ()) -> None:
         """Holds a command line that is already split.
 
         Parameters:
         - cmd: the command; None for none
         - args: the arguments after the command
-        - lead: the options before the command
+        - lead_args: the options before the command
         - own_args: dockscreen's own options that were given
         - prefix: the docker command line before this level (prefix in the class docstring)
         """
         self.cmd = cmd
         self.args = tuple(args)
-        self.lead_args = tuple(lead)
+        self.lead_args = tuple(lead_args)
         self.own_args = frozenset(own_args)
         self.prefix = tuple(prefix)
 
@@ -162,50 +165,51 @@ class CommandLine:
         return [*self.prefix, *self.lead_args]
 
     @property
-    def skip_screening(self) -> bool:
+    def is_screening_skipped(self) -> bool:
         """Tells whether --skip-screening was given."""
-        return self.has_own(SKIP_SCREENING)
+        return self.has_own(SKIP_SCREENING_OPTION)
 
     @property
-    def allow_me(self) -> bool:
+    def is_me_allowed(self) -> bool:
         """Tells whether --allow-me was given."""
-        return self.has_own(ALLOW_ME)
+        return self.has_own(ALLOW_ME_OPTION)
 
     @property
-    def as_me(self) -> bool:
+    def has_as_me(self) -> bool:
         """Tells whether --as-me was given before the command, where it does not belong."""
-        return self.has_own(AS_ME)
+        return self.has_own(AS_ME_OPTION)
 
     @property
-    def strict(self) -> bool:
+    def is_strict(self) -> bool:
         """Tells whether --strict-screen was given."""
-        return self.has_own(STRICT_SCREEN)
+        return self.has_own(STRICT_SCREEN_OPTION)
 
     @property
-    def helpful(self) -> bool:
+    def is_helpful(self) -> bool:
         """Tells whether --helpful or --verbose was given."""
-        return self.has_own(HELPFUL) or self.has_own(VERBOSE)
+        return self.has_own(HELPFUL_OPTION) or self.has_own(VERBOSE_OPTION)
 
     def subcommand(self, value_opts: Collection[str] = (), own_opts: Collection[str] = (),
-                   inherit_lead: bool = False) -> "CommandLine":
+                   should_inherit_lead: bool = False) -> "CommandLine":
         """Returns the command line of the command, read from the arguments after it: `up -d` for the
         `compose -f a.yml up -d` of `docker compose -f a.yml up -d`.
 
         It keeps the dockscreen options given here, and its prefix is this one's up to and including the
-        command. With inherit_lead, it takes this one's place instead: its lead starts with this one's, its
-        prefix is this one's, and this command is dropped. That is only right where the subcommand on its
+        command. With should_inherit_lead, it takes this one's place instead: its lead starts with this one's,
+        its prefix is this one's, and this command is dropped. That is only right where the subcommand on its
         own means the same, as `run` does for `container run`.
 
         Parameters:
         - value_opts: the command's options that take the next token as their value
         - own_opts: dockscreen's own options, to take out of those before its command
-        - inherit_lead: whether the subcommand replaces this command, keeping the options before it
+        - should_inherit_lead: whether the subcommand replaces this command, keeping the options before it
         """
-        cmd, args, lead, taken = _split_argv(self.args, value_opts, own_opts)
-        if inherit_lead:
-            return CommandLine(cmd, args, [*self.lead_args, *lead], self.own_args | taken, self.prefix)
+        cmd, args, lead_args, taken_options = _split_argv(self.args, value_opts, own_opts)
+        if should_inherit_lead:
+            return CommandLine(cmd, args, [*self.lead_args, *lead_args], self.own_args | taken_options,
+                               self.prefix)
         prefix = [*self.prefix, *self.lead_args, *([self.cmd] if self.cmd is not None else [])]
-        return CommandLine(cmd, args, lead, self.own_args | taken, prefix)
+        return CommandLine(cmd, args, lead_args, self.own_args | taken_options, prefix)
 
 
 def main_commandline(argv: Sequence[str], value_opts: Collection[str] = (),
@@ -217,8 +221,8 @@ def main_commandline(argv: Sequence[str], value_opts: Collection[str] = (),
     - value_opts: docker's options that take the next token as their value, which is then not the command
     - own_opts: dockscreen's own options, to take out of those before the command
     """
-    cmd, args, lead, taken = _split_argv(argv, value_opts, own_opts)
-    return CommandLine(cmd, args, lead, taken)
+    cmd, args, lead_args, taken_options = _split_argv(argv, value_opts, own_opts)
+    return CommandLine(cmd, args, lead_args, taken_options)
 
 
 def _find_subcommand(argv: Sequence[str], value_opts: Collection[str]) -> int | None:
@@ -291,7 +295,7 @@ def strip_options(args: Sequence[str], names: Collection[str]) -> list[str]:
     - args: the arguments
     - names: options that take a value, long and short
     """
-    kept = []
+    kept_args = []
     i = 0
     while i < len(args):
         token = args[i]
@@ -302,9 +306,9 @@ def strip_options(args: Sequence[str], names: Collection[str]) -> list[str]:
                 or any(token.startswith(n) for n in names if not n.startswith("--")):
             i += 1
         else:
-            kept.append(token)
+            kept_args.append(token)
             i += 1
-    return kept
+    return kept_args
 
 
 def positionals(args: Sequence[str], long_values: Collection[str],
@@ -316,18 +320,18 @@ def positionals(args: Sequence[str], long_values: Collection[str],
     - long_values: long options that take a value
     - short_values: letters of short options that do, which take the next argument when they end a cluster
     """
-    found: list[str] = []
+    positional_args: list[str] = []
     i = 0
     while i < len(args):
         token = args[i]
         if token == "--":
-            found += args[i + 1:]
+            positional_args += args[i + 1:]
             break
         if token.startswith("--"):
             i += 1 if "=" in token or token not in long_values else 2
         elif token.startswith("-") and token != "-":
             i += 2 if token[-1] in short_values else 1
         else:
-            found.append(token)
+            positional_args.append(token)
             i += 1
-    return found
+    return positional_args

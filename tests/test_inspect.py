@@ -53,9 +53,9 @@ def test_sensitive_paths_are_found_inside_a_directory_after_resolving_symlinks(t
     monkeypatch.setenv("HOME", str(home))
     os.symlink(home, tmp_path / "link-to-home")
 
-    assert inspect._sensitive_inside(str(home / "code"), make_runtime(env={})) == []
-    assert str(home) in inspect._sensitive_inside(str(tmp_path / "link-to-home"), make_runtime(env={}))
-    assert "/etc" in inspect._sensitive_inside("/", make_runtime(env={}))
+    assert inspect._sensitive_paths_inside(str(home / "code"), make_runtime(env={})) == []
+    assert str(home) in inspect._sensitive_paths_inside(str(tmp_path / "link-to-home"), make_runtime(env={}))
+    assert "/etc" in inspect._sensitive_paths_inside("/", make_runtime(env={}))
 
 
 def test_the_sensitive_paths_in_each_configured_mount_dir_are_found(tmp_path, monkeypatch):
@@ -73,7 +73,7 @@ def test_a_project_directory_containing_the_home_directory_is_refused(tmp_path, 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / "compose.yaml").write_text("")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(inspect.ProjectRefused) as refused:
+    with pytest.raises(inspect.ProjectRefusal) as refused:
         inspect.project([], make_runtime())
     assert [f.verdict for f in refused.value.findings] == [Verdict.REFUSED]
     assert "contains" in str(refused.value.findings[0])
@@ -83,7 +83,7 @@ def test_the_walk_up_stops_at_the_home_directory(tmp_path):
     (tmp_path / "compose.yaml").write_text("")  # a stray file in "home"
     (tmp_path / "work").mkdir()
     stray = inspect._find_compose_dir(str(tmp_path / "work"), (), home=str(tmp_path), uid=os.getuid())
-    assert stray == ProjectLocation(str(tmp_path), foreign=True)
+    assert stray == ProjectLocation(str(tmp_path), is_foreign=True)
     found = inspect._find_compose_dir(str(tmp_path / "work"), (), home="/elsewhere", uid=os.getuid())
     assert found == ProjectLocation(str(tmp_path))
 

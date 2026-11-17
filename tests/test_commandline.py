@@ -21,7 +21,7 @@ FLAG = "--skip-screening"
 ])
 def test_only_a_global_option_counts(argv, found, rest):
     line = commandline.main_commandline(argv, docker_compose.GLOBAL_OPTS_WITH_VALUE, {FLAG})
-    assert (line.skip_screening, line.argv) == (found, rest)
+    assert (line.is_screening_skipped, line.argv) == (found, rest)
 
 
 @pytest.mark.parametrize("argv, split", [
@@ -38,7 +38,7 @@ def test_a_command_line_is_split_at_its_command(argv, split):
 def test_a_subcommand_keeps_the_options_given_before_it_and_knows_what_came_before():
     line = docker_line("--allow-me", "-H", "unix:///s", "compose", "--helpful", "-f", "a.yml", "up", "-d")
     compose = line.subcommand(docker_compose.GLOBAL_OPTS_WITH_VALUE, docker_compose.OWN_OPTIONS)
-    assert compose.allow_me and compose.helpful and not compose.skip_screening
+    assert compose.is_me_allowed and compose.is_helpful and not compose.is_screening_skipped
     assert (compose.lead_args, compose.cmd, compose.args) == (("-f", "a.yml"), "up", ("-d",))
     assert compose.full_argv == ["-H", "unix:///s", "compose", "-f", "a.yml", "up", "-d"]
     assert compose.global_args == ["-H", "unix:///s", "compose", "-f", "a.yml"]
@@ -46,8 +46,8 @@ def test_a_subcommand_keeps_the_options_given_before_it_and_knows_what_came_befo
 
 def test_a_subcommand_that_inherits_the_lead_takes_the_place_of_its_command():
     line = docker_line("--allow-me", "-H", "unix:///s", "container", "run", "-it", "x")
-    run = line.subcommand(inherit_lead=True)
-    assert run.allow_me
+    run = line.subcommand(should_inherit_lead=True)
+    assert run.is_me_allowed
     assert (run.lead_args, run.cmd, run.args, run.prefix) == (("-H", "unix:///s"), "run", ("-it", "x"), ())
     assert run.full_argv == ["-H", "unix:///s", "run", "-it", "x"]
 
@@ -99,12 +99,12 @@ def test_docker_without_a_global_flag_gets_no_exemption():
 @pytest.mark.parametrize("argv", [["--helpful", "up"], ["--verbose", "up"], ["--verbose", "--helpful", "up"]])
 def test_helpful_and_verbose_are_ours_and_not_passed_on(argv):
     line = compose_line(*argv)
-    assert (line.helpful, line.argv) == (True, ["up"])
+    assert (line.is_helpful, line.argv) == (True, ["up"])
 
 
 def test_verbose_after_the_subcommand_is_dockers_own():
     line = compose_line("up", "--verbose")
-    assert (line.helpful, line.argv) == (False, ["up", "--verbose"])
+    assert (line.is_helpful, line.argv) == (False, ["up", "--verbose"])
 
 
 @pytest.mark.parametrize("argv, helpful", [
@@ -114,7 +114,7 @@ def test_the_helpful_mode_follows_the_flags_and_the_audit_command(argv, helpful)
 
     docker_dispatch(argv, make_runtime(docker=FakeDocker(image_user="app")))
 
-    assert messages._helpful is helpful
+    assert messages._is_helpful is helpful
 
 
 def test_compose_audit_is_helpful(tmp_path):
@@ -122,9 +122,9 @@ def test_compose_audit_is_helpful(tmp_path):
     runtime, _ = compose_project(tmp_path, PROJECT)
 
     docker_dispatch(["compose", "audit"], runtime)
-    assert messages._helpful is True
+    assert messages._is_helpful is True
     docker_dispatch(["compose", "--verbose", "ps"], runtime)
-    assert messages._helpful is True and runtime.docker.forwarded == [["ps"]]  # --verbose stays ours
+    assert messages._is_helpful is True and runtime.docker.forwarded == [["ps"]]  # --verbose stays ours
 
 
 # --- scanning helpers ------------------------------------------------------
