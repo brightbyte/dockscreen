@@ -1,11 +1,12 @@
-"""This module defines the Finding class, for what screening finds that stops a command (see notice for what
-it reports without stopping it, and report for the verdict that follows from the findings).
+"""This module defines the Finding class, for a problem that screening finds and that stops a command.
+Problems that do not stop the command are notices (notice), and the module report holds the verdict that
+follows from the findings.
 
-A finding says one thing about one subject (a service, an image, a container, the command line) and why the
-command must not run, as the verdict it makes. Refused means the policy says no. Failed means screening could
-not get far enough to judge: docker, the image or the compose config was not there, or pulling or building
-failed. A refusal is about the project, image or command line; a failure is about getting to them, and may go
-away when the user tries again.
+A finding states one thing about one subject (a service, an image, a container, the command line): the
+reason that the command must not run. Its verdict says which kind of reason it is. Refused means that the
+policy says no. Failed means that screening could not get far enough to judge: docker, the image or the
+compose config was not there, or pulling or building failed. A refusal is about the project, the image or
+the command line. A failure is about getting to them, and may go away when the user tries again.
 
 The verdict of a whole screening is the worst of its findings, and the exit status of an audit. Exit status 2
 is left for usage errors.
@@ -23,7 +24,7 @@ from dockscreen.util import messages
 
 class Verdict(enum.IntEnum):
     """Enum of the outcomes of an audit, or of the screening before a command runs. Its value is the exit
-    status, and the worse outcome has the larger one.
+    status, and the worse outcome has the larger value.
     """
     PASSED = 0
     REFUSED = 1
@@ -32,13 +33,13 @@ class Verdict(enum.IntEnum):
 
 @dataclass(frozen=True)
 class Finding:
-    """Value object for a statement about one subject of screening and why the command must not run, which
-    prints as a line marked as an error. It holds the text, the verdict, the subject, what to do about it and
-    the docker error.
+    """Value object for a statement about one subject of screening, giving the reason that the command must
+    not run. It prints as a line marked as an error. It holds the text, the verdict, the subject, the advice
+    on the next step, and the docker error.
 
-    Its string value is the text, after the subject and a colon if there is one. Build one with the
-    constructor, or with of from a text, an error or another finding; with_text and with_help build a changed
-    copy. Two findings are equal if all of that is.
+    Its string value is the text, after the subject and a colon if there is one. Build a finding with the
+    constructor, or with the static method Finding.of from a text, an error or another finding. The methods
+    with_text and with_help build a changed copy. Two findings are equal if all of these are equal.
 
     Attributes:
     - text: what it says, without the subject
@@ -78,12 +79,14 @@ class Finding:
 
     @staticmethod
     def of(reason: object, verdict: Verdict | None = None, subject: str | None = None) -> "Finding":
-        """Returns reason as a finding with verdict about subject, keeping its help and docker error.
+        """Returns reason as a finding with verdict, about subject. The finding keeps the help and the docker
+        error of reason.
 
         Parameters:
         - reason: a text, an error, or a Finding, whose own subject becomes part of the text
-        - verdict: if None, a Finding's own, else REFUSED
-        - subject: what it is about ("service web"); None to keep a Finding's own, or for none
+        - verdict: the verdict; if None, the verdict of reason if it is a Finding, else REFUSED
+        - subject: what it is about ("service web"); None to keep the subject of reason if it is a Finding,
+          or for no subject
         """
         if verdict is None:
             verdict = reason.verdict if isinstance(reason, Finding) else Verdict.REFUSED
@@ -98,33 +101,35 @@ class Finding:
         return replace(self, text=text)
 
     def with_help(self, help: str | None) -> "Finding":
-        """Returns a copy of this finding with help as what to do about it; None for nothing."""
+        """Returns a copy of this finding with help as what to do about it; None for no help."""
         return replace(self, help=help)
 
     def with_subject(self, subject: str) -> "Finding":
-        """Returns a copy of this finding about subject, which its own subject becomes part of the text of."""
+        """Returns a copy of this finding about subject. This finding's own subject becomes part of the
+        text.
+        """
         return Finding.of(self, subject=subject)
 
 
-# What a check of the policy returns a list of: findings, and notices for what a trusted value gets.
+# A check of the policy returns a list of these: findings, and notices for problems with a trusted value.
 ReportEntry = Finding | Notice
 
 
 def failure_of(error: BaseException, subject: str | None = None, help: str | None = None) -> Finding:
-    """Returns the failure to look that error reports, about subject if given, with what to do about it
-    (help) if given, and the error itself if it is a DockerError, whose output follows the finding.
+    """Returns the failure to look that error reports, as a finding about subject, with help. Both are
+    optional. If error is a DockerError, the finding keeps it, and its output follows the finding.
 
     Parameters:
     - error: the error
-    - subject: what it is about; None for none
-    - help: what to do about it; None for nothing
+    - subject: what it is about; None for no subject
+    - help: what to do about it; None for no help
     """
     return Finding.of(error, Verdict.FAILED, subject).with_help(help)
 
 
 def with_subject(entries: Iterable[ReportEntry], subject: str) -> list[ReportEntry]:
-    """Returns each of found as one about subject, which its own subject becomes part of the text of, with
-    its own verdict or severity.
+    """Returns each of entries as an entry about subject, with its own verdict or severity. The entry's own
+    subject becomes part of its text.
     """
     return [f.with_subject(subject) for f in entries]
 
@@ -141,14 +146,14 @@ def failures(reasons: Iterable[object], subject: str | None = None) -> list[Find
 
 def judge(reasons: Iterable[object], origin: Origin, trust: Iterable[Origin], subject: str | None = None
            ) -> list[ReportEntry]:
-    """Returns each of reasons, what the policy refuses in a value from origin, as a refusal; or as a
-    warning if origin is in trust, whose values are taken as given.
+    """Returns each of reasons as a refusal. The reasons are the policy's objections to a value from origin.
+    If origin is in trust, the policy takes its values as given, and each reason becomes a warning instead.
 
     Parameters:
     - reasons: what the policy refuses
     - origin: where the value comes from
     - trust: the origins whose values are taken as given
-    - subject: what they are about; None for none
+    - subject: what they are about; None for no subject
     """
     if origin in trust:
         return [Notice(str(r), NoticeSeverity.WARNING, subject, messages.help_of(r)) for r in reasons]

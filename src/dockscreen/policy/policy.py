@@ -1,11 +1,12 @@
 """This module defines the Policy class, for checking a compose project, a container, a build or an image
-against the rules of the security policy, with the settings they apply with.
+against the rules of the security policy, with the settings that the rules apply.
 
-policy.rules groups the rules by subject: the keys of a service (rules.servicerules), what
-a project has besides its services (rules.projectrules), builds (rules.buildrules), and the users
-containers run as (rules.userrules): a service's, an image's and the ones a command line gives. Policy has
-them all, and checks whole targets with them: a project (check_project), a container read back into compose
-service keys (check_container), and a project's builds (check_project_build).
+The package policy.rules groups the rules by subject: the keys of a service (rules.servicerules), the parts of
+a project besides its services (rules.projectrules), builds (rules.buildrules), and the users that containers
+run as (rules.userrules). The user rules cover a service's user, an image's user and the users that a
+command line gives. The class Policy has all the rules, and checks whole targets with them: a project
+(check_project), a container read back into compose service keys (check_container), and a project's
+builds (check_project_build).
 
 The policy is an allowlist and fails closed: it refuses a key that is not on a list, so a Compose feature that
 Docker adds tomorrow stays denied until someone has reviewed it. Every structure that can carry unlisted keys
@@ -13,12 +14,13 @@ Docker adds tomorrow stays denied until someone has reviewed it. Every structure
 `x-` are extension fields that Compose itself ignores; they pass everywhere except in `build` (see
 BuildRules._check_build).
 
-A Policy holds the settings the rules apply with, such as what the id rules, which decide which uids and gids
-a project may choose, judge by (userrules.IdFacts); what is known about the thing judged belongs to it, not to
-the policy, down to the directory the policy judges its paths against. Every rule is a method of Policy,
-whether it reads the settings or not. The checks of a whole target turn the problems of each rule into
-findings (finding.Finding), or into notices (notice.Notice) for a trusted value, about the service, volume or
-network they concern. Nothing here touches docker, only the filesystem for realpath resolution.
+A Policy holds the settings that the rules apply. Among them are the facts that the id rules judge by
+(userrules.IdFacts); those rules decide which uids and gids a project may choose. Knowledge about the judged
+thing belongs to that thing, not to the policy, down to the directory that the policy judges its paths
+against. Every rule is a method of Policy, whether it reads the settings or not. The checks of a whole
+target turn the problems of each rule into findings (finding.Finding), or into notices (notice.Notice) for a
+trusted value. Each finding or notice is about the service, volume or network it concerns. Nothing here
+touches docker; only realpath resolution reads the file system.
 """
 
 import dataclasses
@@ -50,19 +52,20 @@ from dockscreen.policy.userdecision import UserDecision
 @dataclasses.dataclass(frozen=True)
 class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     """Service object for checking a compose project, a container, a build or an image against the rules of
-    the security policy, with the settings they apply with, as the config file sets them for one directory and
-    image. It holds those settings, the origins it trusts, and the policy of each service of a project.
+    the security policy. It applies the settings that the config file sets for one directory and image. It
+    holds those settings, the origins it trusts, and the policy of each service of a project.
 
     The rules come from the mixins in policy.rules. Instances come from Screener.policy and
-    Screener.project_policy; with_trust and the other with_* methods give copies.
+    Screener.project_policy. The method with_trust and the other with_* methods return copies.
 
     Attributes:
     - ids: what the id rules judge by (userrules.IdFacts)
     - trust: the origins whose values the policy takes as given: it points out its objections to them
       instead of refusing them (with_trust)
     - config_file: the invoking user's config file, named in hints on what it can allow; None for no hints
-    - section: which image section of the config file applies to the image this policy is for, and why the
-      one for its repository does not (sections.section_for); NO_SECTION for a policy not for an image
+    - section: the image section of the config file that applies to this policy's image, or the reason that
+      the section for the image's repository does not apply (sections.section_for); NO_SECTION for a policy
+      that is not for an image
     - nobody_range: the inclusive (low, high) range of ids any project or image may choose
     - default_user: the (uid, gid) that runs instead of an image that would run as root
     - default_home: the HOME the default user gets (default_home)
@@ -81,8 +84,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     default_home: str = Config().default_home
     default_origin: Origin = Origin.DOCKSCREEN
     section: SectionMatch = NO_SECTION
-    # The policy for each service of the project this one is for, with the settings of its image section
-    # if one applies, by service name; a service that is not in it gets this one.
+    # By service name, the policy for each service of this policy's project, with the settings of the
+    # service's image section if one applies. A service that is not in the mapping gets this policy.
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
@@ -92,8 +95,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
         Parameters:
         - settings: the settings of the config file that apply (sections.effective_settings)
-        - ids: what the id rules judge by besides the settings: the invoking user, with allow_me, and this
-          host
+        - ids: what the id rules judge by besides the settings: the invoking user, with is_me_allowed, and
+          this host
         - config_file: named in hints, as in Policy
         """
         return cls(ids, settings.mount_dirs, config_file=config_file, nobody_range=settings.nobody_range,
@@ -102,14 +105,14 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
                    default_origin=_origin_of(settings, "default_user"))
 
     def for_service(self, name: str) -> "Policy":
-        """Returns the policy to check the service called name with: per_service's for it, with this one's
-        trust, else this one.
+        """Returns the policy for checking the service called name: its entry in per_service, with this
+        policy's trust, or else this policy.
         """
         service_policy = self.per_service.get(name)
         return service_policy.with_trust(self.trust) if service_policy else self
 
     def with_section(self, section: SectionMatch) -> Self:
-        """Returns this policy for an image that section says which image section applies to."""
+        """Returns this policy for an image, with section as the image section that applies to it."""
         return dataclasses.replace(self, section=section)
 
     def with_trust(self, trust: frozenset[Origin]) -> Self:
@@ -121,12 +124,12 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         return dataclasses.replace(self, per_service=MappingProxyType(dict(per_service)))
 
     def check_project(self, project: Project) -> list[ReportEntry]:
-        """Checks a compose project's definition and where it is; returns what it finds, each about what it
-        concerns.
+        """Checks a compose project's definition and its location. Returns the findings and notices, each
+        about the part of the project it concerns.
 
-        Empty if it passes. This checks each service with its own policy (for_service). The facts that only
-        docker can give have checks of their own: the daemon (check_daemon), the containers that have the
-        project's name (check_project_name), and the images (check_images).
+        The result is empty if the project passes. This checks each service with its own policy (for_service).
+        The facts that only docker can give have checks of their own: the daemon (check_daemon), the
+        containers that have the project's name (check_project_name), and the images (check_images).
         """
         config, name = project.definition, project.name
         top_level_problems = [*unknown_key_problems(config, TOP_LEVEL_KEYS, "top-level key"),
@@ -162,7 +165,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         return problems + self._check_file_sources(project.definition, project.directory)
 
     def check_service(self, service: JudgedService) -> list[ReportEntry]:
-        """Checks one service; returns what it finds, empty if there is nothing.
+        """Checks one service; returns the findings and notices, empty if there are none.
 
         A problem is refused, or a warning if its value comes from an origin that this policy trusts
         (finding.judge). This leaves a user from the image to the image decision.
@@ -183,17 +186,18 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
         return findings
 
     def check_container(self, container: Container) -> list[ReportEntry]:
-        """Checks what a container asks for as check_service would check a service that asked for the same
-        (Container.definition); returns what it finds.
+        """Checks the requests of a container, in the way that check_service checks a service with the same
+        requests (Container.definition). Returns the findings and notices.
 
-        Its keys come from the command line that created it, judged with the current directory as the
-        project's; its user from where container.user_origin says.
+        The container's keys come from the command line that created it, and the policy judges them with the
+        current directory as the project directory. Its user comes from the origin that
+        container.user_origin names.
         """
         return self.check_service(container)
 
     def check_images(self, inspections: Mapping[str, ImageInspection | UnseenImage]) -> list[Finding]:
-        """Checks the images that decide the users of a project's services, as they were looked at; returns
-        one finding per service that must not run (image_problem).
+        """Checks the images that decide the users of a project's services, as dockscreen saw them. Returns
+        one finding for each service that must not run (image_problem).
 
         Parameters:
         - inspections: by service, what was seen of the images (ImageInspection, or UnseenImage)
@@ -203,8 +207,8 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
 
     def assess_images(self, inspections: Mapping[str, ImageInspection | UnseenImage]
                       ) -> dict[str, UserDecision]:
-        """Decides the user of each service of a project whose image decides it, from its image as it was
-        looked at, with the policy for that service (for_service); returns the UserDecisions by service.
+        """Decides the user of each service whose image decides it. This method judges the image as dockscreen
+        saw it, with the policy for that service (for_service). Returns the UserDecisions by service.
 
         Parameters:
         - inspections: by service, what was seen of the images (ImageInspection, or UnseenImage)

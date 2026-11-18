@@ -1,5 +1,5 @@
-"""This module defines the Docker class, a client for the docker commands dockscreen needs, as thin wrappers
-around the real binary, and the errors it raises."""
+"""This module defines the Docker class and the errors it raises. Docker is a client for the docker
+commands that dockscreen needs, as thin wrappers around the real binary."""
 
 import io
 import json
@@ -19,11 +19,11 @@ FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
 class DockerError(Exception):
-    """Exception raised when docker or compose cannot give what screening asked for, such as a project, an
-    image or a definition. It holds what docker printed about it.
+    """Exception raised when docker or compose cannot give screening the thing that screening asked for,
+    such as a project, an image or a definition. It holds docker's output about the failure.
 
     Attributes:
-    - output: what docker printed, which may span lines; "" if nothing
+    - output: docker's output, which may span lines; "" if docker printed nothing
     """
 
     def __init__(self, message: str, output: str | None = None) -> None:
@@ -36,11 +36,11 @@ class DockerNotFoundError(DockerError):
 
 
 class Docker:
-    """Client for the real docker binary, which runs the docker and compose commands dockscreen needs and
-    reads what they print. It holds the path of the binary and the environment its commands run with.
+    """Client for the real docker binary. It runs the docker and compose commands that dockscreen needs and
+    reads their output. It holds the path of the binary and the environment its commands run with.
 
-    Its commands run with the environment property; with_env gives a copy that passes more variables. Tests
-    get one from new_for_testing, with a stand-in for running processes.
+    Its commands run with the environment property. The method with_env returns a copy that passes more
+    variables. Tests get an instance from new_for_testing, with a stand-in for running processes.
 
     Attributes:
     - binary: the path of the real docker
@@ -51,7 +51,7 @@ class Docker:
 
         Parameters:
         - binary: the path of the real docker
-        - env: the environment of everything it runs; None for this process's own
+        - env: the environment of everything this Docker runs; None for this process's own
         """
         self.binary, self.env = binary, env
         self._run_proc = subprocess.run
@@ -62,7 +62,7 @@ class Docker:
 
         Parameters:
         - run_proc: a stand-in for subprocess.run
-        - binary: the path of the docker it stands for
+        - binary: the path of the docker that run_proc stands in for
         """
         docker = cls(binary)
         docker._run_proc = run_proc
@@ -70,11 +70,11 @@ class Docker:
 
     @property
     def environment(self) -> Mapping[str, str]:
-        """Returns the environment of what it runs."""
+        """Returns the environment of the commands this Docker runs."""
         return os.environ if self.env is None else self.env
 
     def with_env(self, variables: Mapping[str, str]) -> Self:
-        """Returns a Docker like this one that also passes variables in the environment of what it runs."""
+        """Returns a copy of this Docker that also passes variables in the environment of its commands."""
         docker = type(self)(self.binary, {**self.environment, **variables})
         docker._run_proc = self._run_proc
         return docker
@@ -103,7 +103,7 @@ class Docker:
             messages.exit_with_error(messages.DOCKER_NOT_FOUND_MESSAGE)
 
     def create(self, args: Sequence[str]) -> tuple[int, str | None]:
-        """Runs `docker create args` and returns (exit code, container id or None if it failed).
+        """Runs `docker create args` and returns (exit code, container id or None if the creation failed).
 
         stderr stays on the terminal, so pull progress shows.
         """
@@ -129,7 +129,8 @@ class Docker:
         return json.loads(result.stdout)[0]
 
     def read_file(self, container: str, path: str) -> str | None:
-        """Returns the text of a file in a container that has not been started, or None if it cannot be read.
+        """Returns the text of a file in a container that has not been started, or None if the file cannot be
+        read.
 
         Raises DockerError if the file is larger than MAX_FILE_BYTES.
         """
@@ -171,8 +172,7 @@ class Docker:
         self.run(["rm", "--force", "--", container], capture_output=True)
 
     def label_values(self, label: str, value: str, wanted_label: str) -> list[str]:
-        """Returns the value of the label wanted_label of each container, running or not, whose label is
-        value.
+        """Returns the values of wanted_label on the containers, running or not, whose label is set to value.
 
         Empty for a container without wanted_label. Raises DockerError if docker cannot say.
 
@@ -201,8 +201,8 @@ class Docker:
         return self._launch(self._run_proc, cmd, capture_output=True, text=True, check=False)
 
     def run_child(self, cmd: Sequence[str]) -> int:
-        """Runs cmd on this terminal and returns its exit status, 128 + the signal if a signal ended it, or
-        127 if docker does not exist.
+        """Runs cmd on this terminal and returns its exit status. The status is 128 + the signal if a signal
+        ended the command, and 127 if docker does not exist.
 
         Termination signals are passed on; Ctrl-C reaches the child from the terminal itself.
 
@@ -232,8 +232,8 @@ class Docker:
         return 128 - code if code < 0 else code
 
     def _launch(self, launch: Callable[..., Any], cmd: Sequence[str], **kwargs: Any) -> Any:
-        """Returns what launch (_run_proc or subprocess.Popen) returns for cmd, run with env if that is
-        set. Raises DockerNotFoundError if the binary does not exist.
+        """Runs cmd with launch (_run_proc or subprocess.Popen), and with env if that is set; returns the
+        result. Raises DockerNotFoundError if the binary does not exist.
         """
         if self.env is not None:
             kwargs["env"] = self.env
@@ -244,11 +244,12 @@ class Docker:
 
 
 def _first_file_of_tar(data: bytes) -> str | None:
-    """Returns the text of the first entry of a tar archive, or None if that is not a regular file or
+    """Returns the text of the first entry of a tar archive, or None if the entry is not a regular file or
     the archive cannot be read.
 
-    The archive is the image's: anything but a regular file (a device, a link that was not followed) has no
-    text to read, so this takes it as no file, which docker would not find names in either.
+    The archive comes from the image. Anything but a regular file (a device, a link that was not followed)
+    has no text to read, so this treats such an entry as a missing file; docker would not find names in it
+    either.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
@@ -260,8 +261,8 @@ def _first_file_of_tar(data: bytes) -> str | None:
 
 
 def is_remote(global_args: Sequence[str], docker: Docker) -> bool:
-    """Tells whether the daemon docker talks to might not be this host's own, where the checks, which compare
-    ids and paths with this host's, mean nothing.
+    """Tells whether the daemon that docker talks to might not be this host's own. On another host's daemon
+    the checks mean nothing, because they compare ids and paths with this host's.
 
     Parameters:
     - global_args: docker's options before the subcommand, which may choose the daemon (--host, --context)

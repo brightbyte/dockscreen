@@ -1,11 +1,12 @@
-"""This module provides functions for finding and loading the project a compose command line selects, as
-docker compose resolves it, and for gathering what the policy judges about it besides its config: where it is,
-which containers have its name, and which configured mount directories are risky.
+"""This module provides functions for finding and loading the project that a compose command line selects,
+as docker compose resolves it. It also provides functions for gathering the other facts that the policy
+judges about the project, besides its config: its location, the containers that have its name, and the
+configured mount directories that are risky.
 
-These checks matter because the project directory is the root that the policy judges bind mounts and host
-files against, so it must be the directory compose will use, located as compose does, and one that holds
-nothing sensitive; and the project name decides the containers and volumes compose acts on, so it must be
-this project's.
+These checks matter for two reasons. The policy judges bind mounts and host files against the project
+directory, so that directory must be the one compose will use, located as compose does, and it must hold
+nothing sensitive. And the project name decides the containers and volumes that compose acts on, so the
+name must be this project's.
 """
 
 import json
@@ -28,10 +29,10 @@ from dockscreen.util import commandline
 COMPOSE_FILE_NAMES = ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
 # A project's .env that sets these makes compose read compose files that are not the ones located here.
 COMPOSE_VARS_IN_ENV_FILE = re.compile(r"^\s*(export\s+)?COMPOSE_(FILE|PATH_SEPARATOR)\s*=", re.MULTILINE)
-# No container may mount a directory that equals or contains one of these wholesale: as a project
-# directory, everything under it is "inside the project" and the project may bind mount it, so a compose
-# file in / or /etc would make the whole system mountable; as a configured mount dir, every project could
-# mount it.
+# No container may mount a directory that equals or contains one of these as a whole. As a project
+# directory, everything under it would be "inside the project", which the project may bind mount, so a
+# compose file in / or /etc would make the whole system mountable. As a configured mount dir, every project
+# could mount it.
 SENSITIVE_DIRS = ("/", "/etc", "/usr", "/var", "/boot", "/root", "/run", "/proc", "/sys", "/dev")
 # Write access to the socket is control of the daemon, which is root on the host.
 DOCKER_SOCKET = "/var/run/docker.sock"
@@ -51,10 +52,10 @@ class ProjectRefusal(Exception):
 
 
 def project(args: Sequence[str], runtime: Runtime) -> Project:
-    """Returns the project args select, with its definition as compose resolves it.
+    """Returns the project that args select, with its definition as compose resolves it.
 
-    Raises ProjectRefusal if the policy refuses where the project is (Policy.check_location); DockerError if
-    compose cannot give the definition.
+    Raises ProjectRefusal if the policy refuses the project's location (Policy.check_location), and raises
+    DockerError if compose cannot give the definition.
 
     Parameters:
     - args: the compose options before the subcommand, which select the project
@@ -68,9 +69,10 @@ def project(args: Sequence[str], runtime: Runtime) -> Project:
 
 
 def locate(args: Sequence[str], runtime: Runtime) -> ProjectLocation:
-    """Returns where the project args select is, as compose would find it.
+    """Returns the location of the project that args select, as compose would find it.
 
-    Raises DockerError if that cannot be found: the compose file is read from stdin, or there is none.
+    Raises DockerError if the location cannot be found, because compose reads the file from stdin or there
+    is no compose file.
 
     Parameters:
     - args: the compose options before the subcommand, which select the project
@@ -128,8 +130,8 @@ WORKING_DIR_LABEL = "com.docker.compose.project.working_dir"
 
 
 def working_directories(name: str, docker: Docker) -> list[str]:
-    """Returns the directories that the containers with the project name say they were made from, "" for
-    one that does not say.
+    """Returns the directories that the containers with the project name were made from, as their labels
+    say. For a container without that label, the list holds "".
 
     Volumes and networks say nothing about where they came from, so only containers count. Raises
     DockerError if docker cannot say.
@@ -138,22 +140,22 @@ def working_directories(name: str, docker: Docker) -> list[str]:
 
 
 def name_lookup_failure(name: str, error: DockerError) -> Finding:
-    """Returns the failure to look at the containers called by the project name (working_directories).
+    """Returns the failure to look at the containers with the project name (working_directories).
 
     It is a failure, which stops the command like a refusal: dockscreen does not take a name it could not
     check to be free.
 
     Parameters:
     - name: the project name
-    - error: why docker could not say
+    - error: the error that docker gave
     """
     return Finding.of(error, Verdict.FAILED).with_text(
         f"cannot tell whether another project is called {name!r}: {error}")
 
 
 def name_conflicts(project_policy: policy.Policy, name: str, directory: str, docker: Docker) -> list[Finding]:
-    """Checks the name of the project in directory against the containers that have it, by project_policy
-    (Policy.check_project_name); returns what it finds, or the failure to look.
+    """Checks the project's name against the containers that have it, with project_policy
+    (Policy.check_project_name). Returns the findings, or the failure to look.
 
     Parameters:
     - project_policy: the policy to check with
@@ -171,8 +173,9 @@ def name_conflicts(project_policy: policy.Policy, name: str, directory: str, doc
 def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
     """Tells whether the user chose the project name, with -p or COMPOSE_PROJECT_NAME.
 
-    A name the user chose is not checked against other projects: the command line and the shell are
-    trusted, and choosing the name of another project on purpose is the way to act on it.
+    dockscreen does not check a name that the user chose against other projects: the command line and the
+    shell are trusted, and choosing the name of another project on purpose is the way to act on that
+    project.
 
     Parameters:
     - args: the compose options before the subcommand, which select the project
@@ -183,9 +186,10 @@ def names_project(args: Sequence[str], env: Mapping[str, str]) -> bool:
 
 
 def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> ProjectLocation:
-    """Determines the project directory as docker compose would from args and cwd.
+    """Determines the project directory from args and cwd, as docker compose would.
 
-    Raises DockerError if that cannot be done: a compose file from stdin, or as _find_compose_dir says.
+    Raises DockerError if that is not possible: for a compose file read from stdin, or for the reasons listed
+    under the function _find_compose_dir.
     """
     env = runtime.env
     explicit_directories = commandline.option_values(args, "--project-directory", None)
@@ -196,7 +200,7 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Projec
     if not files and env.get("COMPOSE_FILE"):
         files = env["COMPOSE_FILE"].split(env.get("COMPOSE_PATH_SEPARATOR", os.pathsep))
     if "-" in files:
-        # read once by compose, so there is no file to locate a project directory from, or to check
+        # compose reads stdin once, so there is no file to locate a project directory from, or to check
         raise DockerError("a compose file read from stdin cannot be inspected")
     if files:  # compose takes the project directory from the first file
         return ProjectLocation(os.path.realpath(os.path.dirname(os.path.join(cwd, files[0]))))
@@ -206,12 +210,12 @@ def _project_location(args: Sequence[str], cwd: str, runtime: Runtime) -> Projec
 
 
 def _find_compose_dir(start: str, env_files: Iterable[str], home: str, uid: int) -> ProjectLocation:
-    """Finds the directory of the nearest compose file, walking up from start as compose does, with the .env
-    files on the way (and the env_files entries) that could send compose elsewhere.
+    """Finds the directory of the nearest compose file, walking up from start as compose does. It also finds
+    the .env files on the way, and the env_files entries, that could send compose elsewhere.
 
-    The walk stops at home and at the first directory not owned by uid: a compose file found there was not
-    put there for this project, and makes the location foreign. The starting directory is the user's own
-    choice and is not subject to the ownership rule. Raises DockerError if there is no compose file.
+    The walk stops at home and at the first directory that uid does not own. A compose file found there was
+    not put there for this project, so it makes the location foreign. The starting directory is the user's
+    own choice, so the ownership rule does not apply to it. Raises DockerError if there is no compose file.
     """
     home = os.path.realpath(home)
     redirects = [path for path in (os.path.join(start, f) for f in env_files) if _sets_compose_vars(path)]

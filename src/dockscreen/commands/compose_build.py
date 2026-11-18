@@ -1,9 +1,9 @@
-"""This module implements `docker compose build` and `bake`, checking only what a build can reach before
-compose builds the project.
+"""This module implements `docker compose build` and `bake`. Before compose builds the project, dockscreen
+checks only the parts of this host that a build can reach.
 
-Builds start no containers of the project, so dockscreen checks only the files and access a build can
-reach (projectscreening.check_build): build sources inside the project, no host network, no `x-` keys that
-`buildx bake` would read.
+Builds start no containers of the project. So dockscreen checks only the files and access that a build can
+reach (projectscreening.check_build): build sources must be inside the project, and there may be no host
+network and no `x-` keys, which `buildx bake` would read.
 """
 
 from dockscreen.commands import helptext
@@ -14,8 +14,8 @@ from dockscreen.util import commandline
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker compose build` or `bake` if the project's builds pass the checks; returns 1 if they do
-    not, otherwise docker replaces this process.
+    """Runs `docker compose build` or `bake` if the project's builds pass the checks. Returns 1 if they do
+    not; otherwise docker replaces this process.
 
     Parameters:
     - parent_cli: the compose command line, with `build` or `bake` as its command; its lead_args are the

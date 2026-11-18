@@ -1,18 +1,19 @@
 """This module provides functions for reading command lines that run something in a container (`docker compose
-run` and `exec`, `docker exec`) just far enough to find the user and the service or container. runargs
-reads `docker run`, with the same GivenUsers.
+run` and `exec`, `docker exec`) just far enough to find the user and the service or container. The module
+runargs reads `docker run`, with the same GivenUsers.
 
-The command line is trusted, so the policy does not check the user it gives against the id rules, only its
-form (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands. Docker would resolve a
-name in the image (for `exec`, in the running container's /etc/passwd, which the container may have
-rewritten), and a uid alone takes its group from the image. `--as NAME` names an account on this host
-instead, and `--as-me` the invoking user's own ids. Reading changes nothing: the arguments keep both as their
-UserOption, which the policy resolves (Policy.resolve_user_options), and which resolved replaces by
-`--user=uid:gid` before compose or docker sees them.
+The command line is trusted, so the policy does not check the user it gives against the id rules; it checks
+only the form of the user (Policy.check_user_options): numeric `uid:gid`, which docker uses as it stands.
+Docker would resolve a name in the image (for `exec`, in the running container's /etc/passwd, which the
+container may have rewritten), and a uid alone takes its group from the image. `--as NAME` names an account on
+this host instead, and `--as-me` stands for the invoking user's own ids. Reading changes nothing: the
+arguments keep both options as their UserOption. The policy resolves each UserOption
+(Policy.resolve_user_options), and the function resolve_user_options replaces it by `--user=uid:gid` before
+compose or docker sees the arguments.
 
-A misreading cannot loosen anything: a user this misses reaches compose as typed, which the command line
-could have done with plain compose anyway, and for a service this misses, the policy decides its image as
-if the command line chose no user.
+A misreading cannot loosen anything. A user that this reading misses reaches compose as typed, which the
+command line could have done with plain compose anyway. For a service that this reading misses, the policy
+decides its image as if the command line chose no user.
 """
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -33,7 +34,8 @@ COMPOSE_VALUE_FLAGS = {
 }
 
 
-# An argument as read: a string, or the UserOption of --as or --as-me until it is resolved (resolved).
+# An argument as read: a string, or the UserOption of --as or --as-me until it is resolved
+# (resolve_user_options).
 Arg = str | UserOption
 
 # The arguments a record holds: Arg as read, str once resolved.
@@ -73,14 +75,14 @@ class GivenUsers:
         self.options.append(UserOption("--user", spec))
 
     def record_account(self, name: str) -> UserOption:
-        """Returns the UserOption of --as with name, with the ids of the local account of that name if there
-        is one, and records it.
+        """Records and returns the UserOption of --as with name. It holds the ids of the local account of
+        that name, if there is one.
         """
         return self._record_choice(UserOption(commandline.AS_OPTION, name,
                                               self.accounts.user_ids(name) if name else None))
 
     def record_me(self) -> UserOption:
-        """Returns the UserOption of --as-me, with the invoking user's own ids, and records it."""
+        """Records and returns the UserOption of --as-me, which holds the invoking user's own ids."""
         return self._record_choice(UserOption(commandline.AS_ME_OPTION, "", self.callers_ids))
 
     def _record_choice(self, option: UserOption) -> UserOption:
@@ -91,26 +93,26 @@ class GivenUsers:
 
 
 class UserArgs(NamedTuple, Generic[ArgT]):
-    """Record of what a command line that runs something in a container says about the service or container
-    it names and about the user, read only far enough to find those. It holds the service or container, the
-    arguments, the users it gives, and the options that take a value.
+    """Record of a command line that runs something in a container, read only far enough to find the service
+    or container it names and the user it gives. It holds the service or container, the arguments, the
+    users it gives, and the options that take a value.
 
-    It is for the commands that name a service or container: `docker compose run` keeps it, because the
-    service it names is the one whose user the command line chooses, so the image does not decide it, and
-    because its options are applied to that service (screen.runoptions). `docker compose up` and `create`
-    keep one that names no service. `exec`, for compose and docker alike, only needs the rewritten arguments
-    (userscreening.resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which also
-    holds the image and the options only `run` has; both keep the users in a GivenUsers.
+    It is for the commands that name a service or container. `docker compose run` keeps it for two reasons:
+    the command line chooses the user of the service it names, so the image does not decide that user; and
+    compose applies the options to that service (screen.runoptions). `docker compose up` and `create`
+    keep a record that names no service. `exec`, for compose and docker alike, only needs the rewritten
+    arguments (userscreening.resolve_user_args). `docker run` has a record of its own, runargs.RunArgs, which
+    also holds the image and the options only `run` has; both keep the users in a GivenUsers.
 
-    Instances come from parse and parse_compose, or from from_args for a subcommand that takes neither a
-    service nor a user.
+    Instances come from the functions parse and parse_compose, or from the classmethod from_args for a
+    subcommand that takes neither a service nor a user.
 
     Attributes:
     - service: the service or container it names, or None
     - args: the arguments, with --as and --as-me as their UserOption until resolved
     - users: what the command line says about the user before the service (GivenUsers)
-    - values: each option before the service that takes a value, with it; --as and --as-me are under --user,
-      as their UserOption until resolved
+    - values: each option before the service that takes a value, with its value; --as and --as-me appear
+      under --user, as their UserOption until resolved
     """
     service: str | None
     args: tuple[ArgT, ...]
@@ -119,7 +121,7 @@ class UserArgs(NamedTuple, Generic[ArgT]):
 
     def with_users_resolved(self, resolutions: Mapping[UserOption, Resolution]) -> "UserArgs[str]":
         """Returns this record with --as and --as-me replaced by the users they stand for: `--user=uid:gid`
-        in args (the function resolved), `uid:gid` in values.
+        in args (resolve_user_options), and `uid:gid` in values.
         """
         values = tuple((option, _resolve_arg(value, resolutions, should_omit_option=True))
                        for option, value in self.values)
@@ -164,7 +166,7 @@ def parse(args: Sequence[str], value_flags: Collection[str], me: tuple[int, int]
 
 
 class _Reading:
-    """Private helper of parse that holds what it has read of a command line so far."""
+    """Private helper of the function parse that holds what parse has read of a command line so far."""
 
     def __init__(self, users: GivenUsers) -> None:
         self.users = users
@@ -177,35 +179,35 @@ class _Reading:
         self.values.append(("--user", option))
 
     def result(self, service: str | None, remaining_args: Sequence[str]) -> UserArgs[Arg]:
-        """Returns what was read, with service and the rest of the arguments after it."""
+        """Returns the record of what was read, with service and the remaining arguments after it."""
         return UserArgs(service, (*self.kept_args, *remaining_args), self.users, tuple(self.values))
 
 
 
 def parse_compose(subcommand: str, args: Sequence[str], me: tuple[int, int],
                   accounts: hostusers.HostAccounts) -> UserArgs[Arg]:
-    """Returns parse of the arguments of `docker compose run` or `exec`.
+    """Returns the result of the function parse for the arguments of `docker compose run` or `exec`.
 
     Parameters:
     - subcommand: `run` or `exec`
     - args: the subcommand's arguments
-    - me, accounts: as parse takes them
+    - me, accounts: as the function parse takes them
     """
     return parse(args, COMPOSE_VALUE_FLAGS[subcommand], me, accounts)
 
 
 def resolve_user_options(args: Iterable[Arg], resolutions: Mapping[UserOption, Resolution]
                          ) -> tuple[str, ...]:
-    """Returns args with --as and --as-me replaced by `--user=uid:gid`, with the user each stands for. Raises
-    KeyError for one that resolutions lacks: it must not reach docker.
+    """Returns args with each --as and --as-me replaced by `--user=uid:gid`, for the user it stands for.
+    Raises KeyError for an option that resolutions lacks, since such an option must not reach docker.
     """
     return tuple(_resolve_arg(arg, resolutions) for arg in args)
 
 
 def _resolve_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution],
                  should_omit_option: bool = False) -> str:
-    """Returns arg, or for a UserOption the user it stands for: `--user=uid:gid`, or with should_omit_option
-    `uid:gid`.
+    """Returns arg, or, for a UserOption, the user it stands for: as `--user=uid:gid`, or as `uid:gid` if
+    should_omit_option is set.
     """
     if isinstance(arg, str):
         return arg
@@ -214,7 +216,9 @@ def _resolve_arg(arg: Arg, resolutions: Mapping[UserOption, Resolution],
 
 
 def _parse_long(args: Sequence[str], i: int, value_flags: Collection[str], reading: _Reading) -> int:
-    """Reads the --option at args[i] into reading, --as as its UserOption, and returns the index after it."""
+    """Reads the --option at args[i] into reading, and returns the index after it. --as is read as its
+    UserOption.
+    """
     name, equals_sign, value = args[i].partition("=")
     end = i
     if (name in value_flags or name == commandline.AS_OPTION) and not equals_sign:

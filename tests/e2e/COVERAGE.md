@@ -5,18 +5,18 @@ Audience: whoever changes dockscreen's checks and reads the coverage report of
 reach should be listed here, with the reason. Anything missing from the report and from this list is a
 gap: write a scenario for it.
 
-The unit tests cover what is listed, unless it says otherwise.
+The unit tests cover every item listed, unless the item says otherwise.
 
 ## Defences that a real docker or compose never triggers
 
-They guard against a docker, compose or buildx that behaves differently from today's, and fail closed.
+These defences guard against a docker, compose or buildx that behaves differently from today's, and fail closed.
 
 - `projectscreening._read_back_problem` and `_first_difference`: compose reading the generated file back
-  differently from what was checked. dockscreen writes compose's own output, so today's compose reads it
+  differently from the checked config. dockscreen writes compose's own output, so today's compose reads it
   back the same.
 - `inspect._load_config`: `docker compose config` printing something that is not JSON.
 - `bakescreening._definition`: `bake --print` printing something that is not a JSON object.
-- `build.fields` for entries given as text, and `Policy._check_cache_from` for an entry it cannot read:
+- `imagebuild.fields` for entries given as text, and `Policy._check_cache_from` for an entry it cannot read:
   current buildx prints `output`, `cache-from`, `cache-to` and `secret` entries as objects. Older buildx
   prints text.
 - `serviceinfo._services_to_run`: `docker compose config --services` failing after `config` worked.
@@ -27,21 +27,21 @@ They guard against a docker, compose or buildx that behaves differently from tod
 - `base.unknown_key_problems` for top-level keys: compose refuses unknown top-level keys itself, and leaves
   out the ones it knows but does not use (`models`).
 - `Policy.check_cap_drop` and `check_security_opt` refusing a missing ALL or no-new-privileges, and
-  `compose_harden._fix_config` adding them: hardening adds both to every service before the policy sees
-  it.
-- `policy._check_host_files` for an `env_file` entry without a path: compose gives every entry one.
+  `projectfixes.fix_config` adding them: hardening adds both to every service before the policy sees
+  the service.
+- `servicerules._check_host_files` for an `env_file` entry without a path: compose gives every entry a path.
 - `projectscreening.check_name` for a project without a name.
 - `Policy.check_user` for a service without a user: the services that set none are left to their
   images, and those that start get a user before the final check.
 - `decisions.Decisions.changes` for a decision that pins no user: a refused or failed decision stops
-  the run before finalize.
+  the run before `finish`.
 - `containerscreening._verify_split` refusing a command line whose image dockscreen misread: it knows every
   value-taking option of `docker run` that the daemon accepts on Linux. An option it does not know, such
   as `--cpu-count`, fails at `create` instead
   (`test_an_option_dockscreen_does_not_know_fails_closed`).
 - `x-` keys in a compose `build`: compose drops them from its config, and its own build ignores them
   (`test_compose_drops_x_bake_from_a_build_so_its_output_is_never_written`). `docker buildx bake` reads
-  `x-bake` from a compose file, and the policy screens it on the definition `--print` gives.
+  `x-bake` from a compose file, and the policy screens bake on the definition that `--print` gives.
 
 ## Races
 
@@ -62,17 +62,17 @@ Something has to change between two of dockscreen's calls to docker.
 
 ## Not reachable from the command line
 
-- `Docker.new_for_testing`, `Subordinate.new_for_testing`, `runtime._real_docker_path` with wrappers given,
+- `Docker.new_for_testing`, `SubordinateRanges.new_for_testing`, `runtime._real_docker_path` with wrappers given,
   `sections.effective_settings` without a directory: for the unit tests.
 - `imageuser.describe` without the host's accounts.
 - `messages._escape` for a character above U+FFFF: the messages that quote project text with one in it
   quote it with `repr`, which escapes it first (`test_characters_beyond_the_basic_plane_are_shown_as_text`).
-- `policy._outside` without a config file to name in the hint: dockscreen always knows where the
-  user's file is.
-- `images.section_hint` for an image from a registry other than Docker Hub: the scenarios pull only from
+- `RuleBase._outside_problem` without a config file to name in the hint: dockscreen always knows the
+  path of the user's config file.
+- `image.section_hint` for an image from a registry other than Docker Hub: the scenarios pull only from
   Docker Hub.
 - `docker_cli`'s `if __name__ == "__main__"`: `bin/docker` calls `main` itself.
-- `commandline.split_argv` and `find_subcommand` at a `--` before the command (`docker -- ps`), and
+- `commandline._split_argv` and `_find_subcommand` at a `--` before the command (`docker -- ps`), and
   `option_value` at a `--` before `--pull`.
 - `docker_run.audit` when docker is missing: the check for a remote daemon runs docker first, and the
   entry point reports that it is missing.
@@ -91,11 +91,11 @@ Something has to change between two of dockscreen's calls to docker.
 ## Depends on the image store
 
 With docker's containerd image store, which these tests ran against, a locally tagged or built image
-has a repo digest under its local name (`docs/security-review.md`). So these are not reached:
+has a repo digest under its local name (`docs/security-review.md`). So the scenarios do not reach these code paths:
 
 - `sections.section_for` saying that the image was not pulled from the section's repository, and the note
   in the report of `docker_run.audit` that says so.
 - `serviceinfo._find_section_images` and `Screener.project_policy` finding no proof for a section, and the final check of
-  `projectrun.check_and_run` refusing a service that only passed because of it.
+  `projectrun.check_and_run` refusing a service that only passed because of that section.
 
-The tests mark the scenarios for them as expected failures.
+The tests mark the scenarios for these code paths as expected failures.

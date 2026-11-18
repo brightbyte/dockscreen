@@ -1,17 +1,18 @@
-"""This module provides functions for finding which variables of the shell end up in which service of a
-compose project, and for the ids dockscreen passes to compose.
+"""This module provides functions for finding the shell variables that end up in each service of a compose
+project, and for the ids that dockscreen passes to compose.
 
-dockscreen passes UID and GID, the real ids of the invoking user, in the environment of the compose commands
-it runs, for compose files to interpolate (`user: "${UID}:${GID}"`); they override values already in
-the environment, so that `${UID}` is the invoking user's real uid, the one --allow-me allows, and not the
-value of an inherited variable. The policy refuses these ids unless the invoking user gives --allow-me (see
-rules.userrules): passing them only makes the project's intent readable.
+dockscreen passes UID and GID, the real ids of the invoking user, in the environment of the compose
+commands it runs, so that compose files can interpolate them (`user: "${UID}:${GID}"`). They override
+values already in the environment. That way, `${UID}` is the invoking user's real uid, which --allow-me
+allows, and not the value of an inherited variable. The policy refuses these ids unless the invoking user
+gives --allow-me (see rules.userrules); passing them only makes the project's intent readable.
 
-`environment: [FOO]` takes FOO from the shell. The resolved config shows it like any other value, so this
-recognises a pass-through by the value being the shell's own under the same name. That also catches
-`FOO: bar` when the shell happens to have FOO=bar, and misses `X: ${FOO}`, which copies the value under
-another name. It leaves out the variables dockscreen passes to compose (EXPORTED_VARIABLES). The policy judges
-the result (Policy.check_shell_env).
+`environment: [FOO]` takes FOO from the shell. The resolved config shows FOO like any other value, so the
+function copied_shell_variables recognises a pass-through by its value: the value equals the shell's value
+of the variable with the same name. This test also catches `FOO: bar` when the shell happens to have
+FOO=bar, and it misses `X: ${FOO}`, which copies the value under another name. The function leaves out the
+variables that dockscreen passes to compose (EXPORTED_VARIABLES). The policy judges the result
+(Policy.check_shell_env).
 """
 
 from collections.abc import Mapping
@@ -30,7 +31,8 @@ def exported_variables(me: tuple[int, int]) -> dict[str, str]:
 
 
 def copied_shell_variables(config: dict[str, Any], env: Mapping[str, str]) -> dict[str, list[str]]:
-    """Returns {service: [variable names]} for the environment values of services that are the shell's own.
+    """Returns {service: [variable names]}: the variables in each service's environment whose value is the
+    shell's own.
 
     Parameters:
     - config: the project's resolved definition

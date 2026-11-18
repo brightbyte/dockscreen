@@ -2,14 +2,13 @@
 project, and the settings that result.
 
 The config file can give the settings per image (`[images."REPOSITORY"]`) and per project
-(`[projects."DIRECTORY"]`).
-They apply in that order, after the top level (effective): a single value replaces the one before, a list
-is added to the ones before.
+(`[projects."DIRECTORY"]`). The sections apply in that order, after the top level (effective_settings). A
+single value replaces the value before it; a list is added to the lists before it.
 
 An image section names a repository: it trusts the image's maintainer, not one image. A name alone
-proves nothing, because anyone can build or tag an image locally under any name, so an image matches only
-if docker recorded that it pulled the image from that repository (a repo digest), and never for a service
-that builds its image from a Dockerfile (section_for).
+proves nothing, because anyone can build or tag an image locally under any name. So an image matches a
+section only if docker recorded that it pulled the image from that repository (a repo digest). It never
+matches for a service that builds its image from a Dockerfile (section_for).
 """
 
 import os
@@ -21,11 +20,11 @@ from dockscreen.model.settings import Config, ConfigSection, SectionMatch
 
 
 def effective_settings(config: Config, repository: str | None = None, directory: str | None = None) -> Config:
-    """Returns the settings for an image pulled from repository, in a project in directory.
+    """Returns the settings for an image pulled from repository, in the project whose directory is
+    directory.
 
-    They are the top level's, amended by the image's section, then by the sections of the projects that
-    directory is in, outermost first. The
-    result has no sections of its own.
+    They are the top-level settings, amended first by the image's section, then by the sections of the
+    projects that contain directory, outermost first. The result has no sections of its own.
 
     Parameters:
     - config: the settings of the config file
@@ -46,7 +45,9 @@ def effective_settings(config: Config, repository: str | None = None, directory:
 
 
 def _amend(config: Config, section: ConfigSection) -> Config:
-    """Returns config with section applied: the values it sets replace, the lists it gives are added to."""
+    """Returns config with section applied: the values it sets replace those in config, and the lists it
+    gives are added to those in config.
+    """
     changes = {key: getattr(section, key) for key in ("user", "default_user", "default_home", "nobody_range")
                if getattr(section, key) is not None}
     list_keys = [key for key in ("mount_dirs", "security_opts") if getattr(section, key)]
@@ -64,7 +65,7 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
     Parameters:
     - config: the settings of the config file
     - reference: the image name the service or command line uses
-    - repo_digests: the image's RepoDigests (docker image inspect): where it was pulled from
+    - repo_digests: the image's RepoDigests (docker image inspect), which say where docker pulled it from
     - is_built: the service builds the image from a Dockerfile
     """
     name = repository(reference)
@@ -79,8 +80,9 @@ def section_for(config: Config, reference: str, repo_digests: Iterable[str] | No
 
 
 def repository_for_name(config: Config, reference: str, is_built: bool) -> str | None:
-    """Returns the repository of the image section the name alone points to, or None if there is none or
-    the service builds the image. The name proves nothing: this is for before the image is there.
+    """Returns the repository of the image section that the name alone points to. Returns None if there is
+    no such section, or if the service builds the image. The name proves nothing, so this is only for the
+    time before the image is there.
 
     Parameters:
     - config: the settings of the config file

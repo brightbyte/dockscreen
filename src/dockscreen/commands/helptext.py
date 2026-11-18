@@ -2,9 +2,9 @@
 out like docker's own.
 
 An overview lists dockscreen's options and the commands it audits or adds; a topic covers one command.
-Docker's (or compose's) own help for the same thing follows ours, except for commands only dockscreen
-has. The help wraps text as the audit report does (messages.report_width): option and command descriptions
-under their own column, as docker does.
+Docker's (or compose's) own help for the same thing follows ours, except for commands that only dockscreen
+has. The help wraps text to the width of the audit report (messages.report_width). As in docker's help, option
+and command descriptions wrap under their own column.
 """
 
 import textwrap
@@ -31,13 +31,14 @@ class HelpOption(NamedTuple):
 
 class HelpTopic(NamedTuple):
     """Record of the help page for one command, for showing it laid out like docker's own. It holds the
-    command's usage and summary, what dockscreen does with it, and dockscreen's own options for it.
+    command's usage and summary, notes on dockscreen's handling of the command, and dockscreen's own options
+    for it.
 
     Attributes:
     - usage: the usage line
     - summary: one line, also in the overview
     - aliases: the other names of the command
-    - notes: what dockscreen does with it: paragraphs, and list items starting with "- "
+    - notes: notes on dockscreen's handling of the command: paragraphs, and list items starting with "- "
     - options: dockscreen's own options for the command
     - has_docker_help: whether docker (or compose) has its own help for the command, which follows ours
     """
@@ -54,13 +55,13 @@ USER_OPTIONS = (
     HelpOption(commandline.AS_ME_OPTION, "Run as yourself"),
     HelpOption("--user", "Numeric UID:GID only; --as is for names", short="u", value="string"),
 )
-DEFAULTS = ("It adds --cap-drop=ALL and --security-opt=no-new-privileges:true before your options, which "
-            "can override them.")
+DEFAULTS = ("dockscreen adds --cap-drop=ALL and --security-opt=no-new-privileges:true before your options, "
+            "which can override them.")
 IMAGE_RULES = (
     "- an image that would run as root runs as the default user instead (the nobody user unless configured)",
-    ("- dockscreen denies an image user that is an account of this host, or with mounts an id outside the "
+    ("- dockscreen denies an image user that is an account of this host, or, with mounts, an id outside the "
      "nobody range"),
-    "- an image runs as the user the config file sets for it, its project or every image",
+    "- an image runs as the user that the config file sets for the image, for its project or for every image",
     "- dockscreen passes the user to docker as numbers, so the image's passwd file cannot change it",
 )
 VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖ denied by audit, or " \
@@ -68,17 +69,17 @@ VERDICT = "The last line dockscreen prints is the verdict: ✔ audit passed, ⊖
 
 DOCKER_OPTIONS = (
     HelpOption(commandline.HELPFUL_OPTION,
-               "Say what to do about a message too (also --verbose, which is not passed on)"),
-    HelpOption(commandline.SKIP_SCREENING_OPTION, "Turn all checks off; warns every time"),
+               "Also show advice on each message (also --verbose, which is not passed on)"),
+    HelpOption(commandline.SKIP_SCREENING_OPTION, "Turn all checks off; dockscreen warns every time"),
     HelpOption(commandline.STRICT_SCREEN_OPTION,
-               "For audit, run, create, start, restart, buildx bake and compose run: also deny what the "
-               "command line asks for that a project or image may not have"),
+               "For audit, run, create, start, restart, buildx bake and compose run: also deny the "
+               "command line's requests that a project or image may not make"),
 )
 COMPOSE_OPTIONS = (
     HelpOption(commandline.ALLOW_ME_OPTION, "Allow services to run as you"),
     HelpOption(commandline.HELPFUL_OPTION,
-               "Say what to do about a message too (also --verbose, which is not passed on)"),
-    HelpOption(commandline.SKIP_SCREENING_OPTION, "Turn all checks off; warns every time"),
+               "Also show advice on each message (also --verbose, which is not passed on)"),
+    HelpOption(commandline.SKIP_SCREENING_OPTION, "Turn all checks off; dockscreen warns every time"),
 )
 
 SCREENED_COMPOSE = (
@@ -96,9 +97,9 @@ BRIEF_HELP = HelpOption(commandline.BRIEF_OPTION, "Print only the verdict, in on
 
 def command_topic(name: str, function: Callable[..., object], aliases: Sequence[str] = (),
                   options: Sequence[HelpOption] = ()) -> HelpTopic:
-    """Returns the HelpTopic of one of dockscreen's own compose commands, from fn's docstring.
+    """Returns the HelpTopic of one of dockscreen's own compose commands, made from the docstring of function.
 
-    The first line becomes the summary and each further paragraph a note, up to the Parameters: list,
+    The first line becomes the summary, and each further paragraph becomes a note, up to the Parameters: list,
     which is for developers.
 
     Parameters:
@@ -124,7 +125,7 @@ def topics(helps: Mapping[str, Callable[[str], HelpTopic]]) -> dict[str, HelpTop
     """Returns the HelpTopic of each command, by name.
 
     Parameters:
-    - helps: the help function of each command, by name, which returns its HelpTopic given that name
+    - helps: by command name, the help function of each command; given the name, it returns the HelpTopic
     """
     return {name: help_function(name) for name, help_function in helps.items()}
 
@@ -134,7 +135,8 @@ def topic_lines(help_topic: HelpTopic, follows_name: str, width: int | None) -> 
 
     Parameters:
     - help_topic: the HelpTopic of the command
-    - follows_name: whose help follows ours, announced at the end if the topic says it does
+    - follows_name: the command whose own help follows ours; the end of the help announces that command's
+      help, if the topic says that it follows
     - width: the width to wrap to; None for no wrapping
     """
     lines = [f"Usage:  {help_topic.usage}", "", *_paragraph(help_topic.summary, width)]
@@ -151,7 +153,7 @@ def _overview(usage: str, summary: str, options: Iterable[HelpOption],
               sections: Iterable[tuple[str, Mapping[str, HelpTopic]]], closing_text: str, follows_name: str,
               width: int | None) -> list[str]:
     """Returns the help for dockscreen or compose as lines: options, then each (title, {name: HelpTopic})
-    section, then more and the announcement of follows_name's help.
+    section, then closing_text and the announcement of follows_name's help.
     """
     lines = [f"Usage:  {usage}", "", *_paragraph(summary, width), "", "Options:",
              *_table([(o._left_column(), o.text) for o in options], width)]
@@ -161,7 +163,9 @@ def _overview(usage: str, summary: str, options: Iterable[HelpOption],
 
 
 def _notes(texts: Iterable[str], width: int | None) -> list[str]:
-    """Returns texts as lines: a paragraph after a blank line, or a list item (`- `) right after it."""
+    """Returns texts as lines: a paragraph after a blank line, or a list item (`- `) right after the previous
+    text.
+    """
     lines: list[str] = []
     for text in texts:
         if text.startswith("- "):
@@ -172,8 +176,9 @@ def _notes(texts: Iterable[str], width: int | None) -> list[str]:
 
 
 def _table(rows: Sequence[tuple[str, str]], width: int | None) -> list[str]:
-    """Returns (left, right) rows as lines, the right column after the widest left one and wrapped under
-    itself; not wrapped if width is None or leaves it under 20 columns.
+    """Returns (left, right) rows as lines. The right column starts after the widest left text, and wraps
+    under itself. The right column does not wrap if width is None, or if wrapping would leave it under 20
+    columns.
     """
     column = max(len(left_text) for left_text, _ in rows) + 3
     lines: list[str] = []
@@ -205,7 +210,9 @@ def _item(text: str, width: int | None) -> list[str]:
 
 
 def _follow_lines(has_docker_help: bool, name: str) -> list[str]:
-    """Returns the lines that announce name's own help after ours, if docker_help says it follows."""
+    """Returns the lines that announce the own help of name after ours, if has_docker_help says that it
+    follows.
+    """
     return ["", f"{name} help follows:", ""] if has_docker_help and name else []
 
 
@@ -247,8 +254,8 @@ def compose_overview(screened_topics: Mapping[str, HelpTopic], commands: Mapping
 
 
 def show(render_lines: Callable[[int | None], list[str]]) -> None:
-    """Prints the lines build(width) returns, with the width of the audit report, or 80 columns without
-    a terminal, as docker does: help is read in less more than grepped.
+    """Prints the lines that render_lines returns, wrapped to the width of the audit report. Without a
+    terminal, this uses 80 columns, as docker does: people read help in less more often than they grep it.
 
     Parameters:
     - render_lines: returns the lines of the help, wrapped to the width it is given (None for no wrapping)

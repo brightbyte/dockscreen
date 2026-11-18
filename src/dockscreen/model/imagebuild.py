@@ -1,10 +1,11 @@
-"""This module defines the ImageBuild class, a view of the build of one image as screening sees it, from
-compose's `build:` section or from a target of `docker buildx bake`, and BakeDefinition, bake's definition
-of its builds.
+"""This module defines two classes. The class ImageBuild is a view of the build of one image as screening
+sees it, from compose's `build:` section or from a target of `docker buildx bake`. The class
+BakeDefinition is bake's definition of its builds.
 
-Both read a context, a Dockerfile and named contexts from this host, and may use a network and the SSH
-agent; they give these different names (ImageBuild.keys). Bake also says where a build writes (`output`,
-`cache-to`) and what it reads besides (`cache-from`, `secret`), as `key=value,...` entries (fields).
+Both kinds of build read a context, a Dockerfile and named contexts from this host, and may use a network
+and the SSH agent; compose and bake give these different names (ImageBuild.keys). Bake also names the
+places a build writes to (`output`, `cache-to`) and the other things it reads (`cache-from`, `secret`), as
+`key=value,...` entries (fields).
 """
 
 import csv
@@ -17,15 +18,17 @@ BAKE_KEYS = ("context", "dockerfile", "contexts")
 
 class ImageBuild(NamedTuple):
     """View of the definition of one image build, from compose's `build:` or a target of `docker buildx bake`,
-    for judging what the build reads on this host. It holds the definition, what it calls the context, the
-    Dockerfile and the named contexts, and the directory its relative paths are relative to.
+    for judging the files the build reads on this host. It holds the definition, the names it uses for the
+    context, the Dockerfile and the named contexts, and the directory that its relative paths are relative
+    to.
 
-    Instances come from from_compose and from_bake.
+    Instances come from the classmethods from_compose and from_bake.
 
     Attributes:
     - definition: the build's keys, as compose or bake gives them; a dict that must not be changed in place
-    - keys: what the definition calls the context, the Dockerfile and the named contexts
-    - directory: the directory its relative paths are relative to, which what it reads must stay inside
+    - keys: the names the definition uses for the context, the Dockerfile and the named contexts
+    - directory: the directory that its relative paths are relative to; everything the build reads must
+      stay inside it
     """
     definition: dict[str, Any]
     keys: tuple[str, str, str]
@@ -46,7 +49,7 @@ class ImageBuild(NamedTuple):
         """Returns the build that a bake target defines.
 
         Parameters:
-        - target: the target, as `bake --print` gives it; None for an empty one
+        - target: the target, as `bake --print` gives it; None for an empty target
         - directory: the directory bake ran in
         """
         return cls(target or {}, BAKE_KEYS, directory)
@@ -73,7 +76,7 @@ class BakeDefinition(NamedTuple):
 
     Attributes:
     - definition: the targets and groups, as a JSON object; a dict that must not be changed in place
-    - directory: the directory bake ran in, which it reads the targets' relative paths from
+    - directory: the directory bake ran in; bake reads the targets' relative paths from there
     """
     definition: dict[str, Any]
     directory: str
@@ -86,7 +89,7 @@ class BakeDefinition(NamedTuple):
 
 
 def fields(entry: Any) -> dict[str, str] | None:
-    """Returns the {key: value} of a `key=value,key=value` entry, or None if it is not one.
+    """Returns the {key: value} of a `key=value,key=value` entry, or None if entry has another form.
 
     Newer buildx prints some entries (cache-from, cache-to, secret) as objects of the same keys.
     A bare word has no keys.

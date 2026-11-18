@@ -2,16 +2,17 @@
 untrusted text they quote, so that it cannot pass for anything else.
 
 Every message is one line that starts with PREFIX, so the user can tell it apart from the output of
-docker and compose. printable_text() escapes the text, because much of it quotes the untrusted project or
-image.
-Only what docker printed about a failure (a reason's output) keeps its line breaks: it follows the
-message on lines indented past PREFIX, each escaped, so none of them can pass for a message.
+docker and compose. The function printable_text escapes the text, because much of the text quotes the
+untrusted project or image.
+Only docker's output about a failure (a reason's output) keeps its line breaks. That output follows the
+message on lines indented past PREFIX, each line escaped, so that none of the lines can pass for a
+message.
 Command output that is meant as data (audit reports, harden patches, help) goes to stdout and is not
 a message.
 
 A line can start with a mark (Message, or anything else that HasMark): a plain text symbol, coloured as
-docker colours its own when the line goes to a terminal and NO_COLOR is not set. The line keeps its mark as
-an attribute, so the same symbol can stand for different things in different colours.
+docker colours its own marks when the line goes to a terminal and NO_COLOR is not set. The line keeps its
+mark as an attribute, so the same symbol can stand for different things in different colours.
 """
 
 import os
@@ -43,16 +44,16 @@ class Mark(str):
 
 
 class Message(str):
-    """Value object for a message line that starts with a mark, which is kept apart from the text for
-    colouring. Its string value is the text, without the mark, which only printing adds; the line only states
-    the facts. It holds the mark, the text and what to do about it.
+    """Value object for a message line that starts with a mark. The mark is kept apart from the text, for
+    colouring. Its string value is the text without the mark, which only printing adds; the line only states
+    the facts. It holds the mark, the text, and the help, which advises on the next step.
 
     The str base does not protect these attributes, so nothing changes them after construction.
 
     Attributes:
     - mark: the Mark
     - text: the text
-    - help: what to do about it, shown only in helpful mode (set_helpful), or None
+    - help: the advice on the next step, shown only in helpful mode (set_helpful), or None
     """
 
     mark: Mark
@@ -72,7 +73,8 @@ class Message(str):
 
 @runtime_checkable
 class HasMark(Protocol):
-    """Protocol for what prints as a line that starts with a mark, such as a Message, a Finding or a Notice.
+    """Protocol for an object that prints as a line starting with a mark, such as a Message, a Finding or a
+    Notice.
 
     Attributes:
     - mark: the Mark
@@ -98,25 +100,26 @@ def help_of(text: object) -> str | None:
 
 @runtime_checkable
 class HasOutput(Protocol):
-    """Protocol for what carries what docker printed about a failure, such as a DockerError or a Finding
-    that reports one.
+    """Protocol for an object that carries docker's output about a failure, such as a DockerError or a
+    Finding that reports one.
 
     Attributes:
-    - output: what docker printed, which may span lines; None or "" if nothing
+    - output: docker's output, which may span lines; None or "" if docker printed nothing
     """
 
     output: str | None
 
 
 def output_of(text: object) -> str | None:
-    """Returns what docker printed that comes with text (anything that HasOutput, such as an error), or None
-    if it carries none, as a plain string does not.
+    """Returns docker's output that comes with text (anything that HasOutput, such as an error), or None if
+    text carries none, as a plain string does not.
     """
     return text.output or None if isinstance(text, HasOutput) else None
 
 
 def with_output(text: object) -> str:
-    """Returns text followed by its output (output_of), as one text: for where it has to fit on one line."""
+    """Returns text followed by its output (output_of), as one text, for places where the text has to fit
+    on one line."""
     output = output_of(text)
     return f"{text}: {output}" if output else str(text)
 
@@ -135,7 +138,7 @@ GOOD = Mark("\u25cf", GREEN)    # ● accepted as it is
 WARN = Mark("\u25cf", YELLOW)   # ● allowed, but worth a look; also a change that can alter behaviour
 BAD = Mark("\u25cf", RED)       # ● refused, or could not be checked
 HINT = Mark("\u24d8", BLUE)     # ⓘ how to get past something
-ROUTINE = Mark("\u25cf", CYAN)  # \u25cf changed by dockscreen, rarely matters
+ROUTINE = Mark("\u25cf", CYAN)  # ● changed by dockscreen, rarely matters
 PASSED_MARK = Mark("\u2714", GREEN)  # ✔
 REFUSED_MARK = Mark("\u2296", RED)   # ⊖
 FAILED_MARK = Mark("\u2718", RED)    # ✘ could not look, as docker marks errors
@@ -146,14 +149,15 @@ FAILED_MARK = Mark("\u2718", RED)    # ✘ could not look, as docker marks error
 # up with the text after the mark.
 MAX_WIDTH, MIN_WIDTH, TAB_WIDTH = 120, 20, 8
 CONTINUATION = "  "
-# Where the lines of a message's output start: past PREFIX and a mark, so that none starts like a message.
+# Where the lines of a message's output start: past PREFIX and a mark, so that no line of the output
+# starts like a message.
 OUTPUT_INDENT = " " * (len(PREFIX) + 1) + "  "
 
 
 def print_notice(text: object) -> None:
     """Prints text to stderr as one dockscreen message: prefixed, escaped and with its mark painted.
 
-    What docker printed about text (output_of) follows, each of its lines escaped and indented by
+    Docker's output about text (output_of) follows, each of its lines escaped and indented by
     OUTPUT_INDENT.
     """
     print(f"{PREFIX} {_paint(text, sys.stderr)}", file=sys.stderr)
@@ -166,9 +170,9 @@ def print_line(text: str | HasMark, should_indent: bool = True) -> None:
 
     Parameters:
     - text: the line, which may start with a mark (HasMark)
-    - should_indent: print it after a tab, which sets the report apart from the [dockscreen] messages on
-      stderr, wrapped to report_width() with the text lined up after the mark. Without it, the line is printed
-      as it is, for output that is all one line (--brief)
+    - should_indent: print the line after a tab, which sets the report apart from the [dockscreen] messages
+      on stderr, and wrap it to report_width(), with the text lined up after the mark. Without it, the line
+      is printed as it is, for output that is all one line (--brief)
     """
     if not should_indent:
         print(_paint(text, sys.stdout))
@@ -191,8 +195,8 @@ def report_width(fallback: int = 0) -> int | None:
 def _wrap(text: str | HasMark, width: int | None, should_colour: bool) -> list[str]:
     """Splits text into escaped lines that fit width columns after a tab, never breaking a word.
 
-    Continued lines line up under the text after the mark. width: None for one line; should_colour: whether
-    to colour the mark.
+    Continued lines line up under the text after the mark. A width of None gives one line; should_colour
+    tells whether to colour the mark.
     """
     if isinstance(text, HasMark):
         lead, body = f"{text.mark} ", printable_text(text.display_text)
@@ -203,14 +207,16 @@ def _wrap(text: str | HasMark, width: int | None, should_colour: bool) -> list[s
     else:
         lines = textwrap.wrap(lead + body, width=width - TAB_WIDTH, subsequent_indent=CONTINUATION,
                               break_long_words=False, break_on_hyphens=False) or [""]
-    if isinstance(text,
-                  HasMark) and should_colour:  # coloured after wrapping, so the escape codes take up no width
+    # coloured after wrapping, so that the escape codes take up no width
+    if isinstance(text, HasMark) and should_colour:
         lines[0] = _colour(text.mark) + lines[0][len(text.mark):]
     return lines
 
 
 def _paint(line: object, stream: TextIO) -> str:
-    """Returns line escaped (printable), with its mark coloured if stream is a terminal that wants colour."""
+    """Returns line escaped (printable_text), with its mark coloured if stream is a terminal that wants
+    colour.
+    """
     if not isinstance(line, HasMark):
         return printable_text(line)
     mark = _colour(line.mark) if _wants_colour(stream) else line.mark
@@ -223,7 +229,9 @@ def _colour(mark: Mark) -> str:
 
 
 def _wants_colour(stream: TextIO) -> bool:
-    """Tells whether to colour what is written to stream: a terminal, without NO_COLOR or TERM=dumb."""
+    """Tells whether to colour the text written to stream: only for a terminal, without NO_COLOR or
+    TERM=dumb.
+    """
     if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
         return False
     try:
@@ -233,7 +241,7 @@ def _wants_colour(stream: TextIO) -> bool:
 
 
 def print_warning(text: str) -> None:
-    """Prints text as a warning message (notice)."""
+    """Prints text as a warning message, in the way print_notice prints a message."""
     print_notice(f"warning: {text}")
 
 

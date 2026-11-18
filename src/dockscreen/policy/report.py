@@ -1,9 +1,9 @@
-"""This module defines the Report of what one screening reported, and how it is shown: a report is what a
-command or an audit ends by showing, and its verdict (finding.Verdict), the worst of its findings, is the
-exit status of an audit.
+"""This module defines the Report class, for the outcome of one screening, and functions for showing it. A
+command or an audit ends by showing a report. The report's verdict (finding.Verdict) is the worst of its
+findings, and it is the exit status of an audit.
 
-Use it to build a report from findings (Report.of, Report.refusal, Report.failure, Report.with_more_findings)
-and to show it (Report.show, Report.show_screening).
+The classmethods Report.of, Report.refusal and Report.failure, and the method Report.with_more_findings,
+build a report from findings. The methods Report.show and Report.show_screening show a report.
 """
 
 from collections.abc import Iterable
@@ -25,8 +25,8 @@ class Report(NamedTuple):
     """Record of what one screening reported, from which its verdict follows. It holds the notices and the
     findings, each in their order.
 
-    Build one with of, or with refusal or failure for a single reason; show it with show, or with
-    show_screening before a command runs.
+    Build a report with the classmethod of, or with the classmethods refusal and failure for a single
+    reason. Show it with the method show, or with the method show_screening before a command runs.
 
     Attributes:
     - notices: what was reported without stopping the command (Notice)
@@ -59,7 +59,7 @@ class Report(NamedTuple):
         return cls((), (Finding.of(reason, Verdict.FAILED),))
 
     def with_more_findings(self, extra_entries: Iterable[ReportEntry]) -> Self:
-        """Returns a report of what this one holds, then more."""
+        """Returns a report with the entries of this report, followed by extra_entries."""
         return type(self).of([*self.notices, *self.findings, *extra_entries])
 
     @property
@@ -81,8 +81,8 @@ class Report(NamedTuple):
 
     @property
     def brief_line(self) -> messages.Message:
-        """Returns the verdict as one line, for --brief: the closing line, then the first reason if it did
-        not pass and how many more there are.
+        """Returns the verdict as one line, for --brief. The line starts with the closing line; if screening
+        did not pass, it adds the first reason and the number of further reasons.
         """
         if self.has_passed:
             return self.closing_line

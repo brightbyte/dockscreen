@@ -1,9 +1,8 @@
-"""This module implements `docker compose` through dockscreen: it reads compose's part of the command line,
-and dispatches to the compose subcommands dockscreen gates or adds, forwarding everything else.
+"""This module implements `docker compose` through dockscreen. It reads compose's part of the command line,
+and dispatches the compose subcommands that dockscreen gates or adds. It forwards everything else to compose.
 
-We deliberately do not use argparse for the docker compose surface. Anything we
-do not recognise must reach docker compose untouched, so the only thing we
-parse is the position of the subcommand.
+We deliberately do not use argparse for the docker compose surface. Anything we do not recognise must reach
+docker compose untouched, so the only thing we parse is the position of the subcommand.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -26,7 +25,8 @@ from dockscreen.host.runtime import Runtime
 from dockscreen.policy.report import Report
 from dockscreen.util import commandline, messages
 
-# dockscreen's own options before the compose subcommand; --as-me is taken out to be refused there
+# dockscreen's own options before the compose subcommand. --as-me is taken out too, so that dispatch can
+# refuse it
 OWN_OPTIONS = frozenset({
     commandline.SKIP_SCREENING_OPTION, commandline.ALLOW_ME_OPTION, commandline.AS_ME_OPTION,
     commandline.HELPFUL_OPTION, commandline.VERBOSE_OPTION,
@@ -62,7 +62,7 @@ COMMANDS: Mapping[str, Callable[[commandline.CommandLine, Runtime], int]] = Mapp
     "fix": compose_harden.harden,
 })
 ALIASES = MappingProxyType({"fix": "harden"})  # alias -> command it stands for
-# the help of each command dockscreen has its own help for: of its own commands, and of the screened ones
+# dockscreen's own help, for its own commands and for the commands it screens
 COMMAND_HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyType({
     "audit": compose_audit.help,
     "harden": compose_harden.help,
@@ -77,7 +77,7 @@ SCREENED_HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyT
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker compose …`, screened, and returns the exit status unless docker replaces this process.
+    """Screens and runs `docker compose …`. Returns the exit status, unless docker replaces this process.
 
     Errors that stop everything (config.ConfigError, DockerNotFoundError) are left to docker_cli.main.
 
@@ -86,8 +86,8 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime the `docker` wrapper loaded
     """
     assert parent_cli.cmd == "compose"
-    # the compose commands are run without them; -H or --context would choose a daemon or config that the
-    # screening did not look at
+    # dockscreen runs the compose commands without docker's options before `compose`: -H or --context would
+    # choose a daemon or config that the screening did not look at
     if parent_cli.lead_args:
         messages.print_notice("docker options before `compose` are not supported")
         return 1
@@ -96,8 +96,8 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
         for warning in commandline.SKIP_SCREENING_WARNINGS:
             messages.print_warning(warning)
         return runtime.docker.exec(cli.full_argv)
-    # for `user: "${UID}:${GID}"` in compose files; only compose gets them, not this process, and not
-    # with --skip-screening, which leaves compose as it is
+    # UID and GID, for `user: "${UID}:${GID}"` in compose files. Only compose gets them, not this process.
+    # With --skip-screening, compose does not get them either, since that option leaves compose as it is
     return ComposeCommand(cli, runtime.with_docker_env(shellenv.exported_variables(runtime.me))).dispatch()
 
 
@@ -153,10 +153,12 @@ class ComposeCommand:
         return self._passthrough(cli.argv)
 
     def _help_request(self) -> str | None:
-        """Determines what help the command line asks for: None for none, "" for the overview, else a command.
+        """Determines the help that the command line asks for: None for none, "" for the overview, else a
+        command.
 
-        `help`, `help COMMAND`, or --help or -h as the first argument after the command. Only a leading one
-        counts: after `run SERVICE` the rest belongs to the service's command (`run app grep -h x`).
+        The command line asks for help with `help`, with `help COMMAND`, or with --help or -h as the first
+        argument after the command. Only a leading --help or -h counts: after `run SERVICE`, the rest belongs
+        to the service's command (`run app grep -h x`).
         """
         cli = self.commandline
         if cli.cmd is None:
@@ -167,7 +169,7 @@ class ComposeCommand:
         return cli.cmd if cli.args[:1] in (("--help",), ("-h",)) else None
 
     def show_help(self, target: str) -> int:
-        """Prints dockscreen's help for target, then forwards to compose's own help if it has one.
+        """Prints dockscreen's help for target, then forwards to compose's own help, if compose has one.
 
         Parameters:
         - target: the subcommand to give the help of; "" for compose itself
@@ -195,7 +197,7 @@ class ComposeCommand:
 
 
 def supports_strict(subcommand: str | None) -> bool:
-    """Tells whether the compose subcommand sub can be screened with the command line untrusted.
+    """Tells whether dockscreen can screen the given compose subcommand with the command line untrusted.
 
     Parameters:
     - subcommand: the subcommand; None for none

@@ -1,8 +1,8 @@
-"""This module defines the Notice class, for what screening reports without stopping the command: what
-dockscreen changes in what it runs, and what is worth a look. A Notice never judges anything; what is
-refused, or could not be looked at, is a Finding (finding).
+"""This module defines the Notice class, for a statement that screening reports without stopping the
+command. A notice describes a change that dockscreen makes to the things it runs, or points out something
+worth a look. A Notice never judges anything; a refusal, or a failure to look, is a Finding (finding).
 
-A notice is info if it rarely changes how anything runs, a warning if it can.
+A notice is info if the change it reports rarely affects anything, and a warning if it can.
 """
 
 import enum
@@ -23,11 +23,13 @@ MARKS = {NoticeSeverity.INFO: messages.ROUTINE, NoticeSeverity.WARNING: messages
 
 @dataclass(frozen=True)
 class Notice:
-    """Value object for a statement about one subject of screening that stops nothing, which prints as a line
-    marked by its severity (MARKS). It holds the text, the severity, the subject and what to do about it.
+    """Value object for a statement about one subject of screening that stops nothing. It prints as a line
+    marked by its severity (MARKS). It holds the text, the severity, the subject, and the advice on the next
+    step.
 
-    Its string value is the text, after the subject and a colon if there is one. Build one with the
-    constructor; with_text and with_help build a changed copy. Two notices are equal if all of that is.
+    Its string value is the text, after the subject and a colon if there is one. Build a notice with the
+    constructor. The methods with_text and with_help build a changed copy. Two notices are equal if all of
+    these are equal.
 
     Attributes:
     - text: what it says, without the subject
@@ -59,9 +61,9 @@ class Notice:
         return replace(self, text=text)
 
     def with_help(self, help: str | None) -> "Notice":
-        """Returns a copy of this notice with help as what to do about it; None for nothing."""
+        """Returns a copy of this notice with help as what to do about it; None for no help."""
         return replace(self, help=help)
 
     def with_subject(self, subject: str) -> "Notice":
-        """Returns a copy of this notice about subject, which its own subject becomes part of the text of."""
+        """Returns a copy of this notice about subject. This notice's own subject becomes part of the text."""
         return replace(self, text=str(self), subject=subject)

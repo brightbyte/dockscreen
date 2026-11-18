@@ -1,10 +1,10 @@
-"""This module implements the compose commands that act on the containers a project already has (`down`,
-`rm`, `stop`, `kill`, `restart`, `start`, `pause`, `unpause`), for which dockscreen checks only the
-project's name.
+"""This module implements the compose commands that act on the containers a project already has: `down`, `rm`,
+`stop`, `kill`, `restart`, `start`, `pause` and `unpause`. For these, dockscreen checks only the project's
+name.
 
-These stop, change or remove the resources the name stands for, so the policy refuses a name that
-containers made from another directory already have (projectscreening.check_name). A name the user
-chooses on the command line or in the environment is their choice, and dockscreen does not check it.
+These commands stop, change or remove the resources the name stands for, so the policy refuses a name that
+containers made from another directory already have (projectscreening.check_name). A name the user chooses on
+the command line or in the environment is their choice, and dockscreen does not check it.
 """
 
 from dockscreen.host.runtime import Runtime
@@ -14,8 +14,8 @@ from dockscreen.util import commandline
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker compose down`, `rm`, `stop` or another command that uses the project's name if the name is
-    free; returns 1 if it is not, otherwise docker replaces this process.
+    """Runs `docker compose down`, `rm`, `stop` or another command that uses the project's name, if the name
+    is free. Returns 1 if it is not; otherwise docker replaces this process.
 
     Parameters:
     - parent_cli: the compose command line, with the subcommand as its command; its lead_args are the compose

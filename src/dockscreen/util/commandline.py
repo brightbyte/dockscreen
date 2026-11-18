@@ -1,16 +1,18 @@
-"""This module provides what every reader of docker and compose command lines uses: the names of dockscreen's
-own options, which docker and compose never see, the CommandLine class, which splits a command line at its
-command and holds it without them, and functions that find one thing in a command line.
+"""This module provides the parts that every reader of docker and compose command lines uses. These are the
+names of dockscreen's own options, which docker and compose never see; the CommandLine class, which splits a
+command line at its command and holds it without those options; and functions that find one thing in a
+command line.
 
-Before the subcommand (main_commandline and CommandLine.subcommand take them out):
-- --skip-screening runs the real thing with no checks and no defaults. After the subcommand dockscreen
-  does not recognise it, so docker or compose rejects it, which is the safe direction. dockscreen prints
+Before the subcommand (main_commandline and CommandLine.subcommand take these options out):
+- --skip-screening runs the real thing with no checks and no defaults. dockscreen does not recognise it
+  after the subcommand, so there docker or compose rejects it, which is the safe direction. dockscreen prints
   the warning every time, and the user cannot silence it, because someone may have copied the flag
   into a script or an alias.
 - --allow-me lets services and images run as the invoking user's own ids (see rules.userrules), for
   compose. Docker's commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user
   instead.
-- --helpful (or --verbose) adds the second part of messages that have one: why, and what it costs.
+- --helpful (or --verbose) adds the second part of the messages that have a second part: the reason, and
+  the cost.
   The audit commands do that anyway. dockscreen takes --verbose here rather than pass it on, so that it
   does not make docker or compose noisy as well.
 - --strict-screen treats the command line as untrusted too: the policy refuses its requests that a
@@ -20,12 +22,12 @@ Before the subcommand (main_commandline and CommandLine.subcommand take them out
 
 After `audit`, for compose and docker alike: --brief prints only the verdict, in one line.
 
-After `run` or `exec` (userargs and runargs replace them by `--user=uid:gid`):
+After `run` or `exec` (userargs and runargs replace these options by `--user=uid:gid`):
 - --as NAME: a local user by name, resolved on this host.
 - --as-me: the invoking user's own ids.
 
-The helpers are not full parsers: each knows which options take a value only from the set it is given,
-and the callers handle the result so that a misreading refuses or changes nothing.
+The helpers are not full parsers: each one knows only the options that take a value in the set it is
+given. The callers handle the result so that a misreading leads to a refusal, or changes nothing.
 """
 
 from collections.abc import Collection, Sequence
@@ -37,13 +39,13 @@ ALLOW_ME_OPTION = "--allow-me"
 AS_OPTION = "--as"
 AS_ME_OPTION = "--as-me"
 STRICT_SCREEN_OPTION = "--strict-screen"
-# What --strict-screen is refused with before a command that does not support it.
+# The refusal of --strict-screen before a command that does not support it.
 STRICT_REFUSAL = (f"{STRICT_SCREEN_OPTION} is only supported for audit, create, restart, run, start, buildx "
                   "bake and compose run so far")
-# What --allow-me is refused with before a command that does not support it.
+# The refusal of --allow-me before a command that does not support it.
 ALLOW_ME_REFUSAL = (f"{ALLOW_ME_OPTION} is only supported for compose; for run, audit and create, choose the "
                     f"user after the command with {AS_ME_OPTION}, {AS_OPTION} NAME or --user UID:GID")
-# The warnings that --skip-screening turns screening off for a command.
+# The warnings that --skip-screening has turned screening off for a command.
 SKIP_SCREENING_WARNINGS = (f"{SKIP_SCREENING_OPTION} given: screening is disabled.",
                            "nothing in this command is checked, and no defaults are added.")
 HELPFUL_OPTION = "--helpful"
@@ -62,9 +64,10 @@ AS_ME_MESSAGE = messages.Message(
 def _split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts: Collection[str] = ()
                ) -> tuple[str | None, tuple[str, ...], tuple[str, ...], frozenset[str]]:
     """Splits argv at its command and returns (command, arguments after it, options before it, own options
-    taken out). The command is None, and the arguments are empty, if argv has none before `--`.
+    taken out). The command is None, and the arguments are empty, if argv has no command before `--`.
 
-    Only the own options before the command are taken out; those after it, and any after `--`, stay.
+    Only the own options before the command are taken out; the own options after the command, and any after
+    `--`, stay.
 
     Parameters:
     - argv: the arguments, in the form [options...] [command [arguments...]]
@@ -102,21 +105,21 @@ def _split_argv(argv: Sequence[str], value_opts: Collection[str] = (), own_opts:
 class CommandLine:
     """Record of one level of a docker command line, `docker run …` or the `up …` of `docker compose up …`,
     split at its command, with dockscreen's own options before the command taken out. It holds the options
-    before the command, the command and the arguments after it, which dockscreen options were given, and
-    what came before this level.
+    before the command, the command and the arguments after it, the dockscreen options that were given, and
+    the command line before this level.
 
-    Instances come from main_commandline, for the docker command line, and from subcommand, for the
-    command line of a command that has commands of its own (compose, buildx, container). Nothing changes
+    Instances come from main_commandline, for the docker command line, and from the method subcommand, for
+    the command line of a command that has commands of its own (compose, buildx, container). Nothing changes
     their attributes afterwards, though nothing enforces that.
 
     Attributes:
     - cmd: the command, or None if there is none
     - lead_args: the options before the command, at this level only; all of argv if there is no command
     - args: the arguments after the command; empty if there is none
-    - own_args: dockscreen's own options that were given, at this level or one before it; none of them is
-      in argv
+    - own_args: dockscreen's own options that were given, at this level or a level before it; none of them
+      is in argv
     - prefix: the docker command line before this level, up to and including the command it belongs to
-      (`compose` for compose's); empty for docker's own
+      (`compose` for compose's command line); empty for docker's own
     """
 
     def __init__(self, cmd: str | None, args: Collection[str], lead_args: Collection[str] = (),
@@ -155,12 +158,10 @@ class CommandLine:
 
     @property
     def global_args(self) -> list[str]:
-        """Returns the docker command line up to the command, composed from the prefix and
-        lead before the command.
+        """Returns the docker command line up to the command: the prefix, then the lead_args.
 
-        This is meant to be used when building commands. To read an option, look at the
-        lead_args of its own level: what an option means, and whether it takes a value,
-        depends on the level.
+        Use it to build commands. To read an option, look at the lead_args of the option's own level,
+        because the meaning of an option, and whether it takes a value, depends on the level.
         """
         return [*self.prefix, *self.lead_args]
 
@@ -191,13 +192,14 @@ class CommandLine:
 
     def subcommand(self, value_opts: Collection[str] = (), own_opts: Collection[str] = (),
                    should_inherit_lead: bool = False) -> "CommandLine":
-        """Returns the command line of the command, read from the arguments after it: `up -d` for the
-        `compose -f a.yml up -d` of `docker compose -f a.yml up -d`.
+        """Returns the command line of the command, read from the arguments after it. For example, it returns
+        `up -d` for the `compose -f a.yml up -d` of `docker compose -f a.yml up -d`.
 
-        It keeps the dockscreen options given here, and its prefix is this one's up to and including the
-        command. With should_inherit_lead, it takes this one's place instead: its lead starts with this one's,
-        its prefix is this one's, and this command is dropped. That is only right where the subcommand on its
-        own means the same, as `run` does for `container run`.
+        The result keeps the dockscreen options given here, and its prefix is this command line's, up to and
+        including the command. With should_inherit_lead, the result takes the place of this command line
+        instead: its lead_args start with this command line's lead_args, its prefix is this command line's
+        prefix, and this command is dropped. That is only
+        right where the subcommand means the same on its own, as `run` does for `container run`.
 
         Parameters:
         - value_opts: the command's options that take the next token as their value
@@ -318,7 +320,8 @@ def positionals(args: Sequence[str], long_values: Collection[str],
     Parameters:
     - args: the arguments
     - long_values: long options that take a value
-    - short_values: letters of short options that do, which take the next argument when they end a cluster
+    - short_values: the letters of short options that take a value; such an option takes the next
+      argument when it ends a cluster
     """
     positional_args: list[str] = []
     i = 0

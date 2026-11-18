@@ -1,13 +1,13 @@
 """This module implements `docker start` and `docker restart`, with the same check as `run`, on containers
 that already exist.
 
-dockscreen cannot rewrite an existing container, so the policy refuses one whose user dockscreen would
-replace (by the default user or a configured one), like one whose user it does not accept, unless it
-already runs as that user.
+dockscreen cannot rewrite an existing container. So the policy refuses a container whose user dockscreen would
+replace, by the default user or a configured one, unless the container already runs as that user. The policy
+refuses such a container just like a container whose user it does not accept.
 
-Docker does not record where it created a container, and its labels, which its image can set, prove
-nothing. So the policy judges it without a directory: no project section of the config file applies, and only
-the configured mount_dirs allow bind mounts.
+Docker does not record where it created a container, and its labels, which its image can set, prove nothing.
+So the policy judges such a container without a directory: no project section of the config file applies,
+and only the configured mount_dirs allow bind mounts.
 """
 
 
@@ -26,8 +26,8 @@ VALUE_SHORT = frozenset("st")
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker start` or `restart` if every container it names passes check; returns 1 if one does not,
-    otherwise docker replaces this process.
+    """Runs `docker start` or `restart` if every container that it names passes check. Returns 1 if a
+    container does not; otherwise docker replaces this process.
 
     Parameters:
     - parent_cli: the docker command line, with `start` or `restart` as its command
@@ -40,15 +40,15 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
 
 def check(cli: commandline.CommandLine, runtime: Runtime) -> list[ReportEntry]:
-    """Returns the refusals that forbid starting the containers that the `docker start` (or `restart`)
-    command line cli names.
+    """Returns the refusals that forbid starting the containers named on cli, a `docker start` or `restart`
+    command line.
 
     containerscreening.check_existing judges each container, and this refuses a remote daemon.
 
     Parameters:
     - cli: the docker command line, with `start` or `restart` as its command. With --strict-screen, the policy
-      judges the requests of the command line that created a container as a project's, and refuses them
-      (Policy.check_container)
+      judges the requests of the command line that created a container as if a project had made them, and
+      refuses them (Policy.check_container)
     - runtime: the Runtime of the command
     """
     screener = Screener(runtime, own_ids_hint="")  # the image's user is set in the config file, see the hint
@@ -76,6 +76,6 @@ def help(name: str) -> helptext.HelpTopic:
     return helptext.HelpTopic(
         "dockscreen start [OPTIONS] CONTAINER [CONTAINER...]",
         "Start containers, denied if they would fail the check of run",
-        (("dockscreen cannot change an existing container, so it denies one whose image's user it would "
-          "replace or deny."), helptext.VERDICT),
+        (("dockscreen cannot change an existing container, so it denies a container whose image's user it "
+          "would replace or deny."), helptext.VERDICT),
         aliases=("dockscreen container start", "dockscreen start"))

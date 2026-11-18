@@ -1,5 +1,5 @@
 """This package screens targets: it gathers what docker shows of them and what the command line says, and
-has the policy judge it, in the stages each kind of target needs.
+has the policy judge these facts, in the stages that each kind of target needs.
 
 Contents:
 - screener: the Screener, which gives the policy for a target and looks at images through docker
@@ -13,7 +13,8 @@ Contents:
 Each screening module gives, in its docstring, the reasons its kind of target needs screening, and the
 reasons for the way it is done.
 
-Not here: the rules (policy); which command screens what, and what happens with the verdict (commands).
+Not here: the rules (policy); the choice of targets for each command, and the action on the verdict
+(commands).
 
 Constraints:
 - No module here decides on its own whether something may run; every judgment comes from a Policy.

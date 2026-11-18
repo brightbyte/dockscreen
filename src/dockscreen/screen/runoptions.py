@@ -3,14 +3,14 @@ service it runs, with the command line as their origin, so that the policy can j
 run.
 
 Compose applies these options to the service itself, from the command line, after reading the project:
-`--user` replaces the service's user; `-v` adds a mount; `--cap-add` and `--cap-drop` add to theirs and
-take the same capabilities out of the other; `--env-from-file` reads a file on this host, like an
-env_file. The other options of `run` set keys that the policy does not restrict.
+`--user` replaces the service's user; `-v` adds a mount; `--cap-add` and `--cap-drop` each add to their own
+list, and take the same capabilities out of the other list; `--env-from-file` reads a file on this host,
+like an env_file. The other options of `run` set keys that the policy does not restrict.
 
-A `-v` source is a bind mount if it starts with `.`, `/` or `~`, else a named volume, as compose reads it.
-Compose leaves the source as it is; the policy judges `~` as the home directory and a relative source
-against the project directory, so that the judged source reaches at least as far as the one that can run. An
-`--env-from-file` path is read from the current directory.
+Compose reads a `-v` source as a bind mount if it starts with `.`, `/` or `~`, and as a named volume
+otherwise. Compose leaves the source as it is. The policy judges `~` as the home directory, and a relative
+source against the project directory, so that the judged source reaches at least as far as the source that
+can run. An `--env-from-file` path is read from the current directory.
 """
 
 import os
@@ -29,13 +29,13 @@ ENV_FILE = ("--env-from-file",)
 
 
 def substitutions(user_args: userargs.UserArgs[str], service: Service, runtime: Runtime) -> ProjectPatch:
-    """Returns the patch that makes service what `run` with the options of user_args runs.
+    """Returns the patch that turns service into the service that `run` runs with the options of user_args.
 
     Parameters:
     - user_args: the arguments of `run`
     - service: the service that `run` runs
-    - runtime: the Runtime of the command, whose current directory relative paths are read from, with its home
-      directory as `~`
+    - runtime: the Runtime of the command; relative paths are read from its current directory, and `~`
+      stands for its home directory
     """
     substitutions = []
     definition = service.definition
@@ -67,9 +67,9 @@ def _set(service: Service, key: str, value: Any) -> Substitution:
 
 def _capabilities(definition: dict[str, Any], added_capabilities: list[str],
                   dropped_capabilities: list[str]) -> tuple[list, list]:
-    """Returns (cap_add, cap_drop) of the service with definition once compose applies --cap-add
-    (added_capabilities) and --cap-drop (dropped_capabilities): each is appended to its own list and taken out
-    of the other, added_capabilities first.
+    """Returns (cap_add, cap_drop) of the service with definition, once compose applies --cap-add
+    (added_capabilities) and --cap-drop (dropped_capabilities). Compose appends each capability to its own
+    list and takes it out of the other list, added_capabilities first.
     """
     cap_add, cap_drop = list(definition.get("cap_add") or []), list(definition.get("cap_drop") or [])
     if added_capabilities:
@@ -84,7 +84,8 @@ def _capabilities(definition: dict[str, Any], added_capabilities: list[str],
 def _mount(spec: str, home: str) -> dict[str, Any]:
     """Returns the mount, in compose's long syntax, that a `-v` spec adds.
 
-    A spec with more parts than source, target and options gets no type, which the policy refuses.
+    A spec with more parts than source, target and options gets no type, and the policy refuses such a
+    mount.
     """
     parts = spec.split(":")
     if len(parts) == 1:

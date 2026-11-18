@@ -12,12 +12,12 @@ from dockscreen.util import commandline, messages
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker compose exec` with --as and --as-me replaced by ids; returns 1 for a user that cannot be
-    used, otherwise docker replaces this process.
+    """Runs `docker compose exec`, with --as and --as-me replaced by ids. Returns 1 for a user that cannot be
+    used; otherwise docker replaces this process.
 
     Parameters:
-    - parent_cli: the compose command line, with `exec` as its command; its lead_args are the compose
-      options, which select the project
+    - parent_cli: the compose command line, with `exec` as its command; its lead_args are the compose options,
+      which select the project
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "exec"

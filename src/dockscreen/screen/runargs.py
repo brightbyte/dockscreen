@@ -4,10 +4,11 @@ create` + `docker start`.
 We need the image position and the few flags that `run` has and `create` lacks
 (`-d`, `--sig-proxy`, `--detach-keys`, `-a`). Nothing security-relevant hangs
 on this: the policy looks at the container the daemon created from the result,
-and docker_run checks that our reading of the command line matched the daemon's.
+and containerscreening checks that our reading of the command line matched the
+daemon's (_verify_split).
 
-Reading changes nothing but what `create` lacks: it keeps --as and --as-me as their UserOption, as userargs
-does, until the policy resolves them.
+Reading changes nothing except the options that `create` lacks. It keeps --as and --as-me as their
+UserOption, as the module userargs does, until the policy resolves them.
 """
 
 from collections.abc import Mapping, Sequence
@@ -52,15 +53,15 @@ class ParseError(Exception):
 
 
 class RunArgs(NamedTuple, Generic[ArgT]):
-    """Record of what a `docker run` command line asks for, read far enough to run it as `docker create` and
-    `docker start`. It holds the arguments for `create`, the image and its command, the options only `run`
+    """Record of a `docker run` command line, read far enough to run it as `docker create` and `docker
+    start`. It holds the arguments for `create`, the image and its command, the options that only `run`
     has, and what the command line says about the user.
 
-    It is the counterpart of userargs.UserArgs for `docker run`, which names an image where the others name a
-    service or container, and has the options `create` lacks; the users it gives are kept in the same
-    GivenUsers.
+    It is the counterpart of userargs.UserArgs for `docker run`. A `docker run` command line names an image
+    where the others name a service or container, and it has the options that `create` lacks. Its users are
+    kept in the same GivenUsers.
 
-    Instances come from parse.
+    Instances come from the function parse.
 
     Attributes:
     - create_args: the arguments for `docker create`, with --as and --as-me as their UserOption until
@@ -87,7 +88,7 @@ class RunArgs(NamedTuple, Generic[ArgT]):
 
 
 class _State:
-    """Private helper of parse that holds what it has read of a command line so far."""
+    """Private helper of the function parse that holds what parse has read of a command line so far."""
     def __init__(self, users: userargs.GivenUsers) -> None:
         self.users = users
         self.kept_args: list[Arg] = []
@@ -99,8 +100,8 @@ def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAcco
     """Splits `docker run` arguments into the `docker create` arguments, the image, its command and
     the options `create` lacks, with --as and --as-me as their UserOption.
 
-    Raises ParseError if there is no image or an option lacks its value. The users given are in users, for
-    the policy to judge and resolve.
+    Raises ParseError if there is no image or an option lacks its value. The users given are in the
+    record's users, for the policy to judge and resolve.
 
     Parameters:
     - args: the arguments after `run`
@@ -129,7 +130,7 @@ def parse(args: Sequence[str], me: tuple[int, int], accounts: hostusers.HostAcco
 
 
 def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
-    """Reads the --option at args[i] into state and returns the index after it, and after its value."""
+    """Reads the --option at args[i] into state. Returns the index after the option and its value."""
     token = args[i]
     name, equals_sign, value = token.partition("=")
     if name == commandline.AS_ME_OPTION:
@@ -161,8 +162,8 @@ def _parse_long(args: Sequence[str], i: int, state: _State) -> int:
 
 
 def _parse_short(args: Sequence[str], i: int, state: _State) -> int:
-    """Reads the option cluster at args[i], such as -itv or -p80:80, into state and returns the index
-    after it, and after its value.
+    """Reads the option cluster at args[i], such as -itv or -p80:80, into state. Returns the index after the
+    cluster and its value.
     """
     token = args[i]
     kept_flags = ""
@@ -174,7 +175,7 @@ def _parse_short(args: Sequence[str], i: int, state: _State) -> int:
             state.should_detach = True
         elif char in SHORT_VALUE_FLAGS:
             remainder = token[j + 1:]
-            if char == "a":  # --attach has no `create` equivalent; dropped with its value
+            if char == "a":  # --attach has no `create` equivalent, so this drops it with its value
                 if not remainder:
                     _value_at(args, i + 1, token)
                     consumed_count = 2

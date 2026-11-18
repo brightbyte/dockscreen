@@ -1,9 +1,9 @@
-"""This module defines the Container class, a view of a container as docker inspect shows it, which can also
-give what the container asks for in the terms of a compose service.
+"""This module defines the Container class, a view of a container as docker inspect shows it. A Container
+can also give the container's requests in the terms of a compose service.
 
-A container that `docker run` created holds its command line's requests, as the daemon parsed them. Read
-back into the compose service keys of the same meaning (Container.as_service), the policy for compose
-services can judge it, with the same wording.
+A container that `docker run` created holds its command line's requests, as the daemon parsed them.
+The method Container.as_service reads the requests back into the compose service keys of the same
+meaning, so that the policy for compose services can judge them, with the same wording.
 """
 
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ from dockscreen.model import mounts
 from dockscreen.model.mounts import Mount
 from dockscreen.model.origin import Origin
 
-# Inspected HostConfig fields that hold what the compose key of the same meaning holds.
+# HostConfig fields of docker inspect, each with the compose service key that holds the same value.
 SERVICE_FIELDS = {
     "Privileged": "privileged",
     "CapAdd": "cap_add",
@@ -35,18 +35,18 @@ SERVICE_FIELDS = {
 
 
 class Container(NamedTuple):
-    """View of a container as docker inspect shows it, for judging what it asks for as a compose service is
-    judged (JudgedService). It holds what docker inspect shows, the directory its bind mounts are judged
-    against, and where its user comes from.
+    """View of a container as docker inspect shows it, for judging its requests in the same way as a compose
+    service's (JudgedService). It holds what docker inspect shows, the directory that its bind mounts are
+    judged against, and the origin of its user.
 
     Everything else it has comes from the command line that created it. A container that could not be
-    inspected comes from placeholder and has only its id.
+    inspected comes from the classmethod placeholder and has only its id.
 
     Attributes:
     - info: what docker inspect shows of it; a dict that must not be changed in place
-    - directory: the directory the command line that created it ran in; None for a container that existed
-      before, since docker does not record where it created it, and its labels, which an image can set, prove
-      nothing
+    - directory: the directory where the command line that created it ran; None for a container that
+      existed before. Docker does not record where it created a container, and its labels prove nothing,
+      since an image can set them.
     - user_origin: where its user comes from
     """
     info: dict[str, Any]
@@ -55,8 +55,8 @@ class Container(NamedTuple):
 
     @classmethod
     def placeholder(cls, container: str, directory: str | None) -> Self:
-        """Returns the container called container, created in directory, which exists but could not be
-        inspected.
+        """Returns a placeholder for the container called container, which exists but could not be
+        inspected; it was created in directory.
 
         Parameters:
         - container: its name or id
@@ -91,13 +91,13 @@ class Container(NamedTuple):
 
     @property
     def definition(self) -> dict[str, Any]:
-        """Returns the compose service keys that ask for what it has (as_service), with its user unless that
-        comes from its image.
+        """Returns the compose service keys that ask for what the container has (as_service). They include its
+        user, unless the user comes from its image.
         """
         return self.as_service(includes_user=self.user_origin is not Origin.IMAGE)
 
     def origin_of(self, key: str) -> Origin:
-        """Returns where the value of the service key of definition comes from."""
+        """Returns the origin of the value of key, one of the service keys in definition."""
         return self.user_origin if key == "user" else Origin.COMMAND_LINE
 
     def with_user_origin(self, user_origin: Origin) -> Self:
@@ -105,8 +105,8 @@ class Container(NamedTuple):
         return self._replace(user_origin=user_origin)
 
     def as_service(self, includes_user: bool) -> dict[str, Any]:
-        """Returns the compose service keys that ask for what this container has; its user only if
-        includes_user.
+        """Returns the compose service keys that ask for what this container has; they include its user only
+        if includes_user is set.
         """
         host_config = self.info.get("HostConfig") or {}
         service = {key: host_config[field] for field, key in SERVICE_FIELDS.items() if host_config.get(field)}

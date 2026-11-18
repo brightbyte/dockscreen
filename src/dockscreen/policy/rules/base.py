@@ -1,6 +1,6 @@
-"""This module defines what the groups of the policy's rules have in common: the base class with the settings
-they read, the interface of the service they judge, and functions for checking keys against an allowlist and
-paths against a directory."""
+"""This module defines the parts that the groups of the policy's rules have in common: the base class with
+the settings they read, and the interface of the service they judge. It also provides functions for checking
+keys against an allowlist and paths against a directory."""
 
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 
 
 class JudgedService(Protocol):
-    """Protocol of a service as Policy.check_service judges it, which a compose service (project.Service) and
-    a container read back as one (container.Container) both implement. It gives the service's keys, the
-    directory the policy judges them against, whether it reaches host files, and where each key's value comes
-    from.
+    """Protocol of a service as Policy.check_service judges it. A compose service (project.Service)
+    implements it, and so does a container read back as a service (container.Container). It gives the
+    service's keys, the directory that the policy judges them against, whether the service reaches host
+    files, and the origin of each key's value.
     """
 
     @property
@@ -27,9 +27,9 @@ class JudgedService(Protocol):
 
     @property
     def directory(self) -> str | None:
-        """Returns the directory the policy judges its relative paths and bind mounts against; None for a
-        container whose directory is not known, whose bind mounts only the configured mount_dirs allow. Only a
-        compose service has keys with relative paths (directory_of).
+        """Returns the directory that the policy judges its relative paths and bind mounts against. Returns
+        None for a container whose directory is not known; then only the configured mount_dirs allow its bind
+        mounts. Only a compose service has keys with relative paths (directory_of).
         """
         ...
 
@@ -44,11 +44,12 @@ class JudgedService(Protocol):
 
 
 class RuleBase:
-    """Base class of the mixins of Policy, not used on its own. It declares the settings their rules read,
-    which Policy holds and documents, and what follows from them for every group of rules.
+    """Base class of the mixins of Policy, not used on its own. It declares the settings that their rules
+    read, which Policy holds and documents. It also provides what follows from those settings for every
+    group of rules.
 
-    The facts the id rules judge by (userrules.IdFacts), the settings and host facts about ids, are one
-    object, ids, for the groups of rules to read.
+    The id rules judge by the settings and host facts about ids (userrules.IdFacts). These are one object,
+    ids, for every group of rules to read.
     """
     ids: "IdFacts"
     extra_dirs: tuple
@@ -63,8 +64,8 @@ class RuleBase:
     section: SectionMatch
 
     def mount_roots(self, directory: str | None) -> tuple[str, ...]:
-        """Returns where bind mounts may come from for a project in directory: directory, then the configured
-        mount_dirs; only those for None.
+        """Returns the directories that bind mounts may come from, for a project in directory: directory
+        first, then the configured mount_dirs. For None, it returns only the configured mount_dirs.
 
         Parameters:
         - directory: the project directory; None for no known directory
@@ -72,8 +73,8 @@ class RuleBase:
         return (*([directory] if directory is not None else []), *self.extra_dirs)
 
     def _outside_problem(self, subject: str, directory: str | None) -> str:
-        """Returns the problem that subject is outside the mount roots of a project in directory (None: none
-        known), with how the config file can allow it.
+        """Returns the problem that subject is outside the mount roots of a project in directory, with a hint
+        on allowing it in the config file. directory is None if no directory is known.
         """
         text = f"{subject} is outside {_roots_text(directory, self.extra_dirs)}"
         if self.config_file:
@@ -102,15 +103,18 @@ def unknown_key_problems(mapping: Mapping[str, Any], allowed_keys: Collection[st
 
 
 def _roots_text(directory: str | None, extra_dirs: Sequence[str]) -> str:
-    """Names the mount roots of a project in directory (None: none known), with extra_dirs, for a message."""
+    """Names the mount roots of a project in directory, with extra_dirs, for a message. directory is None if
+    no directory is known.
+    """
     if directory is None:
         return "the configured mount_dirs" if extra_dirs else "the configured mount_dirs, which are none"
     return f"{directory}" + (" and the configured mount_dirs" if extra_dirs else "")
 
 
 def directory_of(service: JudgedService) -> str:
-    """Returns the directory of a service that has keys with relative paths: a compose service.
-    container.as_service reads a container's requests back without any, so its directory may be unknown.
+    """Returns the directory of a service that has keys with relative paths, which only a compose service
+    has. container.as_service reads a container's requests back without relative paths, so the directory of
+    a container may be unknown.
     """
     assert service.directory is not None, "only a compose service has keys with relative paths"
     return service.directory
@@ -125,8 +129,8 @@ def is_inside(path: str, root: str) -> bool:
     """Tells whether path, resolved relative to root and through symlinks, is root or below it.
 
     Docker follows symlinks when it mounts or reads a path, so a project that contains `data -> /` must not
-    pass with `./data`; resolving also undoes `..` and repeated slashes. This holds for the file system as it
-    is when the check runs: a container that can write the project could swap a directory for a link
+    pass with `./data`. Resolving also undoes `..` and repeated slashes. The result holds for the file system
+    as it is when the check runs. A container that can write the project could swap a directory for a link
     afterwards (docs/design.md, Known gaps).
     """
     real_root = os.path.realpath(root)

@@ -7,8 +7,8 @@ Contents:
 - userrules: users and ids, and the facts the rules judge them by (IdFacts)
 - base: what the mixins share
 
-Not here: the settings the rules apply with, which Policy holds, and anything that calls them in order;
-that is Policy's (policy.policy) and screen's.
+Not here: the settings that the rules apply, which Policy holds. Not here either: code that calls the
+rules in order; that is the job of Policy (policy.policy) and of screen.
 
 Constraints: as for policy. A rule returns what it finds; it does not print, raise for a refusal, or call
 docker. The rules do not depend on the modules that describe their results (userdecisionview).

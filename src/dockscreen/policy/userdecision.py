@@ -1,11 +1,14 @@
-"""This module defines the UserDecision class, a record of a judgement of the user a container would run as,
-which Policy.check_image returns.
+"""This module defines the UserDecision class, a record of a judgement of the user that a container would run
+as. The method Policy.check_image returns a UserDecision.
 
-Where that user comes from is an origin like any other value's: the image's own user (Origin.IMAGE),
-judged by the id rules; one the config file sets (Origin.CONFIG), for the image, the project or every one;
-the default user for an image that would run as root (replaces_root), the config file's or dockscreen's
-own; or one the command line chose, which the image does not decide. An image that dockscreen could not
-look at has no user, and so no origin.
+The decision records the user's origin, like any other value's. The user can be:
+- the image's own user (Origin.IMAGE), which the id rules judge;
+- a user that the config file sets (Origin.CONFIG), for the image, the project or every image;
+- the default user, for an image that would run as root (replaces_root); it is the config file's default
+  user or dockscreen's own;
+- a user that the command line chose; the image does not decide that user.
+
+An image that dockscreen could not look at has no user, and so no origin.
 """
 
 from typing import NamedTuple, Self
@@ -18,22 +21,24 @@ from dockscreen.policy.notice import Notice
 
 
 class UserDecision(NamedTuple):
-    """Record of a judgement of the user a container would run as. It holds where that user comes from, the
-    image, what was reported, the identity read from the image, and the user dockscreen pins.
+    """Record of a judgement of the user that a container would run as. It holds the origin of that user, the
+    image, the notices and findings, the identity read from the image, and the user that dockscreen pins.
 
-    Instances come from Policy.check_image, through Screener.assess for one container and Screener.decide for
-    a project; failure gives one for an image that dockscreen could not look at.
+    Instances come from Policy.check_image, through Screener.assess for one container and through
+    Screener.decide for a project. The classmethod UserDecision.failure returns a decision for an image that
+    dockscreen could not look at.
 
     Attributes:
     - origin: where the user comes from; None if dockscreen could not look at the image
     - image: the image (Image)
-    - notices: what is worth a look but forbids nothing: an image section that does not apply, and why
+    - notices: points worth a look that forbid nothing, such as an image section that does not apply, with
+      the reason
     - findings: refusals and failures to look, which forbid running the container
     - identity: the ids read from the image, or None
     - user: the (uid, gid) dockscreen pins (pins_user), or None
     - section: which image section of the config file applied (SectionMatch)
-    - home: the HOME to set for the default user that replaces root; "" leaves it alone, as when the command
-      line or an env file chose one (ImageInspection.home_chosen)
+    - home: the HOME to set for the default user that replaces root; "" leaves HOME alone, as when the
+      command line or an env file chose a HOME (ImageInspection.is_home_chosen)
     - replaces_root: whether the default user runs instead of the image's root
     """
     origin: Origin | None
@@ -48,7 +53,7 @@ class UserDecision(NamedTuple):
 
     @classmethod
     def failure(cls, image: Image, reason: object) -> Self:
-        """Returns the decision of an image that dockscreen could not look at, for reason."""
+        """Returns a decision for an image that dockscreen could not look at, with reason as its finding."""
         return cls(None, image, (), (Finding.of(reason, Verdict.FAILED),))
 
     @property
@@ -63,15 +68,16 @@ class UserDecision(NamedTuple):
 
     @property
     def pins_user(self) -> bool:
-        """Tells whether dockscreen decided the user, and runs the image as it, spelled as numbers: the
-        image's own, the config file's, or the default user; not one the command line chose.
+        """Tells whether dockscreen decided the user and runs the image as that user, spelled as numbers. The
+        user is the image's own, the config file's or the default user, but never a user that the command
+        line chose.
         """
         return self.user is not None and not self.is_refused
 
     @property
     def is_accepted(self) -> bool:
-        """Tells whether the image runs as the user decided for it without replacing its root (pins_user):
-        its own user, accepted, or the one the config file sets for it.
+        """Tells whether the image runs as its decided user (pins_user) without replacing its root. That user
+        is the image's own user, accepted by the rules, or the user that the config file sets for it.
         """
         return self.pins_user and not self.replaces_root
 

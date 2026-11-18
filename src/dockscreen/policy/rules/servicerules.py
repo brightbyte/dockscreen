@@ -1,16 +1,18 @@
 """This module defines the ServiceRules class and the checks of each key (SERVICE_CHECKS), for judging the
-keys of a service: a compose service's, or a container's read back into compose service keys.
+keys of a service. The service is a compose service, or a container read back into compose service keys.
 
 The lists name each key either as harmless (any value is fine) or as checked (it has an entry in
 SERVICE_CHECKS that validates the value). The policy refuses a key that is neither, so a Compose feature that
 Docker adds tomorrow stays denied until someone has reviewed it. Every check returns a list of human-readable
 problems; an empty list means the value is acceptable.
 
-In short, the rules protect against a service that gets root on the host through the kernel or the
-daemon (privileges, devices, host namespaces, another runtime), one that reads or writes host files
-(mounts, files read on the host, other containers' mounts), and one that runs something unchecked beside
-its main process (hooks, develop.watch actions). Each constant and check below names its threat and the
-defense against it.
+In short, the rules protect against three kinds of service:
+- one that gets root on the host through the kernel or the daemon (privileges, devices, host namespaces,
+  another runtime);
+- one that reads or writes host files (mounts, files read on the host, other containers' mounts);
+- one that runs something unchecked beside its main process (hooks, develop.watch actions).
+
+Each constant and check below names its threat and the defense against it.
 """
 
 from collections.abc import Callable, Iterable
@@ -38,11 +40,12 @@ NO_NEW_PRIVILEGES = frozenset({"no-new-privileges", "no-new-privileges:true", "n
 # permissions (CAP_DAC_OVERRIDE, CAP_FOWNER), change owners (CAP_CHOWN), switch to any id (CAP_SETUID,
 # CAP_SETGID), create device nodes (CAP_MKNOD) and forge packets on the bridge network (CAP_NET_RAW). The
 # user rules keep a service from running as root, but an image's setuid binary or a later bug could still
-# make it root inside; without capabilities, that root cannot use the bypasses on mounted files.
+# make it root inside the container. Without capabilities, that root cannot use the bypasses on mounted
+# files.
 #
 # no-new-privileges: the kernel ignores the setuid and setgid bits and file capabilities when the process
-# executes a program, so a setuid-root binary that the image ships (sudo, su, or one made for the purpose)
-# cannot turn the checked user into root. The user decision is only worth something with this set.
+# executes a program. So a setuid-root binary that the image ships (sudo, su, or a binary made for the
+# purpose) cannot turn the checked user into root. The user decision is only worth something with this set.
 CAP_DROP = "ALL"
 SECURITY_OPT = "no-new-privileges:true"
 
@@ -57,36 +60,36 @@ SECURITY_OPT = "no-new-privileges:true"
 #   the rules that let the container create and use such device nodes itself.
 # - gpus: host devices, and the GPU runtime's hooks, which run on the host with the container's input.
 # - cgroup_parent: puts the container in a cgroup of the host's choosing (system.slice, another
-#   container's), outside the limits docker gives it and able to starve or share with the processes there.
-# - external_links: links to containers outside the project, which are reachable by name and whose
-#   environment variables (passwords, tokens) older docker copies into this container.
-# - group_add: older docker daemons look a number up as a group name in the image's /etc/group first, so
-#   an image with a group named "65534" whose gid is 0 gets gid 0; dockscreen can neither pin the value
-#   nor read the group file for a service that sets user:.
+#   container's). There it is outside the limits that docker gives it, and it can starve the processes
+#   there or share their resources.
+# - external_links: links to containers outside the project. They are reachable by name, and older docker
+#   copies their environment variables (passwords, tokens) into this container.
+# - group_add: older docker daemons look a number up as a group name in the image's /etc/group first. So
+#   an image with a group named "65534" whose gid is 0 gets gid 0. dockscreen can neither pin the value nor
+#   read the group file for a service that sets user:.
 FORBIDDEN_KEYS = (
     "privileged", "cap_add", "devices", "device_cgroup_rules", "gpus", "cgroup_parent", "external_links",
     "group_add",
 )
 
-# Namespaces that may not be the host's or another container's (`host`, `container:NAME`):
-# - pid: the container sees and signals the host's processes, and reaches their files through
-#   /proc/PID/root and /proc/PID/cwd.
-# - ipc: the host's System V and POSIX shared memory, which databases, X11 and audio servers use.
-# - uts: the hostname, which the host's own services and logs take as theirs.
-# - userns_mode: `host` turns off the daemon's user namespace remapping, where it is on, so root in the
-#   container is root on the host.
-# - cgroup: the host's cgroup tree.
-# - network_mode: the host's network reaches services that listen on the host's 127.0.0.1 only (a docker
-#   API on tcp, databases, local admin interfaces) and can bind the host's ports; another container's
-#   network sees its traffic and its localhost.
-# A tuple: the order of the checks is the order of the problems reported.
+# Namespaces that may not be the host's or another container's (`host`, `container:NAME`): - pid: the
+# container sees and signals the host's processes, and reaches their files through /proc/PID/root and
+# /proc/PID/cwd. - ipc: the host's System V and POSIX shared memory, which databases, X11 and audio servers
+# use. - uts: the hostname; the host's own services and logs take it as theirs. - userns_mode: `host` turns
+# off the daemon's user namespace remapping, where it is on, so root in the container is root on the host. -
+# cgroup: the host's cgroup tree. - network_mode: the host's network reaches services that listen only on the
+# host's 127.0.0.1 (a docker API on tcp, databases, local admin interfaces), and a container on it can bind
+# the host's ports. Another container's network sees that container's traffic and its localhost. A tuple: the
+# order of the checks is the order of the problems reported.
 NAMESPACE_KEYS = ("pid", "ipc", "uts", "userns_mode", "cgroup", "network_mode")
 
-# Service keys whose value cannot widen access beyond the container. Network
-# exposure (ports, extra_hosts, dns, logging) is deliberately not restricted. Some only look harmless
-# because of other rules: sysctls can only set namespaced kernel settings (docker refuses the others),
-# which change the host only in a host namespace, refused above; secrets and configs name the top-level
-# ones, which ProjectRules checks; tmpfs mounts memory, not host paths.
+# Service keys whose value cannot widen access beyond the container. Network exposure (ports, extra_hosts,
+# dns, logging) is deliberately not restricted. Some keys are only harmless because of other rules:
+# - sysctls can only set namespaced kernel settings, because docker refuses the others; those change the
+#   host only in a host namespace, which the rules above refuse;
+# - secrets and configs name the project's top-level secrets and configs, which the rules in ProjectRules
+#   check;
+# - tmpfs mounts memory, not host paths.
 HARMLESS_SERVICE_KEYS = frozenset({
     "annotations", "attach", "blkio_config", "command", "configs", "container_name", "cpu_count",
     "cpu_percent", "cpu_period", "cpu_quota", "cpu_rt_period", "cpu_rt_runtime", "cpu_shares", "cpus",
@@ -119,10 +122,11 @@ DEPLOY_KEYS = frozenset({
 DEVELOP_KEYS = frozenset({"watch"})
 WATCH_KEYS = frozenset({"path", "action", "target", "ignore", "include", "initial_sync"})
 
-# Not sync+exec: its `exec` runs a command in the container with a user and privileged flag of its own, as
-# a hook does, outside the checks of the service's user (`exec` is not in WATCH_KEYS either).
+# Not sync+exec: its `exec` runs a command in the container with a user and a privileged flag of its own,
+# as a hook does. That command is outside the checks of the service's user. (`exec` is not in WATCH_KEYS
+# either.)
 WATCH_ACTIONS = frozenset({"sync", "rebuild", "sync+restart"})
-# _check_hooks judges privileged and user, the others cannot widen access.
+# The check _check_hooks judges the keys privileged and user; the other keys cannot widen access.
 HOOK_KEYS = frozenset({"command", "user", "privileged", "working_dir", "environment"})
 SELINUX_HINT = "; if bind mounts fail on SELinux, add the :z or :Z mount option instead"
 
@@ -131,7 +135,8 @@ class ServiceRules(RuleBase):
     """Mixin of Policy with the rules for the keys of a service, not used on its own."""
 
     def check_security_opt(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks security_opt; returns its options that are not allowed, and no-new-privileges if missing.
+        """Checks security_opt. Returns the options that are not allowed, and a problem if no-new-privileges
+        is missing.
 
         Allowed are no-new-privileges and the configured security_opts.
 
@@ -159,18 +164,18 @@ class ServiceRules(RuleBase):
     def _check_runtime(self, value: Any, service: JudgedService) -> list[str]:
         """Checks runtime; returns a problem unless it is runc or unset.
 
-        Any other runtime is one that the daemon's configuration names: one without the isolation runc
-        gives (the GPU runtimes' host hooks, sysbox, a wrapper an administrator added), or one whose
-        isolation the other rules were not written for.
+        Any other runtime is a runtime that the daemon's configuration names. It may lack the isolation that
+        runc gives (the GPU runtimes' host hooks, sysbox, a wrapper that an administrator added), or have an
+        isolation that the other rules were not written for.
         """
         return [] if value in (None, "", "runc") else [f"runtime {value!r} is not allowed"]
 
     def _check_volumes_from(self, value: Any, service: JudgedService) -> list[str]:
         """Checks volumes_from; returns a problem for each source that is a container, not a service.
 
-        A container outside the project can have any mounts, made by its creator: taking its volumes
-        takes its bind mounts of host paths too. The policy checks another service of the project like this
-        one.
+        A container outside the project can have any mounts that its creator chose. Taking its volumes also
+        takes its bind mounts of host paths. Another service of the project is fine, because the policy
+        checks it like this service.
         """
         return [
             f"volumes_from {source!r} reaches a container outside the project"
@@ -179,14 +184,15 @@ class ServiceRules(RuleBase):
         ]
 
     def _check_mounts(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks a service's volumes; returns their unknown keys and types, and bind mounts outside the
+        """Checks a service's volumes. Returns their unknown keys and types, and the bind mounts outside the
         mount roots.
 
-        A bind mount gives the container the host path itself, to read and, unless read-only, to write: a
-        source outside the project is a project's way to ~/.ssh, /etc or the docker socket (which is
-        root on the host). This compares the source after resolving symlinks (base.is_inside), since docker
-        follows them: a link in the project that points to / is outside. ProjectRules checks named volumes
-        where the project defines them, tmpfs is memory, and an image mount is another image's files.
+        A bind mount gives the container the host path itself: to read, and to write unless it is read-only. A
+        source outside the project is a project's way to ~/.ssh, /etc or the docker socket (which is root on
+        the host). This compares the source after resolving symlinks (base.is_inside), because docker follows
+        them: a link in the project that points to / is outside. Other types need no check here: the rules in
+        ProjectRules check named volumes where the project defines them, tmpfs is memory, and an image mount
+        holds another image's files.
         """
         problems = []
         for mount in value or []:
@@ -204,11 +210,11 @@ class ServiceRules(RuleBase):
         return problems
 
     def _check_develop(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks develop; returns unknown keys, and watch rules with bad actions or paths outside the
-        project.
+        """Checks develop. Returns its unknown keys, and the watch rules that have a bad action or a path
+        outside the project.
 
-        `compose watch` copies the changes under a watch path into the container (sync), so a path
-        outside the project would hand the container host files, such as ~/.aws, as they change.
+        `compose watch` copies the changes under a watch path into the container (sync). So a path outside
+        the project would hand the container host files, such as ~/.aws, whenever they change.
         """
         value, directory = value or {}, directory_of(service)
         problems = unknown_key_problems(value, DEVELOP_KEYS, "develop key")
@@ -221,7 +227,7 @@ class ServiceRules(RuleBase):
         return problems
 
     def _check_deploy(self, value: Any, service: JudgedService) -> list[str]:
-        """Checks deploy; returns unknown keys, and reservations of host devices.
+        """Checks deploy. Returns its unknown keys, and its reservations of host devices.
 
         A device reservation is another way to ask for GPUs and other host devices (see FORBIDDEN_KEYS).
         """
@@ -235,7 +241,7 @@ class ServiceRules(RuleBase):
         return problems
 
 
-# A check of one service key: takes the Policy, the value and the service, returns the problems.
+# A check of one service key: it takes the Policy, the value and the service, and returns the problems.
 Check = Callable[["Policy", Any, JudgedService], list[str]]
 
 
@@ -245,7 +251,9 @@ def _forbid(key: str) -> Check:
 
 
 def _check_namespace(key: str) -> Check:
-    """Returns a check for the namespace key that refuses the host's namespace and other containers'."""
+    """Returns a check for the namespace key. The check refuses the host's namespace and the namespaces of
+    other containers.
+    """
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         text = str(value)
         if text == "host" or text.startswith("container:"):
@@ -255,12 +263,13 @@ def _check_namespace(key: str) -> Check:
 
 
 def _check_host_files(key: str) -> Check:
-    """Returns a check for key (env_file or label_file) that refuses files outside the project directory.
+    """Returns a check for key (env_file or label_file). The check refuses files outside the project
+    directory.
 
     Compose reads these files on the host, as the user, and puts their content into the container's
-    environment or labels: a project that names ~/.aws/credentials or /etc/shadow-like files of the user
-    gets their content into a container it controls. These keys only show up in the definition when it is
-    loaded without env resolution; with it, compose inlines the content and the path is lost.
+    environment or labels. So a project that names ~/.aws/credentials, or similar files of the user, gets
+    their content into a container it controls. These keys only show up in the definition when dockscreen
+    loads it without env resolution. With env resolution, compose inlines the content and loses the path.
     """
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems, directory = [], directory_of(service)
@@ -273,12 +282,12 @@ def _check_host_files(key: str) -> Check:
 
 
 def _check_hooks(key: str) -> Check:
-    """Returns a check for the hook key (post_start or pre_stop) that refuses hooks that escalate.
+    """Returns a check for the hook key (post_start or pre_stop). The check refuses hooks that escalate.
 
     A hook is a command that compose runs in the container with `docker exec`, with a user and a privileged
-    flag of its own: a way to run as root, or with every capability, beside a main process whose user was
-    checked. Refused are hooks with unknown keys, privileged ones, and ones whose user Policy.check_user
-    refuses (rules.userrules).
+    flag of its own. So a hook could run as root, or with every capability, beside a main process whose user
+    the policy checked. The check refuses hooks with unknown keys, privileged hooks, and hooks whose user
+    Policy.check_user refuses (rules.userrules).
     """
     def check(policy: "Policy", value: Any, service: JudgedService) -> list[str]:
         problems = []
@@ -286,7 +295,8 @@ def _check_hooks(key: str) -> Check:
             problems += unknown_key_problems(hook, HOOK_KEYS, f"{key} key")
             if hook.get("privileged"):
                 problems.append(f"{key} privileged is not allowed")
-            if hook.get("user") is not None:  # without one, the hook runs as the service's checked user
+            # without a user of its own, the hook runs as the service's checked user
+            if hook.get("user") is not None:
                 problems += policy.check_user(hook["user"], service)
         return problems
     return check

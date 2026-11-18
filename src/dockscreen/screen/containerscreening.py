@@ -1,24 +1,26 @@
-"""This module provides functions for screening a container: one created as `docker run` would create it,
-whose user the policy then decides (create), one that exists already (check_existing), and what the command
-line that made either asks for that a project or an image may not (command_line_findings).
+"""This module provides functions for screening a container. The function create makes a container as
+`docker run` would, and the policy decides its user. The function check_existing judges a container that
+exists already. The function command_line_findings finds the requests of the command line that a project
+or an image may not make.
 
-create inspects the container docker created and has the policy judge it, and leaves it for the calling code
-to start or remove: only the calling code knows whether it is to run, be created again with the user decided,
-or be reported on.
+The function create inspects the container that docker created, and has the policy judge it. It leaves the
+container for
+the calling code to start or remove, since only the calling code knows what comes next: running it,
+creating it again with the decided user, or reporting on it.
 
 Containers need screening because `docker run IMAGE` runs the image as the user it chooses, root by default,
 and the image is someone else's. The command line is trusted, but it does not say which user the image
-picks, nor the identity the image's passwd and group files give it; only the image does. So the container is
-created, which lets the daemon read the command line with all its options, and inspected before it starts:
-the judged container is docker's own, not dockscreen's reading of a command line with a hundred options.
-dockscreen still reads the command line far enough to find the image and the user options, so it checks
-that reading against the container (_verify_split): a misreading must not judge another image than the
-one that runs, or miss a --user.
+picks, nor the identity the image's passwd and group files give it; only the image does. So dockscreen has
+docker create the container, which lets the daemon read the command line with all its options, and inspects
+it before it starts. The policy then judges docker's own container, not dockscreen's reading of a command
+line with a hundred options. dockscreen still reads the command line far enough to find the image and the
+user options, so it checks that reading against the container (_verify_split). A misreading must not make
+the policy judge another image than the one that runs, or miss a --user.
 
 Anyone may have created an existing container (check_existing), perhaps with plain docker or a project's
-script, and `docker start` would run it without any of this; dockscreen cannot rewrite it, so the policy
-judges it as it is. Audit points out the command line's requests (command_line_findings) because people
-copy commands from READMEs too: the user may trust a command line they did not write.
+script. `docker start` would run it without any of this, and dockscreen cannot rewrite it, so the policy
+judges it as it is. The audit command points out the command line's requests (command_line_findings) because
+people copy commands from READMEs too: the user may trust a command line they did not write.
 """
 
 from typing import Any
@@ -39,8 +41,8 @@ from dockscreen.util import ids, messages
 
 def create(screener: Screener, run_args: runargs.RunArgs[str], changes: CommandLinePatch,
            first_decision: UserDecision | None = None) -> tuple[int, tuple[Container, UserDecision] | None]:
-    """Creates the container as `docker run` would and returns (exit status, (container, decision of its
-    user)), or (exit status, None) if docker could not create it; it said why.
+    """Creates the container as `docker run` would. Returns (exit status, (container, decision of its user)),
+    or (exit status, None) if docker could not create it; docker has then said why.
 
     The container is left for the calling code to remove.
 
@@ -48,9 +50,9 @@ def create(screener: Screener, run_args: runargs.RunArgs[str], changes: CommandL
     - screener: the Screener of the command
     - run_args: the `docker run` command line, as parsed
     - changes: what goes before the command line's own arguments: the defaults, and the user decided
-    - first_decision: the decision of a first creation, whose user changes pins; the container is then not
-      assessed again, only checked to be what the command line asked for, and its user comes from where the
-      decided one does
+    - first_decision: the decision about a first creation, whose user changes pins. The policy then does not
+      assess the container again; dockscreen only checks that it is what the command line asked for. Its
+      user has the same origin as the user of first_decision.
     """
     code, container_id = screener.docker.create(changes.apply_to(run_args.create_args))
     if container_id is None:
@@ -72,8 +74,9 @@ def create(screener: Screener, run_args: runargs.RunArgs[str], changes: CommandL
 
 
 def _user_origin(run_args: runargs.RunArgs[str], first_decision: UserDecision | None) -> Origin:
-    """Returns where the user of the container comes from: where the user of first_decision does, for a
-    container re-created with it (create), else the command line if it gives one, else the image.
+    """Returns the origin of the container's user. For a container that create made again with
+    first_decision, it is the origin of that decision's user. Otherwise it is the command line, if the
+    command line gives a user, and else the image.
     """
     if first_decision is not None and first_decision.origin is not None:
         return first_decision.origin
@@ -83,13 +86,14 @@ def _user_origin(run_args: runargs.RunArgs[str], first_decision: UserDecision | 
 def _verify_split(info: dict[str, Any], run_args: runargs.RunArgs[str]) -> list[Finding]:
     """Checks that our reading of the command line matches the container the daemon created.
 
-    runargs reads the command line only far enough to find the image and the command, and does not know
-    every option docker has: an option it does not know to take a value would shift its reading, so that
-    it takes the option's value for the image, or the image for part of the command. The user options are
+    The module runargs reads the command line only far enough to find the image and the command, and it
+    does not know every option that docker has. An option that runargs does not know to take a value would
+    shift its reading: runargs would take the option's value for the image, or the image for part of the
+    command. The user options are
     found by the same reading. This refuses a container whose image or command differs from that reading,
     since the image the policy decided on and the --user found may then not be the ones that run.
 
-    Returns the problem if it does not, else an empty list.
+    Returns the problem if the reading and the container differ, else an empty list.
     """
     config = info["Config"]
     misread_image = config.get("Image") != run_args.image
@@ -103,15 +107,16 @@ def _verify_split(info: dict[str, Any], run_args: runargs.RunArgs[str]) -> list[
 
 def command_line_findings(screener: Screener, container: Container, decision: UserDecision,
                           trust: frozenset[Origin]) -> list[ReportEntry]:
-    """Returns what the command line asks for, in the container it created, that a project or an image may not
-    have: refused, or a warning where trust trusts the command line (Policy.check_container).
+    """Returns the requests of the command line, as the container it created shows them, that a project or an
+    image may not make (Policy.check_container). Each is a refusal, or a warning where trust includes the
+    command line.
 
     Empty if the container could not be inspected.
 
     Parameters:
     - screener: the Screener of the command
-    - container: the container, as create gives it
-    - decision: the decision of its user, as create gives it
+    - container: the container, as the function create returns it
+    - decision: the decision about its user, as the function create returns it
     - trust: the origins the policy trusts: TRUSTED_ORIGINS, or STRICT_ORIGINS for --strict-screen
     """
     if not container.is_inspected:
@@ -122,16 +127,16 @@ def command_line_findings(screener: Screener, container: Container, decision: Us
 def check_existing(screener: Screener, ref: str, is_strict: bool) -> list[ReportEntry]:
     """Returns the refusals that forbid starting the existing container ref, each about ref.
 
-    dockscreen cannot rewrite an existing container, so this refuses one whose user dockscreen would replace
-    (by the default user or a configured one) like one whose user the policy does not accept, unless it
-    already runs as that user. Docker does not record where it created a container, so the policy judges it
-    without a directory.
+    dockscreen cannot rewrite an existing container. So if dockscreen would replace the container's user (by
+    the default user or a configured one), this refuses the container, just as it refuses a container whose
+    user the policy does not accept. The exception is a container that already runs as the replacement user.
+    Docker does not record where it created a container, so the policy judges it without a directory.
 
     Parameters:
     - screener: the Screener of the command
     - ref: the name or id of the container
-    - is_strict: whether what the command line that created it asked for is judged as a project's would be,
-      and refused (Policy.check_container)
+    - is_strict: whether the policy judges the requests of the command line that created the container as
+      it would judge a project's, and refuses them (Policy.check_container)
     """
     problems: list[ReportEntry] = []
     try:

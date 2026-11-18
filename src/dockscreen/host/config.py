@@ -1,17 +1,17 @@
 """This module provides functions for reading dockscreen's settings (model.settings.Config) from TOML files
 that only the user or root can write.
 
-dockscreen trusts the files completely, so it reads them only when nothing but their owner could have
-put their content there: the user or root must own the file and every directory above it, and group
-and others may not write them, as ssh's StrictModes requires. A project cannot configure dockscreen;
+dockscreen trusts the files completely, so it reads a file only when nothing but its owner could have
+written it. As ssh's StrictModes requires, the user or root must own the file and every directory above
+it, and group and others may not write to any of them. A project cannot configure dockscreen;
 environment variables do not configure it either.
 
-The user's file overrides the system file key by key, and [images] and [projects] section by section.
-dockscreen creates a missing user file from config.template.toml, with every setting commented out, so
-that it shows the defaults without overriding the system file.
+The user's file overrides the system file key by key, and it overrides [images] and [projects] section by
+section. dockscreen creates a missing user file from config.template.toml, with every setting commented
+out, so that the new file shows the defaults without overriding the system file.
 
 The settings can also be given per image (`[images."REPOSITORY"]`) and per project
-(`[projects."DIRECTORY"]`); which of them apply to a target is the policy's (policy.sections).
+(`[projects."DIRECTORY"]`); the policy decides which of them apply to a target (policy.sections).
 """
 
 import importlib.resources
@@ -39,8 +39,8 @@ class ConfigError(Exception):
 def user_file_path(env: Mapping[str, str], home: str) -> str:
     """Returns the path of the user's config file, $XDG_CONFIG_HOME/dockscreen/config.toml.
 
-    This ignores an XDG_CONFIG_HOME in env that is not absolute, as XDG says, in favour of home/.config:
-    the system would read it relative to the current directory, which is the project's, so a project could
+    If XDG_CONFIG_HOME in env is not absolute, this ignores it and uses home/.config instead, as XDG says.
+    A relative path would be read from the current directory, which is the project's, so a project could
     supply the config that dockscreen trusts completely.
 
     Parameters:
@@ -65,9 +65,10 @@ def load_current(env: Mapping[str, str], home: str, uid: int) -> Config:
 
 
 def _create_user_file(path: str) -> bool:
-    """Writes the template to path, with its directories, if nothing is there; returns whether it did.
+    """Writes the template to path, with its directories, if nothing is there; returns whether it wrote the
+    template.
 
-    Failing to write it is not an error: dockscreen runs with the defaults. An existing file, or a
+    Failing to write the template is not an error: dockscreen runs with the defaults. An existing file, or a
     symlink in its place, is never touched: following a link someone placed there would write the
     template to the link's target, as the user.
     """
@@ -83,7 +84,8 @@ def _create_user_file(path: str) -> bool:
 
 
 def _load(paths: Iterable[str], uid: int, check: Callable[[str, int], None] | None = None) -> Config:
-    """Reads the files in paths and merges them over the defaults, later ones winning; skips missing ones.
+    """Reads the files in paths and merges them over the defaults; later files win, and missing files are
+    skipped.
 
     check(path, uid) raises ConfigError for a file that cannot be trusted (_check_strict_modes by default).
     Raises ConfigError too for a file that cannot be read or parsed, or that sets something invalid.
@@ -98,7 +100,8 @@ def _load(paths: Iterable[str], uid: int, check: Callable[[str, int], None] | No
 
 
 def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
-    """Returns config with data, read from path, over it: its keys replace, its sections replace by name.
+    """Returns config with data, which was read from path, merged over it: keys in data replace the keys
+    in config, and sections in data replace the sections in config with the same name.
 
     Raises ConfigError, naming path, for an unknown key or an invalid value.
     """
@@ -122,7 +125,7 @@ def _merge(config: Config, path: str, data: dict[str, Any]) -> Config:
 
 
 def _table(path: str, key: str, value: object) -> dict[str, Any]:
-    """Returns value if it is a table; raises ConfigError naming key in path otherwise."""
+    """Returns value if it is a table; otherwise raises ConfigError, naming key and path."""
     if not isinstance(value, dict):
         raise ConfigError(f"{path}: {key} must be a table of sections")
     return value
@@ -164,14 +167,15 @@ def _section(path: str, section_name: str, data: object) -> ConfigSection:
 
 
 def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, Any] | None:
-    """Returns the TOML in path, or None if there is no file; check(path, uid) must pass for the file read.
+    """Returns the TOML in path, or None if there is no file.
 
-    Raises ConfigError if it does not, or the file cannot be read or parsed.
+    The file must pass check(path, uid). Raises ConfigError if it does not, or if the file cannot be read
+    or parsed.
     """
     try:
         with open(path, "rb") as f:
             check(path, uid)
-            # check looked at the path; what is read is the file already open, so they must be the same
+            # check looked at the path, but this reads the file that is already open: the two must be one file
             opened_stat, path_stat = os.fstat(f.fileno()), os.stat(path)
             if (opened_stat.st_dev, opened_stat.st_ino) != (path_stat.st_dev, path_stat.st_ino):
                 raise ConfigError(f"{path}: the file was replaced while it was read")
@@ -185,8 +189,8 @@ def _read(path: str, uid: int, check: Callable[[str, int], None]) -> dict[str, A
 
 
 def _check_strict_modes(path: str, uid: int, stat_path: Callable[[str], os.stat_result] = os.stat) -> None:
-    """Checks, like ssh's StrictModes, that path and every directory above it are owned by uid or root
-    and writable by no one else; raises ConfigError if not.
+    """Checks that uid or root owns path and every directory above it, and that no one else can write to
+    them, as ssh's StrictModes does; raises ConfigError if not.
 
     Otherwise anyone who could write there could configure dockscreen.
     """

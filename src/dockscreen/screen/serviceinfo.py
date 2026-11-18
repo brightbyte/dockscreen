@@ -1,14 +1,16 @@
-"""This module provides functions for finding out what screening needs to know about the services of a
-compose project besides their definition: which of them start, which user the image of each started service
-that sets no user would run it as (imageusers), and the images that an image section of the config file
-names, with where they were pulled from, which shows whether the section applies (ServiceImages).
+"""This module provides functions for finding out the facts about a compose project's services that
+screening needs, besides their definition. These facts are:
+- the services that start;
+- for each started service that sets no user, the user that its image would run it as (imageusers);
+- the images that an image section of the config file names, with the repositories they were pulled from,
+  which show whether the section applies (ServiceImages).
 
-A project file is untrusted, so dockscreen cannot just assume that a service without `user:` runs as root
-or as its image says; a service whose user the command line chose (`run -u`) runs as that one, so no one
-asks its image. The rest is the policy's and decisions': the policy pins the users it accepts in the
-generated config only, with the image it checked, so that neither the files the project owns nor `harden`
-output turn off the project's updates; a service that does not start, or whose user the command line
-chose, gets the default user in case something starts it without that user.
+A project file is untrusted, so dockscreen cannot just assume that a service without `user:` runs as root,
+or as its image says. A service whose user the command line chose (`run -u`) runs as that user, so no one
+asks its image. The rest is up to the policy, and to the module decisions. The policy pins the users it
+accepts, together with the image it checked, in the generated config only; that way neither the project's own
+files nor the `harden` output turn off the project's updates. A service that does not start, or whose user the
+command line chose, gets the default user, in case something starts it without that user.
 """
 
 from collections.abc import Sequence
@@ -25,18 +27,21 @@ from dockscreen.screen.screener import Screener
 
 def prepare(command: Sequence[str], project: Project, args: Sequence[str], screener: Screener,
             chosen_services: frozenset[str] = frozenset()) -> tuple[ServiceImages | None, list[Finding]]:
-    """Finds out what screening needs to know about project's services, for the policy to decide on
-    (Screener.decide): pulls and builds the images of the services that start as `up` would, and looks at
-    those of the services that set no user.
+    """Finds out the facts about project's services that the policy needs to decide on (Screener.decide).
+    This pulls and builds the images of the services that start, as `up` would, and looks at the images of
+    the services that set no user.
 
-    Returns (what was found of the images, the failures to acquire them), None for the first if one failed.
+    Returns (the facts found about the images, the failures to acquire them). The first is None if acquiring
+    an image failed.
 
     Parameters:
-    - command: the compose command line (up to the subcommand) on the project's definition, as it will run
+    - command: the compose command line, up to the subcommand, that reads the project's definition as it
+      will run
     - project: the hardened project
     - args: the arguments after the subcommand, which name services and may carry --build or --pull
     - screener: the Screener to pull, build, decide and run with
-    - chosen_services: services whose user the command line chooses (`run -u`); their images are not looked at
+    - chosen_services: services whose user the command line chooses (`run -u`); this does not look at their
+      images
     """
     config = project.definition
     try:
@@ -55,16 +60,16 @@ def prepare(command: Sequence[str], project: Project, args: Sequence[str], scree
 
 
 def _find_section_images(config: dict[str, Any], screener: Screener) -> dict[str, Image]:
-    """Finds the images of the services that an image section of the config file names, with where they
-    were pulled from, which shows whether the section applies; the checks before the images were there
-    trusted the name alone.
+    """Finds the images of the services that an image section of the config file names, with the
+    repositories they were pulled from, which show whether the section applies. The checks before the images
+    were there trusted the name alone.
 
     A section trusts a repository's maintainer, but a name proves nothing: a project can build or tag an
     image of its own as `mariadb` and so borrow the user, mount dirs or security options configured for
     the real one. Only a repo digest for the repository, recorded when docker pulled the image from there,
     shows its origin (sections.section_for).
 
-    Returns {service: image} for those that are here.
+    Returns {service: image} for the images that are present.
     """
     settings = screener.runtime.settings
     section_images = {}

@@ -1,7 +1,7 @@
-"""This module defines the Runtime class, a snapshot of what dockscreen takes from the process it runs in,
-gathered once by the entry point.
+"""This module defines the Runtime class, a snapshot of the facts that dockscreen takes from the process it
+runs in. The entry point gathers them once.
 
-Everything below the entry points gets these as a Runtime, so none of it reads the config file, the
+Everything below the entry points gets these facts as a Runtime, so none of it reads the config file, the
 invoking user's ids, the environment or the host's accounts on its own.
 """
 
@@ -17,9 +17,10 @@ from dockscreen.util import messages
 
 
 class Runtime(NamedTuple):
-    """Snapshot of what dockscreen takes from the process it runs in, so that nothing below the entry points
-    reads the environment, the config file or this host's accounts on its own. It holds the settings, the real
-    docker, the host's accounts, and the invoking user's ids, environment and directories.
+    """Snapshot of the facts that dockscreen takes from the process it runs in, so that nothing below the
+    entry points reads the environment, the config file or this host's accounts on its own. It holds the
+    settings, the real docker, the host's accounts, and the invoking user's ids, environment and
+    directories.
 
     Instances come from load_runtime, at the entry point.
 
@@ -29,8 +30,8 @@ class Runtime(NamedTuple):
     - accounts: the accounts on this host (HostAccounts)
     - subordinate: the ranges in /etc/subuid and /etc/subgid (SubordinateRanges)
     - me: the invoking user's real (uid, gid)
-    - env: the environment, which compose and docker inherit; it must not be changed in place, and
-      with_docker_env gives a runtime whose docker passes more variables
+    - env: the environment, which compose and docker inherit; it must not be changed in place, and the
+      method with_docker_env returns a runtime whose docker passes more variables
     - home: the invoking user's home directory
     - cwd: the directory dockscreen was started in
     """
@@ -50,7 +51,7 @@ class Runtime(NamedTuple):
         return config.user_file_path(self.env, self.home)
 
     def with_docker_env(self, variables: Mapping[str, str]) -> Self:
-        """Returns this runtime with variables added to the environment of what its docker runs.
+        """Returns this runtime with variables added to the environment of the commands its docker runs.
 
         env, this process's own environment, stays as it is.
         """
@@ -58,8 +59,8 @@ class Runtime(NamedTuple):
 
 
 def load_runtime() -> Runtime:
-    """Gathers the Runtime of this process; raises config.ConfigError for a config file not to be trusted,
-    and DockerNotFoundError if there is no real docker.
+    """Gathers the Runtime of this process. Raises config.ConfigError for a config file that cannot be
+    trusted, and DockerNotFoundError if there is no real docker.
 
     Creates the user's config file if it is missing (config.load_current). Warns about empty or
     relative PATH entries.
@@ -91,10 +92,10 @@ def _warn_about_relative_path(env: Mapping[str, str]) -> None:
 
 def _real_docker_path(settings: Config, env: Mapping[str, str],
                       wrappers: Collection[str] | None = None) -> str:
-    """Returns the docker to run: the one settings names, else the first one on PATH that is not a
-    wrapper. Raises DockerNotFoundError if there is none.
+    """Returns the path of the docker to run: the docker that settings names, else the first docker on PATH
+    that is not a wrapper. Raises DockerNotFoundError if there is none.
 
-    wrappers: real paths of the wrappers to skip; by default the one this process was started as.
+    wrappers: real paths of the wrappers to skip; by default the wrapper that this process was started as.
     """
     if wrappers is None:
         wrappers = {os.path.realpath(sys.argv[0])}
@@ -108,7 +109,7 @@ def _real_docker_path(settings: Config, env: Mapping[str, str],
 def _find_docker(env: Mapping[str, str], wrappers: Collection[str]) -> str | None:
     """Returns the first executable `docker` on PATH in env whose real path is not in wrappers, or None.
 
-    This skips empty and relative PATH entries (an empty one means the current directory): a project
+    This skips empty and relative PATH entries (an empty entry means the current directory): a project
     must not be able to supply the binary dockscreen runs.
     """
     for directory in env.get("PATH", "").split(os.pathsep):

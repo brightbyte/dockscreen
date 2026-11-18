@@ -1,11 +1,13 @@
-"""This module defines the Screener class, for getting what screening one command needs from the invoking user
-and this host (the runtime): the policy for each target, and what an image is like, looked at through docker.
+"""This module defines the Screener class. A Screener gets the things that screening one command needs from
+the invoking user and this host (the runtime): the policy for each target, and the facts about an image,
+which it looks at through docker.
 
-What the checks of one project, image or container need follows from it and from where that target is:
-the settings of the config file with the project and image sections that apply (sections.effective_settings),
-the id rules with those settings, and the policy (Policy) built from them. The directory is the
-target's: a compose project's own, for what a command line runs the current one, and none for a container
-that existed before, since docker does not record where it created it.
+The checks of one project, image or container need settings that depend on the target and on its
+location: the settings of the config file with the project and image sections that apply
+(sections.effective_settings), the id rules with those settings, and the policy (Policy) built from them.
+The directory is the target's own. It is a compose project's directory, the current directory for a
+container that a command line runs, and none for a container that existed before, since docker does not
+record where it created that container.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -32,11 +34,11 @@ from dockscreen.policy.userdecision import UserDecision
 
 class Screener(NamedTuple):
     """Judge of what one command runs: a factory of the policies its checks need, and a service object that
-    looks at images through docker and has them judged (look, assess, decide). It holds the runtime and
-    whether the invoking user's own ids are allowed and how a refusal says to allow them.
+    looks at images through docker and has them judged (look, assess, decide). It holds the runtime,
+    whether the invoking user's own ids are allowed, and the way a refusal tells the user to allow them.
 
-    Create one per command from its Runtime, with allow_me if the command line asks for it, and with the
-    own_ids_hint of commands that allow the invoking user's ids another way than compose does.
+    Create one per command from its Runtime. Pass is_me_allowed if the command line asks for it, and the
+    own_ids_hint of a command that allows the invoking user's ids in another way than compose does.
 
     Attributes:
     - runtime: the Runtime of the command
@@ -68,8 +70,8 @@ class Screener(NamedTuple):
 
     def policy(self, directory: str | None, section: SectionMatch = NO_SECTION,
                trust: frozenset[Origin] = TRUSTED_ORIGINS) -> Policy:
-        """Returns the policy for the project in directory, with the image section that section says applies,
-        trusting the origins in trust.
+        """Returns the policy for a project in directory. The policy uses the image section that section
+        names, and trusts the origins in trust.
 
         Parameters:
         - directory: the project directory; None if no project section applies
@@ -81,8 +83,8 @@ class Screener(NamedTuple):
         return target_policy.with_section(section).with_trust(trust)
 
     def check_given_users(self, given_options: Iterable[UserOption]) -> Report:
-        """Returns the report of judging the users the command line gives by the policy for the current
-        directory (Policy.check_user_options): it holds their refusals, if any.
+        """Returns the report on the users that the command line gives, as the policy for the current
+        directory judges them (Policy.check_user_options). The report holds their refusals, if any.
 
         Parameters:
         - given_options: the user options the command line gives (GivenUsers.options)
@@ -90,8 +92,8 @@ class Screener(NamedTuple):
         return Report.of(self.policy(self.runtime.cwd).check_user_options(given_options))
 
     def resolve_given_users(self, given_options: Iterable[UserOption]) -> dict[UserOption, Resolution]:
-        """Returns what --as and --as-me among the user options the command line gives stand for, by the
-        policy for the current directory (Policy.resolve_user_options).
+        """Returns the users that --as and --as-me stand for, among the user options that the command line
+        gives. The policy for the current directory resolves them (Policy.resolve_user_options).
 
         Parameters:
         - given_options: the user options the command line gives (GivenUsers.options)
@@ -99,8 +101,8 @@ class Screener(NamedTuple):
         return self.policy(self.runtime.cwd).resolve_user_options(given_options)
 
     def section_for(self, image: Image) -> SectionMatch:
-        """Returns which image section applies to image, by its name and where it was pulled from
-        (sections.section_for).
+        """Returns the image section that applies to image, judged by its name and by the repository it was
+        pulled from (sections.section_for).
         """
         return sections.section_for(self.runtime.settings, image.reference, image.digests, image.is_built)
 
@@ -111,9 +113,9 @@ class Screener(NamedTuple):
         Parameters:
         - project: the project
         - section_images: the images of project's services that were found (ServiceImages.section_images),
-          None before they were looked for. Before, the section is the one the image name points to; after,
-          the one its image was proven to have been pulled for (section_for), and none for an image that was
-          not found
+          or None before dockscreen looks for them. Before that, each service gets the section that its image
+          name points to. After dockscreen has looked, each service gets the section that its image was proven
+          to come from (section_for), and a service whose image was not found gets none.
         """
         directory = project.directory
         per_service = {}
@@ -131,8 +133,9 @@ class Screener(NamedTuple):
 
     def decide(self, project: Project, images: ServiceImages | None, failures: Sequence[Finding] = ()
                ) -> Decisions:
-        """Returns what the policy for project (project_policy) decides about its services' users from what
-        was found of their images, with the failures to acquire them.
+        """Returns the decisions of the policy for project (project_policy) about its services' users. The
+        policy decides from the facts found about their images; the Decisions also hold the failures to
+        acquire the images.
 
         Parameters:
         - project: the project
@@ -146,20 +149,24 @@ class Screener(NamedTuple):
     def assess(self, directory: str | None, container: str, container_info: dict[str, Any],
                origin: Origin | None = None, has_mounts: bool | None = None, reference: str | None = None,
                is_built: bool = False) -> UserDecision:
-        """Decides which user the container's image may run as (rules.userrules), for the project in directory
-        (the current one for what a command line runs, None for a container that existed before): looks at
-        the image as far as the policy needs (look), which then judges it (Policy.check_image).
+        """Decides the user that the container's image may run as (rules.userrules), for a project in
+        directory. directory is the current one for a container that a command line runs, and None for a
+        container that existed before. This looks at the image as far as the policy needs (look), and the
+        policy then judges the facts found (Policy.check_image).
 
-        Returns a UserDecision, with the container's user's origin if it does not come from the image. Raises
-        DockerError if the image cannot be inspected or its passwd or group file is too large.
+        Returns a UserDecision. Its origin is the origin of the container's user, if that user does not come
+        from the image. Raises DockerError if docker cannot inspect the image, or if its passwd or group file
+        is too large.
 
         Parameters:
         - directory: the project's directory, as above
         - container, container_info: the container created from the image, and what docker inspect shows of it
         - origin: where the container's user comes from, if known (ImageInspection.user_origin if not)
-        - has_mounts: the container reaches host files or devices; worked out from container_info if not given
+        - has_mounts: whether the container reaches host files or devices; worked out from container_info if
+          not given
         - reference: the image name as the command line or the service gave it (the container's if None)
-        - is_built: the image is built from a Dockerfile by the service; the config file never applies then
+        - is_built: whether the service builds the image from a Dockerfile; no image section of the config
+          file applies then
         """
         inspection, image_policy = self.look(directory, container, container_info, origin, has_mounts,
                                              reference, is_built)
@@ -169,16 +176,17 @@ class Screener(NamedTuple):
              origin: Origin | None = None,
              has_mounts: bool | None = None, reference: str | None = None, is_built: bool = False
              ) -> tuple[ImageInspection, Policy]:
-        """Looks at the container's image as far as the policy for it needs, without judging any of it, and
-        returns what was found, with that policy (the one for its image section, section_for).
+        """Looks at the container's image as far as the policy for the image needs, without judging it.
+        Returns the facts found, and the policy for the image's section (section_for).
 
-        What docker inspect shows of the image comes first; the passwd and group files are read from the
-        container only if the policy needs them (Policy.needs_user_files). A missing file has no names in
-        it, for docker as for us. Raises DockerError if the image cannot be inspected or its passwd or
-        group file is too large.
+        This first takes what docker inspect shows of the image. It reads the passwd and group files from the
+        container only if the policy needs them (Policy.needs_user_files). A missing file has no names in it,
+        for docker and for dockscreen alike. Raises DockerError if docker cannot inspect the image, or if its
+        passwd or group file is too large.
 
         Parameters:
-        - directory, container, container_info, origin, has_mounts, reference, is_built: as assess takes them
+        - directory, container, container_info, origin, has_mounts, reference, is_built: as the method assess
+          takes them
         """
         # by the id docker created the container from: someone may have moved the name to another image since
         image_info = self.docker.inspect_image(container_info["Image"])

@@ -3,8 +3,8 @@ sets of origins that are trusted.
 
 Screening knows a value's origin only as finely as docker shows it. `docker compose config` merges the
 compose files, `.env`, env files, `include` and `extends`, so everything in it comes from the project.
-A container that `docker run` created has what the command line asked for, except a user equal to its
-image's own, which comes from the image.
+Everything in a container that `docker run` created comes from the command line, except a user equal to
+the image's own, which comes from the image.
 """
 
 import enum
@@ -15,13 +15,13 @@ class Origin(enum.Enum):
     COMMAND_LINE = "command line"  # the user typing the command
     CONFIG = "config file"         # dockscreen's config files, which only their owner or root can write
     PROJECT = "project"            # the compose project: its files, .env, env files and fragments
-    IMAGE = "image"                # its USER, /etc/passwd and /etc/group
+    IMAGE = "image"                # the image's USER, /etc/passwd and /etc/group
     DOCKSCREEN = "dockscreen"      # chosen by dockscreen from what it checked
 
 
-# The origins whose values the policy takes as given: it points out its objections to them instead of
-# refusing. It checks the values dockscreen sets once more like the project's, so that a mistake in them
-# stops the command.
+# The origins whose values the policy takes as given: the policy points out its objections to these values
+# instead of refusing them. The policy checks the values that dockscreen sets once more, like the project's
+# values, so that a mistake in them stops the command.
 TRUSTED_ORIGINS = frozenset({Origin.COMMAND_LINE, Origin.CONFIG})
 # --strict-screen: the policy judges the command line like a project.
 STRICT_ORIGINS = TRUSTED_ORIGINS - {Origin.COMMAND_LINE}

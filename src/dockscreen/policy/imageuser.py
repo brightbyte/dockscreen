@@ -5,13 +5,17 @@ The image's own /etc/passwd and /etc/group decide the identity docker would use,
 so the id rules (rules.userrules) decide whether the image may have it. dockscreen runs an accepted identity
 pinned as numbers, so a difference between this reading and docker's can at worst refuse a good image.
 
-resolve reads the files as moby does, quirks included, because an image can write them so that two parsers
-read them two ways: a uid field that is not a number (`app:x:1000x:...`) is 0 to moby, root, which a strict
-parser would reject or read as 1000; whitespace that Python strips and Go does not (\x1c to \x1f) can make a
-line name a different user; the first of two entries for a name wins; moby looks up a numeric user by number
-only, so an entry whose name is "1000" cannot redirect `USER 1000`; and it finds supplementary groups by the
-user's name. Reading them the same way finds the root that docker would have used, and decides on the identity
-the image would really get.
+The function resolve reads the files as moby does, quirks included. An image can write them so that two
+parsers read them in two ways:
+- a uid field that is not a number (`app:x:1000x:...`) is 0 to moby, which is root; a strict parser would
+  reject it or read it as 1000;
+- whitespace that Python strips and Go does not (\x1c to \x1f) can make a line name a different user;
+- the first of two entries for a name wins;
+- moby looks up a numeric user by number only, so an entry whose name is "1000" cannot redirect `USER 1000`;
+- moby finds supplementary groups by the user's name.
+
+Reading the files the same way finds the root that docker would have used, so the decision is about the
+identity that the image would really get.
 """
 
 from collections.abc import Sequence
@@ -36,8 +40,8 @@ def _lines(text: str) -> list[str]:
 
 
 def _atoi(text: str) -> int:
-    """Reads text as moby does with Go's strconv.Atoi: an optional sign and ASCII digits, else 0;
-    a number out of the int64 range becomes the nearest limit.
+    """Reads text as moby does with Go's strconv.Atoi. Text that is not an optional sign followed by ASCII
+    digits gives 0. A number outside the int64 range becomes the nearest limit.
     """
     digits = text[1:] if text[:1] in "+-" else text
     if not (digits and all(c in "0123456789" for c in digits)):
@@ -73,8 +77,8 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity
     """Resolves a `user[:group]` spec to the UserIdentity docker would run it as, using the image's files.
 
     A numeric user or group is an id, never a name (moby looks it up by number only). A numeric
-    uid without a passwd entry gets gid 0. Raises ValueError for a name the image does not define,
-    which docker would refuse to start too, and for a negative id.
+    uid without a passwd entry gets gid 0. Raises ValueError for a name that the image does not define
+    (docker would refuse to start the container too), and for a negative id.
 
     Parameters:
     - spec: the `user[:group]`; None or "" for the image's default, root
@@ -112,7 +116,7 @@ def resolve(spec: str | None, passwd_text: str, group_text: str) -> UserIdentity
 
 def _find(entries: Sequence[tuple[Any, ...]], arg: str) -> tuple[Any, ...] | None:
     """Returns the first entry (name, id, ...) that arg names, by id if arg is a number, else by name;
-    None if there is none.
+    None if no entry matches.
     """
     if _is_id(arg):
         return next((e for e in entries if e[1] == int(arg)), None)
@@ -126,11 +130,11 @@ def _is_id(text: str) -> bool:
 
 
 def describe(identity: UserIdentity, local_accounts: hostusers.HostAccounts | None = None) -> str:
-    """Describes the identity in words, and which local accounts the ids are.
+    """Describes the identity in words, and names the local accounts that the ids belong to.
 
     Parameters:
     - identity: the ids
-    - local_accounts: this host's accounts (hostusers.HostAccounts); None to leave them out
+    - local_accounts: this host's accounts (hostusers.HostAccounts); None to leave out the account names
     """
     def describe_id(kind: str, value: int) -> str:
         if local_accounts is None:

@@ -1,8 +1,8 @@
 """This module provides functions for reading and writing numeric uids and gids, as the command line, the
 config file and projects give them.
 
-Ids given by the command line, the config file or the project are ASCII digits only. How docker reads
-ids out of an image's passwd and group files is different, and lives in imageuser.
+Ids given by the command line, the config file or the project are ASCII digits only. Docker reads ids
+out of an image's passwd and group files differently; the module imageuser reads them that way.
 """
 
 # 65535 and 4294967295 are (uid_t)-1 in 16 and 32 bits, which tools read as "no id".
@@ -15,7 +15,7 @@ def is_id(text: str) -> bool:
 
 
 def parse_id(value: object) -> int | None:
-    """Returns value as a numeric id, or None if its text is not one (is_id)."""
+    """Returns value as a numeric id, or None if its text is not a numeric id (is_id)."""
     text = str(value)
     return int(text) if is_id(text) else None
 

@@ -1,15 +1,15 @@
-"""This module implements `docker compose harden` (and `fix`), dockscreen's own command, which prints a
-compose override that fixes what can be fixed.
+"""This module implements `docker compose harden` (and `fix`), dockscreen's own command. It prints a compose
+override that fixes the problems that have a safe fix.
 
-The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
-lead_args of the command line.
+The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the lead_args
+of the command line.
 
-The fixes are the policy's (projectfixes); Policy.check_project, run on the result, reports the problems
-left.
+The fixes come from the policy (projectfixes). Policy.check_project then runs on the result and reports the
+problems that are left.
 
-_render writes the difference between a config and its fixed copy as a compose override file. Compose
-merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset` tag
-and replaced lists use `!override`. _render writes values as JSON, which is valid YAML.
+The function _render writes the difference between a config and its fixed copy as a compose override file.
+Compose merges override lists by appending and cannot drop a key by omitting it, so removals use the `!reset`
+tag and replaced lists use `!override`. _render writes the values as JSON, which is valid YAML.
 """
 
 import json
@@ -31,17 +31,17 @@ from dockscreen.util.messages import printable_text
 
 
 def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Prints a compose override that fixes the problems with a safe fix; exits with 1 if problems remain.
+    """Prints a compose override that fixes the problems that have a safe fix. Exits with 1 if problems
+    remain.
 
-    The patch is relative to the merged config as dockscreen will run it, defaults
-    included: it holds only the changes needed on top of them to pass the audit,
-    and one comment names the defaults dockscreen adds itself. Mount sources outside
-    the project become placeholders for you to edit; the patch lists problems without
-    a safe automatic fix as comments. harden pulls and builds images first, as `up`
-    would, to see which services need a user of their own.
+    The patch applies to the merged config as dockscreen will run it, with its defaults included. It holds
+    only the changes needed on top of that config to pass the audit, and one comment names the defaults that
+    dockscreen adds itself. Mount sources outside the project become placeholders for you to edit. The patch
+    lists the problems without a safe automatic fix as comments. harden first pulls and builds the images, as
+    `up` would, to find the services that need a user of their own.
 
-    A user that has to be set becomes `${UID}:${GID}`, your own, so harden checks the result as if you
-    gave --allow-me, and the patch says that it needs it.
+    Where a user has to be set, harden sets `${UID}:${GID}`, which is your own. So harden checks the result as
+    if you gave --allow-me, and the patch says that it needs --allow-me.
 
     Parameters:
     - parent_cli: the compose command line, with `harden` or `fix` as its command; --allow-me in it makes no
@@ -66,8 +66,9 @@ def harden(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     static_project = loaded_project.static_project()
     fixed_config = projectfixes.fix_config(static_project, static_policy)
-    # what the patch runs as, as compose would read it; compose interpolates the generated file and makes
-    # its paths absolute, so ${UID} or ./ETC there would read back differently from what was checked
+    # the patch as compose would read it, which is the config that runs. Compose interpolates the generated
+    # file and makes its paths absolute, so ${UID} or ./ETC in it would read back differently from the checked
+    # config
     resolved_config = projectfixes.resolve_config_values(fixed_config, static_policy,
                                                          static_project.directory)
     # the patched project goes through the same stages as `up` would take it through
@@ -105,10 +106,10 @@ def _render(original_config: dict[str, Any], fixed_config: dict[str, Any],
     original_config: the config compose applies the patch to, as dockscreen will run it (defaults included).
     unfixed_problems and notes become comments.
 
-    The user saves this as a compose file, and much of it is the project's text: mount sources and
-    problems in comments, service names and keys. _render escapes comments (printable) so that a newline
-    in them cannot end the comment and add keys of the project's choosing, such as `privileged: true`, and
-    quotes names and keys unless they are plainly safe.
+    The user saves this as a compose file, and much of it is the project's text: mount sources and problems in
+    comments, and service names and keys. This escapes the comments (printable_text), so that a newline in
+    them cannot end the comment and add keys of the project's choosing, such as `privileged: true`. It also
+    quotes names and keys, unless they are plainly safe.
     """
     lines = [_HEADER]
     lines += [f"# note: {printable_text(note)}" for note in notes]
@@ -135,7 +136,7 @@ def _yaml_key(key: str) -> str:
 
 
 def _mount_notes(original_config: dict[str, Any], fixed_config: dict[str, Any]) -> list[str]:
-    """Returns one note per mount whose source fixed_config replaced by a placeholder."""
+    """Returns one note for each mount whose source fixed_config replaces with a placeholder."""
     notes = []
     for name, before in original_config.get("services", {}).items():
         after = fixed_config["services"][name]
@@ -167,7 +168,7 @@ def _service_changes(original_config: dict[str, Any],
 
 
 def _render_value(value: Any) -> str:
-    """Renders value as YAML for the override file, tagged so that it replaces what the project set."""
+    """Renders value as YAML for the override file, tagged so that it replaces the project's value."""
     if value is None:
         return "!reset null"
     if isinstance(value, list):

@@ -1,8 +1,8 @@
-"""This module implements `docker compose audit`, dockscreen's own command, which reports what `up` would do
+"""This module implements `docker compose audit`, dockscreen's own command. It reports the outcome of `up`
 without starting anything.
 
-The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the
-lead_args of the command line.
+The compose options before the subcommand (e.g. ["-f", "x.yml"]), which select the project, are the lead_args
+of the command line.
 """
 
 from collections.abc import Sequence
@@ -19,7 +19,7 @@ HARDEN_HINT = "the harden subcommand prints a compose override file with these f
 
 
 def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs the checks that screen `up` without starting anything; pulls and builds images as up would.
+    """Runs the checks that screen `up`, without starting anything. Pulls and builds images as `up` would.
 
     Exit status 0 if `up` would run, 1 if it would refuse, 3 if the audit failed to get that far
     (Report.verdict). --brief prints only the verdict, in one line.
@@ -61,7 +61,7 @@ def _audit_images(loaded_project: projectscreening.LoadedProject, screener: Scre
     """Screens the project as `up` would, stage by stage (projectscreening), pulling and building its images
     if the checks before them pass.
 
-    Returns (what the last stage found, report lines).
+    Returns the report of the last stage, and the lines to print.
     """
     check_result = projectscreening.check(loaded_project, screener)
     if isinstance(check_result, Report):
@@ -73,7 +73,7 @@ def _audit_images(loaded_project: projectscreening.LoadedProject, screener: Scre
     cleared_project = check_result
     with loaded_project.generated_files(screener.docker.binary) as command:
         decisions = projectscreening.decide(cleared_project, screener, command)
-    # the last stage is what `up` checks once more before it runs: image sections need proof then
+    # the last stage is the check that `up` repeats before it runs; image sections need proof at that point
     finish_result = projectscreening.finish(cleared_project, decisions, screener)
     final_report = finish_result if isinstance(finish_result, Report) else finish_result.report
     return final_report, decisions.describe()

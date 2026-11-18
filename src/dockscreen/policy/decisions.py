@@ -1,6 +1,6 @@
-"""This module defines the Decisions class, a record of what a policy decided about the users of a compose
-project's services once dockscreen has looked at their images, with the substitutions that follow from it
-(Policy.user_changes), and the functions for describing both.
+"""This module defines the Decisions class, a record of a policy's decisions on the users of a compose
+project's services. The policy makes them once dockscreen has looked at the services' images. The record also
+holds the substitutions that follow from the decisions (Policy.user_changes), and it can describe both.
 """
 
 from collections.abc import Mapping, Sequence
@@ -21,9 +21,9 @@ from dockscreen.util import ids, messages
 
 
 class Decisions(NamedTuple):
-    """Record of what a policy decided about the users of a compose project's services once their images were
-    looked at. It holds the project and the policy, the decision about each service, the report, and the
-    substitutions that follow.
+    """Record of a policy's decisions on the users of a compose project's services, made after dockscreen
+    looked at their images. It holds the project and the policy, the decision about each service, the report,
+    and the substitutions that follow.
 
     Instances come from Screener.decide.
 
@@ -47,15 +47,15 @@ class Decisions(NamedTuple):
     def of(cls, project: Project, project_policy: Policy, local_accounts: hostusers.HostAccounts,
            inspections: Mapping[str,
                                 ImageInspection | UnseenImage], failures: Sequence[Finding] = ()) -> Self:
-        """Returns what project_policy decides about project from what was seen of its services' images, with
-        the failures to acquire them.
+        """Returns the decisions of project_policy on project, based on the inspections of its services'
+        images. The record also holds the failures to acquire the images.
 
         Parameters:
         - project: the project
         - project_policy: the policy that decides, with the image sections the images proved
         - local_accounts: this host's accounts, for naming the users
         - inspections: by service, what was seen of the images that decide the users
-        - failures: the failures to pull, build or list its services
+        - failures: the failures to pull, build or list the project's services
         """
         decisions = project_policy.assess_images(inspections)
         report = Report.of([*failures, *project_policy.check_images(inspections)])
@@ -63,7 +63,7 @@ class Decisions(NamedTuple):
                    project_policy.user_changes(project, decisions))
 
     def describe(self) -> list[messages.HasMark]:
-        """Describes, in one line per service that sets no user, what dockscreen does about it."""
+        """Describes dockscreen's handling of each service that sets no user, in one line per service."""
         lines: list[messages.HasMark] = []
         decisions = self.by_service
         for name in sorted(self.project.services_without_user):
@@ -85,7 +85,7 @@ class Decisions(NamedTuple):
         return [*lines, *self.changes.group_notices()]
 
     def notices(self) -> list[Notice]:
-        """Lists, as notices, what a run does that the project did not ask for."""
+        """Lists, as notices, the changes that a run makes beyond the project's requests."""
         return self.changes.notices()
 
 

@@ -1,12 +1,12 @@
 """This module provides functions for finding the mounts of a container or a compose service, and for telling
 which of them reach files on this host.
 
-What a container can write on the host depends on its user only where it reaches host files: bind mounts,
-devices, the volumes of another container, and for compose secrets and configs, which are bind-mounted
-files. Named volumes live in docker's own directory and tmpfs in memory, so the user id means nothing to
-the host there; except a named volume whose local driver options mount a device or a host path, which
-compose shows in the volume's `driver_opts`. A container that docker inspect shows does not say how its
-named volumes were made.
+A container's user decides its access to host files only where the container reaches them: through bind
+mounts, devices, the volumes of another container, and, for compose, secrets and configs, which are
+bind-mounted files. Named volumes live in docker's own directory, and tmpfs lives in memory, so the user id
+means nothing to the host there. The exception is a named volume whose local driver options mount a device
+or a host path; compose shows those options in the volume's `driver_opts`. Docker inspect does not say how
+a container's named volumes were made.
 """
 
 from collections.abc import Mapping
@@ -17,8 +17,8 @@ BIND_FLAGS = frozenset({"bind", "rbind"})
 
 
 class Mount(NamedTuple):
-    """Value object for a filesystem attached to a container. It holds its type, where it comes from and where
-    it is mounted.
+    """Value object for a filesystem attached to a container. It holds its type, its source and its
+    target.
 
     Attributes:
     - kind: its type: bind, volume, tmpfs or image
@@ -40,19 +40,20 @@ def mount_flags(opts: Mapping[str, Any]) -> set[str]:
 
 
 def volume_reaches_host(volume: Mapping[str, Any] | None) -> bool:
-    """Tells whether a compose top-level volume mounts host files: its driver_opts name a device or mount
-    options. A plain tmpfs does not count.
+    """Tells whether a compose top-level volume mounts host files, which it does if its driver_opts name a
+    device or mount options. A plain tmpfs does not count.
     """
     opts = (volume or {}).get("driver_opts") or {}
-    # memory, not a host path; with a device or the bind flag it is not plain, and the policy refuses it
+    # a plain tmpfs is memory, not a host path; a tmpfs with a device or the bind flag is not plain, and the
+    # policy refuses it
     is_plain_tmpfs = (opts.get("type") == "tmpfs" and opts.get("device", "") in ("", "tmpfs")
                       and not mount_flags(opts) & BIND_FLAGS)
     return bool(opts.get("device") or opts.get("o")) and not is_plain_tmpfs
 
 
 def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] | None = None) -> bool:
-    """Tells whether a compose service reaches host files: bind mounts, secrets and configs, devices, the
-    volumes of another container, or a named volume that volume_reaches_host.
+    """Tells whether a compose service reaches host files: through bind mounts, secrets and configs, devices,
+    the volumes of another container, or a named volume for which volume_reaches_host is true.
 
     Parameters:
     - service: the service's keys, as compose config gives them
@@ -67,10 +68,10 @@ def service_reaches_host(service: Mapping[str, Any], volumes: Mapping[Any, Any] 
 
 
 def container_mounts(info: Mapping[str, Any]) -> list[Mount]:
-    """Returns the mounts of a container each one once.
+    """Returns the mounts of a container, each one once.
 
-    -v puts a bind mount in HostConfig.Binds, --mount in HostConfig.Mounts; inspect also lists them all in
-    Mounts.
+    -v puts a bind mount in HostConfig.Binds, and --mount puts a mount in HostConfig.Mounts; docker inspect
+    also lists all of these mounts in Mounts.
 
     Parameters:
     - info: what docker inspect shows of the container

@@ -1,13 +1,13 @@
 # End-to-end tests
 
 These tests characterize dockscreen against the real docker of your host: every check it makes, written
-as a scenario of what a project, an image or a command line asks for and what dockscreen does about it.
+as a scenario: a request of a project, an image or a command line, and dockscreen's response to it.
 They are for developers who change dockscreen, and for whoever reviews its security: the unit tests
-simulate docker and compose, and these show that the checks hold up against the real ones.
+simulate docker and compose, and these tests show that the checks hold up against the real ones.
 
 Nothing starts. dockscreen runs the real docker through `handoff.py`, which passes every call on except
 the hand-off: the call that would start, stop or change containers, or write a build's output, once the
-checks have passed. `handoff.py` records that call and answers it with success, so a scenario sees exactly what
+checks have passed. `handoff.py` records that call and answers it with success, so a scenario sees exactly the call that
 dockscreen would have run (the arguments, the compose file it generated), and can inspect the container
 it created for `docker run`. The tests pull a few small images, build the example app image, and create
 containers that nothing starts; the tests remove all of these after the run.
@@ -20,7 +20,7 @@ From the repository root, as your ordinary user:
 pytest -m e2e -rs
 ```
 
-`pytest` alone deselects them. `-rs` lists the skipped tests and why. To run one feature or scenario:
+`pytest` alone deselects them. `-rs` lists the skipped tests and the reasons. To run one feature or scenario:
 
 ```
 pytest -m e2e -rs tests/e2e/test_e2e_docker_run.py
@@ -28,7 +28,7 @@ pytest -m e2e -rs -k allow_me
 ```
 
 The tests find the real docker as the first `docker` on `PATH` that is not a script, so they pass over
-dockscreen's own `bin/docker` and an installed entry point. If that finds the wrong one, name it:
+dockscreen's own `bin/docker` and an installed entry point. If that search finds the wrong docker, name the right one:
 
 ```
 DOCKSCREEN_E2E_DOCKER=/usr/bin/docker pytest -m e2e -rs
@@ -41,38 +41,38 @@ DOCKSCREEN_E2E_COVERAGE=1 pytest -m e2e -rs
 ```
 
 runs dockscreen under coverage.py, if it is installed, and ends with a report of the lines and branches of
-dockscreen the scenarios did not reach, and an HTML report in `.coverage-e2e/html`. `COVERAGE.md` says
-which of those cannot be reached from here, and why.
+dockscreen the scenarios did not reach, and an HTML report in `.coverage-e2e/html`. `COVERAGE.md` lists
+the ones that the scenarios cannot reach, with the reasons.
 
 ## Preconditions
 
 Each test checks its needs first, and skips itself with a `PreconditionWarning` if the host lacks one.
 
-All of them need:
+All tests need:
 
 - docker with a reachable daemon, on the default context, and `DOCKER_HOST` unset or a `unix://` socket
 - `docker compose`
 - to run as a user other than root
-- no `/etc/dockscreen/config.toml`, which would change what dockscreen allows
+- no `/etc/dockscreen/config.toml`, which would change dockscreen's policy
 - a home directory that no one else can write to, nor any directory above it: the tests write their
   config files below it, and dockscreen does not read a config file from a place others can write to
 
-Some need more:
+Some tests need more:
 
 - a registry to pull from: `alpine`, `redis`, `nginx` and `nginx-unprivileged`, at pinned tags
 - uid and gid between 1000 and 60000, for the app image built with your ids
 - a range in `/etc/subuid`, for the image whose user is a subordinate id
 - a local user 101, for the scenarios where nginx-unprivileged (which runs as 101) is refused for it, or no
-  user 101, for the one where it is refused only with a host mount
+  user 101, for the scenario where it is refused only with a host mount
 - a local user 1, for the scenario that refuses an account of this host
 - an id between 20000 and 60000 that is no user, group or subordinate id, for the app image built to run
   as a stranger to the host, and for the scenarios that need an id that means nothing here
-- `docker buildx` for the bake scenarios, and `bake --call` for the one that passes
+- `docker buildx` for the bake scenarios, and `bake --call` for the bake scenario that passes
 - compose 2.24 or newer for the harden scenarios, whose patch uses `!reset` and `!override`
 
 ## Layout
 
-Each `test_e2e_*.py` is a feature: its docstring states the rules, and each test is a scenario of them,
+Each `test_e2e_*.py` is a feature: its docstring states the rules, and each test is a scenario of those rules,
 written in the steps of `steps.py`:
 
 ```python
@@ -90,11 +90,11 @@ their names.
   A failing Then step shows what dockscreen printed and the calls it made to docker.
 - `handoff.py`: the docker that dockscreen runs, which holds back the hand-off and records every call.
 - `conftest.py`: the fixtures, which check the preconditions, pull and build images, and measure coverage.
-- `realdocker.py`: what the fixtures and steps share: the image names, running dockscreen with a config
+- `realdocker.py`: the code that the fixtures and steps share: the image names, running dockscreen with a config
   file of its own, `require()`.
 - `projects/webapp`: a compose project of the usual kind: an app built from the `Dockerfile` with your
   ids, redis, nginx and a mail catcher behind a profile. `compose.debug.yaml` is an override that asks
-  for too much, `docker-bake.hcl` has a target that writes to the host and one that uses the host's
+  for too much, `docker-bake.hcl` has a target that writes to the host and a target that uses the host's
   cache, secrets and SSH agent.
 - `projects/monitoring`: cAdvisor and the node exporter, set up as their documentation says, which reach
   into the host in most of the ways dockscreen refuses.
@@ -106,8 +106,8 @@ may change them.
 
 - Nothing may start: a call that starts or changes containers must be one that `handoff.py` holds back.
   Add it to `HELD_DOCKER` or `HELD_COMPOSE` before a scenario makes dockscreen hand it on.
-- State the rule in the feature's docstring first, then write the scenario against it: what dockscreen
-  prints and hands on, not how it gets there.
+- State the rule in the feature's docstring first, then write the scenario against it: dockscreen's output
+  and the calls it hands on, not the steps it takes to get there.
 - Check an assumption about the host with `require(condition, reason)` before relying on it, rather
   than letting the scenario fail.
 - Give the compose file as data (`given_service`, `given_compose`); the helpers write it as JSON, which is YAML.

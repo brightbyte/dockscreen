@@ -1,9 +1,9 @@
-"""This module implements `docker compose run`, with the checks of `up` and the user the command line may
-choose for the service.
+"""This module implements `docker compose run`, with the checks of `up`, and with the user that the command
+line may choose for the service.
 
-The command line is trusted: compose gets a user it gives as numeric `uid:gid`, and dockscreen resolves
-`--as NAME` and `--as-me` to ids on this host (userargs); the policy then does not check that service's
-user against the image.
+The command line is trusted. Compose gets a user that the command line gives as numeric `uid:gid`, and
+dockscreen resolves `--as NAME` and `--as-me` to ids on this host (userargs). The policy then does not check
+that service's user against the image.
 """
 
 from dockscreen.commands import helptext, projectrun
@@ -14,13 +14,13 @@ from dockscreen.util import commandline
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker compose run` if the project passes the checks, and returns the exit status: 1 for a user
-    on the command line that cannot be used. Under --strict-screen, the policy also judges the changes the
-    command line makes to the service.
+    """Runs `docker compose run` if the project passes the checks, and returns the exit status. The status is
+    1 for a user on the command line that cannot be used. Under --strict-screen, the policy also judges the
+    changes the command line makes to the service.
 
     Parameters:
-    - parent_cli: the compose command line, with `run` as its command; its lead_args are the compose
-      options, which select the project
+    - parent_cli: the compose command line, with `run` as its command; its lead_args are the compose options,
+      which select the project
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"

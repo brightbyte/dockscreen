@@ -1,15 +1,15 @@
-"""This module defines the Project class, a view of a compose project as screening sees it, with classes for
-where it is, for the services in it, and for what was found of their images.
+"""This module defines the Project class, a view of a compose project as screening sees it. Further classes
+hold the project's location, its services, and the facts found about their images.
 
 The project may bind mount every path below its directory, so the directory must be the one compose
-uses, and must not hold anything that may not be mounted (ProjectLocation).
+uses, and it must not hold anything that may not be mounted (ProjectLocation).
 
-A project's definition is what `docker compose config` resolves from all its files: every compose file,
+A project's definition is the result of `docker compose config` on all its files: every compose file,
 `.env`, `include` and `extends`, with every profile active and env files not inlined. Compose runs the
-definition, so the policy judges it, and not the files themselves. The project also has what its
-definition does not say: where it is, and where the values that dockscreen changed in its definition
-come from. What docker says about it besides (its daemon, the containers with its name, its images) is
-not part of it.
+definition, so the policy judges it, and not the files themselves. The project also holds two facts that
+its definition does not state: its location, and the origins of the values that dockscreen changed in the
+definition. Other facts that docker gives about it (its daemon, the containers with its name, its images)
+are not part of it.
 """
 
 from collections.abc import Mapping
@@ -22,15 +22,15 @@ from dockscreen.model.origin import Origin
 
 
 class ProjectLocation(NamedTuple):
-    """Record of where a compose project is, as compose would find it, and what makes that directory unfit to
-    be a project's. It holds the directory and what was found against it.
+    """Record of a compose project's location, as compose would find it, and of anything that makes the
+    directory unfit for a project. It holds the directory and the problems found with it.
 
     Instances come from inspect.locate.
 
     Attributes:
     - directory: the project directory
     - is_foreign: whether it was found by walking up from the current directory into the home directory, or
-      into one the user does not own
+      into a directory that the user does not own
     - redirects: the .env files on the way that set COMPOSE_FILE or COMPOSE_PATH_SEPARATOR
     - sensitive_paths: the sensitive paths it equals or contains ($HOME, /etc, ...)
     """
@@ -41,17 +41,19 @@ class ProjectLocation(NamedTuple):
 
 
 class Project(NamedTuple):
-    """View of a compose project's resolved definition, for judging it. It holds the definition, where the
-    project is, and where the values dockscreen set in the definition come from.
+    """View of a compose project's resolved definition, for judging it. It holds the definition, the project's
+    location, and the origins of the values that dockscreen set in the definition.
 
-    Instances come from inspect.project; projectpatch.ProjectPatch.apply_to gives one with values changed.
+    Instances come from inspect.project. The method projectpatch.ProjectPatch.apply_to returns a copy with
+    values changed.
 
     Attributes:
-    - definition: what `docker compose config` resolves from all the project's files; a dict that must not
-      be changed in place: with_definition gives a project with another one
+    - definition: the result of `docker compose config` on all the project's files. It is a dict that must
+      not be changed in place. The method with_definition returns a copy of the project with another
+      definition.
     - location: where it is (ProjectLocation)
-    - origins: by service and key, where the values dockscreen set come from, where that is not the project
-      (with_origins)
+    - origins: by service and key, the origins of the values that dockscreen set, wherever the origin is not
+      the project (with_origins)
     """
     definition: dict[str, Any]
     location: ProjectLocation
@@ -79,7 +81,7 @@ class Project(NamedTuple):
 
     @property
     def services_without_user(self) -> frozenset[str]:
-        """Returns the names of the services that set no user, whose image's user is what docker runs."""
+        """Returns the names of the services that set no user; docker runs those as their image's user."""
         return frozenset(s.name for s in self.services if not s.definition.get("user"))
 
     def service(self, name: str) -> "Service":
@@ -91,8 +93,8 @@ class Project(NamedTuple):
         return self._replace(definition=definition)
 
     def with_origins(self, origins: Mapping[str, Mapping[str, Origin]]) -> Self:
-        """Returns this project with origins added to where the values of its services' keys come from; a
-        key in both takes its origin from origins.
+        """Returns this project with origins added to the origins of its services' keys. Where a key has an
+        origin in both, the origin in origins wins.
 
         Parameters:
         - origins: by service and key, where the values come from
@@ -106,9 +108,9 @@ class Project(NamedTuple):
 
 class Service(NamedTuple):
     """View of one service of a Project, for judging its keys (JudgedService). It holds the project and the
-    service's name; its keys, and what follows from them, are read from the project.
+    service's name; it reads its keys, and the facts that follow from them, from the project.
 
-    Get one from Project.service or Project.services.
+    Get an instance from Project.service or Project.services.
 
     Attributes:
     - name: the name of the service
@@ -138,9 +140,9 @@ class Service(NamedTuple):
 
 
 class ServiceImages(NamedTuple):
-    """Record of what was found of the images of a compose project's services once they were acquired, for
-    the policy to decide on. It holds the images found, and what was seen of those that decide the services'
-    users.
+    """Record of the facts found about the images of a compose project's services, once they were acquired,
+    for the policy to decide on. It holds the images found, and the inspections of the images that decide
+    the services' users.
 
     Instances come from serviceinfo.prepare.
 

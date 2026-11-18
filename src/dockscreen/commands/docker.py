@@ -1,8 +1,8 @@
-"""This module implements `docker` through dockscreen: the dispatch that gates or adds the commands
-dockscreen knows and hands everything else to the real docker.
+"""This module implements `docker` through dockscreen. Its dispatch gates or adds the commands that dockscreen
+knows, and hands everything else to the real docker.
 
-`compose` goes to docker_compose, commands that start containers from images go through the gate (GATES),
-everything else is exec'd to the real docker unchanged.
+`compose` goes to docker_compose, and commands that start containers from images go through the gate (GATES).
+dockscreen execs everything else to the real docker unchanged.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -37,7 +37,7 @@ GATES = MappingProxyType({
 })
 
 BUILDX_OPTS_WITH_VALUE = frozenset({"--builder"})
-# the help of each command dockscreen has its own help for
+# dockscreen's own help, for each command that has one
 HELP: Mapping[str, Callable[[str], helptext.HelpTopic]] = MappingProxyType({
     "run": docker_run.help,
     "create": docker_create.help,
@@ -64,7 +64,7 @@ class DockerCommand:
         self.runtime = runtime
 
     def dispatch(self) -> int:
-        """Runs the command, screened, helped or passed on, and returns the exit status, unless docker
+        """Runs the command, which it screens, helps with or passes on. Returns the exit status, unless docker
         replaces this process.
         """
         cli = _short_form(self.commandline)
@@ -93,12 +93,13 @@ class DockerCommand:
             return GATES[cmd](cli, self.runtime)
         if cli.is_strict:
             # refused, not ignored: a user who asks for strict screening must not get the lenient kind.
-            # Every command above that does not support it refuses it itself.
+            # Every command above that does not support --strict-screen refuses it itself.
             return Report.refusal(commandline.STRICT_REFUSAL).show()
         return _passthrough(argv, self.runtime)
 
     def show_help(self, cli: commandline.CommandLine, target: str) -> int:
-        """Prints dockscreen's help for target, then passes on to docker for its own if it has one.
+        """Prints dockscreen's help for target, then passes on to docker for docker's own help, if docker has
+        one.
 
         Parameters:
         - cli: the command line that asks for help
@@ -124,9 +125,9 @@ class DockerCommand:
 
 
 def _short_form(cli: commandline.CommandLine) -> commandline.CommandLine:
-    """Returns cli with `docker container run` and the other gated commands read as `docker run`, which they
-    are the same as. `container audit` is not ours: it stays as it is, and so does anything else after
-    `container`.
+    """Returns cli, with `docker container run` and the other gated commands read in their short form, such as
+    `docker run`: they are the same commands. `container audit` is not ours, so it stays as it is, and so does
+    anything else after `container`.
     """
     if cli.cmd != "container" or not cli.args or cli.args[0] not in GATES:
         return cli
@@ -134,10 +135,11 @@ def _short_form(cli: commandline.CommandLine) -> commandline.CommandLine:
 
 
 def _help_request(cli: commandline.CommandLine) -> str | None:
-    """Determines what help the command line asks for: None for none, "" for the overview, else a command.
+    """Determines the help that the command line asks for: None for none, "" for the overview, else a command.
 
-    `help`, `help COMMAND`, or --help or -h as the first argument after the command; for run and create, -h is
-    --hostname. `compose` gives its own help (ComposeCommand), except for `help compose`.
+    The command line asks for help with `help`, with `help COMMAND`, or with --help or -h as the first
+    argument after the command. For run and create, -h means --hostname. `compose` gives its own help
+    (ComposeCommand), except for `help compose`.
     """
     if cli.cmd is None:
         lead_args = cli.lead_args
@@ -150,7 +152,9 @@ def _help_request(cli: commandline.CommandLine) -> str | None:
 
 
 def _wants_command_help(sub: str, args: Sequence[str]) -> bool:
-    """Tells whether args ask for help: --help, or -h, first. For run and create, -h is --hostname."""
+    """Tells whether args ask for help, with --help or -h as the first argument. For run and create, -h is
+    --hostname.
+    """
     first_arg = tuple(args[:1])
     return first_arg == ("--help",) or (first_arg == ("-h",) and sub not in ("run", "create"))
 

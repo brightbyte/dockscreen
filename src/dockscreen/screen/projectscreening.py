@@ -1,30 +1,32 @@
 """This module provides functions for screening a compose project in stages, and for running docker compose
 from the config that was checked, not from the files compose would find itself.
 
-Each stage is a function from what the one before it gave to what the next needs, or to the report that
-stops screening: the loaded project (load_project, LoadedProject) is checked before any image is looked
-at (check), which clears it (ClearedProject); its images are then acquired and decided on (decide), and the
-project with what was decided is checked once more (finish), which makes it runnable (RunnableProject). A
-caller composes the stages it needs; the types say which stage may follow which, so nothing is pulled or
-built for a project that was not cleared, and nothing runs that was not checked last.
+Each stage is a function. It takes what the stage before it gave, and returns what the next stage needs,
+or the report that stops screening. The function check judges the loaded project (load_project,
+LoadedProject) before dockscreen looks at any image, and clears it (ClearedProject). The function decide
+then acquires the project's images and decides about them. The function finish checks the project with
+those decisions once more, and makes it runnable (RunnableProject). A caller composes the stages it
+needs. The types say which stage may follow which, so dockscreen pulls or builds nothing for a project
+that the policy did not clear, and runs nothing that the policy did not check last.
 
-The commands that act on the containers a project already has check only its name (check_name), and
-the ones that only build check only what the builds can reach (check_build).
+Commands that act on a project's existing containers check only its name (check_name). Commands that
+only build check only what the builds can reach (check_build).
 
-Projects need screening because `docker compose up` gives a project, a directory someone else wrote,
-every power the daemon has, which is root on this host. The stages exist for these reasons:
+Projects need screening because `docker compose up` gives a project every power the daemon has, which is
+root on this host, and a project is a directory that someone else wrote. The stages exist for these reasons:
 - load_project: dockscreen asks compose for its own reading of the project (`config`), since a second
   parser would read the YAML, the interpolation and the merging of files differently; it locates the
   project directory first, because the policy judges bind mounts against it.
 - check: the policy judges the definition's requests before dockscreen pulls or builds anything, because
   building runs the project's Dockerfile, and a refused project should not get even that far.
-- decide: a service without `user:` runs as its image says, which only the image can tell; dockscreen acquires
-  the image as compose would, then looks at it without starting it.
+- decide: a service without `user:` runs as the user its image chooses, and only the image can tell which
+  user that is. dockscreen acquires the image as compose would, then looks at it without starting it.
 - finish: the defaults, the decided users and the pinned images change the project, so the policy judges
   the result once more, as the project that will run.
-- running from the generated file: compose reading the project's own files again could see something
-  else (a file changed in between, discovery rules, interpolation), so it reads only the file the policy
-  checked, and dockscreen has it read that back first, in case it would interpret it differently.
+- running from the generated file: if compose read the project's own files again, it could see something
+  else (a file changed in between, discovery rules, interpolation). So compose reads only the file the
+  policy checked. dockscreen has compose read that file back first, in case compose would interpret it
+  differently.
 - check_name: the project name decides which existing volumes, networks and containers compose acts on,
   so a project that claims another's name reaches that project's data.
 - check_build: a build reads files from this host and runs the project's Dockerfile.
@@ -34,8 +36,8 @@ dockscreen hardens the resolved config, has the policy check it, writes it to a 
 compose as its only file, together with the project directory and name it came from. The checked config
 is then exactly the one that runs: compose does not read the project's files a second time, and there are
 no discovery rules to mirror. Before it pulls or builds any image, dockscreen asks compose for the config of
-the generated file, and refuses the run if it differs from the checked one (decide). The price is that
-compose runs as a child process (so that dockscreen can remove the file afterwards) and shows the
+the generated file, and refuses the run if that config differs from the checked config (decide). The price is
+that compose runs as a child process (so that dockscreen can remove the file afterwards) and shows the
 temporary file as its config file.
 """
 
@@ -67,7 +69,7 @@ from dockscreen.util import commandline
 # containers, other than those checked.
 REPLACED_OPTIONS = ("--file", "-f", "--project-directory", "--project-name", "-p")
 
-# Writes a config to a generated file and returns the compose command line on it (generated).
+# Writes a config to a generated file and returns the compose command line that reads it (generated_files).
 Command = Callable[[dict[str, Any]], list[str]]
 
 
@@ -76,9 +78,9 @@ class LoadedProject(NamedTuple):
     options that select the project, the project as compose resolved it, whether its daemon may be another
     host's, and the substitutions that add the defaults to it.
 
-    What runs is the resolved project with every substitution made, in order: the hardening, then what the
-    images decided (finish). Nothing else changes the definition that compose gets. Instances come from
-    load_project.
+    The project that runs is the resolved project with every substitution made, in order: first the
+    hardening, then the substitutions that follow from the images (finish). Nothing else changes the
+    definition that compose gets. Instances come from load_project.
 
     Attributes:
     - global_args: the compose options that select the project
@@ -93,7 +95,7 @@ class LoadedProject(NamedTuple):
 
     @property
     def hardened_project(self) -> Project:
-        """Returns the project with the defaults added, which is what the images are acquired for."""
+        """Returns the project with the defaults added. dockscreen acquires the images for this project."""
         return self.hardening.apply_to(self.resolved_project)
 
     @property
@@ -102,8 +104,8 @@ class LoadedProject(NamedTuple):
         return self.resolved_project.directory
 
     def static_project(self) -> Project:
-        """Returns the hardened project as the checks before any image is looked at see it, which leave the
-        users that the images decide to later.
+        """Returns the hardened project as the checks before any image see it. Those checks leave the users
+        that the images decide to a later stage.
         """
         hardened_project = self.hardened_project
         services_without_user = hardened_project.services_without_user
@@ -113,21 +115,21 @@ class LoadedProject(NamedTuple):
         """Returns this project with definition as its resolved one.
 
         Parameters:
-        - definition: a definition with the defaults already added, as hardened has it
+        - definition: a definition with the defaults already added, as hardened_project has it
         """
         return self._replace(resolved_project=self.hardened_project.with_definition(definition),
                              hardening=ProjectPatch())
 
     def generated_files(self, docker_binary: str) -> contextlib.AbstractContextManager[Command]:
-        """Returns _generated() for this project."""
+        """Returns _generated_files() for this project."""
         return _generated_files(self.global_args, self.directory, docker_binary)
 
 
 class ClearedProject(NamedTuple):
-    """Record of a loaded project that passed the checks before any image is looked at, which is what
-    acquiring its images needs (decide). It holds the project.
+    """Record of a loaded project that passed the checks made before dockscreen looks at any image.
+    The stage decide, which acquires the images, needs such a record. It holds the project.
 
-    Instances come from check.
+    Instances come from the function check.
 
     Attributes:
     - loaded_project: the project (LoadedProject)
@@ -139,7 +141,7 @@ class RunnableProject(NamedTuple):
     """Record of a project that passed every stage of screening, which is what may run. It holds the project
     that will run, what was decided about its images, and what the last check found.
 
-    Instances come from finish.
+    Instances come from the function finish.
 
     Attributes:
     - project: the project that will run
@@ -152,10 +154,10 @@ class RunnableProject(NamedTuple):
 
 
 def load_project(args: Sequence[str], runtime: Runtime) -> LoadedProject:
-    """Loads the project args select, with the defaults to add.
+    """Loads the project that args select, with the defaults to add.
 
-    Raises inspect.ProjectRefusal if the policy refuses where it is, DockerError if it cannot be inspected,
-    ValueError if it cannot be hardened.
+    Raises inspect.ProjectRefusal if the policy refuses the project's location, raises DockerError if docker
+    cannot inspect the project, and raises ValueError if the project cannot be hardened.
 
     Parameters:
     - args: the compose options before the subcommand, which select the project
@@ -169,8 +171,9 @@ def load_project(args: Sequence[str], runtime: Runtime) -> LoadedProject:
 
 
 def check(loaded_project: LoadedProject, screener: Screener) -> ClearedProject | Report:
-    """Checks the project before any image is looked at (LoadedProject.static_project): its definition, its
-    daemon, and, once those pass, the containers that already have its name.
+    """Checks the project as it is before dockscreen looks at any image (LoadedProject.static_project). It
+    checks the definition and the daemon and, once those pass, the containers that already have the
+    project's name.
 
     Returns the project cleared for acquiring its images, or the report that stops it.
     """
@@ -185,16 +188,16 @@ def check(loaded_project: LoadedProject, screener: Screener) -> ClearedProject |
 
 def decide(cleared_project: ClearedProject, screener: Screener, command: Command, args: Sequence[str] = (),
            chosen_services: frozenset[str] = frozenset()) -> Decisions:
-    """Finds out what screening needs to know about the services of the hardened project (serviceinfo.prepare)
-    and decides their users (Screener.decide), once compose has been shown to read the generated file back as
-    its definition.
+    """Finds out what screening needs to know about the services of the hardened project
+    (serviceinfo.prepare), and decides their users (Screener.decide). It does this only after compose has
+    read the generated file back as the project's definition.
 
-    Returns failed Decisions, with nothing pulled or built, if compose reads it differently.
+    If compose reads the file differently, this returns failed Decisions, and pulls or builds nothing.
 
     Parameters:
-    - cleared_project: the project, as check cleared it
+    - cleared_project: the project, as the function check cleared it
     - screener: the Screener to pull, build, look and decide with
-    - command: writes the generated file (generated())
+    - command: writes the generated file (generated_files())
     - args, chosen_services: as serviceinfo.prepare takes them
     """
     project = cleared_project.loaded_project.hardened_project
@@ -210,19 +213,21 @@ def decide(cleared_project: ClearedProject, screener: Screener, command: Command
 def finish(cleared_project: ClearedProject, decisions: Decisions, screener: Screener,
            user_args: userargs.UserArgs[str] | None = None, is_strict: bool = False
            ) -> RunnableProject | Report:
-    """Makes the project that will run, the resolved one with the hardening and then what the images decided
-    (Decisions.changes), and checks it with the policy that decided, with image sections only where the
-    images proved them.
+    """Makes the project that will run, and checks it. The project that will run is the resolved project
+    with the hardening added, and then with the changes that follow from the images (Decisions.changes). The
+    policy that made the decisions checks it, with image sections only where the images proved them.
 
-    Returns it as runnable, or the report that stops it, which is decided's if that did not pass.
+    Returns the project as runnable, or the report that stops it. That report is the report of decisions,
+    if decisions did not pass.
 
     Parameters:
-    - cleared_project: the project, as check cleared it
-    - decisions: what decide decided about its images
+    - cleared_project: the project, as the function check cleared it
+    - decisions: the decisions that the function decide made about its images
     - screener: the Screener of the command
     - user_args: the arguments of the subcommand, with the user the command line chose (compose_run)
-    - is_strict: --strict-screen was given, so the service as `run`'s options change it (runoptions) is
-      judged, with the command line untrusted; otherwise those options are taken as given, as for `docker run`
+    - is_strict: --strict-screen was given. The policy then judges the service as `run`'s options change it
+      (runoptions), and does not trust the command line. Otherwise compose gets those options as given, as
+      for `docker run`.
     """
     if not decisions.report.has_passed:
         return decisions.report
@@ -238,9 +243,9 @@ def finish(cleared_project: ClearedProject, decisions: Decisions, screener: Scre
 
 
 def surroundings(loaded_project: LoadedProject, screener: Screener) -> list[Notice]:
-    """Returns what the policy finds in what the project gets from around it: configured mount dirs that
-    contain sensitive paths (Policy.check_mount_dirs), and variables its services take from the shell
-    (Policy.check_shell_env).
+    """Returns the policy's findings about what the project takes from its surroundings: configured mount
+    dirs that contain sensitive paths (Policy.check_mount_dirs), and variables that its services take from
+    the shell (Policy.check_shell_env).
     """
     runtime, project_policy = screener.runtime, screener.policy(loaded_project.directory)
     sensitive_mount_dirs = inspect.sensitive_mount_dirs(runtime)
@@ -251,10 +256,11 @@ def surroundings(loaded_project: LoadedProject, screener: Screener) -> list[Noti
 
 
 def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
-    """Returns why the project's name may not be used: containers made from another directory have it.
+    """Returns the findings that forbid the project its name: containers made from another directory have
+    the same name.
 
-    Empty for a name chosen on the command line or in the environment, and for a project that cannot be
-    inspected, which is left to compose to report.
+    The list is empty for a name that the user chose on the command line or in the environment. It is also
+    empty for a project that docker cannot inspect; compose reports that itself.
 
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
@@ -274,11 +280,11 @@ def check_name(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
 
 
 def check_build(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
-    """Returns why the project's builds may not run: what they can reach (Policy.check_project_build), or
-    why the project could not be loaded or was refused before it was.
+    """Returns the findings that stop the project's builds: what the builds can reach
+    (Policy.check_project_build), or the reason the project could not be loaded or was refused first.
 
-    This does not leave a project that cannot be loaded to compose, as check_name does: a build reads files,
-    so a build the policy cannot check does not run.
+    Unlike check_name, this does not leave a project that cannot be loaded to compose: a build reads files,
+    so a build that the policy cannot check does not run.
 
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
@@ -295,10 +301,10 @@ def check_build(global_args: Sequence[str], runtime: Runtime) -> list[Finding]:
 
 def _name_conflicts(loaded_project: LoadedProject, static_policy: policy.Policy,
                     screener: Screener) -> list[Finding]:
-    """Returns what static_policy finds in the containers that have the project's name, or the failure to
-    look (inspect.name_conflicts).
+    """Returns static_policy's findings about the containers that have the project's name, or the failure to
+    look at them (inspect.name_conflicts).
 
-    Not looked at for a name the user chose, or on a daemon that may not be this host's.
+    This looks at nothing for a name that the user chose, or on a daemon that may not be this host's.
     """
     name = loaded_project.resolved_project.name
     is_name_chosen = inspect.names_project(loaded_project.global_args, screener.runtime.env)
@@ -320,14 +326,15 @@ def _generated_files(global_args: Sequence[str], project_dir: str,
                      docker_binary: str) -> Iterator[Command]:
     """Provides a private temporary directory for generated configs, and yields command(config).
 
-    command writes config there and returns the `docker compose` command line on it alone, with the project
-    directory and name pinned, ready for a subcommand to be appended. Everything is removed afterwards.
+    The function command writes config there, and returns a `docker compose` command line that reads only that
+    file. The command line pins the project directory and name, and is ready for a subcommand to be appended.
+    This removes the directory and its files afterwards.
 
     This creates the directory for this run, readable by the user only, so another user of this host
     can neither read the config nor put a file of their own in its place for compose to read. It passes
-    the project directory and name, rather than leave compose to work them out from the file's location,
-    since the file is in the temporary directory and compose resolved its relative paths against the
-    project's.
+    the project directory and name, rather than leave compose to work them out from the file's location.
+    The file is in the temporary directory, but compose resolved its relative paths against the project
+    directory.
     """
     counter = itertools.count()
     with tempfile.TemporaryDirectory(prefix="dockscreen-") as directory:
@@ -344,7 +351,8 @@ def _generated_files(global_args: Sequence[str], project_dir: str,
 
 
 def _read_back_problem(command: Sequence[str], config: dict[str, Any], docker: Docker) -> str | None:
-    """Returns why compose does not read the generated file back as exactly config, or None if it does.
+    """Returns the reason compose does not read the generated file back as exactly config, or None if it
+    does.
 
     A value compose reads differently would run differently from what the policy saw.
     command: the compose command line on the generated file.
@@ -372,8 +380,8 @@ def _first_difference(expected_value: Any, actual_value: Any, path: str = "confi
             if difference_path := _first_difference(expected_value[key], actual_value[key], f"{path}.{key}"):
                 return difference_path
         return None
-    if isinstance(expected_value, list) and isinstance(actual_value,
-                                                       list) and len(expected_value) == len(actual_value):
+    if (isinstance(expected_value, list) and isinstance(actual_value, list)
+            and len(expected_value) == len(actual_value)):
         for i, (e, a) in enumerate(zip(expected_value, actual_value)):
             if difference_path := _first_difference(e, a, f"{path}[{i}]"):
                 return difference_path

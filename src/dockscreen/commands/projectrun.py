@@ -1,6 +1,6 @@
-"""This module provides what compose up, create and run share: having the project screened, printing what
-was found, and running compose as a child on the config the policy checked, for as long as the generated file
-it reads exists (projectscreening).
+"""This module provides the steps that compose up, create and run share. They have the project screened, print
+the findings, and run compose as a child process on the config that the policy checked. Compose runs while the
+generated file that it reads exists (projectscreening).
 """
 
 from collections.abc import Sequence
@@ -18,13 +18,13 @@ from dockscreen.util import messages
 def check_and_run(global_args: list[str], sub: str, user_args: userargs.UserArgs[str], runtime: Runtime,
                   is_me_allowed: bool = False, is_strict: bool = False,
                   notices: Sequence[Notice] = ()) -> int:
-    """Runs `docker compose global_args sub` with the arguments of user_args, sub a subcommand that starts
-    containers, on the project global_args select if it passes the checks.
+    """Runs `docker compose global_args sub`, with the arguments of user_args, if the project passes the
+    checks. sub is a subcommand that starts containers, and global_args select the project.
 
-    Returns the exit status: 1 if the policy refuses the project or its images, or dockscreen cannot check
-    them, else the subcommand's. This first acquires the images of services that set no user, by the
-    project's pull policy, and has the policy decide on them (serviceinfo, imageusers); the config that
-    runs is the one the policy checked, with the result.
+    Returns the exit status: 1 if the policy refuses the project or its images, or if dockscreen cannot check
+    them; otherwise the status of the subcommand. First, this acquires the images of the services that set no
+    user, following the project's pull policy, and has the policy decide on their users (serviceinfo,
+    imageusers). The config that runs is the one that the policy checked, with those decisions applied.
 
     Parameters:
     - global_args: the compose options before the subcommand, which select the project
@@ -33,11 +33,11 @@ def check_and_run(global_args: list[str], sub: str, user_args: userargs.UserArgs
       (userscreening.screen_user_options)
     - runtime: the Runtime of the command
     - is_me_allowed: the invoking user gave --allow-me, so the policy allows their own ids
-    - is_strict: the user gave --strict-screen, so the policy judges the service as `run`'s options change
-      it (runoptions), with the command line untrusted; otherwise compose gets those options as given, as
-      docker does for `docker run`
-    - notices: what resolving the user the command line chose did (userscreening.screen_user_options), printed
-      with the project's notices
+    - is_strict: the user gave --strict-screen. The policy then judges the service as `run`'s options change
+      it (runoptions), with the command line untrusted. Otherwise compose gets those options as given, as
+      docker does for `docker run`.
+    - notices: the notices from resolving the user that the command line chose
+      (userscreening.screen_user_options); they are printed with the project's notices
     """
     try:
         loaded_project = projectscreening.load_project(global_args, runtime)

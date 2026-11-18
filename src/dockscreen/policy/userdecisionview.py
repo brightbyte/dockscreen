@@ -1,5 +1,5 @@
-"""This module provides functions for describing a UserDecision of the user a container would run as: how it
-is marked, what it means for running the image, why it is refused and how to get past that.
+"""This module provides functions for describing a UserDecision: its mark, its meaning for running the image,
+the reasons for a refusal, and the ways past a refusal.
 """
 
 from dockscreen.host import hostusers
@@ -22,8 +22,9 @@ def dot(decision: UserDecision) -> messages.Mark:
 
 
 def outcome(decision: UserDecision, local_accounts: hostusers.HostAccounts) -> str:
-    """Describes what a decision of an image's user means for running it, after the image's name: what it
-    runs as if accepted, what runs instead of its root, or why it may not run.
+    """Describes the meaning of a decision of an image's user for running the image, as text that follows the
+    image's name. The text names the user that the image runs as if the decision accepts it, the user that
+    runs instead of the image's root, or the reasons that the image may not run.
 
     Parameters:
     - decision: the UserDecision of the image
@@ -53,7 +54,8 @@ def root_default_notice(default_user: tuple[int, int]) -> Notice | None:
 
 
 def explain(decision: UserDecision, config_file: str) -> list[Finding]:
-    """Returns the decision's reasons, with how to get past them if they come from the image's user;
+    """Returns the decision's reasons. If they come from the image's user, each carries a hint on getting
+    past the refusal.
 
     Parameters:
     - decision: the UserDecision of the image
@@ -66,9 +68,9 @@ def explain(decision: UserDecision, config_file: str) -> list[Finding]:
 
 
 def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
-    """Returns the decision's reasons, with how config_file can give the image a user if they come from the
-    image's user. A container that exists keeps the user docker created it with, so choosing one is no way
-    out.
+    """Returns the decision's reasons. If they come from the image's user, each carries a hint on giving the
+    image a user in config_file. An existing container keeps the user that docker created it with, so
+    choosing a user is no way out.
 
     Parameters:
     - decision: the UserDecision of the image of the container
@@ -81,5 +83,5 @@ def explain_existing(decision: UserDecision, config_file: str) -> list[Finding]:
 
 
 def config_hint(image: str, config_file: str) -> str:
-    """Returns the hint how config_file can give image a user, for an image pulled from a registry."""
+    """Returns the hint on giving image a user in config_file, for an image pulled from a registry."""
     return f"or, for an image pulled from a registry, {section_hint(image, config_file)}"

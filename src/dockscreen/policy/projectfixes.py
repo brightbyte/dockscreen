@@ -1,9 +1,9 @@
-"""This module provides the fixes of `docker compose harden`: a copy of a project's definition with what has a
-safe automatic fix fixed, for the user to adopt as an override file.
+"""This module provides the fixes of `docker compose harden`. They make a copy of a project's definition in
+which every problem with a safe automatic fix is fixed, for the user to adopt as an override file.
 
-Unlike hardening, which dockscreen applies to every run without changing the project, these change what
-the project says, and only what the user writes back. What has no safe fix is left as it is, for
-Policy.check_project to report on the result.
+Hardening is different: dockscreen applies it to every run and leaves the project unchanged. These fixes
+change what the project says, but only once the user writes them back. A problem without a safe fix stays
+as it is, and Policy.check_project reports it on the result.
 """
 
 import copy
@@ -21,8 +21,8 @@ from dockscreen.policy.rules.userrules import image_problem
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.util import ids
 
-# What fix puts into `user`: the invoking user's own ids, which dockscreen passes to compose (ids.py) and
-# allows only with --allow-me. A literal would only fit the user who ran harden.
+# The value that a fix puts into `user`: the invoking user's own ids. dockscreen passes them to compose
+# (ids.py) and allows them only with --allow-me. A literal value would only fit the user who ran harden.
 USER_TEMPLATE = "${UID}:${GID}"
 
 # Keys whose removal is a safe fix.
@@ -32,10 +32,10 @@ _REMOVABLE_SERVICE_KEYS = (*servicerules.FORBIDDEN_KEYS, "runtime", *servicerule
 def fix_config(project: Project, project_policy: policy.Policy) -> dict[str, Any]:
     """Returns a copy of the project's definition with the problems that have a mechanical fix fixed.
 
-    Fixable: user/group, privileges, host namespaces, and bind mount sources outside the project, which
-    become placeholder paths for the user to edit. Unknown keys, volumes, networks, secrets, build contexts
-    and env files have no safe automatic fix; they stay, and Policy.check_project reports them on the
-    result.
+    These problems have a fix: user and group, privileges, host namespaces, and bind mount sources outside the
+    project. A source outside the project becomes a placeholder path for the user to edit. Unknown keys,
+    volumes, networks, secrets, build contexts and env files have no safe automatic fix. They stay, and
+    Policy.check_project reports them on the result.
     """
     fixed_config = copy.deepcopy(project.definition)
     for original_service in project.services:
@@ -63,9 +63,9 @@ def fix_config(project: Project, project_policy: policy.Policy) -> dict[str, Any
 
 def resolve_config_values(config: dict[str, Any], project_policy: policy.Policy, directory: str
                           ) -> dict[str, Any]:
-    """Returns a copy of config, of the project in directory, as compose reads the patch, for checking it:
-    USER_TEMPLATE becomes the invoking user's ids, and a relative placeholder mount source a path in
-    directory.
+    """Returns a copy of config as compose reads it, so that the policy can check the patch.
+    USER_TEMPLATE becomes the invoking user's ids, and a relative placeholder mount source becomes a path in
+    directory, the project directory.
     """
     resolved_config = copy.deepcopy(config)
     for service in resolved_config.get("services", {}).values():
@@ -78,8 +78,9 @@ def resolve_config_values(config: dict[str, Any], project_policy: policy.Policy,
 
 
 def _fix_mount(mount: dict[str, Any], service_policy: policy.Policy, directory: str) -> dict[str, Any]:
-    """Returns mount, with a bind source outside service_policy's mount roots for a project in directory
-    replaced by a placeholder to edit.
+    """Returns mount unchanged, unless it is a bind mount whose source is outside the mount roots of
+    service_policy, for a project in directory. Then it returns a copy whose source is a placeholder for the
+    user to edit.
     """
     if mount.get("type") != "bind" or is_inside_any(mount["source"], service_policy.mount_roots(directory)):
         return mount
@@ -89,8 +90,8 @@ def _fix_mount(mount: dict[str, Any], service_policy: policy.Policy, directory: 
 def _placeholder_source(source: str, project_dir: str) -> str:
     """Returns a relative, upper-case stand-in for a source outside the project: /etc becomes ./ETC.
 
-    The upper case keeps it from naming the same directory as a real lower-case one, and marks it as
-    something to edit.
+    The upper case keeps the placeholder from naming a real directory, which would be lower case. It also
+    marks the path as something to edit.
     """
     relative_path = os.path.relpath(source, project_dir)
     if relative_path.startswith(os.pardir):
@@ -100,12 +101,14 @@ def _placeholder_source(source: str, project_dir: str) -> str:
 
 def set_image_users(fixed_config: dict[str, Any], decisions: Mapping[str, UserDecision]
                     ) -> tuple[list[Finding], list[str]]:
-    """Sets a user in fixed_config, a project's fixed definition, on the services whose image chose one that
-    is not acceptable; returns (problems left, notes on what was set).
+    """Sets a user on each service whose image chose a user that is not acceptable. Returns the problems
+    that remain, and notes on the users it set.
 
     Parameters:
-    - fixed_config: the definition, as fixed_config gives it; changed in place
-    - decisions: the decisions on the images' users, by service, as dockscreen looked at the images with fixed
+    - fixed_config: a project's fixed definition, as fix_config gives it; this function changes fixed_config
+      in place
+    - decisions: by service, the decisions on the images' users; dockscreen made them by looking at the
+      images of the fixed definition
     """
     remaining_problems: list[Finding] = []
     notes: list[str] = []

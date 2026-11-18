@@ -1,5 +1,5 @@
-"""This module implements `docker compose up` and the commands that create containers from the config as it
-does (`scale`, `watch`, `alpha`).
+"""This module implements `docker compose up`, and the other commands that create containers from the config
+as `up` does: `scale`, `watch` and `alpha`.
 
 The policy checks the project, dockscreen looks at its images, and compose runs the config the policy
 checked (projectrun.check_and_run).

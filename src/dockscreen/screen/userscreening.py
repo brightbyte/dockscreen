@@ -1,14 +1,14 @@
 """This module provides functions for having the policy judge the users a command line gives (`--user`, `-u`,
 `--as`, `--as-me`) and resolve `--as` and `--as-me` to ids, before the arguments reach docker or compose.
 
-The command lines are read by userargs and runargs, which keep `--as` and `--as-me` as their UserOption; the
-rules judge and resolve them (Policy.check_user_options, Policy.resolve_user_options) through the Screener of
-the command.
+The modules userargs and runargs read the command lines, and keep `--as` and `--as-me` as their UserOption.
+The rules judge and resolve them (Policy.check_user_options, Policy.resolve_user_options) through the Screener
+of the command.
 
 The user options need screening, though the command line is trusted, because the image decides their
-meaning. Docker resolves a name in `--user` in the image's own /etc/passwd, or for `exec` in
-the running container's, which the image or container can make say root; a uid alone gets its group and
-supplementary groups from those files. So `--user` must be numeric `uid:gid`, which means the same to
+meaning. Docker resolves a name in `--user` in the image's own /etc/passwd, or, for `exec`, in the running
+container's /etc/passwd. The image or the container can make those files say root, and a uid alone gets its
+group and supplementary groups from them. So `--user` must be numeric `uid:gid`, which means the same to
 docker as to the policy. --as and --as-me are dockscreen's own: it resolves them on this host, and
 replaces them by the `--user=uid:gid` they stand for before docker sees the arguments.
 """
@@ -41,12 +41,12 @@ class _ResolvableArgs(Protocol[Resolved_co]):
 
 def screen_user_options(parsed_args: _ResolvableArgs[ArgsT], screener: Screener
                         ) -> tuple[Report, ArgsT | None]:
-    """Has the policy judge the users parsed_args gives and resolve its --as and --as-me
-    (Screener.check_given_users, Screener.resolve_given_users); returns the report, and parsed_args with them
-    replaced by ids (userargs.resolve_user_options).
+    """Has the policy judge the users that parsed_args gives, and resolve its --as and --as-me
+    (Screener.check_given_users, Screener.resolve_given_users). Returns the report, and parsed_args with
+    those options replaced by ids (userargs.resolve_user_options).
 
-    The report holds the refusals, and the record is None; or, if the users pass, the notices of resolving
-    them.
+    If the policy refuses a user, the report holds the refusals and the record is None. If the users pass,
+    the report holds the notices of resolving them.
 
     Parameters:
     - parsed_args: the command line as read (userargs.UserArgs, runargs.RunArgs)
@@ -62,13 +62,14 @@ def screen_user_options(parsed_args: _ResolvableArgs[ArgsT], screener: Screener
 
 def resolve_user_args(args: Sequence[str], value_flags: Collection[str], runtime: Runtime
                       ) -> tuple[Report, list[str] | None]:
-    """Returns the report of judging the users args give, with the notices of resolving names, and args with
-    --as and --as-me replaced by ids (screened); None in their place if the users are refused.
+    """Returns the report on the users that args give, with the notices of resolving names, and args with
+    --as and --as-me replaced by ids (screen_user_options). The arguments are None if the policy refuses the
+    users.
 
     Parameters:
     - args: the subcommand's arguments
     - value_flags: as userargs.parse takes them
-    - runtime: the Runtime of the command, whose accounts and policy the users are resolved and judged with
+    - runtime: the Runtime of the command; its accounts resolve the users, and its policy judges them
     """
     parsed_args = userargs.parse(args, value_flags, runtime.me, runtime.accounts)
     report, resolved_args = screen_user_options(parsed_args, Screener(runtime))

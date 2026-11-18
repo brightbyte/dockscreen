@@ -1,8 +1,8 @@
-"""This module defines the Config class, dockscreen's settings as the config files give them, and the record
-of which image section of them applies to an image (SectionMatch).
+"""This module defines the Config class, dockscreen's settings as the config files give them. It also
+defines SectionMatch, the record of the image section that applies to an image.
 
-host.config reads the files; policy.sections works out which sections apply to an image and a
-project.
+The module host.config reads the files; the module policy.sections works out which sections apply to an
+image and to a project.
 """
 
 from types import MappingProxyType
@@ -29,8 +29,8 @@ class Config(NamedTuple):
     repository and per project directory. It holds the top-level settings, filled in with the defaults, the
     sections, and which settings a file set.
 
-    The user's settings come from host.config.load_current; those that apply to one image and project come
-    from policy.sections.effective_settings, which have no sections of their own.
+    The user's settings come from host.config.load_current. The settings that apply to one image and
+    project come from policy.sections.effective_settings; they have no sections of their own.
 
     Attributes:
     - user: the (uid, gid) an image runs as when nothing chose a user, or None
@@ -57,20 +57,21 @@ class Config(NamedTuple):
 
 
 class SectionMatch(NamedTuple):
-    """Record of which image section of the config file applies to an image, or why the one for its repository
-    does not.
+    """Record of the image section of the config file that applies to an image, or of the reason that the
+    section for the image's repository does not apply.
 
     Instances come from policy.sections.section_for; NO_SECTION stands for a target that is not an image.
 
     Attributes:
     - repository: the repository of the image section that applies, or None
-    - problem: why a section for the image's repository does not apply, for audit; None if there is none
+    - problem: the reason that a section for the image's repository does not apply, for audit; None if
+      there is none
     """
     repository: str | None
     problem: str | None
 
 
-NO_SECTION = SectionMatch(None, None)  # for what is not an image, or an image no section is for
+NO_SECTION = SectionMatch(None, None)  # for a target that is not an image, or an image that no section is for
 
 
 def all_mount_dirs(config: Config) -> tuple[str, ...]:

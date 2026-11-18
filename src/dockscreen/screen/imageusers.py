@@ -1,13 +1,14 @@
-"""This module provides functions for finding out which user the images of compose services would run them
-as, by whatever it takes: dockscreen pulls or builds the images as compose would, and then looks at them,
-so that the policy can decide the user to use by the rule `docker run` uses (rules.userrules). Which
-services' images to look at is the calling code's to say (serviceinfo).
+"""This module provides functions for finding out the user that the image of each compose service would run
+it as. The functions do whatever it takes: dockscreen pulls or builds the images as compose would, and then
+looks at them, so that the policy can decide the user by the rule that `docker run` uses (rules.userrules).
+The calling code says which services' images to look at (serviceinfo).
 
-An image is untrusted, so dockscreen cannot take its user from its name or its config alone. It first
-acquires the images of the services that start, following the project's own pull policy so that automatic
-updates keep happening (pull, or build if the service builds it from a Dockerfile); they are then the
-images that run, since the policy pins them. It then looks at each image asked about through a container
-that docker creates from it and no one starts (Screener.look).
+An image is untrusted, so dockscreen cannot take its user from its name or its config alone. dockscreen
+first acquires the images of the services that start, following the project's own pull policy, so that
+automatic updates keep happening: it pulls each image, or builds it if the service builds it from a
+Dockerfile. These are then the images that run, since the policy pins them. Next, dockscreen looks at each
+image it was asked about, through a container that docker creates from it and that no one starts
+(Screener.look).
 """
 
 from collections.abc import Collection, Sequence
@@ -27,17 +28,19 @@ def find(command: Sequence[str], project: Project, started_services: Collection[
          services_to_look_at: Collection[str],
          args: Sequence[str], screener: Screener) -> tuple[dict[str, ImageInspection | UnseenImage],
                                                            list[Finding]]:
-    """Gets the images of the services in started_services as `up` would, and looks at those of the services
-    in services_to_look_at, as far as the policy needs to decide what they may run as.
+    """Gets the images of the services in started_services, as `up` would. Then it looks at the images of the
+    services in services_to_look_at, as far as the policy needs in order to decide the users they may run
+    as.
 
-    Returns (what was seen of each image looked at, by service, UnseenImage for one that could not be looked
-    at; the failures to get the images), with nothing looked at if getting one failed.
+    Returns (the inspections of the images by service, the failures to get the images). For an image that
+    dockscreen could not look at, the inspection is an UnseenImage. If getting any image failed, this looks
+    at no image.
 
     Parameters:
     - command: the compose command line (up to the subcommand) on the project's definition, as it will run
     - project: the project the services are in
-    - started_services: the services that start, whose images are got
-    - services_to_look_at: the services whose images are looked at; each must be in started_services
+    - started_services: the services that start; this gets their images
+    - services_to_look_at: the services whose images this looks at; each must be in started_services
     - args: the arguments after the subcommand, which may carry --build or --pull
     - screener: the Screener to pull, build and look with
     """
@@ -48,8 +51,8 @@ def find(command: Sequence[str], project: Project, started_services: Collection[
 
 
 def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> str:
-    """Returns the image compose uses for the service called name in config: its own, or <project>-<service>
-    if it is built.
+    """Returns the image that compose uses for the service called name in config: the service's own image,
+    or <project>-<service> if the service builds it.
 
     Parameters:
     - config: the project's definition
@@ -62,8 +65,8 @@ def image_name(config: dict[str, Any], name: str, service: dict[str, Any]) -> st
 def _acquire(command: Sequence[str], config: dict[str, Any], started_services: Collection[str],
              args: Sequence[str],
              docker: Docker) -> list[str]:
-    """Pulls and builds the images of the services in started_services that `up` would, by each service's pull
-    policy and args.
+    """Pulls and builds the images of the services in started_services, as `up` would, following each
+    service's pull policy and args.
 
     Returns the failures, empty if everything was acquired.
     """
@@ -104,8 +107,9 @@ def _image_exists(docker: Docker, image: str) -> bool:
 
 
 def _look(project: Project, name: str, screener: Screener) -> ImageInspection | UnseenImage:
-    """Looks at the image of the service called name, as far as the policy needs to decide what it may run
-    as (Screener.look), through a container created from it and removed again; UnseenImage if that fails.
+    """Looks at the image of the service called name, as far as the policy needs in order to decide the user
+    it may run as (Screener.look). It looks through a container that docker creates from the image, and
+    that dockscreen removes again. Returns an UnseenImage if looking fails.
     """
     config = project.definition
     service = config["services"][name]

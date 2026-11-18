@@ -1,8 +1,8 @@
 # dockscreen
 
-A drop-in for `docker`. `dockscreen compose` refuses compose projects that would reach outside the project directory or run with privileges, and `dockscreen run` refuses images that would. It also adds `cap_drop: [ALL]` and `no-new-privileges` to what it lets through. Everything else goes to the real docker unchanged.
+A drop-in for `docker`. `dockscreen compose` refuses compose projects that would reach outside the project directory or run with privileges, and `dockscreen run` refuses images that would do the same. It also adds `cap_drop: [ALL]` and `no-new-privileges` to what it lets through. Everything else goes to the real docker unchanged.
 
-It protects you from what you download, the compose project and its images. It does not protect you from your own command line. For how it works and why, see [docs/design.md](docs/design.md).
+It protects you from the things you download: the compose project and its images. It does not protect you from your own command line. For how it works and why, see [docs/design.md](docs/design.md).
 
     pip install -e '.[dev]'
     dockscreen compose up -d
@@ -22,7 +22,7 @@ For `dockscreen compose`: `up`, `create`, `run`, `watch`, `scale` and `alpha` re
 
 Every command dockscreen screens ends its output with the verdict, right before docker or compose takes over: ✔ audit passed, ⊖ denied by audit, or ✘ audit failed when it could not look (the image did not pull, the config did not parse). If `up` or `run` does not show that line, dockscreen was not in the path. Commands it passes on unchecked (`ps`, `logs`, `exec` …) print nothing.
 
-Messages state the facts; with `--helpful` (or `--verbose`, or in `audit`) they continue with what you can do about it. Whatever dockscreen changes is said, with a cyan mark if it rarely matters (defaults added, names resolved to ids, images pinned) or a yellow one if it can alter how things run (an image's root user replaced by the default user, or a `cap_drop` or `security_opt` of your own extended).
+Messages state the facts. With `--helpful` (or `--verbose`, or in `audit`), they continue with advice on the next step. dockscreen reports every change it makes. A cyan mark means the change rarely matters: defaults added, names resolved to ids, images pinned. A yellow mark means the change can alter the behaviour: an image's root user replaced by the default user, or a `cap_drop` or `security_opt` of your own extended.
 
 When refusing, dockscreen says why. `dockscreen compose harden` prints a compose override file with the fixes dockscreen can make.
 
@@ -30,12 +30,12 @@ When refusing, dockscreen says why. `dockscreen compose harden` prints a compose
 
 Containers don't run as root or as you unless you say so.
 
-- An image that would run as root runs as the `nobody` user (the configured `default_user`) instead, with a notice. dockscreen sets its `HOME` to `/tmp` (the configured `default_home`), which the `nobody` user can write to, unlike the home of the `root` user, unless you or the service set a `HOME`. A user that comes from the image or the config file keeps the home docker gives it, and a `default_user` of root gets none.
-- A project or an image may not pick root, an id of a local account, an id from `/etc/subuid` or `/etc/subgid`, or 65535 and 4294967295. That applies to the uid, the gid and supplementary groups.
+- An image that would run as root runs as the `nobody` user (the configured `default_user`) instead, with a notice. dockscreen sets its `HOME` to `/tmp` (the configured `default_home`), unless you or the service set a `HOME`. The `nobody` user can write to `/tmp`, but not to the home of the `root` user. A user that comes from the image or the config file keeps the home that docker gives it, and a `default_user` of root gets no `HOME` from dockscreen.
+- A project or an image may not pick root, an id of a local account, an id from `/etc/subuid` or `/etc/subgid`, or 65535 and 4294967295. This rule applies to the uid, the gid and the supplementary groups.
 - With host mounts (bind mounts, devices, `volumes_from`, secrets, configs), the id must be in the nobody range (65530–65534 unless configured), the default user, a user configured for the image, or you with `--allow-me`.
 - To run services as yourself: `dockscreen --allow-me compose up`, with `user: "${UID}:${GID}"` on those services. dockscreen sets `UID` and `GID` to your real ids.
 - To give an image a user of its own, such as mariadb's 999, set `user` in its section of the config file, `[images."mariadb"]`. A service of that image may then also name 999 in `user:` itself, with mounts too. A `user` at the top level of the config file does the same for every service of every project: with your own ids there, that is `--allow-me` everywhere.
-- dockscreen resolves names in `user:` and `--as` on this host, not in the image. It refuses a name unknown here, and a uid without a group.
+- dockscreen resolves names in `user:` and `--as` on this host, not in the image. It refuses a name unknown here, and it refuses a uid without a group.
 
 The full rules are in [docs/design.md](docs/design.md#users-and-groups).
 
@@ -47,11 +47,11 @@ dockscreen passes an accepted image user on as numbers (`user: "uid:gid"`, `dock
 
 A service whose image dockscreen looked at also gets `pull_policy: never` and, unless it is built from a Dockerfile, `image:` set to the checked image's id, in the generated file only. Something else retagging the image between the check and the run cannot change what starts. `docker compose ps` therefore shows the id instead of the name.
 
-Compose interpolates the files it reads, so dockscreen writes the generated file as `docker compose config` printed it (a literal `$` is `$$`, which reads back as a literal `$`). Before anything is pulled or built, dockscreen asks compose for the config of that file and refuses unless it equals the config it checked.
+Compose interpolates the files it reads, so dockscreen writes the generated file as `docker compose config` printed it (a literal `$` is `$$`, which reads back as a literal `$`). Before anything is pulled or built, dockscreen asks compose for the config of that file, and refuses the run unless that config equals the config it checked.
 
 ## Variables from your shell
 
-`environment: [FOO]` takes FOO from your shell. dockscreen does not refuse it, but `audit` and every run that starts containers say which services get which variables (names only, never values). The resolved config does not record where a value came from, so a pass-through is recognised by the value being your shell's own under the same name: `X: ${FOO}` is not noticed, and `FOO: bar` is reported if your shell has `FOO=bar`. `UID` and `GID` are left out.
+`environment: [FOO]` takes FOO from your shell. dockscreen does not refuse such a copy, but `audit` and every run that starts containers say which services get which variables (names only, never values). The resolved config does not record where a value came from. So dockscreen recognises a pass-through by its value: the value is your shell's own, under the same name. As a result, `X: ${FOO}` is not noticed, and `FOO: bar` is reported if your shell has `FOO=bar`. `UID` and `GID` are left out.
 
 ## Network
 
@@ -69,12 +69,12 @@ The restrictions imposed by docker-fw can be bypassed using `--network host`, or
 | Command | |
 |---|---|
 | `dockscreen compose audit [--brief]` | run the checks and report, without starting anything (it pulls and builds) |
-| `dockscreen compose harden` (also `fix`) | print a compose override that fixes what can be fixed; the rest is listed as comments |
-| `dockscreen audit [--brief] [run options] IMAGE [COMMAND]` | say what `dockscreen run` would do with the same arguments, without starting anything (see [Images](#images)) |
+| `dockscreen compose harden` (also `fix`) | print a compose override that fixes the problems that have a safe fix; the rest is listed as comments |
+| `dockscreen audit [--brief] [run options] IMAGE [COMMAND]` | report the outcome of `dockscreen run` with the same arguments, without starting anything (see [Images](#images)) |
 
 ## Configuration
 
-dockscreen reads `/etc/dockscreen/config.toml` and then `~/.config/dockscreen/config.toml` (or `$XDG_CONFIG_HOME/dockscreen/config.toml`), which overrides it key by key. If your file doesn't exist, dockscreen creates it with every setting commented out, showing the defaults. Environment variables and the project's `.env` do not configure it. Whatever the files say is trusted, so they are only read if the file and every directory above it are owned by you or root and writable by no one else; otherwise dockscreen refuses to run. Unknown keys are an error.
+dockscreen reads `/etc/dockscreen/config.toml` and then `~/.config/dockscreen/config.toml` (or `$XDG_CONFIG_HOME/dockscreen/config.toml`), which overrides it key by key. If your file doesn't exist, dockscreen creates it with every setting commented out, showing the defaults. Environment variables and the project's `.env` do not configure it. dockscreen trusts the files completely. So it reads a file only if the file and every directory above it are owned by you or root, and writable by no one else. Otherwise dockscreen refuses to run. Unknown keys are an error.
 
 ```toml
 default_user = "65534:65534"       # replaces an image's root user
@@ -92,11 +92,11 @@ user = "999:999"
 mount_dirs = ["/srv/shop-uploads"]
 ```
 
-Every setting except `docker` can also go in an image section and a project section. They apply in that order, after the top level: a single value (`user`, `default_user`, `default_home`, `nobody_range`) replaces the one before, a list (`mount_dirs`, `security_opts`) is added to. Nothing stops a section from allowing too much: that is your call.
+Every setting except `docker` can also go in an image section and a project section. They apply in that order, after the top level. A single value (`user`, `default_user`, `default_home`, `nobody_range`) replaces the one before; a list (`mount_dirs`, `security_opts`) is added to the one before. Nothing stops a section from allowing too much: that is your call.
 
 When dockscreen refuses something the config file could allow (a bind mount outside the project, an image's own user), the message names the setting and your config file.
 
-An image section names a repository, without tag: it trusts the image's maintainer. It applies only to an image that docker records as pulled from that repository, and never to a service that builds its image, because anything can be tagged locally under any name. Before an image is pulled, its name is enough to pass the first checks; the check right before the run needs the proof, and refuses a service that only passed because of a section its image does not have.
+An image section names a repository, without tag: it trusts the image's maintainer. Anyone can tag an image locally under any name. So the section applies only to an image that docker records as pulled from that repository, and never to a service that builds its image. Before an image is pulled, its name is enough to pass the first checks. The check right before the run needs the proof. It refuses a service that passed only because of a section that its image does not prove.
 
 A `mount_dirs` entry that contains your home directory, a system directory, the config file or the docker socket gets a warning on every run. dockscreen refuses a project directory that contains one of them, and stops the search for a compose file at your home directory and at the first directory that is not yours.
 
@@ -107,8 +107,8 @@ Before the subcommand, such as `dockscreen --allow-me compose up`:
 | Option | |
 |---|---|
 | `--allow-me` | containers may run as you: in `user:`, and as an image's own user. Compose only: docker's commands refuse it, and `run`, `audit` and `create` take `--as-me` instead |
-| `--helpful`, `--verbose` | add to each message what to do about it. The `audit` commands do this anyway. dockscreen takes `--verbose` and does not pass it on, so docker and compose stay quiet |
-| `--strict-screen` | also refuse what the command line asks for that a project or image may not have: for `audit` and `run`, in the container the command line creates; for `start` and `restart`, in the container as it was created, which also needs the hardening defaults, since it cannot be rewritten; for `compose run` (`dockscreen --strict-screen compose run …`), in the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept it: the policy judges create's container when it starts, and bake's whole definition anyway. dockscreen refuses it before any other subcommand |
+| `--helpful`, `--verbose` | add advice on the next step to each message. The `audit` commands do this anyway. dockscreen takes `--verbose` and does not pass it on, so docker and compose stay quiet |
+| `--strict-screen` | also refuse the command line's requests that a project or an image may not make. For `audit` and `run`, dockscreen judges the container that the command line creates. For `start` and `restart`, it judges the container as it was created; that container also needs the hardening defaults, since it cannot be rewritten. For `compose run` (`dockscreen --strict-screen compose run …`), it judges the service as `run`'s `--user`, `-v`, `--cap-add`, `--cap-drop` and `--env-from-file` change it. `create` and `buildx bake` accept the option: the policy judges create's container when it starts, and judges bake's whole definition anyway. dockscreen refuses it before any other subcommand |
 | `--skip-screening` | turns off all checks and defaults, and prints a warning each time |
 
 After `run` or `exec` (compose or docker, and `create` and `audit`), before the service, image or container:
@@ -128,16 +128,16 @@ After `run` or `exec` (compose or docker, and `create` and `audit`), before the 
   - an image that would run as root runs as the default user unless you choose a user;
   - dockscreen refuses an image user that the [rules](#users) refuse, with the container's mounts;
   - a user the config file sets for the image's repository applies, as for compose;
-  - dockscreen passes an accepted image user to docker as `--user uid:gid` (it creates the container a second time with it).
+  - dockscreen passes an accepted image user to docker as `--user uid:gid` (dockscreen creates the container a second time with that user).
 - `start` and `restart` refuse existing containers that would fail that check.
 - `create` gets the hardening defaults.
 - dockscreen refuses remote daemons, here and for `dockscreen compose`.
 
 Choosing a user (see [Options](#options)) skips the image check. To run an image that runs as you, choose the user with `--as-me`.
 
-`dockscreen audit` takes the arguments of `dockscreen run` and says what `run` would do with them, without starting anything. It creates the container as `run` would, pulling the image if `run` would, judges the image's user with the mounts you gave, and removes the container. It exits with 1 if `run` would refuse.
+`dockscreen audit` takes the arguments of `dockscreen run` and reports the outcome of `run` with them, without starting anything. It creates the container as `run` would, pulling the image if `run` would. It judges the image's user with the mounts you gave, and then removes the container. It exits with 1 if `run` would refuse.
 
-It also points out what the command line asks for that a compose project or an image may not have: `--privileged`, `--cap-add`, devices, host namespaces, `--security-opt` other than no-new-privileges, bind mounts outside the current directory and the configured `mount_dirs`, and a `--user` that the [rules](#users) would refuse from an image. `run` allows these, because the command line is trusted. `dockscreen --strict-screen audit …` fails the audit for them too: without it, the audit answers "will it run", with it "is it safe".
+It also points out the command line's requests that a compose project or an image may not make: `--privileged`, `--cap-add`, devices, host namespaces, `--security-opt` other than no-new-privileges, bind mounts outside the current directory and the configured `mount_dirs`, and a `--user` that the [rules](#users) would refuse from an image. `run` allows these, because the command line is trusted. `dockscreen --strict-screen audit …` fails the audit for them too. Without the option, the audit answers "will it run"; with it, the audit answers "is it safe".
 
 ### Audit results
 
@@ -149,7 +149,7 @@ Both audits, `dockscreen audit` and `dockscreen compose audit`, end with one of 
 | 1 | refused | the policy says no |
 | 3 | failed | the audit could not get far enough to judge: no docker, the image could not be pulled or created, the compose config could not be read, a pull or build failed |
 
-Exit status 2 means the audit was called wrongly. The report ends with the verdict: ✔ audit passed, ⊖ denied by audit or ✘ audit failed. Each item in the report starts with a dot, ●, green when accepted as it is, yellow when allowed but changed by dockscreen or worth a look, red when refused or not checked; ⓘ marks a hint. The colours come from the terminal, as in docker's own output, so they show in any font; piped output and `NO_COLOR` get the symbols without colour.
+Exit status 2 means the audit was called wrongly. The report ends with the verdict: ✔ audit passed, ⊖ denied by audit or ✘ audit failed. Each item in the report starts with a dot, ●. The dot is green when the item is accepted as it is, yellow when it is allowed but changed by dockscreen or worth a look, and red when it is refused or not checked. ⓘ marks a hint. The colours come from the terminal, as in docker's own output, so they show in any font. Piped output and `NO_COLOR` get the symbols without colour.
 
 `--brief` prints only the verdict, in one line, such as `✔ audit passed` or `⊖ denied by audit: privileged is not allowed (+2 more)`. Output from docker itself, such as pull progress, still appears.
 
@@ -181,4 +181,4 @@ A config entry that skips screening for an image or a container name is delibera
 
 ## Tests
 
-`pytest` runs the unit tests. `pytest -m e2e` runs the end-to-end tests in `tests/e2e` (see [its README](tests/e2e/README.md)): audits of small example projects and images against the real docker of your host. They pull a few small images and build the example app image, but start no containers. Each test checks what it needs of the host first (a local daemon, a registry it can pull from, your ids, accounts or subordinate ranges) and is skipped with a warning if that is missing; `-rs` lists why.
+`pytest` runs the unit tests. `pytest -m e2e` runs the end-to-end tests in `tests/e2e` (see [its README](tests/e2e/README.md)): audits of small example projects and images against the real docker of your host. They pull a few small images and build the example app image, but start no containers. Each test first checks the host for the things it needs: a local daemon, a registry it can pull from, your ids, accounts or subordinate ranges. If something is missing, the test is skipped with a warning; `-rs` lists the reasons.

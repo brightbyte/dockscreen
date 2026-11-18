@@ -1,11 +1,11 @@
-"""This module defines the CommandLinePatch class, a set of changes dockscreen makes to a `docker run` or
-`create` command line before docker gets it, and the Amendment records it is made of, for applying the changes
-and reporting them. It does not decide what to change: the rules do (Policy.user_amendments,
-hardening.container_defaults).
+"""This module defines the CommandLinePatch class and the Amendment records it consists of. A CommandLinePatch
+is a set of changes that dockscreen makes to a `docker run` or `create` command line before docker gets it;
+the classes apply the changes and report them. They do not decide what to change; the rules do
+(Policy.user_amendments, hardening.container_defaults).
 
-An amendment puts arguments before the command line's own, so the options the command line gives itself
-override it. It is the counterpart of a substitution (see projectpatch), which sets a key of a compose
-service instead.
+An amendment puts arguments before the command line's own arguments, so that the command line's own options
+override the amendment. It is the counterpart of a substitution (see projectpatch), which sets a key of a
+compose service instead.
 """
 
 from collections.abc import Iterable, Iterator, Sequence
@@ -21,7 +21,8 @@ class Amendment(NamedTuple):
 
     Attributes:
     - args: the arguments
-    - notice: what dockscreen does, or None if it is part of another amendment that is reported
+    - notice: the notice that reports the amendment, or None if the notice of another amendment reports
+      this amendment too
     """
     args: tuple[str, ...]
     notice: Notice | None = None
@@ -29,12 +30,13 @@ class Amendment(NamedTuple):
 
 @dataclass(frozen=True)
 class CommandLinePatch:
-    """Value object for a set of changes to the arguments of a `docker run` or `create` command line, which
-    are made together (apply_to) and reported together (notices). It holds the amendments, in their order.
+    """Value object for a set of changes to the arguments of a `docker run` or `create` command line. The
+    changes are made together (apply_to) and reported together (notices). It holds the amendments, in their
+    order.
 
-    Instances come from the rules and hardening (Policy.user_amendments, hardening.container_defaults); of
-    makes one of amendments, and `a + b` one with b's arguments after a's. Iterating over a patch gives its
-    amendments.
+    Instances come from the rules and hardening (Policy.user_amendments, hardening.container_defaults). The
+    classmethod CommandLinePatch.of makes a patch from amendments, and `a + b` makes a patch with the
+    arguments of b after those of a. Iterating over a patch gives its amendments.
 
     Attributes:
     - amendments: the amendments, in their order
@@ -61,9 +63,9 @@ class CommandLinePatch:
         return tuple(arg for a in self.amendments for arg in a.args)
 
     def apply_to(self, args: Sequence[str]) -> list[str]:
-        """Returns args with the arguments of the amendments before them."""
+        """Returns args, preceded by the arguments of the amendments."""
         return [*self.args, *args]
 
     def notices(self) -> list[Notice]:
-        """Returns the notices of the amendments that have one, in their order."""
+        """Returns the notices of the amendments that have a notice, in their order."""
         return [a.notice for a in self.amendments if a.notice]

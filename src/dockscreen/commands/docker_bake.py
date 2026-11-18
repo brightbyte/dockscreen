@@ -1,10 +1,10 @@
-"""This module implements `docker buildx bake`, checking what the project's bake files let the builds reach
-on this host.
+"""This module implements `docker buildx bake`. It checks the parts of this host that the project's bake files
+let the builds reach.
 
-Bake reads files the project controls (docker-bake.hcl, compose files with `x-bake`), as `compose build`
-does, so the policy refuses the same things: build sources outside the project, host networking, the
-SSH agent. Bake adds ways to write to the host (`output`, `cache-to`) and to read files and variables
-(`secret`). dockscreen screens the definition bake would build before running bake (bakescreening).
+Bake reads files the project controls (docker-bake.hcl, compose files with `x-bake`), as `compose build` does,
+so the policy refuses the same things: build sources outside the project, host networking, the SSH agent. Bake
+adds ways to write to the host (`output`, `cache-to`) and to read files and variables (`secret`). dockscreen
+screens the definition bake would build before running bake (bakescreening).
 """
 
 from collections.abc import Collection
@@ -24,9 +24,9 @@ def _wants_screening(args: Collection[str]) -> bool:
 
 
 def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
-    """Runs `docker buildx bake` if the definition it would build passes the policy for builds; returns 1 if
-    it does not, otherwise docker replaces this process. With --print or --help it builds nothing, and runs
-    unchecked.
+    """Runs `docker buildx bake` if the definition that it would build passes the policy for builds. Returns 1
+    if it does not; otherwise docker replaces this process. With --print or --help, bake builds nothing and
+    runs unchecked.
 
     Parameters:
     - parent_cli: buildx's part of the command line, with `bake` as its command

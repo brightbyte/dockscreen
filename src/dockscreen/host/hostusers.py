@@ -46,10 +46,10 @@ class HostAccounts:
 
 class SubordinateRanges:
     """Table of the subordinate id ranges of this host, for telling whether an id belongs to rootless
-    containers (contains). It holds the ranges of /etc/subuid and /etc/subgid, read once on construction with
-    malformed lines skipped, and does not change afterwards, though nothing enforces that.
+    containers (contains). It holds the ranges of /etc/subuid and /etc/subgid, which it reads once on
+    construction, skipping malformed lines. It does not change afterwards, though nothing enforces that.
 
-    Tests get one from new_for_testing, which reads other files.
+    Tests get an instance from new_for_testing, which reads other files.
     """
 
     def __init__(self) -> None:
@@ -76,7 +76,7 @@ class SubordinateRanges:
 
 
 def _read_ranges(path: str) -> list[tuple[int, int]]:
-    """Reads the (start, count) ranges of a subuid or subgid file; none if it cannot be read."""
+    """Reads the (start, count) ranges of a subuid or subgid file; no ranges if the file cannot be read."""
     try:
         with open(path) as f:
             text = f.read()

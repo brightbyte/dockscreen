@@ -4,7 +4,7 @@ Not planned work: things worth doing once there is a need for them. Each says wh
 
 ## Strict screening for run and friends
 
-`--strict-screen` makes `audit` treat the command line as untrusted: what it asks for that a compose project or an image may not have (privileged, cap_add, devices, host namespaces, other security options, bind mounts outside the current directory, a user the id rules refuse) fails the audit. The same could refuse those things at execution time, for `run` first. `runpolicy.findings` already computes them from the created container, so `gate.run` would only need to remove the container and refuse.
+`--strict-screen` makes `audit` treat the command line as untrusted. Then the audit fails for each request that a compose project or an image may not make: privileged, cap_add, devices, host namespaces, other security options, bind mounts outside the current directory, a user that the id rules refuse. The same check could refuse those things at execution time, for `run` first. `containerscreening.command_line_findings` already computes them from the created container, so `docker_run.gate` would only need to remove the container and refuse.
 
 It is not done yet, for three reasons:
 
@@ -16,14 +16,14 @@ Until then, dockscreen refuses `--strict-screen` for every subcommand except `au
 
 ## Image sections pinned by digest
 
-An image section could name a digest as well as a repository. dockscreen would then refuse an image that matches the repository but not the digest, not run without the section's settings: whoever wrote the section trusted that content, and a different image under the same name is not it. A section without a digest keeps matching any image pulled from the repository.
+An image section could name a digest as well as a repository. dockscreen would then refuse an image that matches the repository but not the digest, and would not run it without the section's settings: whoever wrote the section trusted that content, and a different image under the same name is not that content. A section without a digest keeps matching any image pulled from the repository.
 
 ## Image sections with and without a tag
 
-Two sections could match one image: one for the repository (`mariadb`) and one for a tag of it (`mariadb:11`), the tagged one applied after the other. Then settings for every version and settings for one version can live side by side. It needs a rule for an image pulled under several tags.
+Two sections could match one image: one for the repository (`mariadb`) and one for a tag of it (`mariadb:11`), with the tagged section applied after the repository section. Then settings for every version and settings for one version can live side by side. The idea needs a rule for an image pulled under several tags.
 
 ## A doctor command
 
-`dockscreen doctor` could say how dockscreen is set up on this host: which docker it runs (`runtime.real_docker`) and whether the wrapper comes first on PATH, which config files it read or refused as untrusted, whether the daemon counts as remote (`screen.is_remote`), and which mount dirs contain sensitive paths (`screen.mount_dir_warnings`).
+`dockscreen doctor` could report dockscreen's setup on this host. It would report which docker it runs (`runtime._real_docker_path`), and whether the wrapper comes first on PATH. It would list the config files it read, or refused as untrusted. It would say whether the daemon counts as remote (`docker.is_remote`), and which mount dirs contain sensitive paths (`inspect.sensitive_mount_dirs`, `Policy.check_mount_dirs`).
 
-It is not done yet because no one has needed it. Each of these shows up already, as a refusal or a warning, when it matters for a command.
+It is not done yet because no one has needed it. Each of these facts shows up already, as a refusal or a warning, when it matters for a command.
