@@ -5,7 +5,7 @@ dockscreen passes UID and GID, the real ids of the invoking user, in the environ
 commands it runs, so that compose files can interpolate them (`user: "${UID}:${GID}"`). They override
 values already in the environment. That way, `${UID}` is the invoking user's real uid, which --allow-me
 allows, and not the value of an inherited variable. The policy refuses these ids unless the invoking user
-gives --allow-me (see rules.userrules); passing them only makes the project's intent readable.
+gives --allow-me (see rules.idrules); passing them only makes the project's intent readable.
 
 `environment: [FOO]` takes FOO from the shell. The resolved config shows FOO like any other value, so the
 function copied_shell_variables recognises a pass-through by its value: the value equals the shell's value

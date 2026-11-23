@@ -8,7 +8,7 @@ Before the subcommand (main_commandline and CommandLine.subcommand take these op
   after the subcommand, so there docker or compose rejects it, which is the safe direction. dockscreen prints
   the warning every time, and the user cannot silence it, because someone may have copied the flag
   into a script or an alias.
-- --allow-me lets services and images run as the invoking user's own ids (see rules.userrules), for
+- --allow-me lets services and images run as the invoking user's own ids (see rules.idrules), for
   compose. Docker's commands refuse it: `audit`, `create`, `exec` and `run` take --as-me, --as or --user
   instead.
 - --helpful (or --verbose) adds the second part of the messages that have a second part: the reason, and

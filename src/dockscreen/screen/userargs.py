@@ -21,7 +21,7 @@ from typing import Generic, NamedTuple, TypeVar
 
 from dockscreen.host import hostusers
 from dockscreen.host.runtime import Runtime
-from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules.useroptionrules import Resolution, UserOption
 from dockscreen.util import commandline
 
 # Options of `docker compose run` and `exec` that take a value in the next argument.

@@ -18,7 +18,7 @@ from typing import Protocol, TypeVar
 
 from dockscreen.host.runtime import Runtime
 from dockscreen.policy.report import Report
-from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules.useroptionrules import Resolution, UserOption
 from dockscreen.screen import userargs
 from dockscreen.screen.screener import Screener
 from dockscreen.screen.userargs import GivenUsers

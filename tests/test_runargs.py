@@ -2,7 +2,7 @@ import fakes
 import pytest
 
 from dockscreen.policy import policy
-from dockscreen.policy.rules.userrules import UserOption
+from dockscreen.policy.rules.useroptionrules import UserOption
 from dockscreen.screen import runargs, userscreening
 from dockscreen.screen.screener import Screener
 

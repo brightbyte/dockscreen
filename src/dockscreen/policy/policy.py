@@ -2,10 +2,10 @@
 against the rules of the security policy, with the settings that the rules apply.
 
 The package policy.rules groups the rules by subject: the keys of a service (rules.servicerules), the parts of
-a project besides its services (rules.projectrules), builds (rules.buildrules), and the users that containers
-run as (rules.userrules). The user rules cover a service's user, an image's user and the users that a
-command line gives. The class Policy has all the rules, and checks whole targets with them: a project
-(check_project), a container read back into compose service keys (check_container), and a project's
+a project besides its services (rules.projectrules), builds (rules.buildrules), the users that containers run
+as (rules.userrules), the ids that those users may have (rules.idrules), and the users that a command line
+gives (rules.useroptionrules). The class Policy has all the rules, and checks whole targets with them: a
+project (check_project), a container read back into compose service keys (check_container), and a project's
 builds (check_project_build).
 
 The policy is an allowlist and fails closed: it refuses a key that is not on a list, so a Compose feature that
@@ -15,7 +15,7 @@ Docker adds tomorrow stays denied until someone has reviewed it. Every structure
 BuildRules._check_build).
 
 A Policy holds the settings that the rules apply. Among them are the facts that the id rules judge by
-(userrules.IdFacts); those rules decide which uids and gids a project may choose. Knowledge about the judged
+(idrules.IdFacts); those rules decide which uids and gids a project may choose. Knowledge about the judged
 thing belongs to that thing, not to the policy, down to the directory that the policy judges its paths
 against. Every rule is a method of Policy, whether it reads the settings or not. The checks of a whole
 target turn the problems of each rule into findings (finding.Finding), or into notices (notice.Notice) for a
@@ -35,7 +35,7 @@ from dockscreen.model.project import Project
 from dockscreen.model.settings import NO_SECTION, Config, SectionMatch
 from dockscreen.policy import finding
 from dockscreen.policy.finding import Finding, ReportEntry
-from dockscreen.policy.rules import userrules
+from dockscreen.policy.rules import idrules
 from dockscreen.policy.rules.base import JudgedService, unknown_key_problems
 from dockscreen.policy.rules.buildrules import BuildRules
 from dockscreen.policy.rules.projectrules import TOP_LEVEL_KEYS, ProjectRules
@@ -45,12 +45,13 @@ from dockscreen.policy.rules.servicerules import (
     SERVICE_CHECKS,
     ServiceRules,
 )
+from dockscreen.policy.rules.useroptionrules import UserOptionRules
 from dockscreen.policy.rules.userrules import UserRules, image_problem
 from dockscreen.policy.userdecision import UserDecision
 
 
 @dataclasses.dataclass(frozen=True)
-class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
+class Policy(ServiceRules, ProjectRules, BuildRules, UserRules, UserOptionRules):
     """Service object for checking a compose project, a container, a build or an image against the rules of
     the security policy. It applies the settings that the config file sets for one directory and image. It
     holds those settings, the origins it trusts, and the policy of each service of a project.
@@ -59,7 +60,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     Screener.project_policy. The method with_trust and the other with_* methods return copies.
 
     Attributes:
-    - ids: what the id rules judge by (userrules.IdFacts)
+    - ids: what the id rules judge by (idrules.IdFacts)
     - trust: the origins whose values the policy takes as given: it points out its objections to them
       instead of refusing them (with_trust)
     - config_file: the invoking user's config file, named in hints on what it can allow; None for no hints
@@ -71,7 +72,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     - default_home: the HOME the default user gets (default_home)
     - default_origin: where the default user comes from: the config file if it sets one, else dockscreen
     """
-    ids: userrules.IdFacts
+    ids: idrules.IdFacts
     extra_dirs: tuple = ()  # mount_dirs from the config file
     trust: frozenset[Origin] = TRUSTED_ORIGINS
     config_file: str | None = None
@@ -89,7 +90,7 @@ class Policy(ServiceRules, ProjectRules, BuildRules, UserRules):
     per_service: Mapping[str, "Policy"] = MappingProxyType({})
 
     @classmethod
-    def for_settings(cls, settings: Config, ids: userrules.IdFacts,
+    def for_settings(cls, settings: Config, ids: idrules.IdFacts,
                      config_file: str | None = None) -> Self:
         """Returns the policy with these settings (sections.effective_settings).
 

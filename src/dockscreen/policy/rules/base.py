@@ -10,7 +10,7 @@ from dockscreen.model.origin import Origin
 from dockscreen.model.settings import SectionMatch
 
 if TYPE_CHECKING:
-    from dockscreen.policy.rules.userrules import IdFacts
+    from dockscreen.policy.rules.idrules import IdFacts
 
 
 class JudgedService(Protocol):
@@ -48,7 +48,7 @@ class RuleBase:
     read, which Policy holds and documents. It also provides what follows from those settings for every
     group of rules.
 
-    The id rules judge by the settings and host facts about ids (userrules.IdFacts). These are one object,
+    The id rules judge by the settings and host facts about ids (idrules.IdFacts). These are one object,
     ids, for every group of rules to read.
     """
     ids: "IdFacts"

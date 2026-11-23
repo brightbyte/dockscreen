@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from typing import Generic, NamedTuple
 
 from dockscreen.host import hostusers
-from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules.useroptionrules import Resolution, UserOption
 from dockscreen.screen import userargs
 from dockscreen.screen.userargs import Arg, ArgT
 from dockscreen.util import commandline

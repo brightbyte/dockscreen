@@ -27,8 +27,8 @@ from dockscreen.policy.decisions import Decisions
 from dockscreen.policy.finding import Finding
 from dockscreen.policy.policy import Policy
 from dockscreen.policy.report import Report
-from dockscreen.policy.rules import userrules
-from dockscreen.policy.rules.userrules import Resolution, UserOption
+from dockscreen.policy.rules import idrules
+from dockscreen.policy.rules.useroptionrules import Resolution, UserOption
 from dockscreen.policy.userdecision import UserDecision
 
 
@@ -43,11 +43,11 @@ class Screener(NamedTuple):
     Attributes:
     - runtime: the Runtime of the command
     - is_me_allowed: whether --allow-me allows the invoking user's own ids
-    - own_ids_hint: how the command allows them, said when they are refused (userrules.IdFacts)
+    - own_ids_hint: how the command allows them, said when they are refused (idrules.IdFacts)
     """
     runtime: Runtime
     is_me_allowed: bool = False
-    own_ids_hint: str = userrules.COMPOSE_HINT
+    own_ids_hint: str = idrules.COMPOSE_HINT
 
     @property
     def docker(self) -> Docker:
@@ -55,12 +55,12 @@ class Screener(NamedTuple):
         return self.runtime.docker
 
     @property
-    def ids(self) -> userrules.IdFacts:
+    def ids(self) -> idrules.IdFacts:
         """Returns the facts the id rules judge by: the invoking user's ids and whether they are allowed, and
         this host's accounts and subordinate ranges.
         """
         runtime = self.runtime
-        return userrules.IdFacts(runtime.me, self.is_me_allowed, runtime.accounts, runtime.subordinate,
+        return idrules.IdFacts(runtime.me, self.is_me_allowed, runtime.accounts, runtime.subordinate,
                                  self.own_ids_hint)
 
     @property

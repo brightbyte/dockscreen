@@ -2,7 +2,7 @@
 passwd and group files, as docker does.
 
 The image's own /etc/passwd and /etc/group decide the identity docker would use, and the image is untrusted,
-so the id rules (rules.userrules) decide whether the image may have it. dockscreen runs an accepted identity
+so the id rules (rules.idrules) decide whether the image may have it. dockscreen runs an accepted identity
 pinned as numbers, so a difference between this reading and docker's can at worst refuse a good image.
 
 The function resolve reads the files as moby does, quirks included. An image can write them so that two

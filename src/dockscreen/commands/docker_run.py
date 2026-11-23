@@ -29,7 +29,7 @@ from dockscreen.policy.commandlinepatch import CommandLinePatch
 from dockscreen.policy.finding import Finding, ReportEntry
 from dockscreen.policy.notice import Notice, NoticeSeverity
 from dockscreen.policy.report import Report
-from dockscreen.policy.rules import userrules
+from dockscreen.policy.rules import idrules, userrules
 from dockscreen.policy.userdecision import UserDecision
 from dockscreen.policy.userdecisionview import explain, root_default_notice
 from dockscreen.screen import containerscreening, runargs, userscreening
@@ -55,7 +55,7 @@ def gate(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
     - runtime: the Runtime of the command
     """
     assert parent_cli.cmd == "run"
-    screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
     is_remote_daemon = is_remote(parent_cli.lead_args, runtime.docker)
     daemon_report = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote_daemon))
     if not daemon_report.has_passed:
@@ -151,7 +151,7 @@ def audit(parent_cli: commandline.CommandLine, runtime: Runtime) -> int:
 
     line = parent_cli.subcommand(runargs.VALUE_OPTIONS, {commandline.BRIEF_OPTION})
     is_brief, args = line.has_own(commandline.BRIEF_OPTION), line.argv
-    screener = Screener(runtime, own_ids_hint=userrules.RUN_HINT)
+    screener = Screener(runtime, own_ids_hint=idrules.RUN_HINT)
     is_remote_daemon = is_remote(parent_cli.lead_args, runtime.docker)
     daemon_report = Report.of(screener.policy(runtime.cwd).check_daemon(is_remote_daemon))
     if not daemon_report.has_passed:

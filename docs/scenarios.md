@@ -94,28 +94,28 @@ A compose feature that Docker added after these rules (`models`, a new mount opt
 
 ## Users and ids
 
-Goal: a container that runs as root, as an account of this host, or as the invoking user, which owns files on the host, although no one chose that user. The rules are in `rules.userrules`, whose docstring explains each id the rules refuse.
+Goal: a container that runs as root, as an account of this host, or as the invoking user, which owns files on the host, although no one chose that user. The rules are in `rules.idrules`, whose docstring explains each id the rules refuse, and in `rules.userrules`.
 
 ### U1. An image that runs as root
 
 No `USER`, `USER 0`, a user whose group or a supplementary group is 0, or a passwd file written to be read as root by docker and as someone else by a careless parser (`app:x:1000x:...` is uid 0 to moby).
 
 - Defense: the image's passwd and group files are read as moby reads them (`imageuser`), and an identity with 0 anywhere runs as the default user instead, pinned as numbers.
-- Tests: unit `test_userrules.py::test_root_and_no_id_are_refused_in_every_position`, `test_imageuser.py::test_an_earlier_line_that_reads_as_root_wins_over_a_later_well_formed_one`, `test_serviceinfo.py::test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own`; e2e `test_e2e_image_users.py::test_a_uid_that_is_not_a_number_counts_as_root`, `::test_a_member_of_the_root_group_counts_as_root`, `test_e2e_compose_images.py::test_an_image_that_would_run_as_root_runs_as_the_default_user`.
+- Tests: unit `test_idrules.py::test_root_and_no_id_are_refused_in_every_position`, `test_imageuser.py::test_an_earlier_line_that_reads_as_root_wins_over_a_later_well_formed_one`, `test_serviceinfo.py::test_root_images_run_as_the_default_user_and_acceptable_ones_keep_their_own`; e2e `test_e2e_image_users.py::test_a_uid_that_is_not_a_number_counts_as_root`, `::test_a_member_of_the_root_group_counts_as_root`, `test_e2e_compose_images.py::test_an_image_that_would_run_as_root_runs_as_the_default_user`.
 
 ### U2. An id that is not root but owns something
 
 `user: "1000:1000"` (an account of this host), an id in `/etc/subuid` (a rootless container's files), `65535` or `4294967295` (read as "no id"), or with host mounts any id outside the nobody range.
 
 - Defense: the id rules (`UserRules.id_problem`).
-- Tests: unit `test_userrules.py::test_ids_that_exist_on_this_host_are_refused_with_the_local_account_named`, `::test_subordinate_ranges_are_read_from_subuid_and_subgid`; e2e `test_e2e_compose_users.py::test_an_account_of_this_host_is_refused`, `::test_a_subordinate_id_is_refused`, `::test_a_user_the_project_may_not_choose_is_refused`.
+- Tests: unit `test_idrules.py::test_ids_that_exist_on_this_host_are_refused_with_the_local_account_named`, `::test_subordinate_ranges_are_read_from_subuid_and_subgid`; e2e `test_e2e_compose_users.py::test_an_account_of_this_host_is_refused`, `::test_a_subordinate_id_is_refused`, `::test_a_user_the_project_may_not_choose_is_refused`.
 
 ### U3. An id that an older daemon wraps
 
 `user: "4294967296:65534"`: an older daemon converts the id to 32 bits, which gives uid 0, and `4294967296+1000` gives the invoking user's uid. An overflowing number is read as a name, which the image can define as 0. Current moby refuses both kinds of id. This scenario was not run against an older daemon.
 
-- Defense: the policy refuses any id above 2147483647, with or without mounts (`userrules.MAX_ID`).
-- Tests: unit `test_userrules.py::test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts`; e2e `test_e2e_compose_users.py::test_a_user_the_project_may_not_choose_is_refused`.
+- Defense: the policy refuses any id above 2147483647, with or without mounts (`idrules.MAX_ID`).
+- Tests: unit `test_idrules.py::test_ids_above_the_largest_docker_accepts_are_refused_with_or_without_mounts`; e2e `test_e2e_compose_users.py::test_a_user_the_project_may_not_choose_is_refused`.
 
 ### U4. A name the image defines
 
@@ -143,7 +143,7 @@ The config file gives `mariadb` a user or mount dirs; the project builds or tags
 `user: "${UID}:${GID}"`. A container that runs as the invoking user can write all of their files that it mounts, such as `.git/hooks` in the project, whose scripts they run later.
 
 - Defense: the policy refuses the invoking user's ids unless they give `--allow-me` for the run; dockscreen sets `UID` and `GID` itself so that they are the real ids (`shellenv`).
-- Tests: unit `test_policy.py::test_the_callers_own_ids_need_allow_me`, `test_userrules.py::test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with_it`; e2e `test_e2e_compose_users.py::test_the_callers_own_ids_need_allow_me`.
+- Tests: unit `test_policy.py::test_the_callers_own_ids_need_allow_me`, `test_idrules.py::test_the_callers_ids_are_refused_with_a_pointer_to_allow_me_and_allowed_with_it`; e2e `test_e2e_compose_users.py::test_the_callers_own_ids_need_allow_me`.
 
 ## Differences between check and run
 

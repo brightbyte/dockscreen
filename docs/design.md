@@ -248,9 +248,9 @@ Every structure has its own key list, in the rules that judge it (`servicerules`
 | `x-` keys | ignored, as compose does, except in `build` |
 | service names | no leading `-`, because names go to compose as arguments; `pull` and `build` of the images get `--` before them |
 
-### Users (`rules.userrules`, `hostusers`, `image`, `imageuser`)
+### Users (`rules.userrules`, `rules.idrules`, `rules.useroptionrules`, `hostusers`, `image`, `imageuser`)
 
-`Policy.id_problems` (`rules.userrules`) implements [the id rules](#ids-the-project-and-the-image-may-not-choose), with their facts in `userrules.IdFacts`. It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
+`Policy.id_problems` (`rules.idrules`) implements [the id rules](#ids-the-project-and-the-image-may-not-choose), with their facts in `idrules.IdFacts`. It reads `/etc/subuid` and `/etc/subgid` when it checks, and looks up local accounts through NSS, so LDAP and sssd accounts count.
 
 `Screener.assess` implements [steps 2 and 3](#deciding-the-user) for compose and `docker run` alike. It works in two parts:
 
@@ -320,7 +320,7 @@ Every change that dockscreen makes comes from a rule, and dockscreen applies it 
 - For `docker run` and `create`, the thing to run is the arguments (`runargs.RunArgs.create_args`), and the changes are a `commandlinepatch.CommandLinePatch`, whose `Amendment`s each put arguments before the user's own, so that the user's later options override them. `hardening.container_defaults` and the user rules (`Policy.user_amendments`) give patches, and `CommandLinePatch.apply_to` applies them. The two kinds of change apply differently, hence the two types; both carry the notice that reports them.
 - `--as` and `--as-me` stay in the arguments as their `UserOption`, as they were read. The rules judge them (`Policy.check_user_options`) and resolve them (`Policy.resolve_user_options`). Then `with_users_resolved` replaces them in place, because their order relative to `--user` decides which user docker uses. The commands do all of this in one call (`userscreening.screen_user_options`). An argument list that still holds one of them cannot be resolved, so it cannot reach docker. The reader looks the account up while reading the command line, just as `Screener.look` reads an image: that is looking, not changing.
 
-The user rules are in one module (`rules.userrules`). They decide which user a service, an image or a command line may have, and they work out the changes that follow, for compose and for `docker run` alike. `UserDecision` is the result of deciding. The rules turn it into the changes for each kind of thing to run (`Policy.user_changes`, `Policy.user_amendments`).
+The user rules decide which user a service or an image may have (`rules.userrules`, with the id rules of `rules.idrules`), and which user a command line may give (`rules.useroptionrules`). The user rules also work out the changes that follow, for compose and for `docker run` alike. `UserDecision` is the result of deciding. The rules turn it into the changes for each kind of thing to run (`Policy.user_changes`, `Policy.user_amendments`).
 
 The point is less to keep in mind: one way from a rule to the running thing. A change in this direction that adds more code or concepts than it takes away is to be reconsidered, not finished.
 
