@@ -180,6 +180,130 @@ A command's module has these functions:
 
 A command that does not support `--strict-screen` refuses the option itself; the dispatcher refuses it for everything it does not screen. `runargs` and `userargs` read the arguments of `run`, `create` and `exec`. The commands use `docker.is_remote` to refuse a daemon that is not this host's. They use `userscreening.screen_user_options` to have the policy judge and resolve the users that the command line gives, in one step.
 
+### Sequences
+
+The diagrams below show the calls that three commands make, from the user's command line to the real docker. The lanes are the layers: the command module (`command`), the screening code in `screen`, the `Policy`, and the real docker binary (`docker`), which stands for the daemon too. Each call names the function that makes it. A report that stops screening goes back to the user with exit status 1; the diagrams show it only where it is the outcome of a step. The dispatchers (`docker_cli`, `DockerCommand`, `ComposeCommand`) come first in every command, and the diagrams leave them out.
+
+`docker compose up`, with the stages of `projectscreening` (see [Compose](#compose-commandsdocker_compose-composecommand-commandscompose_-inspect-hardening-policy-serviceinfo-imageusers-projectscreening)). The command is `compose_up` with `projectrun`; `create` and `run` take the same path through `projectrun.check_and_run`. The screening code is `projectscreening`, `inspect`, `serviceinfo`, `imageusers` and `Screener`. FILE is the generated config, in a private temporary directory.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Cmd as command
+    participant Screen as screen
+    participant Policy
+    participant Docker as docker
+
+    User->>Cmd: compose up
+    Cmd->>Screen: load_project
+    Screen->>Policy: check_location
+    Screen->>Docker: compose config (inspect.project)
+    Docker-->>Screen: the definition
+    Screen->>Docker: context show (is_remote)
+    Screen->>Policy: hardening.changes
+    Cmd->>Screen: check
+    Screen->>Policy: check_project, check_daemon
+    opt the project and the daemon passed
+        Screen->>Docker: ps (working_directories)
+        Note over Screen,Docker: the containers labelled with the project's name
+        Screen->>Policy: check_project_name
+    end
+    Note over Cmd,Docker: A refusal stops here, before anything is pulled or built.
+    Cmd->>Screen: decide
+    Screen->>Docker: compose -f FILE config
+    Docker-->>Screen: the config as compose reads FILE
+    Note over Screen: A difference from the checked config fails the run (_read_back_problem).
+    Screen->>Docker: config --services (prepare)
+    Screen->>Docker: pull, build (_acquire)
+    Note over Screen,Docker: by the project's pull_policy
+    loop each started service that sets no user
+        Screen->>Docker: create --pull=never (_look)
+        Screen->>Docker: container inspect, image inspect
+        opt needs_user_files
+            Screen->>Docker: cp /etc/passwd, /etc/group
+        end
+        Screen->>Docker: rm
+    end
+    Screen->>Policy: check_image (Screener.decide)
+    Cmd->>Screen: finish
+    Screen->>Policy: user_changes, check_project
+    Cmd->>Docker: compose -f FILE up (run_child)
+    Note over Cmd,Docker: with --project-directory and --project-name pinned
+    Docker-->>User: exit status
+```
+
+`docker run` (`docker_run.gate`). The screening code is `runargs`, `userscreening`, `containerscreening` and `Screener`. dockscreen has the daemon create the container, so that the daemon reads the command line, and judges the container before anything starts it.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Cmd as command
+    participant Screen as screen
+    participant Policy
+    participant Docker as docker
+
+    User->>Cmd: run IMAGE
+    Cmd->>Docker: context show (is_remote)
+    Cmd->>Policy: check_daemon
+    Cmd->>Screen: runargs.parse
+    Note over Screen: looks up the account that --as names
+    Cmd->>Screen: screen_user_options
+    Screen->>Policy: check_user_options, resolve_user_options
+    Cmd->>Screen: create
+    Screen->>Docker: create
+    Note over Screen,Docker: with --cap-drop=ALL and no-new-privileges before the user's options
+    Docker-->>Screen: container id
+    Screen->>Docker: container inspect
+    Note over Screen: _verify_split compares the image and command with the reading of runargs.
+    Screen->>Docker: image inspect (look)
+    opt needs_user_files
+        Screen->>Docker: cp /etc/passwd, /etc/group
+    end
+    Screen->>Policy: check_image (assess)
+    alt the policy refuses the user
+        Cmd->>Docker: rm
+        Cmd-->>User: refusal, exit status 1
+    end
+    opt --strict-screen
+        Cmd->>Policy: check_container
+    end
+    opt the decision pins a user
+        Cmd->>Docker: rm
+        Cmd->>Policy: user_amendments
+        Cmd->>Screen: create
+        Screen->>Docker: create --user=uid:gid
+        Screen->>Docker: container inspect
+        Note over Screen: _verify_split again. The policy keeps the first decision.
+    end
+    Cmd->>Docker: start
+    Docker-->>User: exit status
+```
+
+`docker exec` (`docker_exec.gate`). The screening code is `userscreening`. The command line is trusted, and dockscreen checked the container when it started it. So exec only replaces `--as` and `--as-me` by ids, after the policy has judged the form of the users. Then the real docker replaces the dockscreen process.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Cmd as command
+    participant Screen as screen
+    participant Policy
+    participant Docker as docker
+
+    User->>Cmd: exec CONTAINER COMMAND
+    opt --strict-screen
+        Cmd-->>User: refusal, exit status 1
+    end
+    Cmd->>Screen: resolve_user_args
+    Note over Screen: looks up the account that --as names
+    Screen->>Policy: check_user_options, resolve_user_options
+    alt the policy refuses a user
+        Cmd-->>User: refusal, exit status 1
+    end
+    Cmd->>Docker: exec --user=uid:gid (execvp)
+    Note over Cmd,Docker: The real docker replaces the dockscreen process.
+    Docker-->>User: exit status
+```
+
 ### Compose (`commands.docker_compose`, `ComposeCommand`, `commands.compose_*`, `inspect`, `hardening`, `policy`, `serviceinfo`, `imageusers`, `projectscreening`)
 
 For `up`, `create`, `run`, `watch`, `scale` and `alpha`, dockscreen screens the project (`project.Project`) in stages (`projectscreening`). Each stage runs only once the one before it has passed. Each stage is a function that takes the previous stage's result, and returns either the next stage's input or the report that stops screening; it judges its findings with a check of its own. `load_project` returns a `LoadedProject`, `check` clears it (`ClearedProject`), `decide` takes only a cleared project, and `finish` makes the runnable project (`RunnableProject`). The types say which stage may follow which: dockscreen pulls or builds nothing for a project the policy did not clear, and runs nothing it did not check last.
